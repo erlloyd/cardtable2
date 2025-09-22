@@ -112,35 +112,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # Need previous commit for comparison
+          fetch-depth: 0  # Need full history to find tags
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Check what changed
         id: changes
         run: |
-          # Get changed files since last commit
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
+          # Find last deployment tag
+          LAST_TAG=$(git describe --tags --match="v*" --abbrev=0 2>/dev/null || echo "")
 
-          # Default to deploying both
-          APP_CHANGED=false
-          SERVER_CHANGED=false
-
-          # Check for app-only changes
-          if echo "$CHANGED_FILES" | grep -q "^app/" && ! echo "$CHANGED_FILES" | grep -qE "^(server/|shared/|\.github/|scripts/|package\.json|pnpm-|\.)" ; then
-            APP_CHANGED=true
-          # Check for server-only changes
-          elif echo "$CHANGED_FILES" | grep -q "^server/" && ! echo "$CHANGED_FILES" | grep -qE "^(app/|shared/|\.github/|scripts/|package\.json|pnpm-|\.)" ; then
-            SERVER_CHANGED=true
-          # Otherwise deploy both (shared changes, root changes, or mixed changes)
+          if [ -n "$LAST_TAG" ]; then
+            echo "Comparing against last deployment tag: $LAST_TAG"
+            COMPARE_REF="$LAST_TAG"
           else
-            APP_CHANGED=true
-            SERVER_CHANGED=true
+            echo "No deployment tags found, defaulting to deploy both"
+            echo "app_changed=true" >> $GITHUB_OUTPUT
+            echo "server_changed=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-          echo "app_changed=$APP_CHANGED" >> $GITHUB_OUTPUT
-          echo "server_changed=$SERVER_CHANGED" >> $GITHUB_OUTPUT
-          echo "Deployment decision: app=$APP_CHANGED, server=$SERVER_CHANGED"
+          # Check if app or its dependencies changed using PNPM filter
+          if pnpm --filter "@cardtable2/app...[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/app"; then
+            echo "app_changed=true" >> $GITHUB_OUTPUT
+            echo "App or its dependencies changed since $COMPARE_REF"
+          else
+            echo "app_changed=false" >> $GITHUB_OUTPUT
+            echo "No app changes since $COMPARE_REF"
+          fi
+
+          # Check if server or its dependencies changed using PNPM filter
+          if pnpm --filter "@cardtable2/server...[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
+            echo "server_changed=true" >> $GITHUB_OUTPUT
+            echo "Server or its dependencies changed since $COMPARE_REF"
+          else
+            echo "server_changed=false" >> $GITHUB_OUTPUT
+            echo "No server changes since $COMPARE_REF"
+          fi
 
   deploy-app:
     runs-on: ubuntu-latest
@@ -179,3 +199,32 @@ jobs:
           echo "Server artifacts:"
           ls -la server/dist/
           echo "✅ Server deployment complete!"
+
+  tag-successful-deployment:
+    runs-on: ubuntu-latest
+    needs: [deploy-app, deploy-server]
+    if: always() && (needs.deploy-app.result == 'success' || needs.deploy-app.result == 'skipped') && (needs.deploy-server.result == 'success' || needs.deploy-server.result == 'skipped') && (needs.deploy-app.result == 'success' || needs.deploy-server.result == 'success')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for tagging
+
+      - name: Create deployment tag
+        run: |
+          # Find the next version number
+          LAST_TAG=$(git describe --tags --match="v*" --abbrev=0 2>/dev/null || echo "v0")
+          if [ "$LAST_TAG" = "v0" ]; then
+            NEXT_VERSION="v1"
+          else
+            # Extract number from last tag and increment
+            LAST_NUM=$(echo "$LAST_TAG" | sed 's/^v//')
+            NEXT_NUM=$((LAST_NUM + 1))
+            NEXT_VERSION="v$NEXT_NUM"
+          fi
+
+          echo "Creating deployment tag: $NEXT_VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEXT_VERSION" -m "Successful deployment: $NEXT_VERSION"
+          git push origin "$NEXT_VERSION"

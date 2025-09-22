@@ -210,7 +210,8 @@ jobs:
         with:
           fetch-depth: 0  # Need full history for tagging
 
-      - name: Create deployment tag
+      - name: Determine next version
+        id: version
         run: |
           # Find the next version number
           LAST_TAG=$(git describe --tags --match="v*" --abbrev=0 2>/dev/null || echo "v0")
@@ -222,9 +223,11 @@ jobs:
             NEXT_NUM=$((LAST_NUM + 1))
             NEXT_VERSION="v$NEXT_NUM"
           fi
-
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
           echo "Creating deployment tag: $NEXT_VERSION"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$NEXT_VERSION" -m "Successful deployment: $NEXT_VERSION"
-          git push origin "$NEXT_VERSION"
+
+      - name: Create deployment tag
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ steps.version.outputs.next_version }}
+          message: "Successful deployment: ${{ steps.version.outputs.next_version }}"

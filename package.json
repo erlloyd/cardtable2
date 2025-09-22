@@ -29,7 +29,7 @@
     "typescript": "^5.7.2"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,json,md,yaml}": "prettier --write",
+    "*.{js,jsx,ts,tsx,json,md,yaml,css}": "prettier --write",
     "*.{js,jsx,ts,tsx}": "eslint --fix"
   },
   "engines": {

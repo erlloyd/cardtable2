@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(mkdir:*)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "Bash(chmod:*)",
+      "Bash(pnpm:*)"
     ],
     "deny": []
   }

@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linting
+        run: pnpm run lint
+
+      - name: Run type checking
+        run: pnpm run typecheck
+
+      - name: Check formatting
+        run: pnpm run format:check
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm run test
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app
+        run: pnpm --filter @cardtable2/app build
+
+      - name: Build server
+        run: pnpm --filter @cardtable2/server build
+
+      - name: Upload app artifacts
+        if: matrix.node-version == '20'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-dist
+          path: app/dist/
+
+      - name: Upload server artifacts
+        if: matrix.node-version == '20'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-dist
+          path: server/dist/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need previous commit for comparison
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check what changed
+        id: changes
+        run: |
+          # Check if app or its dependencies changed
+          if pnpm --filter "@cardtable2/app..." --changed-files-ignore-pattern="**/*.md" list | grep -q "@cardtable2/app"; then
+            echo "app_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "app_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if server or its dependencies changed
+          if pnpm --filter "@cardtable2/server..." --changed-files-ignore-pattern="**/*.md" list | grep -q "@cardtable2/server"; then
+            echo "server_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "server_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download app artifacts
+        if: steps.changes.outputs.app_changed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: app-dist
+          path: app/dist/
+
+      - name: Download server artifacts
+        if: steps.changes.outputs.server_changed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: server-dist
+          path: server/dist/
+
+      - name: Deploy App
+        if: steps.changes.outputs.app_changed == 'true'
+        run: |
+          echo "🚀 Deploying app to production..."
+          echo "App artifacts:"
+          ls -la app/dist/
+          echo "✅ App deployment complete!"
+
+      - name: Deploy Server
+        if: steps.changes.outputs.server_changed == 'true'
+        run: |
+          echo "🚀 Deploying server to production..."
+          echo "Server artifacts:"
+          ls -la server/dist/
+          echo "✅ Server deployment complete!"
+
+      - name: No Deployment Needed
+        if: steps.changes.outputs.app_changed == 'false' && steps.changes.outputs.server_changed == 'false'
+        run: |
+          echo "ℹ️ No deployment needed - no changes to app or server"

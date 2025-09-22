@@ -1,0 +1,39 @@
+{
+  "name": "cardtable2",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Cardtable 2.0 - Solo-first card table with multiplayer support",
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "build": "pnpm --filter '!@cardtable2/shared' -r run build",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "format": "pnpm -r run format",
+    "format:check": "pnpm -r run format:check",
+    "validate": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.4.1",
+    "typescript": "^5.7.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,md,yaml}": "prettier --write",
+    "*.{js,jsx,ts,tsx}": "eslint --fix"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

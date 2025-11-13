@@ -8,11 +8,23 @@
       "Bash(pnpm:*)",
       "WebSearch",
       "Bash(node --version)",
-      "Bash(mise ls node)"
+      "Bash(mise ls node)",
+      "WebFetch(domain:code.claude.com)"
     ],
     "deny": []
   },
   "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-needs-input.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

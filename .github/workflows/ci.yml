@@ -140,7 +140,7 @@ jobs:
           fi
 
           # Check if app or its dependencies changed using PNPM filter
-          if pnpm --filter "@cardtable2/app...[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/app"; then
+          if pnpm --filter "{app}[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/app"; then
             echo "app_changed=true" >> $GITHUB_OUTPUT
             echo "App or its dependencies changed since $COMPARE_REF"
           else
@@ -149,7 +149,7 @@ jobs:
           fi
 
           # Check if server or its dependencies changed using PNPM filter
-          if pnpm --filter "@cardtable2/server...[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
+          if pnpm --filter "{server}[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
             echo "server_changed=true" >> $GITHUB_OUTPUT
             echo "Server or its dependencies changed since $COMPARE_REF"
           else

@@ -25,25 +25,28 @@ function GameSelect() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/gamesIndex.json')
-      .then((response) => {
+    const loadGames = async () => {
+      try {
+        const response = await fetch('/gamesIndex.json');
         if (!response.ok) {
           throw new Error('Failed to load games index');
         }
-        return response.json();
-      })
-      .then((data: GamesIndex) => {
+        const data = (await response.json()) as GamesIndex;
         setGames(data.games);
         // Select the first game by default
         if (data.games.length > 0) {
           setSelectedGame(data.games[0]);
         }
         setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to load games';
+        setError(errorMessage);
         setLoading(false);
-      });
+      }
+    };
+
+    void loadGames();
   }, []);
 
   const handleOpenTable = () => {
@@ -51,7 +54,7 @@ function GameSelect() {
       return;
     }
     const tableId = uniqueNamesGenerator(nameConfig);
-    navigate(`/table/${tableId}`, { state: { game: selectedGame } });
+    void navigate(`/table/${tableId}`, { state: { game: selectedGame } });
   };
 
   if (loading) {

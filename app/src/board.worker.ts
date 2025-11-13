@@ -15,85 +15,96 @@ DOMAdapter.set(WebWorkerAdapter);
 let app: Application | null = null;
 
 // Handle messages from main thread
-self.addEventListener(
-  'message',
-  async (event: MessageEvent<MainToWorkerMessage>) => {
-    const message = event.data;
+async function handleMessage(
+  event: MessageEvent<MainToWorkerMessage>,
+): Promise<void> {
+  const message = event.data;
 
-    try {
-      switch (message.type) {
-        case 'init': {
-          // Initialize PixiJS with offscreen canvas
-          const { canvas, width, height, dpr } = message;
+  try {
+    switch (message.type) {
+      case 'init': {
+        // Initialize PixiJS with offscreen canvas
+        const { canvas, width, height, dpr } = message;
 
-          app = new Application();
-          await app.init({
-            canvas,
-            width,
-            height,
-            resolution: dpr,
-            autoDensity: true,
-            backgroundColor: 0x1a1a2e,
-            preference: 'webgl',
-          });
+        app = new Application();
+        await app.init({
+          canvas,
+          width,
+          height,
+          resolution: dpr,
+          autoDensity: true,
+          backgroundColor: 0x1a1a2e,
+          preference: 'webgl',
+        });
 
-          // Render a simple test scene
-          renderTestScene();
+        // Render a simple test scene
+        renderTestScene();
 
-          const response: WorkerToMainMessage = { type: 'initialized' };
-          self.postMessage(response);
-          break;
-        }
-
-        case 'resize': {
-          // Handle canvas resize
-          if (app) {
-            const { width, height, dpr } = message;
-            app.renderer.resize(width, height);
-            app.renderer.resolution = dpr;
-          }
-          break;
-        }
-
-        case 'ping': {
-          // Respond to ping with pong
-          const response: WorkerToMainMessage = {
-            type: 'pong',
-            data: `Pong! Received: ${message.data}`,
-          };
-          self.postMessage(response);
-          break;
-        }
-
-        case 'echo': {
-          // Echo back the data
-          const response: WorkerToMainMessage = {
-            type: 'echo-response',
-            data: message.data,
-          };
-          self.postMessage(response);
-          break;
-        }
-
-        default: {
-          // Unknown message type
-          const response: WorkerToMainMessage = {
-            type: 'error',
-            error: `Unknown message type: ${(message as { type: string }).type}`,
-          };
-          self.postMessage(response);
-        }
+        const response: WorkerToMainMessage = { type: 'initialized' };
+        self.postMessage(response);
+        break;
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      const response: WorkerToMainMessage = {
-        type: 'error',
-        error: `Worker error: ${errorMsg}`,
-      };
-      self.postMessage(response);
+
+      case 'resize': {
+        // Handle canvas resize
+        if (app) {
+          const { width, height, dpr } = message;
+          app.renderer.resize(width, height);
+          app.renderer.resolution = dpr;
+        }
+        break;
+      }
+
+      case 'ping': {
+        // Respond to ping with pong
+        const response: WorkerToMainMessage = {
+          type: 'pong',
+          data: `Pong! Received: ${message.data}`,
+        };
+        self.postMessage(response);
+        break;
+      }
+
+      case 'echo': {
+        // Echo back the data
+        const response: WorkerToMainMessage = {
+          type: 'echo-response',
+          data: message.data,
+        };
+        self.postMessage(response);
+        break;
+      }
+
+      default: {
+        // Unknown message type
+        const response: WorkerToMainMessage = {
+          type: 'error',
+          error: `Unknown message type: ${(message as { type: string }).type}`,
+        };
+        self.postMessage(response);
+      }
     }
-  },
-);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const response: WorkerToMainMessage = {
+      type: 'error',
+      error: `Worker error: ${errorMsg}`,
+    };
+    self.postMessage(response);
+  }
+}
+
+self.addEventListener('message', (event: MessageEvent<MainToWorkerMessage>) => {
+  handleMessage(event).catch((error) => {
+    // Catch any unhandled errors from the promise itself
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const response: WorkerToMainMessage = {
+      type: 'error',
+      error: `Unhandled worker error: ${errorMsg}`,
+    };
+    self.postMessage(response);
+  });
+});
 
 // Render a simple test scene
 function renderTestScene() {

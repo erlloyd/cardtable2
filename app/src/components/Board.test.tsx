@@ -98,14 +98,17 @@ class MockWorker {
 }
 
 describe('Board', () => {
+  let transferControlSpy: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     // Mock Worker constructor
     vi.stubGlobal('Worker', MockWorker);
 
     // Mock HTMLCanvasElement.transferControlToOffscreen
-    HTMLCanvasElement.prototype.transferControlToOffscreen = vi.fn(() => {
+    transferControlSpy = vi.fn(() => {
       return {} as OffscreenCanvas;
     });
+    HTMLCanvasElement.prototype.transferControlToOffscreen = transferControlSpy;
   });
 
   afterEach(() => {
@@ -113,7 +116,7 @@ describe('Board', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders with table ID', async () => {
+  it('renders with table ID', () => {
     render(<Board tableId="happy-clever-elephant" />);
 
     expect(screen.getByTestId('board')).toBeInTheDocument();
@@ -228,9 +231,7 @@ describe('Board', () => {
     });
 
     // Verify transferControlToOffscreen was called
-    expect(
-      HTMLCanvasElement.prototype.transferControlToOffscreen,
-    ).toHaveBeenCalled();
+    expect(transferControlSpy).toHaveBeenCalled();
 
     // Verify initialization message appears
     await waitFor(() => {
@@ -249,8 +250,6 @@ describe('Board', () => {
     });
 
     // transferControlToOffscreen should only be called once
-    expect(
-      HTMLCanvasElement.prototype.transferControlToOffscreen,
-    ).toHaveBeenCalledTimes(1);
+    expect(transferControlSpy).toHaveBeenCalledTimes(1);
   });
 });

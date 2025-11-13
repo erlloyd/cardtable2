@@ -1,239 +1,12 @@
 import js from '@eslint/js';
-import typescript from '@typescript-eslint/eslint-plugin';
-import typescriptParser from '@typescript-eslint/parser';
+import tseslint from 'typescript-eslint';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import prettier from 'eslint-config-prettier';
+import globals from 'globals';
 
-export default [
-  js.configs.recommended,
-  // Frontend/React config
-  {
-    files: ['app/**/*.{ts,tsx}'],
-    ignores: [
-      'app/**/*.test.{ts,tsx}',
-      'app/**/*.worker.{ts,tsx}',
-      'app/e2e/**',
-      'app/playwright.config.ts',
-    ],
-    languageOptions: {
-      parser: typescriptParser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-        ecmaFeatures: {
-          jsx: true,
-        },
-      },
-      globals: {
-        document: 'readonly',
-        window: 'readonly',
-        console: 'readonly',
-        fetch: 'readonly',
-        Response: 'readonly',
-        Worker: 'readonly',
-        URL: 'readonly',
-        MessageEvent: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-      react,
-      'react-hooks': reactHooks,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-      ...react.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
-      'react/react-in-jsx-scope': 'off',
-      'react/prop-types': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      // Disable no-undef for TypeScript files - TypeScript handles this
-      'no-undef': 'off',
-    },
-    settings: {
-      react: {
-        version: 'detect',
-      },
-    },
-  },
-  // Vite config
-  {
-    files: ['app/vite.config.ts'],
-    languageOptions: {
-      parser: typescriptParser,
-      globals: {
-        __dirname: 'readonly',
-        process: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-    },
-  },
-  // Playwright config
-  {
-    files: ['app/playwright.config.ts'],
-    languageOptions: {
-      parser: typescriptParser,
-      globals: {
-        process: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-    },
-  },
-  // Web Workers
-  {
-    files: ['app/**/*.worker.{ts,tsx}'],
-    languageOptions: {
-      parser: typescriptParser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-      },
-      globals: {
-        self: 'readonly',
-        postMessage: 'readonly',
-        addEventListener: 'readonly',
-        MessageEvent: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
-      // Disable no-undef for TypeScript files - TypeScript handles this
-      'no-undef': 'off',
-    },
-  },
-  // Test files (Vitest)
-  {
-    files: ['app/**/*.test.{ts,tsx}'],
-    languageOptions: {
-      parser: typescriptParser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-        ecmaFeatures: {
-          jsx: true,
-        },
-      },
-      globals: {
-        vi: 'readonly',
-        describe: 'readonly',
-        it: 'readonly',
-        expect: 'readonly',
-        beforeEach: 'readonly',
-        afterEach: 'readonly',
-        Response: 'readonly',
-        URL: 'readonly',
-        MessageEvent: 'readonly',
-        ErrorEvent: 'readonly',
-        setTimeout: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-      react,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-      'react/react-in-jsx-scope': 'off',
-      // Disable no-undef for TypeScript files - TypeScript handles this
-      'no-undef': 'off',
-    },
-  },
-  // E2E tests (Playwright)
-  {
-    files: ['app/e2e/**/*.{ts,tsx}'],
-    languageOptions: {
-      parser: typescriptParser,
-      globals: {
-        test: 'readonly',
-        expect: 'readonly',
-        describe: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-    },
-  },
-  // Shared package config
-  {
-    files: ['shared/**/*.{ts,js}'],
-    languageOptions: {
-      parser: typescriptParser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      // Disable no-undef for TypeScript files - TypeScript handles this
-      'no-undef': 'off',
-    },
-  },
-  // Backend/Server config
-  {
-    files: ['server/**/*.{ts,js}'],
-    languageOptions: {
-      parser: typescriptParser,
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: 'module',
-      },
-      globals: {
-        process: 'readonly',
-        console: 'readonly',
-        __dirname: 'readonly',
-        Buffer: 'readonly',
-        global: 'readonly',
-      },
-    },
-    plugins: {
-      '@typescript-eslint': typescript,
-    },
-    rules: {
-      ...typescript.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
-    },
-  },
-  prettier,
+export default tseslint.config(
+  // Base ignores
   {
     ignores: [
       '**/dist/**',
@@ -243,4 +16,144 @@ export default [
       '**/coverage/**',
     ],
   },
-];
+
+  // Base JS recommended
+  js.configs.recommended,
+
+  // TypeScript recommended (non-type-aware)
+  ...tseslint.configs.recommended,
+
+  // Frontend/React - Type-aware linting
+  {
+    files: ['app/**/*.{ts,tsx}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    plugins: {
+      react,
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      ...react.configs.recommended.rules,
+      ...react.configs['jsx-runtime'].rules,
+      ...reactHooks.configs.recommended.rules,
+      'react/prop-types': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-explicit-any': 'warn',
+    },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+  },
+
+  // Web Workers
+  {
+    files: ['app/**/*.worker.{ts,tsx}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.worker,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  // Test files (Vitest)
+  {
+    files: ['app/**/*.test.{ts,tsx}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    plugins: {
+      react,
+    },
+    rules: {
+      ...react.configs.recommended.rules,
+      ...react.configs['jsx-runtime'].rules,
+    },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+  },
+
+  // Shared package - Type-aware linting
+  {
+    files: ['shared/**/*.{ts,js}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  // Backend/Server - Type-aware linting
+  {
+    files: ['server/**/*.{ts,js}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.node,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Allow .toString() on Buffer and other objects in server code
+      '@typescript-eslint/no-base-to-string': 'off',
+    },
+  },
+
+  // Prettier (must be last)
+  prettier,
+);

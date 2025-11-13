@@ -100,10 +100,12 @@ pnpm run format
 - Located at `@cardtable2/shared`
 
 ### CI/CD
-- Git-flow pattern with main branch only
-- Selective deployment: only deploys changed packages
+- Feature branch workflow: all development on feature branches
+- Main branch protected: only merge via tested feature branches
+- Selective deployment: only deploys changed packages on main
 - Uses PNPM filtering to detect changes
 - Changes to shared trigger both app and server deployments
+- App deploys to GitHub Pages at beta.card-table.app
 
 ## Performance Targets
 - 60 fps on mobile/desktop
@@ -127,6 +129,13 @@ pnpm run format
 
 ## Important Notes
 
+### Branching Strategy
+- **IMPORTANT**: All work must be done on feature branches (e.g., `feature/m2-board-core`)
+- Never commit directly to main unless explicitly instructed
+- Branch naming: `feature/{milestone}-{description}` or `fix/{description}`
+- Merge to main only after testing and validation
+- CI/CD deploys automatically on merge to main
+
 ### Testing
 - Unit tests use Vitest
 - E2E tests use Playwright
@@ -139,9 +148,9 @@ pnpm run format
 - Pre-push hooks run typecheck
 
 ### Deployment
-- Placeholder deployment on merge to main
-- App and server deploy independently based on changes
-- Future: App to static hosting, server to container
+- App deploys to GitHub Pages (beta.card-table.app) on merge to main
+- Server deployment placeholder (future: container hosting)
+- App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
 

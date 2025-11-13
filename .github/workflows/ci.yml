@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19'
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -40,9 +40,6 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['20.19', '22.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -51,10 +48,10 @@ jobs:
         with:
           version: 9
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -65,9 +62,6 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['20.19', '22.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -76,10 +70,10 @@ jobs:
         with:
           version: 9
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -92,14 +86,12 @@ jobs:
         run: pnpm --filter @cardtable2/server build
 
       - name: Upload app artifacts
-        if: matrix.node-version == '20.19'
         uses: actions/upload-artifact@v4
         with:
           name: app-dist
           path: app/dist/
 
       - name: Upload server artifacts
-        if: matrix.node-version == '20.19'
         uses: actions/upload-artifact@v4
         with:
           name: server-dist
@@ -125,7 +117,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19'
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install dependencies

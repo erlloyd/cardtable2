@@ -5,7 +5,9 @@
       "Bash(mkdir:*)",
       "mcp__sequential-thinking__sequentialthinking",
       "Bash(chmod:*)",
-      "Bash(pnpm:*)"
+      "Bash(pnpm:*)",
+      "WebSearch",
+      "Bash(node --version)"
     ],
     "deny": []
   }

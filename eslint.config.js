@@ -10,6 +10,11 @@ export default [
   // Frontend/React config
   {
     files: ['app/**/*.{ts,tsx}'],
+    ignores: [
+      'app/**/*.test.{ts,tsx}',
+      'app/e2e/**',
+      'app/playwright.config.ts',
+    ],
     languageOptions: {
       parser: typescriptParser,
       parserOptions: {
@@ -23,6 +28,8 @@ export default [
         document: 'readonly',
         window: 'readonly',
         console: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
       },
     },
     plugins: {
@@ -57,6 +64,71 @@ export default [
       globals: {
         __dirname: 'readonly',
         process: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescript,
+    },
+    rules: {
+      ...typescript.configs.recommended.rules,
+    },
+  },
+  // Playwright config
+  {
+    files: ['app/playwright.config.ts'],
+    languageOptions: {
+      parser: typescriptParser,
+      globals: {
+        process: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescript,
+    },
+    rules: {
+      ...typescript.configs.recommended.rules,
+    },
+  },
+  // Test files (Vitest)
+  {
+    files: ['app/**/*.test.{ts,tsx}'],
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        vi: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        Response: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescript,
+      react,
+    },
+    rules: {
+      ...typescript.configs.recommended.rules,
+      'react/react-in-jsx-scope': 'off',
+    },
+  },
+  // E2E tests (Playwright)
+  {
+    files: ['app/e2e/**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: typescriptParser,
+      globals: {
+        test: 'readonly',
+        expect: 'readonly',
+        describe: 'readonly',
       },
     },
     plugins: {

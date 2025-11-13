@@ -12,11 +12,14 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 - **Shared**: Common TypeScript types
 - **Monorepo**: PNPM workspaces
 
-### Technology Stack (Updated M0.5)
+### Technology Stack (Updated M1)
 - **Node.js**: v24 (LTS Krypton)
 - **React**: 19.2.0
+- **React Router**: 7.9.5
 - **Vite**: 7.2.2
 - **Vitest**: 4.0.8
+- **Playwright**: 1.56.1
+- **Headless UI**: 2.2.9
 - **Express**: 5.1.0
 - **Yjs**: 13.6.27
 - **y-websocket**: 3.0.0
@@ -34,8 +37,13 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 │       └── index.ts    # ObjectKind, TableObject types
 ├── app/                # Frontend (React + PixiJS)
 │   ├── src/
-│   ├── public/
-│   └── vite.config.ts
+│   │   ├── pages/      # Route pages (GameSelect, Table)
+│   │   ├── components/ # React components (Board, GameCombobox)
+│   │   └── types/      # TypeScript types
+│   ├── e2e/            # Playwright E2E tests
+│   ├── public/         # Static assets (gamesIndex.json)
+│   ├── vite.config.ts
+│   └── playwright.config.ts
 ├── server/             # Backend (Node + y-websocket)
 │   └── src/
 │       └── index.ts    # Express + WebSocket server
@@ -56,8 +64,14 @@ pnpm run dev
 # Build for production
 pnpm run build
 
-# Run tests
+# Run tests (unit tests)
 pnpm run test
+
+# Run E2E tests (Playwright)
+cd app && pnpm run test:e2e
+
+# Run E2E tests with UI
+cd app && pnpm run test:e2e:ui
 
 # Run linting
 pnpm run lint
@@ -100,7 +114,7 @@ pnpm run format
 ## Current Status
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
-- ⏳ M1: App Shell & Navigation
+- ✅ M1: App Shell & Navigation (COMPLETED)
 - ⏳ M2: Board Core
 - ⏳ M3: Local Yjs
 - ⏳ M4: Set Loader & Assets
@@ -115,7 +129,7 @@ pnpm run format
 
 ### Testing
 - Unit tests use Vitest
-- E2E tests will use Playwright
+- E2E tests use Playwright
 - All tests must pass before merge to main
 
 ### Code Style
@@ -129,7 +143,18 @@ pnpm run format
 - App and server deploy independently based on changes
 - Future: App to static hosting, server to container
 
-## Recent Changes (M0.5 - Completed)
+## Recent Changes
+
+### M1 - App Shell & Navigation (Completed)
+Complete routing and navigation system:
+- React Router v7 with lazy-loaded Board component
+- Table IDs use human-readable `adjective-adjective-animal` format
+- Game selection with Headless UI combobox
+- Playwright E2E testing infrastructure
+- Unit tests for all components (8 tests passing)
+- ESLint config updated for test files
+
+### M0.5 - Tool Upgrades (Completed)
 All development tools upgraded to latest stable versions:
 - React 18 → 19 (with React 19 JSX transform)
 - Vite 5 → 7 (ESM-only, new browser targets)
@@ -140,4 +165,4 @@ All development tools upgraded to latest stable versions:
 - All linting/formatting tools updated
 
 ## Next Steps
-See `_plans/M1_app_shell_and_navigation.md` for next milestone.
+See `_plans/M2_board_core.md` for next milestone.

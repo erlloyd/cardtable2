@@ -1,0 +1,11 @@
+{
+  "games": [
+    {
+      "id": "fake-game",
+      "name": "Fake Game",
+      "description": "A placeholder game for testing purposes",
+      "version": "1.0.0",
+      "manifestUrl": "/games/fake-game/manifest.json"
+    }
+  ]
+}

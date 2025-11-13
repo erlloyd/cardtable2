@@ -16,8 +16,9 @@ Set up the base application structure with routing and lazy loading for the boar
 **Spec:**
 - `/` renders Game Select screen
 - `/table/:id` renders Table screen
-- `/table/local-<uuid>` generated on "Open Table"
+- `/table/adjective-adjective-animal` generated on "Open Table" (e.g., `/table/happy-clever-elephant`)
 - Board module loaded via `import()` only when navigating to table
+- Table IDs generated using `unique-names-generator` library
 
 **Deliverables:**
 - React Router setup
@@ -28,7 +29,7 @@ Set up the base application structure with routing and lazy loading for the boar
 **Test Plan:**
 - Playwright: navigate between routes and verify Board placeholder renders
 - Verify Board module only loads when navigating to `/table/:id`
-- Check that local table IDs follow `local-<uuid>` format
+- Check that table IDs follow `adjective-adjective-animal` format
 
 ### M1-T2: Game Index & Combobox
 **Objective:** Create `gamesIndex.json` with Fake Game entry and implement game selection combobox.

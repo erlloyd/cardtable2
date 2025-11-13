@@ -41,6 +41,11 @@ class MockWorker {
             type: 'echo-response',
             data: msg.data,
           } as WorkerToMainMessage);
+        } else if (msg.type === 'init') {
+          // Simulate canvas initialization
+          this.simulateMessage({
+            type: 'initialized',
+          } as WorkerToMainMessage);
         }
       }
     }, 0);
@@ -96,10 +101,16 @@ describe('Board', () => {
   beforeEach(() => {
     // Mock Worker constructor
     vi.stubGlobal('Worker', MockWorker);
+
+    // Mock HTMLCanvasElement.transferControlToOffscreen
+    HTMLCanvasElement.prototype.transferControlToOffscreen = vi.fn(() => {
+      return {} as OffscreenCanvas;
+    });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('renders with table ID', async () => {
@@ -191,5 +202,55 @@ describe('Board', () => {
     unmount();
 
     // Worker should be terminated (tested implicitly through no errors)
+  });
+
+  it('renders canvas element', () => {
+    render(<Board tableId="test-table" />);
+
+    const canvas = screen.getByTestId('board-canvas');
+    expect(canvas).toBeInTheDocument();
+    expect(canvas.tagName).toBe('CANVAS');
+  });
+
+  it('initializes canvas and transfers to worker', async () => {
+    render(<Board tableId="test-table" />);
+
+    // Wait for worker to be ready
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent('Ready');
+    });
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    // Verify transferControlToOffscreen was called
+    expect(
+      HTMLCanvasElement.prototype.transferControlToOffscreen,
+    ).toHaveBeenCalled();
+
+    // Verify initialization message appears
+    await waitFor(() => {
+      expect(screen.getByText(/Canvas initialized/i)).toBeInTheDocument();
+    });
+  });
+
+  it('prevents double canvas transfer in strict mode', async () => {
+    render(<Board tableId="test-table" />);
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    // transferControlToOffscreen should only be called once
+    expect(
+      HTMLCanvasElement.prototype.transferControlToOffscreen,
+    ).toHaveBeenCalledTimes(1);
   });
 });

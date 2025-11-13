@@ -42,17 +42,26 @@ export interface StackObject extends TableObject {
 }
 
 // ============================================================================
-// Worker Message Types (M2-T1)
+// Worker Message Types (M2-T1 & M2-T2)
 // ============================================================================
 
 // Messages sent from main thread to worker
 export type MainToWorkerMessage =
   | { type: 'ping'; data: string }
-  | { type: 'echo'; data: string };
+  | { type: 'echo'; data: string }
+  | {
+      type: 'init';
+      canvas: OffscreenCanvas;
+      width: number;
+      height: number;
+      dpr: number;
+    }
+  | { type: 'resize'; width: number; height: number; dpr: number };
 
 // Messages sent from worker to main thread
 export type WorkerToMainMessage =
   | { type: 'pong'; data: string }
   | { type: 'echo-response'; data: string }
   | { type: 'ready' }
+  | { type: 'initialized' }
   | { type: 'error'; error: string };

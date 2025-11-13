@@ -53,6 +53,8 @@ export default [
       ],
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
+      // Disable no-undef for TypeScript files - TypeScript handles this
+      'no-undef': 'off',
     },
     settings: {
       react: {
@@ -118,6 +120,8 @@ export default [
         'error',
         { argsIgnorePattern: '^_' },
       ],
+      // Disable no-undef for TypeScript files - TypeScript handles this
+      'no-undef': 'off',
     },
   },
   // Test files (Vitest)
@@ -153,6 +157,8 @@ export default [
     rules: {
       ...typescript.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
+      // Disable no-undef for TypeScript files - TypeScript handles this
+      'no-undef': 'off',
     },
   },
   // E2E tests (Playwright)
@@ -193,6 +199,8 @@ export default [
         { argsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/explicit-module-boundary-types': 'off',
+      // Disable no-undef for TypeScript files - TypeScript handles this
+      'no-undef': 'off',
     },
   },
   // Backend/Server config

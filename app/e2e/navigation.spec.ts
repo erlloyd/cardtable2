@@ -53,7 +53,7 @@ test.describe('Navigation', () => {
   });
 });
 
-test.describe('Worker Communication (M2-T1)', () => {
+test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
   test('should initialize worker and show ready status', async ({ page }) => {
     await page.goto('/');
 
@@ -67,6 +67,25 @@ test.describe('Worker Communication (M2-T1)', () => {
 
     // Verify "Worker is ready" message appears
     await expect(page.getByText('Worker is ready')).toBeVisible();
+  });
+
+  test('should initialize canvas and render', async ({ page }) => {
+    await page.goto('/');
+
+    // Navigate to table
+    await page.click('text=Open Table');
+    await page.waitForSelector('[data-testid="board"]');
+
+    // Wait for canvas element to appear
+    const canvas = page.locator('[data-testid="board-canvas"]');
+    await expect(canvas).toBeVisible();
+
+    // Wait for canvas to be initialized
+    const status = page.locator('[data-testid="worker-status"]');
+    await expect(status).toContainText('Initialized', { timeout: 5000 });
+
+    // Verify "Canvas initialized" message appears
+    await expect(page.getByText('Canvas initialized')).toBeVisible();
   });
 
   test('should send ping and receive pong', async ({ page }) => {

@@ -10,8 +10,13 @@ interface BoardProps {
 
 function Board({ tableId }: BoardProps) {
   const workerRef = useRef<Worker | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasTransferredRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
+  const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
 
   // Initialize worker on mount
   useEffect(() => {
@@ -40,6 +45,11 @@ function Board({ tableId }: BoardProps) {
             setMessages((prev) => [...prev, 'Worker is ready']);
             break;
 
+          case 'initialized':
+            setIsCanvasInitialized(true);
+            setMessages((prev) => [...prev, 'Canvas initialized']);
+            break;
+
           case 'pong':
             setMessages((prev) => [...prev, `Worker: ${message.data}`]);
             break;
@@ -66,8 +76,50 @@ function Board({ tableId }: BoardProps) {
         workerRef.current.terminate();
         workerRef.current = null;
       }
+      canvasTransferredRef.current = false;
     };
   }, []);
+
+  // Initialize canvas and transfer to worker
+  useEffect(() => {
+    // Wait for worker to be ready
+    if (!isWorkerReady || !canvasRef.current || !workerRef.current) {
+      return;
+    }
+
+    // Prevent double transfer in React strict mode
+    if (canvasTransferredRef.current) {
+      return;
+    }
+
+    // Mark as transferred immediately to prevent race conditions
+    canvasTransferredRef.current = true;
+
+    const canvas = canvasRef.current;
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth * dpr;
+    const height = canvas.clientHeight * dpr;
+
+    try {
+      // Transfer canvas to worker
+      const offscreen = canvas.transferControlToOffscreen();
+
+      const message: MainToWorkerMessage = {
+        type: 'init',
+        canvas: offscreen,
+        width,
+        height,
+        dpr,
+      };
+
+      workerRef.current.postMessage(message, [offscreen]);
+      setMessages((prev) => [...prev, 'Canvas transferred to worker']);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setMessages((prev) => [...prev, `Canvas transfer error: ${errorMsg}`]);
+      canvasTransferredRef.current = false; // Reset on error
+    }
+  }, [isWorkerReady]);
 
   // Send ping message to worker
   const handlePing = () => {
@@ -96,7 +148,29 @@ function Board({ tableId }: BoardProps) {
       <h2>Board: {tableId}</h2>
 
       <div className="worker-status" data-testid="worker-status">
-        Status: {isWorkerReady ? 'Ready' : 'Initializing...'}
+        Worker: {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
+        {isCanvasInitialized ? 'Initialized' : 'Not initialized'}
+      </div>
+
+      <div
+        ref={containerRef}
+        style={{
+          width: '800px',
+          height: '600px',
+          border: '1px solid #ccc',
+          position: 'relative',
+        }}
+        data-testid="canvas-container"
+      >
+        <canvas
+          ref={canvasRef}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'block',
+          }}
+          data-testid="board-canvas"
+        />
       </div>
 
       <div className="controls">

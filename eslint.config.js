@@ -12,6 +12,7 @@ export default [
     files: ['app/**/*.{ts,tsx}'],
     ignores: [
       'app/**/*.test.{ts,tsx}',
+      'app/**/*.worker.{ts,tsx}',
       'app/e2e/**',
       'app/playwright.config.ts',
     ],
@@ -30,6 +31,9 @@ export default [
         console: 'readonly',
         fetch: 'readonly',
         Response: 'readonly',
+        Worker: 'readonly',
+        URL: 'readonly',
+        MessageEvent: 'readonly',
       },
     },
     plugins: {
@@ -89,6 +93,33 @@ export default [
       ...typescript.configs.recommended.rules,
     },
   },
+  // Web Workers
+  {
+    files: ['app/**/*.worker.{ts,tsx}'],
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+      },
+      globals: {
+        self: 'readonly',
+        postMessage: 'readonly',
+        addEventListener: 'readonly',
+        MessageEvent: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescript,
+    },
+    rules: {
+      ...typescript.configs.recommended.rules,
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
+    },
+  },
   // Test files (Vitest)
   {
     files: ['app/**/*.test.{ts,tsx}'],
@@ -109,6 +140,10 @@ export default [
         beforeEach: 'readonly',
         afterEach: 'readonly',
         Response: 'readonly',
+        URL: 'readonly',
+        MessageEvent: 'readonly',
+        ErrorEvent: 'readonly',
+        setTimeout: 'readonly',
       },
     },
     plugins: {

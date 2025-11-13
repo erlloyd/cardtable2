@@ -40,3 +40,19 @@ export interface StackObject extends TableObject {
   _cards: string[]; // Array of card IDs in the stack (top to bottom)
   _faceUp: boolean; // Whether stack is face-up or face-down
 }
+
+// ============================================================================
+// Worker Message Types (M2-T1)
+// ============================================================================
+
+// Messages sent from main thread to worker
+export type MainToWorkerMessage =
+  | { type: 'ping'; data: string }
+  | { type: 'echo'; data: string };
+
+// Messages sent from worker to main thread
+export type WorkerToMainMessage =
+  | { type: 'pong'; data: string }
+  | { type: 'echo-response'; data: string }
+  | { type: 'ready' }
+  | { type: 'error'; error: string };

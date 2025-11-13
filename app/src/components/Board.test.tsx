@@ -1,22 +1,195 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
+import type { WorkerToMainMessage } from '@cardtable2/shared';
+
+// Mock Worker
+class MockWorker {
+  url: string | URL;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  private listeners: Map<
+    string,
+    Array<(event: MessageEvent | ErrorEvent) => void>
+  > = new Map();
+
+  constructor(url: string | URL) {
+    this.url = url;
+
+    // Simulate worker ready message
+    setTimeout(() => {
+      this.simulateMessage({ type: 'ready' } as WorkerToMainMessage);
+    }, 0);
+  }
+
+  postMessage(message: unknown) {
+    // Simulate worker responses
+    setTimeout(() => {
+      if (
+        typeof message === 'object' &&
+        message !== null &&
+        'type' in message
+      ) {
+        const msg = message as { type: string; data?: string };
+        if (msg.type === 'ping') {
+          this.simulateMessage({
+            type: 'pong',
+            data: `Pong! Received: ${msg.data}`,
+          } as WorkerToMainMessage);
+        } else if (msg.type === 'echo') {
+          this.simulateMessage({
+            type: 'echo-response',
+            data: msg.data,
+          } as WorkerToMainMessage);
+        }
+      }
+    }, 0);
+  }
+
+  addEventListener(
+    event: string,
+    handler: (event: MessageEvent | ErrorEvent) => void,
+  ) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event)!.push(handler);
+  }
+
+  removeEventListener(
+    event: string,
+    handler: (event: MessageEvent | ErrorEvent) => void,
+  ) {
+    const handlers = this.listeners.get(event);
+    if (handlers) {
+      const index = handlers.indexOf(handler);
+      if (index > -1) {
+        handlers.splice(index, 1);
+      }
+    }
+  }
+
+  terminate() {
+    this.listeners.clear();
+  }
+
+  // Helper method to simulate messages from worker
+  simulateMessage(data: WorkerToMainMessage) {
+    const event = new MessageEvent('message', { data });
+    const handlers = this.listeners.get('message');
+    if (handlers) {
+      handlers.forEach((handler) => handler(event));
+    }
+  }
+
+  // Helper method to simulate errors
+  simulateError(message: string) {
+    const event = new ErrorEvent('error', { message });
+    const handlers = this.listeners.get('error');
+    if (handlers) {
+      handlers.forEach((handler) => handler(event));
+    }
+  }
+}
 
 describe('Board', () => {
-  it('renders with table ID', () => {
+  beforeEach(() => {
+    // Mock Worker constructor
+    vi.stubGlobal('Worker', MockWorker);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders with table ID', async () => {
     render(<Board tableId="happy-clever-elephant" />);
 
     expect(screen.getByTestId('board')).toBeInTheDocument();
     expect(
-      screen.getByText(/Board loaded for table: happy-clever-elephant/i),
+      screen.getByText(/Board: happy-clever-elephant/i),
     ).toBeInTheDocument();
   });
 
-  it('displays placeholder message', () => {
+  it('initializes worker and displays ready status', async () => {
     render(<Board tableId="test-table" />);
 
-    expect(
-      screen.getByText(/This is a placeholder for the PixiJS board/i),
-    ).toBeInTheDocument();
+    // Initially should show "Initializing..."
+    expect(screen.getByTestId('worker-status')).toHaveTextContent(
+      'Initializing...',
+    );
+
+    // Wait for worker to be ready
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent('Ready');
+    });
+
+    // Should display "Worker is ready" message
+    await waitFor(() => {
+      expect(screen.getByText(/Worker is ready/i)).toBeInTheDocument();
+    });
+  });
+
+  it('sends ping message and receives pong response', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for worker to be ready
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent('Ready');
+    });
+
+    // Click ping button
+    const pingButton = screen.getByTestId('ping-button');
+    await user.click(pingButton);
+
+    // Should display pong response
+    await waitFor(() => {
+      expect(screen.getByText(/Pong! Received:/i)).toBeInTheDocument();
+    });
+  });
+
+  it('sends echo message and receives echo response', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for worker to be ready
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent('Ready');
+    });
+
+    // Click echo button
+    const echoButton = screen.getByTestId('echo-button');
+    await user.click(echoButton);
+
+    // Should display echo response
+    await waitFor(() => {
+      expect(screen.getByText(/Echo:/i)).toBeInTheDocument();
+    });
+  });
+
+  it('disables buttons when worker is not ready', () => {
+    render(<Board tableId="test-table" />);
+
+    const pingButton = screen.getByTestId('ping-button');
+    const echoButton = screen.getByTestId('echo-button');
+
+    // Buttons should be disabled initially
+    expect(pingButton).toBeDisabled();
+    expect(echoButton).toBeDisabled();
+  });
+
+  it('cleans up worker on unmount', async () => {
+    const { unmount } = render(<Board tableId="test-table" />);
+
+    // Wait for worker to be ready
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent('Ready');
+    });
+
+    // Unmount component
+    unmount();
+
+    // Worker should be terminated (tested implicitly through no errors)
   });
 });

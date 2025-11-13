@@ -7,7 +7,8 @@
       "Bash(chmod:*)",
       "Bash(pnpm:*)",
       "WebSearch",
-      "Bash(node --version)"
+      "Bash(node --version)",
+      "Bash(mise ls node)"
     ],
     "deny": []
   }

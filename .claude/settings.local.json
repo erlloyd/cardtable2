@@ -11,5 +11,18 @@
       "Bash(mise ls node)"
     ],
     "deny": []
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/notify-stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

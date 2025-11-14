@@ -53,9 +53,10 @@ export function detectCapabilities(): RendererCapabilities {
   let recommendedMode: 'worker' | 'main-thread' = 'main-thread';
 
   if (hasOffscreenCanvas && hasWebGL) {
-    // iOS 16.x has unstable OffscreenCanvas WebGL support
-    // iOS 17+ is more stable
-    if (isIOS && iOSVersion !== null && iOSVersion < 17) {
+    // IMPORTANT: PixiJS ticker crashes in Web Workers on iOS Safari (all versions)
+    // Even temporary ticker usage for animations causes tab crashes
+    // Force main-thread mode for all iOS devices
+    if (isIOS) {
       recommendedMode = 'main-thread';
     } else {
       recommendedMode = 'worker';

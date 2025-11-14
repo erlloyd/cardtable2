@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import GameSelect from './pages/GameSelect';
 import Table from './pages/Table';
+import DiagnosticTest from './pages/DiagnosticTest';
 
 const router = createBrowserRouter([
   {
@@ -10,6 +11,10 @@ const router = createBrowserRouter([
   {
     path: '/table/:id',
     element: <Table />,
+  },
+  {
+    path: '/diagnostic',
+    element: <DiagnosticTest />,
   },
 ]);
 

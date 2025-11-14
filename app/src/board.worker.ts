@@ -5,9 +5,24 @@ import type {
 } from '@cardtable2/shared';
 import { RendererCore } from './renderer/RendererCore';
 
+console.log('[Worker] Starting worker initialization...');
+console.log('[Worker] User Agent:', self.navigator.userAgent);
+console.log('[Worker] OffscreenCanvas available:', typeof OffscreenCanvas);
+
 // Configure PixiJS for web worker environment
 // This MUST be done before creating any PixiJS objects
-DOMAdapter.set(WebWorkerAdapter);
+try {
+  console.log('[Worker] Setting DOMAdapter to WebWorkerAdapter...');
+  DOMAdapter.set(WebWorkerAdapter);
+  console.log('[Worker] ✓ DOMAdapter set successfully');
+} catch (error) {
+  console.error('[Worker] ✗ Failed to set DOMAdapter:', error);
+  self.postMessage({
+    type: 'error',
+    error: `DOMAdapter setup failed: ${error instanceof Error ? error.message : String(error)}`,
+    context: 'worker-init',
+  } as RendererToMainMessage);
+}
 
 /**
  * Worker-based renderer implementation.

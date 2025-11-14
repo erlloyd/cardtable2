@@ -88,6 +88,10 @@ function Board({ tableId }: BoardProps) {
         case 'error':
           setMessages((prev) => [...prev, `Error: ${message.error}`]);
           break;
+
+        case 'animation-complete':
+          setMessages((prev) => [...prev, 'Animation completed!']);
+          break;
       }
     });
 
@@ -154,6 +158,17 @@ function Board({ tableId }: BoardProps) {
       console.log('[Board] Sending init message to renderer...');
       rendererRef.current.sendMessage(message);
       console.log('[Board] ✓ Init message sent');
+
+      // Debug: Check canvas DOM size after init
+      setTimeout(() => {
+        console.log('[Board] Canvas element check:');
+        console.log('[Board] - canvas.width (attribute):', canvas.width);
+        console.log('[Board] - canvas.height (attribute):', canvas.height);
+        console.log('[Board] - canvas.style.width:', canvas.style.width);
+        console.log('[Board] - canvas.style.height:', canvas.style.height);
+        console.log('[Board] - canvas.clientWidth:', canvas.clientWidth);
+        console.log('[Board] - canvas.clientHeight:', canvas.clientHeight);
+      }, 100);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[Board] ✗ Canvas init error:', errorMsg);
@@ -182,6 +197,17 @@ function Board({ tableId }: BoardProps) {
       data: `Echo test at ${new Date().toLocaleTimeString()}`,
     };
     rendererRef.current.sendMessage(message);
+  };
+
+  // Trigger test animation (rotates circle for 2 seconds)
+  const handleAnimation = () => {
+    if (!rendererRef.current) return;
+
+    const message: MainToRendererMessage = {
+      type: 'test-animation',
+    };
+    rendererRef.current.sendMessage(message);
+    setMessages((prev) => [...prev, 'Starting animation...']);
   };
 
   return (
@@ -229,6 +255,18 @@ function Board({ tableId }: BoardProps) {
           data-testid="echo-button"
         >
           Send Echo
+        </button>
+        <button
+          onClick={handleAnimation}
+          disabled={!isCanvasInitialized}
+          data-testid="animation-button"
+          style={{
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            fontWeight: 'bold',
+          }}
+        >
+          Test Animation (2s)
         </button>
       </div>
 

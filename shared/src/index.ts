@@ -56,7 +56,8 @@ export type MainToRendererMessage =
       height: number;
       dpr: number;
     }
-  | { type: 'resize'; width: number; height: number; dpr: number };
+  | { type: 'resize'; width: number; height: number; dpr: number }
+  | { type: 'test-animation' };
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =
@@ -65,4 +66,5 @@ export type RendererToMainMessage =
   | { type: 'ready' }
   | { type: 'initialized' }
   | { type: 'error'; error: string; context?: string }
-  | { type: 'warning'; message: string };
+  | { type: 'warning'; message: string }
+  | { type: 'animation-complete' };

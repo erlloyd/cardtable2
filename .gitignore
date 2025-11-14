@@ -109,6 +109,8 @@ logs
 
 # Testing
 /coverage
+test-results/
+playwright-report/
 
 # Storybook build outputs
 storybook-static

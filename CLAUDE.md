@@ -94,16 +94,33 @@ pnpm run format
 - Object types: `stack`, `token`, `zone`, `mat`, `counter`
 - Yjs for CRDT-based multiplayer sync
 
+### Rendering Architecture
+- Dual-mode rendering: Worker-based (OffscreenCanvas) OR Main-thread (regular canvas)
+- Worker mode for best performance on desktop/modern mobile (60fps with 300+ objects)
+- Main-thread mode for maximum compatibility (iOS 16.x, debugging, user preference)
+- Shared core logic (SceneManager, HitTester, InputHandler, RenderCore)
+- User-toggleable in settings (auto-detect, force mode, debug tools)
+- See `_plans/M2_rendering_architecture.md` for full details
+
 ### Shared Package
 - Direct TypeScript imports (no build step)
 - Contains common types used by both app and server
 - Located at `@cardtable2/shared`
 
 ### CI/CD
-- Git-flow pattern with main branch only
-- Selective deployment: only deploys changed packages
+- Feature branch workflow: all development on feature branches
+- Main branch protected: only merge via tested feature branches
+- Selective deployment: only deploys changed packages on main
 - Uses PNPM filtering to detect changes
 - Changes to shared trigger both app and server deployments
+- App deploys to GitHub Pages at beta.card-table.app
+
+### Future Hosting Plans
+- **Railway (https://railway.app/)** planned for production hosting
+  - WebSocket support for y-websocket backend
+  - Automatic PR preview deployments for both app and server
+  - Single platform for full-stack deployment
+  - Cost-effective usage-based pricing
 
 ## Performance Targets
 - 60 fps on mobile/desktop
@@ -115,7 +132,7 @@ pnpm run format
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
 - ✅ M1: App Shell & Navigation (COMPLETED)
-- ⏳ M2: Board Core
+- ⏳ M2: Board Core (Dual-Mode Rendering, Camera, Hit-Testing, Object Dragging)
 - ⏳ M3: Local Yjs
 - ⏳ M4: Set Loader & Assets
 - ⏳ M5: Multiplayer Server
@@ -126,6 +143,13 @@ pnpm run format
 - ⏳ M10: Packaging & Documentation
 
 ## Important Notes
+
+### Branching Strategy
+- **IMPORTANT**: All work must be done on feature branches (e.g., `feature/m2-board-core`)
+- Never commit directly to main unless explicitly instructed
+- Branch naming: `feature/{milestone}-{description}` or `fix/{description}`
+- Merge to main only after testing and validation
+- CI/CD deploys automatically on merge to main
 
 ### Testing
 - Unit tests use Vitest
@@ -139,9 +163,9 @@ pnpm run format
 - Pre-push hooks run typecheck
 
 ### Deployment
-- Placeholder deployment on merge to main
-- App and server deploy independently based on changes
-- Future: App to static hosting, server to container
+- App deploys to GitHub Pages (beta.card-table.app) on merge to main
+- Server deployment placeholder (future: container hosting)
+- App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
 

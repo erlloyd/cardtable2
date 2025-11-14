@@ -1,0 +1,9 @@
+# TanStack Router generated files
+**/routeTree.gen.ts
+
+# Build output
+dist/
+coverage/
+
+# Dependencies
+node_modules/

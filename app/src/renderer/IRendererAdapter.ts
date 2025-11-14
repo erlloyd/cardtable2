@@ -4,6 +4,15 @@ import type {
 } from '@cardtable2/shared';
 
 /**
+ * Rendering mode enum.
+ * Defines whether rendering happens in a Web Worker or on the main thread.
+ */
+export enum RenderMode {
+  Worker = 'worker',
+  MainThread = 'main-thread',
+}
+
+/**
  * Unified interface for renderer communication.
  *
  * This interface abstracts the transport layer (worker postMessage vs
@@ -14,6 +23,12 @@ import type {
  * implementation of this interface.
  */
 export interface IRendererAdapter {
+  /**
+   * The rendering mode for this adapter.
+   * This property survives minification (unlike constructor.name).
+   */
+  readonly mode: RenderMode;
+
   /**
    * Send a message to the renderer.
    * Worker mode: posts to worker

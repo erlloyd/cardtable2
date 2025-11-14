@@ -3,7 +3,10 @@ import type {
   MainToRendererMessage,
   RendererToMainMessage,
 } from '@cardtable2/shared';
-import type { IRendererAdapter } from '../renderer/IRendererAdapter';
+import {
+  RenderMode,
+  type IRendererAdapter,
+} from '../renderer/IRendererAdapter';
 import { createRenderer } from '../renderer/RendererFactory';
 
 interface BoardProps {
@@ -19,9 +22,7 @@ function Board({ tableId }: BoardProps) {
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
-  const [renderMode, setRenderMode] = useState<
-    'worker' | 'main-thread' | 'detecting...'
-  >('detecting...');
+  const [renderMode, setRenderMode] = useState<RenderMode | null>(null);
 
   // Initialize renderer on mount
   useEffect(() => {
@@ -32,11 +33,15 @@ function Board({ tableId }: BoardProps) {
 
     // Check for renderMode query parameter to force a specific mode
     const params = new URLSearchParams(window.location.search);
-    const renderMode = params.get('renderMode');
-    let mode: 'auto' | 'worker' | 'main-thread' = 'auto';
+    const renderModeParam = params.get('renderMode');
+    let mode: RenderMode | 'auto' = 'auto';
 
-    if (renderMode === 'worker' || renderMode === 'main-thread') {
-      mode = renderMode;
+    // Query param is a string, so compare against enum values
+    if (renderModeParam === 'worker') {
+      mode = RenderMode.Worker;
+      console.log(`[Board] Forcing render mode: ${mode}`);
+    } else if (renderModeParam === 'main-thread') {
+      mode = RenderMode.MainThread;
       console.log(`[Board] Forcing render mode: ${mode}`);
     } else {
       console.log('[Board] Using auto-detected render mode');
@@ -48,19 +53,16 @@ function Board({ tableId }: BoardProps) {
     // Store renderer reference
     rendererRef.current = renderer;
 
-    // Detect which mode was actually selected
-    const actualMode =
-      renderer.constructor.name === 'WorkerRendererAdapter'
-        ? 'worker'
-        : 'main-thread';
+    // Get the actual mode from the renderer
+    const actualMode = renderer.mode;
     setRenderMode(actualMode);
     console.log(`[Board] ========================================`);
     console.log(`[Board] RENDER MODE: ${actualMode}`);
     console.log(
-      `[Board] Worker will ${actualMode === 'worker' ? 'BE' : 'NOT be'} used`,
+      `[Board] Worker will ${actualMode === RenderMode.Worker ? 'BE' : 'NOT be'} used`,
     );
     console.log(
-      `[Board] OffscreenCanvas will ${actualMode === 'worker' ? 'BE' : 'NOT be'} used`,
+      `[Board] OffscreenCanvas will ${actualMode === RenderMode.Worker ? 'BE' : 'NOT be'} used`,
     );
     console.log(`[Board] ========================================`);
 
@@ -112,7 +114,7 @@ function Board({ tableId }: BoardProps) {
       !isWorkerReady ||
       !canvasRef.current ||
       !rendererRef.current ||
-      renderMode === 'detecting...'
+      !renderMode
     ) {
       return;
     }
@@ -133,7 +135,7 @@ function Board({ tableId }: BoardProps) {
     try {
       let canvasToSend: OffscreenCanvas | HTMLCanvasElement;
 
-      if (renderMode === 'worker') {
+      if (renderMode === RenderMode.Worker) {
         // Worker mode: transfer to OffscreenCanvas
         console.log('[Board] Transferring canvas to OffscreenCanvas...');
         canvasToSend = canvas.transferControlToOffscreen();

@@ -12,7 +12,11 @@
       "WebFetch(domain:code.claude.com)",
       "Bash(curl:*)",
       "Bash(lsof:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:tanstack.com)",
+      "Bash(cat:*)",
+      "Bash(gh run view:*)"
     ],
     "deny": []
   },

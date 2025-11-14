@@ -103,8 +103,10 @@ vi.mock('../renderer/RendererFactory', async () => {
   const { WorkerRendererAdapter } = await import(
     '../renderer/WorkerRendererAdapter'
   );
+  const { RenderMode } = await import('../renderer/IRendererAdapter');
   return {
-    createRenderer: (_mode?: RenderMode) => {
+    RenderMode,
+    createRenderer: (_mode?: RenderMode | 'auto') => {
       // Force worker mode in tests to use MockWorker
       return new WorkerRendererAdapter();
     },
@@ -113,7 +115,7 @@ vi.mock('../renderer/RendererFactory', async () => {
       hasWebGL: true,
       isIOS: false,
       iOSVersion: null,
-      recommendedMode: 'worker' as const,
+      recommendedMode: RenderMode.Worker,
     }),
   };
 });

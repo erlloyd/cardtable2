@@ -1,11 +1,15 @@
-import { useParams } from 'react-router-dom';
+import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense } from 'react';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
 
+export const Route = createFileRoute('/table/$id')({
+  component: Table,
+});
+
 function Table() {
-  const { id } = useParams<{ id: string }>();
+  const { id } = Route.useParams();
 
   return (
     <div className="table">
@@ -14,11 +18,9 @@ function Table() {
       </header>
       <main className="table-main">
         <Suspense fallback={<div>Loading board...</div>}>
-          <Board tableId={id!} />
+          <Board tableId={id} />
         </Suspense>
       </main>
     </div>
   );
 }
-
-export default Table;

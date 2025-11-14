@@ -38,8 +38,10 @@ export function detectCapabilities(): RendererCapabilities {
     hasWebGL = false;
   }
 
-  // Detect iOS and version
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  // Detect iOS and version (including iPadOS masquerading as Mac)
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   let iOSVersion: number | null = null;
 
   if (isIOS) {

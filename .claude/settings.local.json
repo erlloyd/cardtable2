@@ -16,7 +16,9 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:tanstack.com)",
       "Bash(cat:*)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)"
     ],
     "deny": []
   },

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
+  PointerEventData,
+  WheelEventData,
 } from '@cardtable2/shared';
 import {
   RenderMode,
@@ -106,6 +108,44 @@ function Board({ tableId }: BoardProps) {
       canvasTransferredRef.current = false;
     };
   }, []);
+
+  // Add wheel event listener with passive: false to prevent page scroll
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const wheelHandler = (event: WheelEvent) => {
+      if (!rendererRef.current || !isCanvasInitialized) return;
+
+      // Prevent default browser zoom AND page scroll
+      event.preventDefault();
+
+      // Convert to canvas-relative coordinates (accounting for DPR)
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const canvasX = (event.clientX - rect.left) * dpr;
+      const canvasY = (event.clientY - rect.top) * dpr;
+
+      const wheelData: WheelEventData = {
+        deltaY: event.deltaY,
+        clientX: canvasX,
+        clientY: canvasY,
+      };
+
+      const message: MainToRendererMessage = {
+        type: 'wheel',
+        event: wheelData,
+      };
+      rendererRef.current.sendMessage(message);
+    };
+
+    // Add with passive: false to allow preventDefault
+    canvas.addEventListener('wheel', wheelHandler, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('wheel', wheelHandler);
+    };
+  }, [isCanvasInitialized]);
 
   // Initialize canvas and transfer to renderer
   useEffect(() => {
@@ -212,11 +252,108 @@ function Board({ tableId }: BoardProps) {
     setMessages((prev) => [...prev, 'Starting animation...']);
   };
 
+  // Helper to serialize pointer events (M2-T3)
+  const serializePointerEvent = (
+    event: React.PointerEvent,
+  ): PointerEventData => {
+    const pointerType = event.pointerType;
+    const isValidType =
+      pointerType === 'mouse' ||
+      pointerType === 'pen' ||
+      pointerType === 'touch';
+
+    if (!isValidType) {
+      console.warn(
+        'Unexpected pointer type:',
+        pointerType,
+        'defaulting to mouse',
+      );
+    }
+
+    // Convert to canvas-relative coordinates (accounting for DPR)
+    const canvas = canvasRef.current;
+    let canvasX = event.clientX;
+    let canvasY = event.clientY;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvasX = (event.clientX - rect.left) * dpr;
+      canvasY = (event.clientY - rect.top) * dpr;
+    }
+
+    return {
+      pointerId: event.pointerId,
+      pointerType: isValidType ? pointerType : 'mouse',
+      clientX: canvasX,
+      clientY: canvasY,
+      button: event.button,
+      buttons: event.buttons,
+      isPrimary: event.isPrimary,
+    };
+  };
+
+  // Handle pointer down (M2-T3)
+  const handlePointerDown = (event: React.PointerEvent) => {
+    if (!rendererRef.current || !isCanvasInitialized) return;
+
+    const message: MainToRendererMessage = {
+      type: 'pointer-down',
+      event: serializePointerEvent(event),
+    };
+    rendererRef.current.sendMessage(message);
+  };
+
+  // Handle pointer move (M2-T3)
+  const handlePointerMove = (event: React.PointerEvent) => {
+    if (!rendererRef.current || !isCanvasInitialized) return;
+
+    const message: MainToRendererMessage = {
+      type: 'pointer-move',
+      event: serializePointerEvent(event),
+    };
+    rendererRef.current.sendMessage(message);
+  };
+
+  // Handle pointer up (M2-T3)
+  const handlePointerUp = (event: React.PointerEvent) => {
+    if (!rendererRef.current || !isCanvasInitialized) return;
+
+    const message: MainToRendererMessage = {
+      type: 'pointer-up',
+      event: serializePointerEvent(event),
+    };
+    rendererRef.current.sendMessage(message);
+  };
+
+  // Handle pointer cancel (M2-T3)
+  const handlePointerCancel = (event: React.PointerEvent) => {
+    if (!rendererRef.current || !isCanvasInitialized) return;
+
+    const message: MainToRendererMessage = {
+      type: 'pointer-cancel',
+      event: serializePointerEvent(event),
+    };
+    rendererRef.current.sendMessage(message);
+  };
+
   return (
     <div className="board" data-testid="board">
-      <h2>Board: {tableId}</h2>
+      <div
+        style={{
+          fontSize: '14px',
+          fontWeight: 'bold',
+          padding: '4px 0',
+          marginBottom: '4px',
+        }}
+      >
+        Board: {tableId}
+      </div>
 
-      <div className="worker-status" data-testid="worker-status">
+      <div
+        className="worker-status"
+        data-testid="worker-status"
+        style={{ fontSize: '12px', marginBottom: '8px' }}
+      >
         Mode: {renderMode} | Worker:{' '}
         {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
         {isCanvasInitialized ? 'Initialized' : 'Not initialized'}
@@ -229,6 +366,7 @@ function Board({ tableId }: BoardProps) {
           height: '600px',
           border: '1px solid #ccc',
           position: 'relative',
+          overflow: 'hidden', // Prevent scrollbars on container
         }}
         data-testid="canvas-container"
       >
@@ -238,8 +376,13 @@ function Board({ tableId }: BoardProps) {
             width: '100%',
             height: '100%',
             display: 'block',
+            touchAction: 'none', // Prevent default touch behaviors
           }}
           data-testid="board-canvas"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         />
       </div>
 
@@ -268,7 +411,7 @@ function Board({ tableId }: BoardProps) {
             fontWeight: 'bold',
           }}
         >
-          Test Animation (2s)
+          Test Animation (3s)
         </button>
       </div>
 

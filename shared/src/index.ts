@@ -42,8 +42,26 @@ export interface StackObject extends TableObject {
 }
 
 // ============================================================================
-// Renderer Message Types (M2-T1, M2-T2, M2-T6)
+// Renderer Message Types (M2-T1, M2-T2, M2-T3, M2-T6)
 // ============================================================================
+
+// Pointer event data (M2-T3)
+export interface PointerEventData {
+  pointerId: number;
+  pointerType: 'mouse' | 'pen' | 'touch';
+  clientX: number;
+  clientY: number;
+  button?: number;
+  buttons?: number;
+  isPrimary: boolean;
+}
+
+// Wheel event data (M2-T3)
+export interface WheelEventData {
+  deltaY: number;
+  clientX: number;
+  clientY: number;
+}
 
 // Messages sent from main thread to renderer (worker or main thread)
 export type MainToRendererMessage =
@@ -57,7 +75,12 @@ export type MainToRendererMessage =
       dpr: number;
     }
   | { type: 'resize'; width: number; height: number; dpr: number }
-  | { type: 'test-animation' };
+  | { type: 'test-animation' }
+  | { type: 'pointer-down'; event: PointerEventData }
+  | { type: 'pointer-move'; event: PointerEventData }
+  | { type: 'pointer-up'; event: PointerEventData }
+  | { type: 'pointer-cancel'; event: PointerEventData }
+  | { type: 'wheel'; event: WheelEventData };
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =

@@ -1,7 +1,9 @@
-import { Application, Graphics } from 'pixi.js';
+import { Application, Graphics, Container } from 'pixi.js';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
+  PointerEventData,
+  WheelEventData,
 } from '@cardtable2/shared';
 
 /**
@@ -11,10 +13,39 @@ import type {
  * regardless of where it runs. The ONLY difference between modes is how
  * postResponse() is implemented (postMessage vs callback).
  */
+// Drag slop thresholds by pointer type (M2-T3)
+const DRAG_SLOP = {
+  touch: 12,
+  pen: 6,
+  mouse: 3,
+} as const;
+
 export abstract class RendererCore {
   protected app: Application | null = null;
+  protected worldContainer: Container | null = null;
   private animationStartTime: number = 0;
   private isAnimating: boolean = false;
+
+  // Camera state (M2-T3)
+  private cameraScale = 1.0;
+
+  // Pointer tracking for gesture recognition
+  private pointers: Map<
+    number,
+    {
+      startX: number;
+      startY: number;
+      type: string;
+      lastX: number;
+      lastY: number;
+    }
+  > = new Map();
+  private isDragging = false;
+  private isPinching = false;
+  private initialPinchDistance = 0;
+  private initialPinchScale = 1.0;
+  private initialPinchMidpoint = { x: 0, y: 0 }; // Locked screen point for pinch zoom
+  private initialPinchWorldPoint = { x: 0, y: 0 }; // World coords under locked midpoint
 
   /**
    * Send a response message back to the main thread.
@@ -105,6 +136,11 @@ export abstract class RendererCore {
               this.app.ticker.stop();
             }
 
+            // Initialize viewport (M2-T3)
+            console.log('[RendererCore] Initializing viewport...');
+            this.initializeViewport(width, height);
+            console.log('[RendererCore] ✓ Viewport initialized');
+
             // Render a simple test scene
             console.log('[RendererCore] Rendering test scene...');
             this.renderTestScene();
@@ -153,8 +189,23 @@ export abstract class RendererCore {
           // Handle canvas resize
           if (this.app) {
             const { width, height, dpr } = message;
+
+            // Store old dimensions before resizing
+            const oldWidth = this.app.renderer.width;
+            const oldHeight = this.app.renderer.height;
+
             this.app.renderer.resize(width, height);
             this.app.renderer.resolution = dpr;
+
+            // Update world container position to keep it centered, preserving pan offset
+            if (this.worldContainer) {
+              const offsetX = this.worldContainer.position.x - oldWidth / 2;
+              const offsetY = this.worldContainer.position.y - oldHeight / 2;
+              this.worldContainer.position.set(
+                width / 2 + offsetX,
+                height / 2 + offsetY,
+              );
+            }
           }
           break;
         }
@@ -184,6 +235,31 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'pointer-down': {
+          this.handlePointerDown(message.event);
+          break;
+        }
+
+        case 'pointer-move': {
+          this.handlePointerMove(message.event);
+          break;
+        }
+
+        case 'pointer-up': {
+          this.handlePointerUp(message.event);
+          break;
+        }
+
+        case 'pointer-cancel': {
+          this.handlePointerCancel(message.event);
+          break;
+        }
+
+        case 'wheel': {
+          this.handleWheel(message.event);
+          break;
+        }
+
         default: {
           // Unknown message type
           this.postResponse({
@@ -204,52 +280,312 @@ export abstract class RendererCore {
   }
 
   /**
+   * Initialize world container for camera (M2-T3).
+   * Using a simple Container with manual transforms instead of pixi-viewport
+   * to avoid DOM dependencies (works in both Worker and main-thread modes).
+   */
+  private initializeViewport(width: number, height: number): void {
+    if (!this.app) return;
+
+    // Create a container for the world/scene
+    this.worldContainer = new Container();
+
+    // Add to stage
+    this.app.stage.addChild(this.worldContainer);
+
+    // Center camera on screen center initially
+    this.worldContainer.position.set(width / 2, height / 2);
+
+    // Set initial scale
+    this.worldContainer.scale.set(this.cameraScale);
+  }
+
+  /**
+   * Calculate distance between two pointers (for pinch gesture).
+   */
+  private getPointerDistance(
+    p1: { lastX: number; lastY: number },
+    p2: { lastX: number; lastY: number },
+  ): number {
+    const dx = p2.lastX - p1.lastX;
+    const dy = p2.lastY - p1.lastY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Handle pointer down event (M2-T3).
+   */
+  private handlePointerDown(event: PointerEventData): void {
+    if (!this.worldContainer) return;
+
+    // Track pointer start position for gesture recognition
+    this.pointers.set(event.pointerId, {
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      type: event.pointerType,
+    });
+
+    // Check if we have 2 touch pointers (pinch gesture)
+    if (this.pointers.size === 2 && event.pointerType === 'touch') {
+      this.isDragging = false;
+      this.isPinching = true;
+
+      // Calculate initial pinch distance and LOCK the midpoint
+      const pointerArray = Array.from(this.pointers.values());
+      this.initialPinchDistance = this.getPointerDistance(
+        pointerArray[0],
+        pointerArray[1],
+      );
+      this.initialPinchScale = this.cameraScale;
+
+      // Calculate and lock the midpoint (this should NOT change during the pinch)
+      this.initialPinchMidpoint.x =
+        (pointerArray[0].lastX + pointerArray[1].lastX) / 2;
+      this.initialPinchMidpoint.y =
+        (pointerArray[0].lastY + pointerArray[1].lastY) / 2;
+
+      // Convert midpoint to world coordinates ONCE at start of pinch
+      this.initialPinchWorldPoint.x =
+        (this.initialPinchMidpoint.x - this.worldContainer.position.x) /
+        this.initialPinchScale;
+      this.initialPinchWorldPoint.y =
+        (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
+        this.initialPinchScale;
+    } else if (event.isPrimary) {
+      // Start dragging if this is the primary pointer (and not pinching)
+      this.isDragging = false; // Will become true once we exceed slop threshold
+    }
+  }
+
+  /**
+   * Handle pointer move event (M2-T3 + pinch-to-zoom).
+   */
+  private handlePointerMove(event: PointerEventData): void {
+    if (!this.worldContainer || !this.app) return;
+
+    const pointerInfo = this.pointers.get(event.pointerId);
+    if (!pointerInfo) return;
+
+    // Store last position for delta calculation
+    const lastX = pointerInfo.lastX;
+    const lastY = pointerInfo.lastY;
+
+    // Update pointer position
+    pointerInfo.lastX = event.clientX;
+    pointerInfo.lastY = event.clientY;
+
+    // Handle pinch zoom (2 fingers)
+    if (this.isPinching && this.pointers.size === 2) {
+      const pointerArray = Array.from(this.pointers.values());
+      const currentDistance = this.getPointerDistance(
+        pointerArray[0],
+        pointerArray[1],
+      );
+
+      // Calculate scale change
+      const scaleChange = currentDistance / this.initialPinchDistance;
+      this.cameraScale = this.initialPinchScale * scaleChange;
+
+      // Apply zoom (no clamping - unlimited zoom)
+      this.worldContainer.scale.set(this.cameraScale);
+
+      // Adjust position so the LOCKED world point stays under the LOCKED screen midpoint
+      // Formula: screenPos = cameraPos + worldPos * scale
+      // Therefore: cameraPos = screenPos - worldPos * scale
+      this.worldContainer.position.x =
+        this.initialPinchMidpoint.x -
+        this.initialPinchWorldPoint.x * this.cameraScale;
+      this.worldContainer.position.y =
+        this.initialPinchMidpoint.y -
+        this.initialPinchWorldPoint.y * this.cameraScale;
+
+      // Request render
+      this.app.renderer.render(this.app.stage);
+      return;
+    }
+
+    // Handle single-pointer pan/drag
+    if (this.pointers.size === 1) {
+      // Calculate movement delta from start
+      const dx = event.clientX - pointerInfo.startX;
+      const dy = event.clientY - pointerInfo.startY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Check if movement exceeds drag slop threshold
+      const pointerType = event.pointerType;
+      const slopThreshold =
+        pointerType === 'mouse' ||
+        pointerType === 'pen' ||
+        pointerType === 'touch'
+          ? DRAG_SLOP[pointerType]
+          : DRAG_SLOP.mouse;
+
+      // Start dragging once we exceed the slop threshold
+      if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
+        this.isDragging = true;
+      }
+
+      // If dragging, manually pan the camera
+      if (this.isDragging && event.isPrimary) {
+        // Calculate delta from last position
+        const deltaX = event.clientX - lastX;
+        const deltaY = event.clientY - lastY;
+
+        // Move world container (camera pans by moving the world)
+        this.worldContainer.position.x += deltaX;
+        this.worldContainer.position.y += deltaY;
+
+        // Request render
+        this.app.renderer.render(this.app.stage);
+      }
+    }
+  }
+
+  /**
+   * Handle pointer up event (M2-T3 + pinch-to-zoom).
+   */
+  private handlePointerUp(event: PointerEventData): void {
+    if (!this.worldContainer) return;
+
+    // Clear pointer tracking
+    this.pointers.delete(event.pointerId);
+
+    // If we were pinching and now have less than 2 pointers, end pinch
+    if (this.isPinching && this.pointers.size < 2) {
+      this.isPinching = false;
+      console.log('[RendererCore] Pinch gesture ended');
+
+      // Transition to pan mode: reset remaining pointer's start position
+      // so user doesn't need to exceed drag slop again
+      if (this.pointers.size === 1) {
+        const remainingPointer = Array.from(this.pointers.values())[0];
+        remainingPointer.startX = remainingPointer.lastX;
+        remainingPointer.startY = remainingPointer.lastY;
+        // Allow immediate dragging without slop threshold
+        this.isDragging = true;
+      }
+    }
+
+    // End dragging
+    if (event.isPrimary) {
+      this.isDragging = false;
+    }
+  }
+
+  /**
+   * Handle pointer cancel event (M2-T3 + pinch-to-zoom).
+   */
+  private handlePointerCancel(event: PointerEventData): void {
+    if (!this.worldContainer) return;
+
+    // Clear pointer tracking
+    this.pointers.delete(event.pointerId);
+
+    // If we were pinching and now have less than 2 pointers, end pinch
+    if (this.isPinching && this.pointers.size < 2) {
+      this.isPinching = false;
+      console.log('[RendererCore] Pinch gesture cancelled');
+
+      // Transition to pan mode: reset remaining pointer's start position
+      // so user doesn't need to exceed drag slop again
+      if (this.pointers.size === 1) {
+        const remainingPointer = Array.from(this.pointers.values())[0];
+        remainingPointer.startX = remainingPointer.lastX;
+        remainingPointer.startY = remainingPointer.lastY;
+        // Allow immediate dragging without slop threshold
+        this.isDragging = true;
+      }
+    }
+
+    // End dragging
+    if (event.isPrimary) {
+      this.isDragging = false;
+    }
+  }
+
+  /**
+   * Handle wheel event for zooming (M2-T3).
+   * Zooms towards the mouse cursor position (zoom to point under cursor).
+   */
+  private handleWheel(event: WheelEventData): void {
+    if (!this.worldContainer || !this.app) return;
+
+    // Mouse position is already canvas-relative (converted in Board.tsx)
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+
+    // Convert mouse position to world coordinates before scaling
+    const worldX = (mouseX - this.worldContainer.position.x) / this.cameraScale;
+    const worldY = (mouseY - this.worldContainer.position.y) / this.cameraScale;
+
+    // Calculate zoom factor from wheel delta
+    const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05;
+
+    // Apply new scale (no clamping - unlimited zoom)
+    this.cameraScale = this.cameraScale * zoomFactor;
+    this.worldContainer.scale.set(this.cameraScale);
+
+    // Adjust position so the world point under cursor stays under cursor
+    this.worldContainer.position.x = mouseX - worldX * this.cameraScale;
+    this.worldContainer.position.y = mouseY - worldY * this.cameraScale;
+
+    // Request render
+    this.app.renderer.render(this.app.stage);
+  }
+
+  /**
    * Render a simple test scene (M2-T2).
    * This will be replaced with real scene management in later tasks.
    */
   private renderTestScene(): void {
-    if (!this.app) return;
-
-    const stage = this.app.stage;
+    if (!this.worldContainer) return;
 
     // Clear any existing children
-    stage.removeChildren();
+    this.worldContainer.removeChildren();
 
-    // Create a simple colored rectangle to verify rendering
+    // Create objects in world space (0,0 is world origin, camera will be centered)
+    // Create a simple colored rectangle
     const rect = new Graphics();
-    rect.rect(50, 50, 200, 150);
+    rect.rect(-200, -150, 200, 150);
     rect.fill(0x6c5ce7);
-    stage.addChild(rect);
+    this.worldContainer.addChild(rect);
 
     // Create another rectangle
     const rect2 = new Graphics();
-    rect2.rect(300, 100, 150, 200);
+    rect2.rect(50, -100, 150, 200);
     rect2.fill(0x00b894);
-    stage.addChild(rect2);
+    this.worldContainer.addChild(rect2);
 
-    // Create a circle
+    // Create a circle at world origin
     const circle = new Graphics();
-    circle.circle(500, 250, 75);
+    circle.circle(0, 0, 75);
     circle.fill(0xfdcb6e);
-    stage.addChild(circle);
+    this.worldContainer.addChild(circle);
   }
 
   /**
    * Cleanup resources.
    */
   destroy(): void {
+    if (this.worldContainer) {
+      this.worldContainer.destroy();
+      this.worldContainer = null;
+    }
     if (this.app) {
       this.app.destroy();
       this.app = null;
     }
+    this.pointers.clear();
   }
 
   /**
    * Start a test animation to verify ticker enable/disable works.
-   * Rotates the circle for 2 seconds, then stops.
+   * Moves the circle back and forth for 3 seconds.
    */
   private startTestAnimation(): void {
-    if (!this.app || this.isAnimating) {
+    if (!this.app || !this.worldContainer || this.isAnimating) {
       console.warn(
         '[RendererCore] Cannot start animation - app not ready or already animating',
       );
@@ -265,27 +601,45 @@ export abstract class RendererCore {
     this.isAnimating = true;
     this.animationStartTime = Date.now();
 
-    // Get the circle (third child in stage)
-    const circle = this.app.stage.children[2];
+    // Get the circle (third child in worldContainer)
+    const circle = this.worldContainer.children[2];
     if (!circle) {
       console.error('[RendererCore] Circle not found for animation');
       return;
     }
 
-    // Store original rotation
-    const originalRotation = circle.rotation;
+    // Store original position
+    const originalX = circle.x;
+    const originalY = circle.y;
+
+    let frameCount = 0;
 
     // Create ticker callback
     const animationTicker = () => {
+      frameCount++;
       const elapsed = Date.now() - this.animationStartTime;
-      const duration = 2000; // 2 seconds
+      const duration = 3000; // 3 seconds
 
       if (elapsed < duration) {
-        // Rotate the circle (2 full rotations over 2 seconds)
-        circle.rotation = originalRotation + (elapsed / duration) * Math.PI * 4;
+        // Move the circle back and forth
+        const progress = elapsed / duration;
+        const oscillation = Math.sin(progress * Math.PI * 4); // 2 full cycles
+        circle.x = originalX + oscillation * 100;
+        circle.y = originalY + oscillation * 50;
+
+        // Render on each frame
+        this.app!.renderer.render(this.app!.stage);
+
+        if (frameCount % 30 === 0) {
+          console.log(
+            `[RendererCore] Animation frame ${frameCount}, elapsed: ${elapsed}ms`,
+          );
+        }
       } else {
         // Animation complete
-        console.log('[RendererCore] Animation complete, stopping ticker...');
+        console.log(
+          `[RendererCore] Animation complete after ${frameCount} frames, stopping ticker...`,
+        );
         this.app!.ticker.remove(animationTicker);
         this.app!.ticker.stop();
         console.log(
@@ -293,8 +647,9 @@ export abstract class RendererCore {
           this.app!.ticker.started,
         );
 
-        // Reset rotation
-        circle.rotation = originalRotation;
+        // Reset position
+        circle.x = originalX;
+        circle.y = originalY;
         this.isAnimating = false;
 
         // Do final render

@@ -29,10 +29,11 @@ describe('Table Route', () => {
     // Wait for router to load
     await router.load();
 
-    expect(
-      screen.getByText(/Table: happy-clever-elephant/i),
-    ).toBeInTheDocument();
     // Wait for lazy loaded Board component
     expect(await screen.findByTestId('board')).toBeInTheDocument();
+    // Check that Board component shows the table ID
+    expect(
+      screen.getByText(/Board for happy-clever-elephant/i),
+    ).toBeInTheDocument();
   });
 });

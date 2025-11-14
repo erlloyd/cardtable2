@@ -1,153 +1,42 @@
-import { Application, Graphics, DOMAdapter, WebWorkerAdapter } from 'pixi.js';
+import { DOMAdapter, WebWorkerAdapter } from 'pixi.js';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
 } from '@cardtable2/shared';
+import { RendererCore } from './renderer/RendererCore';
 
 // Configure PixiJS for web worker environment
 // This MUST be done before creating any PixiJS objects
 DOMAdapter.set(WebWorkerAdapter);
 
-// Board rendering worker
-// M2-T1: Basic message handling
-// M2-T2: OffscreenCanvas + PixiJS rendering
-
-let app: Application | null = null;
-
-// Handle messages from main thread
-async function handleMessage(
-  event: MessageEvent<MainToRendererMessage>,
-): Promise<void> {
-  const message = event.data;
-
-  try {
-    switch (message.type) {
-      case 'init': {
-        // Initialize PixiJS with offscreen canvas
-        const { canvas, width, height, dpr } = message;
-
-        try {
-          app = new Application();
-          // Try WebGL first, but let PixiJS fallback to canvas if needed
-          await app.init({
-            canvas,
-            width,
-            height,
-            resolution: dpr,
-            autoDensity: true,
-            backgroundColor: 0x1a1a2e,
-            // Remove explicit preference to allow automatic fallback
-          });
-
-          // Render a simple test scene
-          renderTestScene();
-
-          const response: RendererToMainMessage = { type: 'initialized' };
-          self.postMessage(response);
-        } catch (initError) {
-          const errorMsg =
-            initError instanceof Error ? initError.message : String(initError);
-          const response: RendererToMainMessage = {
-            type: 'error',
-            error: `PixiJS initialization failed: ${errorMsg}`,
-          };
-          self.postMessage(response);
-        }
-        break;
-      }
-
-      case 'resize': {
-        // Handle canvas resize
-        if (app) {
-          const { width, height, dpr } = message;
-          app.renderer.resize(width, height);
-          app.renderer.resolution = dpr;
-        }
-        break;
-      }
-
-      case 'ping': {
-        // Respond to ping with pong
-        const response: RendererToMainMessage = {
-          type: 'pong',
-          data: `Pong! Received: ${message.data}`,
-        };
-        self.postMessage(response);
-        break;
-      }
-
-      case 'echo': {
-        // Echo back the data
-        const response: RendererToMainMessage = {
-          type: 'echo-response',
-          data: message.data,
-        };
-        self.postMessage(response);
-        break;
-      }
-
-      default: {
-        // Unknown message type
-        const response: RendererToMainMessage = {
-          type: 'error',
-          error: `Unknown message type: ${(message as { type: string }).type}`,
-        };
-        self.postMessage(response);
-      }
-    }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const response: RendererToMainMessage = {
-      type: 'error',
-      error: `Worker error: ${errorMsg}`,
-    };
-    self.postMessage(response);
+/**
+ * Worker-based renderer implementation.
+ * Extends RendererCore and implements postResponse using self.postMessage.
+ */
+class WorkerRendererCore extends RendererCore {
+  protected postResponse(message: RendererToMainMessage): void {
+    self.postMessage(message);
   }
 }
 
+// Create renderer instance
+const renderer = new WorkerRendererCore();
+
+// Listen for messages from main thread
 self.addEventListener(
   'message',
   (event: MessageEvent<MainToRendererMessage>) => {
-    handleMessage(event).catch((error) => {
-      // Catch any unhandled errors from the promise itself
+    renderer.handleMessage(event.data).catch((error) => {
+      // Catch any unhandled errors from the promise
       const errorMsg = error instanceof Error ? error.message : String(error);
-      const response: RendererToMainMessage = {
+      self.postMessage({
         type: 'error',
         error: `Unhandled worker error: ${errorMsg}`,
-      };
-      self.postMessage(response);
+        context: 'worker',
+      } as RendererToMainMessage);
     });
   },
 );
 
-// Render a simple test scene
-function renderTestScene() {
-  if (!app) return;
-
-  const stage = app.stage;
-
-  // Clear any existing children
-  stage.removeChildren();
-
-  // Create a simple colored rectangle to verify rendering
-  const rect = new Graphics();
-  rect.rect(50, 50, 200, 150);
-  rect.fill(0x6c5ce7);
-  stage.addChild(rect);
-
-  // Create another rectangle
-  const rect2 = new Graphics();
-  rect2.rect(300, 100, 150, 200);
-  rect2.fill(0x00b894);
-  stage.addChild(rect2);
-
-  // Create a circle
-  const circle = new Graphics();
-  circle.circle(500, 250, 75);
-  circle.fill(0xfdcb6e);
-  stage.addChild(circle);
-}
-
 // Send ready message when worker initializes
-const readyMessage: RendererToMainMessage = { type: 'ready' };
-self.postMessage(readyMessage);
+self.postMessage({ type: 'ready' } as RendererToMainMessage);

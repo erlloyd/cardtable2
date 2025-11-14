@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
 import type { RendererToMainMessage } from '@cardtable2/shared';
+import type { RenderMode } from '../renderer/RendererFactory';
 
 // Mock Worker
 class MockWorker {
@@ -96,6 +97,26 @@ class MockWorker {
     }
   }
 }
+
+// Mock the renderer factory to use worker mode with MockWorker
+vi.mock('../renderer/RendererFactory', async () => {
+  const { WorkerRendererAdapter } = await import(
+    '../renderer/WorkerRendererAdapter'
+  );
+  return {
+    createRenderer: (_mode?: RenderMode) => {
+      // Force worker mode in tests to use MockWorker
+      return new WorkerRendererAdapter();
+    },
+    detectCapabilities: () => ({
+      hasOffscreenCanvas: true,
+      hasWebGL: true,
+      isIOS: false,
+      iOSVersion: null,
+      recommendedMode: 'worker' as const,
+    }),
+  };
+});
 
 describe('Board', () => {
   let transferControlSpy: () => OffscreenCanvas;

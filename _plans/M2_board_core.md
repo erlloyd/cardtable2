@@ -1,7 +1,7 @@
 # Milestone 2 — Board Core
 
 ## Overview
-Implement the core board functionality with PixiJS rendering, camera controls, and hit-testing.
+Implement the core board functionality with PixiJS rendering, camera controls, hit-testing, and object manipulation.
 
 **Strategy:** Incremental approach to avoid offscreen canvas issues. Build worker communication first, then add rendering, then full features.
 
@@ -134,3 +134,46 @@ Implement the core board functionality with PixiJS rendering, camera controls, a
 - Unit: correct topmost ordering
 - Microbenchmark: verify O(log n + k) performance
 - Performance: ≤2ms hit-test on mid-range mobile with 300 items
+
+**Success Criteria:**
+- Hit-test returns correct object under pointer
+- Z-order respected (topmost object selected)
+- Performance target met (≤2ms)
+- Scene handles 300+ objects efficiently
+
+### M2-T5: Object Dragging
+**Objective:** Implement smooth object dragging with proper gesture disambiguation from camera panning.
+
+**Dependencies:** M2-T3, M2-T4
+
+**Spec:**
+- Drag initiation uses same slop thresholds as camera (touch: 12px, pen: 6px, mouse: 3px)
+- Distinguish between camera pan (empty space) and object drag (hit object)
+- Single object dragging (multi-select comes in later milestone)
+- Smooth object movement at 60fps
+- Pointer-to-visual latency ≤30ms
+- Visual feedback during drag (e.g., slight scale or shadow)
+- Object position updates in world coordinates
+
+**Deliverables:**
+- Drag state machine (idle → tracking → dragging)
+- Gesture disambiguation logic (camera vs object)
+- Object position update system
+- Visual feedback during drag
+- Integration with hit-testing from M2-T4
+- Drag delta calculation in world coordinates
+
+**Test Plan:**
+- E2E: drag object updates its position correctly
+- E2E: dragging empty space pans camera (not object drag)
+- E2E: verify smooth 60fps during drag
+- Unit: drag threshold calculations for each pointer type
+- Unit: world coordinate delta calculations
+- Performance: verify ≤30ms pointer-to-visual latency
+
+**Success Criteria:**
+- Objects drag smoothly at 60fps
+- Clear, intuitive distinction between camera pan and object drag
+- Responsive feel (≤30ms latency from pointer to visual update)
+- Visual feedback provides clear drag state
+- No jitter or lag during drag operations

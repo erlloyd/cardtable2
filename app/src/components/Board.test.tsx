@@ -98,16 +98,15 @@ class MockWorker {
 }
 
 describe('Board', () => {
-  let transferControlSpy: ReturnType<typeof vi.fn>;
+  let transferControlSpy: () => OffscreenCanvas;
 
   beforeEach(() => {
     // Mock Worker constructor
     vi.stubGlobal('Worker', MockWorker);
 
     // Mock HTMLCanvasElement.transferControlToOffscreen
-    transferControlSpy = vi.fn(() => {
-      return {} as OffscreenCanvas;
-    });
+    const mockTransfer = (): OffscreenCanvas => ({}) as OffscreenCanvas;
+    transferControlSpy = vi.fn(mockTransfer);
     HTMLCanvasElement.prototype.transferControlToOffscreen = transferControlSpy;
   });
 

@@ -107,6 +107,13 @@ pnpm run format
 - Changes to shared trigger both app and server deployments
 - App deploys to GitHub Pages at beta.card-table.app
 
+### Future Hosting Plans
+- **Railway (https://railway.app/)** planned for production hosting
+  - WebSocket support for y-websocket backend
+  - Automatic PR preview deployments for both app and server
+  - Single platform for full-stack deployment
+  - Cost-effective usage-based pricing
+
 ## Performance Targets
 - 60 fps on mobile/desktop
 - Sub-2ms hit-testing
@@ -117,7 +124,7 @@ pnpm run format
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
 - ✅ M1: App Shell & Navigation (COMPLETED)
-- ⏳ M2: Board Core
+- ⏳ M2: Board Core (Worker, PixiJS, Camera, Hit-Testing, Object Dragging)
 - ⏳ M3: Local Yjs
 - ⏳ M4: Set Loader & Assets
 - ⏳ M5: Multiplayer Server

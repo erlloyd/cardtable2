@@ -26,22 +26,33 @@ async function handleMessage(
         // Initialize PixiJS with offscreen canvas
         const { canvas, width, height, dpr } = message;
 
-        app = new Application();
-        await app.init({
-          canvas,
-          width,
-          height,
-          resolution: dpr,
-          autoDensity: true,
-          backgroundColor: 0x1a1a2e,
-          preference: 'webgl',
-        });
+        try {
+          app = new Application();
+          // Try WebGL first, but let PixiJS fallback to canvas if needed
+          await app.init({
+            canvas,
+            width,
+            height,
+            resolution: dpr,
+            autoDensity: true,
+            backgroundColor: 0x1a1a2e,
+            // Remove explicit preference to allow automatic fallback
+          });
 
-        // Render a simple test scene
-        renderTestScene();
+          // Render a simple test scene
+          renderTestScene();
 
-        const response: WorkerToMainMessage = { type: 'initialized' };
-        self.postMessage(response);
+          const response: WorkerToMainMessage = { type: 'initialized' };
+          self.postMessage(response);
+        } catch (initError) {
+          const errorMsg =
+            initError instanceof Error ? initError.message : String(initError);
+          const response: WorkerToMainMessage = {
+            type: 'error',
+            error: `PixiJS initialization failed: ${errorMsg}`,
+          };
+          self.postMessage(response);
+        }
         break;
       }
 

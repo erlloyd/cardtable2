@@ -44,6 +44,8 @@ export abstract class RendererCore {
   private isPinching = false;
   private initialPinchDistance = 0;
   private initialPinchScale = 1.0;
+  private initialPinchMidpoint = { x: 0, y: 0 }; // Locked screen point for pinch zoom
+  private initialPinchWorldPoint = { x: 0, y: 0 }; // World coords under locked midpoint
 
   /**
    * Send a response message back to the main thread.
@@ -187,12 +189,22 @@ export abstract class RendererCore {
           // Handle canvas resize
           if (this.app) {
             const { width, height, dpr } = message;
+
+            // Store old dimensions before resizing
+            const oldWidth = this.app.renderer.width;
+            const oldHeight = this.app.renderer.height;
+
             this.app.renderer.resize(width, height);
             this.app.renderer.resolution = dpr;
 
-            // Update world container position to keep it centered
+            // Update world container position to keep it centered, preserving pan offset
             if (this.worldContainer) {
-              this.worldContainer.position.set(width / 2, height / 2);
+              const offsetX = this.worldContainer.position.x - oldWidth / 2;
+              const offsetY = this.worldContainer.position.y - oldHeight / 2;
+              this.worldContainer.position.set(
+                width / 2 + offsetX,
+                height / 2 + offsetY,
+              );
             }
           }
           break;
@@ -320,7 +332,7 @@ export abstract class RendererCore {
       this.isDragging = false;
       this.isPinching = true;
 
-      // Calculate initial pinch distance
+      // Calculate initial pinch distance and LOCK the midpoint
       const pointerArray = Array.from(this.pointers.values());
       this.initialPinchDistance = this.getPointerDistance(
         pointerArray[0],
@@ -328,10 +340,19 @@ export abstract class RendererCore {
       );
       this.initialPinchScale = this.cameraScale;
 
-      console.log(
-        '[RendererCore] Pinch gesture started, distance:',
-        this.initialPinchDistance,
-      );
+      // Calculate and lock the midpoint (this should NOT change during the pinch)
+      this.initialPinchMidpoint.x =
+        (pointerArray[0].lastX + pointerArray[1].lastX) / 2;
+      this.initialPinchMidpoint.y =
+        (pointerArray[0].lastY + pointerArray[1].lastY) / 2;
+
+      // Convert midpoint to world coordinates ONCE at start of pinch
+      this.initialPinchWorldPoint.x =
+        (this.initialPinchMidpoint.x - this.worldContainer.position.x) /
+        this.initialPinchScale;
+      this.initialPinchWorldPoint.y =
+        (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
+        this.initialPinchScale;
     } else if (event.isPrimary) {
       // Start dragging if this is the primary pointer (and not pinching)
       this.isDragging = false; // Will become true once we exceed slop threshold
@@ -369,6 +390,16 @@ export abstract class RendererCore {
 
       // Apply zoom (no clamping - unlimited zoom)
       this.worldContainer.scale.set(this.cameraScale);
+
+      // Adjust position so the LOCKED world point stays under the LOCKED screen midpoint
+      // Formula: screenPos = cameraPos + worldPos * scale
+      // Therefore: cameraPos = screenPos - worldPos * scale
+      this.worldContainer.position.x =
+        this.initialPinchMidpoint.x -
+        this.initialPinchWorldPoint.x * this.cameraScale;
+      this.worldContainer.position.y =
+        this.initialPinchMidpoint.y -
+        this.initialPinchWorldPoint.y * this.cameraScale;
 
       // Request render
       this.app.renderer.render(this.app.stage);
@@ -425,6 +456,16 @@ export abstract class RendererCore {
     if (this.isPinching && this.pointers.size < 2) {
       this.isPinching = false;
       console.log('[RendererCore] Pinch gesture ended');
+
+      // Transition to pan mode: reset remaining pointer's start position
+      // so user doesn't need to exceed drag slop again
+      if (this.pointers.size === 1) {
+        const remainingPointer = Array.from(this.pointers.values())[0];
+        remainingPointer.startX = remainingPointer.lastX;
+        remainingPointer.startY = remainingPointer.lastY;
+        // Allow immediate dragging without slop threshold
+        this.isDragging = true;
+      }
     }
 
     // End dragging
@@ -446,6 +487,16 @@ export abstract class RendererCore {
     if (this.isPinching && this.pointers.size < 2) {
       this.isPinching = false;
       console.log('[RendererCore] Pinch gesture cancelled');
+
+      // Transition to pan mode: reset remaining pointer's start position
+      // so user doesn't need to exceed drag slop again
+      if (this.pointers.size === 1) {
+        const remainingPointer = Array.from(this.pointers.values())[0];
+        remainingPointer.startX = remainingPointer.lastX;
+        remainingPointer.startY = remainingPointer.lastY;
+        // Allow immediate dragging without slop threshold
+        this.isDragging = true;
+      }
     }
 
     // End dragging
@@ -456,18 +507,29 @@ export abstract class RendererCore {
 
   /**
    * Handle wheel event for zooming (M2-T3).
+   * Zooms towards the mouse cursor position (zoom to point under cursor).
    */
   private handleWheel(event: WheelEventData): void {
     if (!this.worldContainer || !this.app) return;
 
+    // Mouse position is already canvas-relative (converted in Board.tsx)
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+
+    // Convert mouse position to world coordinates before scaling
+    const worldX = (mouseX - this.worldContainer.position.x) / this.cameraScale;
+    const worldY = (mouseY - this.worldContainer.position.y) / this.cameraScale;
+
     // Calculate zoom factor from wheel delta
     const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05;
 
-    // Calculate new scale (no clamping - unlimited zoom)
+    // Apply new scale (no clamping - unlimited zoom)
     this.cameraScale = this.cameraScale * zoomFactor;
-
-    // Apply zoom to world container
     this.worldContainer.scale.set(this.cameraScale);
+
+    // Adjust position so the world point under cursor stays under cursor
+    this.worldContainer.position.x = mouseX - worldX * this.cameraScale;
+    this.worldContainer.position.y = mouseY - worldY * this.cameraScale;
 
     // Request render
     this.app.renderer.render(this.app.stage);

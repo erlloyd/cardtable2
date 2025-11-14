@@ -120,10 +120,16 @@ function Board({ tableId }: BoardProps) {
       // Prevent default browser zoom AND page scroll
       event.preventDefault();
 
+      // Convert to canvas-relative coordinates (accounting for DPR)
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const canvasX = (event.clientX - rect.left) * dpr;
+      const canvasY = (event.clientY - rect.top) * dpr;
+
       const wheelData: WheelEventData = {
         deltaY: event.deltaY,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX: canvasX,
+        clientY: canvasY,
       };
 
       const message: MainToRendererMessage = {
@@ -264,11 +270,22 @@ function Board({ tableId }: BoardProps) {
       );
     }
 
+    // Convert to canvas-relative coordinates (accounting for DPR)
+    const canvas = canvasRef.current;
+    let canvasX = event.clientX;
+    let canvasY = event.clientY;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvasX = (event.clientX - rect.left) * dpr;
+      canvasY = (event.clientY - rect.top) * dpr;
+    }
+
     return {
       pointerId: event.pointerId,
       pointerType: isValidType ? pointerType : 'mouse',
-      clientX: event.clientX,
-      clientY: event.clientY,
+      clientX: canvasX,
+      clientY: canvasY,
       button: event.button,
       buttons: event.buttons,
       isPrimary: event.isPrimary,
@@ -394,7 +411,7 @@ function Board({ tableId }: BoardProps) {
             fontWeight: 'bold',
           }}
         >
-          Test Animation (2s)
+          Test Animation (3s)
         </button>
       </div>
 

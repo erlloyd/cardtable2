@@ -251,12 +251,12 @@ function Board({ tableId }: BoardProps) {
     event: React.PointerEvent,
   ): PointerEventData => {
     const pointerType = event.pointerType;
-    // Validate pointer type is one of the expected values
-    if (
-      pointerType !== 'mouse' &&
-      pointerType !== 'pen' &&
-      pointerType !== 'touch'
-    ) {
+    const isValidType =
+      pointerType === 'mouse' ||
+      pointerType === 'pen' ||
+      pointerType === 'touch';
+
+    if (!isValidType) {
       console.warn(
         'Unexpected pointer type:',
         pointerType,
@@ -266,12 +266,7 @@ function Board({ tableId }: BoardProps) {
 
     return {
       pointerId: event.pointerId,
-      pointerType:
-        pointerType === 'mouse' ||
-        pointerType === 'pen' ||
-        pointerType === 'touch'
-          ? pointerType
-          : 'mouse',
+      pointerType: isValidType ? pointerType : 'mouse',
       clientX: event.clientX,
       clientY: event.clientY,
       button: event.button,

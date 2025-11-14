@@ -77,18 +77,18 @@ test.describe('Camera Pan and Zoom (M2-T3)', () => {
     const box = await canvas.boundingBox();
     expect(box).toBeTruthy();
 
+    // Set up error listener before interactions
+    const errors: string[] = [];
+    page.on('pageerror', (error) => {
+      errors.push(error.message);
+    });
+
     // Simulate various pointer interactions
     await page.mouse.move(box!.x + 50, box!.y + 50);
     await page.mouse.down();
     await page.mouse.move(box!.x + 60, box!.y + 60);
     await page.mouse.move(box!.x + 70, box!.y + 70);
     await page.mouse.up();
-
-    // Verify no errors occurred
-    const errors: string[] = [];
-    page.on('pageerror', (error) => {
-      errors.push(error.message);
-    });
 
     await page.waitForTimeout(100);
     expect(errors).toEqual([]);

@@ -10,7 +10,7 @@ import { routeTree } from '../../routeTree.gen';
 // Mock the Board component since it's lazy loaded
 vi.mock('../../components/Board', () => ({
   default: ({ tableId }: { tableId: string }) => (
-    <div data-testid="board">Board for {tableId}</div>
+    <div data-testid="board">Board: {tableId}</div>
   ),
 }));
 
@@ -33,7 +33,7 @@ describe('Table Route', () => {
     expect(await screen.findByTestId('board')).toBeInTheDocument();
     // Check that Board component shows the table ID
     expect(
-      screen.getByText(/Board for happy-clever-elephant/i),
+      screen.getByText(/Board: happy-clever-elephant/i),
     ).toBeInTheDocument();
   });
 });

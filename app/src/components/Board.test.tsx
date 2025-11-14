@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
-import type { WorkerToMainMessage } from '@cardtable2/shared';
+import type { RendererToMainMessage } from '@cardtable2/shared';
 
 // Mock Worker
 class MockWorker {
@@ -18,7 +18,7 @@ class MockWorker {
 
     // Simulate worker ready message
     setTimeout(() => {
-      this.simulateMessage({ type: 'ready' } as WorkerToMainMessage);
+      this.simulateMessage({ type: 'ready' } as RendererToMainMessage);
     }, 0);
   }
 
@@ -35,17 +35,17 @@ class MockWorker {
           this.simulateMessage({
             type: 'pong',
             data: `Pong! Received: ${msg.data}`,
-          } as WorkerToMainMessage);
+          } as RendererToMainMessage);
         } else if (msg.type === 'echo') {
           this.simulateMessage({
             type: 'echo-response',
             data: msg.data,
-          } as WorkerToMainMessage);
+          } as RendererToMainMessage);
         } else if (msg.type === 'init') {
           // Simulate canvas initialization
           this.simulateMessage({
             type: 'initialized',
-          } as WorkerToMainMessage);
+          } as RendererToMainMessage);
         }
       }
     }, 0);
@@ -79,7 +79,7 @@ class MockWorker {
   }
 
   // Helper method to simulate messages from worker
-  simulateMessage(data: WorkerToMainMessage) {
+  simulateMessage(data: RendererToMainMessage) {
     const event = new MessageEvent('message', { data });
     const handlers = this.listeners.get('message');
     if (handlers) {

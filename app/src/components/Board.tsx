@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
-  MainToWorkerMessage,
-  WorkerToMainMessage,
+  MainToRendererMessage,
+  RendererToMainMessage,
 } from '@cardtable2/shared';
 
 interface BoardProps {
@@ -36,7 +36,7 @@ function Board({ tableId }: BoardProps) {
     // Handle messages from worker
     worker.addEventListener(
       'message',
-      (event: MessageEvent<WorkerToMainMessage>) => {
+      (event: MessageEvent<RendererToMainMessage>) => {
         const message = event.data;
 
         switch (message.type) {
@@ -104,7 +104,7 @@ function Board({ tableId }: BoardProps) {
       // Transfer canvas to worker
       const offscreen = canvas.transferControlToOffscreen();
 
-      const message: MainToWorkerMessage = {
+      const message: MainToRendererMessage = {
         type: 'init',
         canvas: offscreen,
         width,
@@ -125,7 +125,7 @@ function Board({ tableId }: BoardProps) {
   const handlePing = () => {
     if (!workerRef.current) return;
 
-    const message: MainToWorkerMessage = {
+    const message: MainToRendererMessage = {
       type: 'ping',
       data: `Hello from table ${tableId}`,
     };
@@ -136,7 +136,7 @@ function Board({ tableId }: BoardProps) {
   const handleEcho = () => {
     if (!workerRef.current) return;
 
-    const message: MainToWorkerMessage = {
+    const message: MainToRendererMessage = {
       type: 'echo',
       data: `Echo test at ${new Date().toLocaleTimeString()}`,
     };

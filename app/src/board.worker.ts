@@ -1,7 +1,7 @@
 import { Application, Graphics, DOMAdapter, WebWorkerAdapter } from 'pixi.js';
 import type {
-  MainToWorkerMessage,
-  WorkerToMainMessage,
+  MainToRendererMessage,
+  RendererToMainMessage,
 } from '@cardtable2/shared';
 
 // Configure PixiJS for web worker environment
@@ -16,7 +16,7 @@ let app: Application | null = null;
 
 // Handle messages from main thread
 async function handleMessage(
-  event: MessageEvent<MainToWorkerMessage>,
+  event: MessageEvent<MainToRendererMessage>,
 ): Promise<void> {
   const message = event.data;
 
@@ -42,12 +42,12 @@ async function handleMessage(
           // Render a simple test scene
           renderTestScene();
 
-          const response: WorkerToMainMessage = { type: 'initialized' };
+          const response: RendererToMainMessage = { type: 'initialized' };
           self.postMessage(response);
         } catch (initError) {
           const errorMsg =
             initError instanceof Error ? initError.message : String(initError);
-          const response: WorkerToMainMessage = {
+          const response: RendererToMainMessage = {
             type: 'error',
             error: `PixiJS initialization failed: ${errorMsg}`,
           };
@@ -68,7 +68,7 @@ async function handleMessage(
 
       case 'ping': {
         // Respond to ping with pong
-        const response: WorkerToMainMessage = {
+        const response: RendererToMainMessage = {
           type: 'pong',
           data: `Pong! Received: ${message.data}`,
         };
@@ -78,7 +78,7 @@ async function handleMessage(
 
       case 'echo': {
         // Echo back the data
-        const response: WorkerToMainMessage = {
+        const response: RendererToMainMessage = {
           type: 'echo-response',
           data: message.data,
         };
@@ -88,7 +88,7 @@ async function handleMessage(
 
       default: {
         // Unknown message type
-        const response: WorkerToMainMessage = {
+        const response: RendererToMainMessage = {
           type: 'error',
           error: `Unknown message type: ${(message as { type: string }).type}`,
         };
@@ -97,7 +97,7 @@ async function handleMessage(
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const response: WorkerToMainMessage = {
+    const response: RendererToMainMessage = {
       type: 'error',
       error: `Worker error: ${errorMsg}`,
     };
@@ -105,17 +105,20 @@ async function handleMessage(
   }
 }
 
-self.addEventListener('message', (event: MessageEvent<MainToWorkerMessage>) => {
-  handleMessage(event).catch((error) => {
-    // Catch any unhandled errors from the promise itself
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    const response: WorkerToMainMessage = {
-      type: 'error',
-      error: `Unhandled worker error: ${errorMsg}`,
-    };
-    self.postMessage(response);
-  });
-});
+self.addEventListener(
+  'message',
+  (event: MessageEvent<MainToRendererMessage>) => {
+    handleMessage(event).catch((error) => {
+      // Catch any unhandled errors from the promise itself
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const response: RendererToMainMessage = {
+        type: 'error',
+        error: `Unhandled worker error: ${errorMsg}`,
+      };
+      self.postMessage(response);
+    });
+  },
+);
 
 // Render a simple test scene
 function renderTestScene() {
@@ -146,5 +149,5 @@ function renderTestScene() {
 }
 
 // Send ready message when worker initializes
-const readyMessage: WorkerToMainMessage = { type: 'ready' };
+const readyMessage: RendererToMainMessage = { type: 'ready' };
 self.postMessage(readyMessage);

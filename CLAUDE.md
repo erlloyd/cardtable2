@@ -132,7 +132,13 @@ pnpm run format
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
 - ✅ M1: App Shell & Navigation (COMPLETED)
-- ⏳ M2: Board Core (Dual-Mode Rendering, Camera, Hit-Testing, Object Dragging)
+- ⏳ M2: Board Core (3/6 tasks complete)
+  - ✅ M2-T1: Basic Web Worker Communication
+  - ✅ M2-T2: OffscreenCanvas + Simple PixiJS Rendering
+  - ⏳ M2-T3: Camera (pixi-viewport) & Gestures
+  - ⏳ M2-T4: Scene Model + RBush Hit-Test
+  - ⏳ M2-T5: Object Dragging
+  - ✅ M2-T6: Dual-Mode Rendering Architecture
 - ⏳ M3: Local Yjs
 - ⏳ M4: Set Loader & Assets
 - ⏳ M5: Multiplayer Server
@@ -168,6 +174,27 @@ pnpm run format
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### M2-T6 - Dual-Mode Rendering Architecture (Completed 2025-11-13)
+Implemented unified rendering architecture supporting both worker and main-thread modes:
+- RendererCore abstract class with all rendering logic (154 lines)
+- IRendererAdapter interface for unified communication
+- WorkerRendererAdapter (worker mode via postMessage)
+- MainThreadRendererAdapter (main-thread mode via callback)
+- Auto-detection: iOS 16.x → main-thread, iOS 17+/Desktop → worker
+- Query parameter support: `?renderMode=worker|main-thread`
+- Conditional canvas transfer (OffscreenCanvas only for worker mode)
+- All 15 tests passing, verified on iOS Chrome (no crashes)
+- Pattern set for M2-T3/T4/T5 to work identically in both modes
+- See `_plans/M2_rendering_architecture.md` for full details
+
+### M2-T1/T2 - Worker Communication & PixiJS Rendering (Completed)
+Basic rendering infrastructure:
+- Web worker with bidirectional message passing
+- OffscreenCanvas + PixiJS 8 rendering
+- React strict mode handling (no double-init)
+- Simple test scene with colored shapes
+- 15 tests passing (unit + integration)
 
 ### M1 - App Shell & Navigation (Completed)
 Complete routing and navigation system:

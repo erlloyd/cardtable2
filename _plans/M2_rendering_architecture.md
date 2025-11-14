@@ -1,5 +1,26 @@
 # M2 - Rendering Architecture: Dual-Mode Strategy
 
+## Status: ✅ IMPLEMENTED
+
+**Completion Date:** 2025-11-13
+**Branch:** feature/m2-dual-rendering
+**Files:**
+- `app/src/renderer/IRendererAdapter.ts` - Unified interface (27 lines)
+- `app/src/renderer/RendererCore.ts` - Shared rendering logic (154 lines)
+- `app/src/renderer/WorkerRendererAdapter.ts` - Worker transport (60 lines)
+- `app/src/renderer/MainThreadRendererAdapter.ts` - Main-thread transport (80 lines)
+- `app/src/renderer/RendererFactory.ts` - Capability detection & factory (97 lines)
+- `app/src/board.worker.ts` - Refactored to extend RendererCore (42 lines, down from 150)
+- `app/src/components/Board.tsx` - Updated to use IRendererAdapter
+
+**Implementation Notes:**
+- Total adapter code: ~200 lines
+- Shared logic: ~2000+ lines (will grow with M2-T3/T4/T5)
+- All 15 tests passing
+- Verified on iOS Chrome (main-thread mode, no crashes)
+- Query parameter support: `?renderMode=worker|main-thread`
+- Auto-detection working for iOS 16.x → main-thread, Desktop → worker
+
 ## Overview
 
 Cardtable 2 supports two rendering modes to maximize compatibility, performance, and debuggability across all platforms and use cases. This is a **first-class architectural choice**, not a fallback pattern.

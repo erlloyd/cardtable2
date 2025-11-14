@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
-  MainToWorkerMessage,
-  WorkerToMainMessage,
+  MainToRendererMessage,
+  RendererToMainMessage,
 } from '@cardtable2/shared';
+import type { IRendererAdapter } from '../renderer/IRendererAdapter';
+import { createRenderer } from '../renderer/RendererFactory';
 
 interface BoardProps {
   tableId: string;
 }
 
 function Board({ tableId }: BoardProps) {
-  const workerRef = useRef<Worker | null>(null);
+  const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasTransferredRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -17,73 +19,101 @@ function Board({ tableId }: BoardProps) {
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
+  const [renderMode, setRenderMode] = useState<
+    'worker' | 'main-thread' | 'detecting...'
+  >('detecting...');
 
-  // Initialize worker on mount
+  // Initialize renderer on mount
   useEffect(() => {
     // Prevent double initialization in React strict mode
-    if (workerRef.current) {
+    if (rendererRef.current) {
       return;
     }
 
-    // Create worker
-    const worker = new Worker(new URL('../board.worker.ts', import.meta.url), {
-      type: 'module',
-    });
+    // Check for renderMode query parameter to force a specific mode
+    const params = new URLSearchParams(window.location.search);
+    const renderMode = params.get('renderMode');
+    let mode: 'auto' | 'worker' | 'main-thread' = 'auto';
 
-    // Store worker reference
-    workerRef.current = worker;
+    if (renderMode === 'worker' || renderMode === 'main-thread') {
+      mode = renderMode;
+      console.log(`[Board] Forcing render mode: ${mode}`);
+    } else {
+      console.log('[Board] Using auto-detected render mode');
+    }
 
-    // Handle messages from worker
-    worker.addEventListener(
-      'message',
-      (event: MessageEvent<WorkerToMainMessage>) => {
-        const message = event.data;
+    // Create renderer adapter
+    const renderer = createRenderer(mode);
 
-        switch (message.type) {
-          case 'ready':
-            setIsWorkerReady(true);
-            setMessages((prev) => [...prev, 'Worker is ready']);
-            break;
+    // Store renderer reference
+    rendererRef.current = renderer;
 
-          case 'initialized':
-            setIsCanvasInitialized(true);
-            setMessages((prev) => [...prev, 'Canvas initialized']);
-            break;
-
-          case 'pong':
-            setMessages((prev) => [...prev, `Worker: ${message.data}`]);
-            break;
-
-          case 'echo-response':
-            setMessages((prev) => [...prev, `Echo: ${message.data}`]);
-            break;
-
-          case 'error':
-            setMessages((prev) => [...prev, `Error: ${message.error}`]);
-            break;
-        }
-      },
+    // Detect which mode was actually selected
+    const actualMode =
+      renderer.constructor.name === 'WorkerRendererAdapter'
+        ? 'worker'
+        : 'main-thread';
+    setRenderMode(actualMode);
+    console.log(`[Board] ========================================`);
+    console.log(`[Board] RENDER MODE: ${actualMode}`);
+    console.log(
+      `[Board] Worker will ${actualMode === 'worker' ? 'BE' : 'NOT be'} used`,
     );
+    console.log(
+      `[Board] OffscreenCanvas will ${actualMode === 'worker' ? 'BE' : 'NOT be'} used`,
+    );
+    console.log(`[Board] ========================================`);
 
-    // Handle worker errors
-    worker.addEventListener('error', (error) => {
-      setMessages((prev) => [...prev, `Worker error: ${error.message}`]);
+    // Handle messages from renderer
+    renderer.onMessage((message: RendererToMainMessage) => {
+      switch (message.type) {
+        case 'ready':
+          setIsWorkerReady(true);
+          setMessages((prev) => [...prev, 'Worker is ready']);
+          break;
+
+        case 'initialized':
+          setIsCanvasInitialized(true);
+          setMessages((prev) => [...prev, 'Canvas initialized']);
+          break;
+
+        case 'pong':
+          setMessages((prev) => [...prev, `Worker: ${message.data}`]);
+          break;
+
+        case 'echo-response':
+          setMessages((prev) => [...prev, `Echo: ${message.data}`]);
+          break;
+
+        case 'error':
+          setMessages((prev) => [...prev, `Error: ${message.error}`]);
+          break;
+
+        case 'animation-complete':
+          setMessages((prev) => [...prev, 'Animation completed!']);
+          break;
+      }
     });
 
     // Cleanup on unmount
     return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
+      if (rendererRef.current) {
+        rendererRef.current.destroy();
+        rendererRef.current = null;
       }
       canvasTransferredRef.current = false;
     };
   }, []);
 
-  // Initialize canvas and transfer to worker
+  // Initialize canvas and transfer to renderer
   useEffect(() => {
-    // Wait for worker to be ready
-    if (!isWorkerReady || !canvasRef.current || !workerRef.current) {
+    // Wait for renderer to be ready
+    if (
+      !isWorkerReady ||
+      !canvasRef.current ||
+      !rendererRef.current ||
+      renderMode === 'detecting...'
+    ) {
       return;
     }
 
@@ -101,46 +131,83 @@ function Board({ tableId }: BoardProps) {
     const height = canvas.clientHeight * dpr;
 
     try {
-      // Transfer canvas to worker
-      const offscreen = canvas.transferControlToOffscreen();
+      let canvasToSend: OffscreenCanvas | HTMLCanvasElement;
 
-      const message: MainToWorkerMessage = {
+      if (renderMode === 'worker') {
+        // Worker mode: transfer to OffscreenCanvas
+        console.log('[Board] Transferring canvas to OffscreenCanvas...');
+        canvasToSend = canvas.transferControlToOffscreen();
+        console.log('[Board] ✓ Canvas transferred successfully');
+        setMessages((prev) => [...prev, 'Canvas transferred to worker']);
+      } else {
+        // Main-thread mode: use canvas directly
+        console.log('[Board] Using canvas directly (NO OffscreenCanvas)');
+        canvasToSend = canvas;
+        console.log('[Board] ✓ Canvas ready for main-thread rendering');
+        setMessages((prev) => [...prev, 'Canvas using main thread']);
+      }
+
+      const message: MainToRendererMessage = {
         type: 'init',
-        canvas: offscreen,
+        canvas: canvasToSend,
         width,
         height,
         dpr,
       };
 
-      workerRef.current.postMessage(message, [offscreen]);
-      setMessages((prev) => [...prev, 'Canvas transferred to worker']);
+      console.log('[Board] Sending init message to renderer...');
+      rendererRef.current.sendMessage(message);
+      console.log('[Board] ✓ Init message sent');
+
+      // Debug: Check canvas DOM size after init
+      setTimeout(() => {
+        console.log('[Board] Canvas element check:');
+        console.log('[Board] - canvas.width (attribute):', canvas.width);
+        console.log('[Board] - canvas.height (attribute):', canvas.height);
+        console.log('[Board] - canvas.style.width:', canvas.style.width);
+        console.log('[Board] - canvas.style.height:', canvas.style.height);
+        console.log('[Board] - canvas.clientWidth:', canvas.clientWidth);
+        console.log('[Board] - canvas.clientHeight:', canvas.clientHeight);
+      }, 100);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      setMessages((prev) => [...prev, `Canvas transfer error: ${errorMsg}`]);
+      console.error('[Board] ✗ Canvas init error:', errorMsg);
+      setMessages((prev) => [...prev, `Canvas init error: ${errorMsg}`]);
       canvasTransferredRef.current = false; // Reset on error
     }
-  }, [isWorkerReady]);
+  }, [isWorkerReady, renderMode]);
 
-  // Send ping message to worker
+  // Send ping message to renderer
   const handlePing = () => {
-    if (!workerRef.current) return;
+    if (!rendererRef.current) return;
 
-    const message: MainToWorkerMessage = {
+    const message: MainToRendererMessage = {
       type: 'ping',
       data: `Hello from table ${tableId}`,
     };
-    workerRef.current.postMessage(message);
+    rendererRef.current.sendMessage(message);
   };
 
-  // Send echo message to worker
+  // Send echo message to renderer
   const handleEcho = () => {
-    if (!workerRef.current) return;
+    if (!rendererRef.current) return;
 
-    const message: MainToWorkerMessage = {
+    const message: MainToRendererMessage = {
       type: 'echo',
       data: `Echo test at ${new Date().toLocaleTimeString()}`,
     };
-    workerRef.current.postMessage(message);
+    rendererRef.current.sendMessage(message);
+  };
+
+  // Trigger test animation (rotates circle for 2 seconds)
+  const handleAnimation = () => {
+    if (!rendererRef.current) return;
+
+    const message: MainToRendererMessage = {
+      type: 'test-animation',
+    };
+    rendererRef.current.sendMessage(message);
+    setMessages((prev) => [...prev, 'Starting animation...']);
   };
 
   return (
@@ -148,7 +215,8 @@ function Board({ tableId }: BoardProps) {
       <h2>Board: {tableId}</h2>
 
       <div className="worker-status" data-testid="worker-status">
-        Worker: {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
+        Mode: {renderMode} | Worker:{' '}
+        {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
         {isCanvasInitialized ? 'Initialized' : 'Not initialized'}
       </div>
 
@@ -187,6 +255,18 @@ function Board({ tableId }: BoardProps) {
           data-testid="echo-button"
         >
           Send Echo
+        </button>
+        <button
+          onClick={handleAnimation}
+          disabled={!isCanvasInitialized}
+          data-testid="animation-button"
+          style={{
+            backgroundColor: '#4CAF50',
+            color: 'white',
+            fontWeight: 'bold',
+          }}
+        >
+          Test Animation (2s)
         </button>
       </div>
 

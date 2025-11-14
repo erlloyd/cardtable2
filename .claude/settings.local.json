@@ -11,7 +11,8 @@
       "Bash(mise ls node)",
       "WebFetch(domain:code.claude.com)",
       "Bash(curl:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   },

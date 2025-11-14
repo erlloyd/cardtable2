@@ -42,26 +42,29 @@ export interface StackObject extends TableObject {
 }
 
 // ============================================================================
-// Worker Message Types (M2-T1 & M2-T2)
+// Renderer Message Types (M2-T1, M2-T2, M2-T6)
 // ============================================================================
 
-// Messages sent from main thread to worker
-export type MainToWorkerMessage =
+// Messages sent from main thread to renderer (worker or main thread)
+export type MainToRendererMessage =
   | { type: 'ping'; data: string }
   | { type: 'echo'; data: string }
   | {
       type: 'init';
-      canvas: OffscreenCanvas;
+      canvas: OffscreenCanvas | HTMLCanvasElement;
       width: number;
       height: number;
       dpr: number;
     }
-  | { type: 'resize'; width: number; height: number; dpr: number };
+  | { type: 'resize'; width: number; height: number; dpr: number }
+  | { type: 'test-animation' };
 
-// Messages sent from worker to main thread
-export type WorkerToMainMessage =
+// Messages sent from renderer to main thread
+export type RendererToMainMessage =
   | { type: 'pong'; data: string }
   | { type: 'echo-response'; data: string }
   | { type: 'ready' }
   | { type: 'initialized' }
-  | { type: 'error'; error: string };
+  | { type: 'error'; error: string; context?: string }
+  | { type: 'warning'; message: string }
+  | { type: 'animation-complete' };

@@ -1,8 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
-import GameSelect from './GameSelect';
-import { GamesIndex } from '../types/game';
+import {
+  createMemoryHistory,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { routeTree } from '../../routeTree.gen';
+import { GamesIndex } from '../../types/game';
 
 const mockGamesIndex: GamesIndex = {
   games: [
@@ -16,7 +20,7 @@ const mockGamesIndex: GamesIndex = {
   ],
 };
 
-describe('GameSelect', () => {
+describe('Index Route (GameSelect)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -32,16 +36,18 @@ describe('GameSelect', () => {
       ),
     );
 
-    render(
-      <MemoryRouter>
-        <GameSelect />
-      </MemoryRouter>,
-    );
+    const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
+    const router = createRouter({
+      routeTree,
+      history: memoryHistory,
+      defaultPendingMinMs: 0,
+    });
+    render(<RouterProvider router={router} />);
 
-    // Should show loading state initially
-    expect(screen.getByText(/Loading games.../i)).toBeInTheDocument();
+    // Wait for router to load
+    await router.load();
 
-    // Wait for games to load
+    // Wait for games to load (may skip loading state)
     await waitFor(() => {
       expect(screen.getByText(/Cardtable/i)).toBeInTheDocument();
     });
@@ -58,11 +64,16 @@ describe('GameSelect', () => {
       vi.fn(() => Promise.reject(new Error('Failed to load'))),
     );
 
-    render(
-      <MemoryRouter>
-        <GameSelect />
-      </MemoryRouter>,
-    );
+    const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
+    const router = createRouter({
+      routeTree,
+      history: memoryHistory,
+      defaultPendingMinMs: 0,
+    });
+    render(<RouterProvider router={router} />);
+
+    // Wait for router to load
+    await router.load();
 
     await waitFor(() => {
       expect(screen.getByText(/Error: Failed to load/i)).toBeInTheDocument();

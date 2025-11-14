@@ -2,7 +2,7 @@ import type {
   MainToRendererMessage,
   RendererToMainMessage,
 } from '@cardtable2/shared';
-import type { IRendererAdapter } from './IRendererAdapter';
+import { RenderMode, type IRendererAdapter } from './IRendererAdapter';
 import { RendererCore } from './RendererCore';
 
 /**
@@ -36,6 +36,8 @@ class MainThreadRendererCore extends RendererCore {
  * requested by the user (e.g., for debugging or battery saving).
  */
 export class MainThreadRendererAdapter implements IRendererAdapter {
+  readonly mode = RenderMode.MainThread;
+
   private renderer: MainThreadRendererCore;
   private messageHandler: ((message: RendererToMainMessage) => void) | null =
     null;

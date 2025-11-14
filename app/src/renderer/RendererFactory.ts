@@ -1,11 +1,15 @@
-import type { IRendererAdapter } from './IRendererAdapter';
+import { RenderMode, type IRendererAdapter } from './IRendererAdapter';
 import { WorkerRendererAdapter } from './WorkerRendererAdapter';
 import { MainThreadRendererAdapter } from './MainThreadRendererAdapter';
 
+// Re-export RenderMode for convenience
+export { RenderMode };
+
 /**
- * Rendering mode selection.
+ * Rendering mode selection parameter.
+ * 'auto' means detect automatically based on capabilities.
  */
-export type RenderMode = 'worker' | 'main-thread' | 'auto';
+export type RenderModeParam = RenderMode | 'auto';
 
 /**
  * Renderer capabilities and platform information.
@@ -15,7 +19,7 @@ export interface RendererCapabilities {
   hasWebGL: boolean;
   isIOS: boolean;
   iOSVersion: number | null;
-  recommendedMode: 'worker' | 'main-thread';
+  recommendedMode: RenderMode;
 }
 
 /**
@@ -52,16 +56,16 @@ export function detectCapabilities(): RendererCapabilities {
   }
 
   // Determine recommended mode
-  let recommendedMode: 'worker' | 'main-thread' = 'main-thread';
+  let recommendedMode: RenderMode = RenderMode.MainThread;
 
   if (hasOffscreenCanvas && hasWebGL) {
     // IMPORTANT: PixiJS ticker crashes in Web Workers on iOS Safari (all versions)
     // Even temporary ticker usage for animations causes tab crashes
     // Force main-thread mode for all iOS devices
     if (isIOS) {
-      recommendedMode = 'main-thread';
+      recommendedMode = RenderMode.MainThread;
     } else {
-      recommendedMode = 'worker';
+      recommendedMode = RenderMode.Worker;
     }
   }
 
@@ -80,16 +84,22 @@ export function detectCapabilities(): RendererCapabilities {
  * @param mode - Desired render mode ('auto' uses capability detection)
  * @returns Renderer adapter instance
  */
-export function createRenderer(mode: RenderMode = 'auto'): IRendererAdapter {
+export function createRenderer(
+  mode: RenderModeParam = 'auto',
+): IRendererAdapter {
+  let actualMode: RenderMode;
+
   if (mode === 'auto') {
     const capabilities = detectCapabilities();
-    mode = capabilities.recommendedMode;
+    actualMode = capabilities.recommendedMode;
+  } else {
+    actualMode = mode;
   }
 
-  switch (mode) {
-    case 'worker':
+  switch (actualMode) {
+    case RenderMode.Worker:
       return new WorkerRendererAdapter();
-    case 'main-thread':
+    case RenderMode.MainThread:
       return new MainThreadRendererAdapter();
     default:
       // Fallback to main-thread for unknown modes

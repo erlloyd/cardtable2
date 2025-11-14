@@ -217,3 +217,4 @@ All development tools upgraded to latest stable versions:
 
 ## Next Steps
 See `_plans/M2_board_core.md` for next milestone.
+- When asked to plan something, always ask if it should be saved in the _plans folder

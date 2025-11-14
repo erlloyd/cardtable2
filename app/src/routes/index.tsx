@@ -1,5 +1,5 @@
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { CARDTABLE_VERSION } from '@cardtable2/shared';
-import { useNavigate } from 'react-router-dom';
 import {
   uniqueNamesGenerator,
   adjectives,
@@ -9,6 +9,10 @@ import {
 import { useState, useEffect } from 'react';
 import GameCombobox from '../components/GameCombobox';
 import { Game, GamesIndex } from '../types/game';
+
+export const Route = createFileRoute('/')({
+  component: GameSelect,
+});
 
 const nameConfig: Config = {
   dictionaries: [adjectives, adjectives, animals],
@@ -54,7 +58,10 @@ function GameSelect() {
       return;
     }
     const tableId = uniqueNamesGenerator(nameConfig);
-    void navigate(`/table/${tableId}`, { state: { game: selectedGame } });
+    void navigate({
+      to: '/table/$id',
+      params: { id: tableId },
+    });
   };
 
   if (loading) {
@@ -96,5 +103,3 @@ function GameSelect() {
     </div>
   );
 }
-
-export default GameSelect;

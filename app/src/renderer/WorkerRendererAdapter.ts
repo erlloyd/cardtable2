@@ -2,7 +2,7 @@ import type {
   MainToRendererMessage,
   RendererToMainMessage,
 } from '@cardtable2/shared';
-import type { IRendererAdapter } from './IRendererAdapter';
+import { RenderMode, type IRendererAdapter } from './IRendererAdapter';
 
 /**
  * Adapter for worker-based rendering mode.
@@ -11,6 +11,8 @@ import type { IRendererAdapter } from './IRendererAdapter';
  * interface. Messages are sent via postMessage and received via worker.onmessage.
  */
 export class WorkerRendererAdapter implements IRendererAdapter {
+  readonly mode = RenderMode.Worker;
+
   private worker: Worker;
   private messageHandler: ((message: RendererToMainMessage) => void) | null =
     null;

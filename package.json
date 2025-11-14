@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Cardtable 2.0 - Solo-first card table with multiplayer support",
   "scripts": {
-    "dev": "pnpm -r --parallel --filter '!@cardtable2/shared' run dev",
+    "dev": "pnpm --parallel --filter \"@cardtable2/app\" --filter \"@cardtable2/server\" run dev",
     "build": "pnpm --filter '!@cardtable2/shared' -r run build",
     "test": "pnpm -r run test",
     "lint": "pnpm -r run lint",

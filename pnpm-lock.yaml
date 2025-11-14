@@ -59,6 +59,9 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.136.1
         version: 1.136.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      pixi-viewport:
+        specifier: ^6.0.3
+        version: 6.0.3(pixi.js@8.14.1)
       pixi.js:
         specifier: ^8.14.1
         version: 8.14.1
@@ -2858,6 +2861,11 @@ packages:
     resolution: {integrity: sha512-eG2dWTVw5bzqGRztnHExczNxt5VGsE6OwTeCG3fdUf9KBsZzO3R5OIIIzWR+iZA0NtZ+RDVdaoE2dK1cn6jH4g==}
     engines: {node: '>=0.10'}
     hasBin: true
+
+  pixi-viewport@6.0.3:
+    resolution: {integrity: sha512-2+qPJ0/n+8hQYhWvY+795+x9y3MiUrCOWacK0DY53whowWaGdx9iDocy7z1pBwjkZhC52YvrJQuZKK0sdVLtBw==}
+    peerDependencies:
+      pixi.js: '>=8'
 
   pixi.js@8.14.1:
     resolution: {integrity: sha512-cwiY5VdzpbjoxW/n378bHBaPbZF8e81rYS36rfgUOSHyqLJ7AvC/YYUVfybnjJrT8/zVJ/gBIEpVSmt+A+FC6Q==}
@@ -6737,6 +6745,10 @@ snapshots:
   picomatch@4.0.3: {}
 
   pidtree@0.6.0: {}
+
+  pixi-viewport@6.0.3(pixi.js@8.14.1):
+    dependencies:
+      pixi.js: 8.14.1
 
   pixi.js@8.14.1:
     dependencies:

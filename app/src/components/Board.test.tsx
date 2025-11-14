@@ -274,4 +274,131 @@ describe('Board', () => {
     // transferControlToOffscreen should only be called once
     expect(transferControlSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('forwards pointer down events to renderer', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const canvas = screen.getByTestId('board-canvas');
+
+    // Spy on Worker postMessage to verify pointer event is sent
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+
+      // Simulate pointer down on canvas
+      await user.pointer({ target: canvas, keys: '[MouseLeft>]' });
+
+      // Verify pointer-down message was sent
+      await waitFor(() => {
+        expect(postMessageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'pointer-down',
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            event: expect.objectContaining({
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              pointerId: expect.any(Number),
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              pointerType: expect.any(String),
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              clientX: expect.any(Number),
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              clientY: expect.any(Number),
+            }),
+          }),
+        );
+      });
+    }
+  });
+
+  it('forwards pointer move events to renderer', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const canvas = screen.getByTestId('board-canvas');
+
+    // Spy on Worker postMessage
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+
+      // Simulate pointer move on canvas
+      await user.pointer({
+        target: canvas,
+        coords: { clientX: 100, clientY: 200 },
+      });
+
+      // Verify pointer-move message was sent
+      await waitFor(() => {
+        const calls = postMessageSpy.mock.calls;
+        const hasPointerMove = calls.some(
+          (call) =>
+            call[0] &&
+            typeof call[0] === 'object' &&
+            'type' in call[0] &&
+            call[0].type === 'pointer-move',
+        );
+        expect(hasPointerMove).toBe(true);
+      });
+    }
+  });
+
+  it('forwards pointer up events to renderer', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const canvas = screen.getByTestId('board-canvas');
+
+    // Spy on Worker postMessage
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+
+      // Simulate pointer down and up
+      await user.pointer([
+        { target: canvas, keys: '[MouseLeft>]' },
+        { keys: '[/MouseLeft]' },
+      ]);
+
+      // Verify pointer-up message was sent
+      await waitFor(() => {
+        const calls = postMessageSpy.mock.calls;
+        const hasPointerUp = calls.some(
+          (call) =>
+            call[0] &&
+            typeof call[0] === 'object' &&
+            'type' in call[0] &&
+            call[0].type === 'pointer-up',
+        );
+        expect(hasPointerUp).toBe(true);
+      });
+    }
+  });
 });

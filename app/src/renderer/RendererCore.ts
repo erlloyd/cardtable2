@@ -1,7 +1,9 @@
-import { Application, Graphics } from 'pixi.js';
+import { Application, Graphics, Container } from 'pixi.js';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
+  PointerEventData,
+  WheelEventData,
 } from '@cardtable2/shared';
 
 /**
@@ -11,10 +13,36 @@ import type {
  * regardless of where it runs. The ONLY difference between modes is how
  * postResponse() is implemented (postMessage vs callback).
  */
+// Drag slop thresholds by pointer type (M2-T3)
+const DRAG_SLOP = {
+  touch: 12,
+  pen: 6,
+  mouse: 3,
+} as const;
+
 export abstract class RendererCore {
   protected app: Application | null = null;
+  protected worldContainer: Container | null = null;
   private animationStartTime: number = 0;
   private isAnimating: boolean = false;
+
+  // Camera state (M2-T3)
+  private cameraScale = 1.0;
+  private readonly minZoom = 0.5;
+  private readonly maxZoom = 2.0;
+
+  // Pointer tracking for gesture recognition
+  private pointers: Map<
+    number,
+    {
+      startX: number;
+      startY: number;
+      type: string;
+      lastX: number;
+      lastY: number;
+    }
+  > = new Map();
+  private isDragging = false;
 
   /**
    * Send a response message back to the main thread.
@@ -105,6 +133,11 @@ export abstract class RendererCore {
               this.app.ticker.stop();
             }
 
+            // Initialize viewport (M2-T3)
+            console.log('[RendererCore] Initializing viewport...');
+            this.initializeViewport(width, height);
+            console.log('[RendererCore] ✓ Viewport initialized');
+
             // Render a simple test scene
             console.log('[RendererCore] Rendering test scene...');
             this.renderTestScene();
@@ -155,6 +188,11 @@ export abstract class RendererCore {
             const { width, height, dpr } = message;
             this.app.renderer.resize(width, height);
             this.app.renderer.resolution = dpr;
+
+            // Update world container position to keep it centered
+            if (this.worldContainer) {
+              this.worldContainer.position.set(width / 2, height / 2);
+            }
           }
           break;
         }
@@ -184,6 +222,31 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'pointer-down': {
+          this.handlePointerDown(message.event);
+          break;
+        }
+
+        case 'pointer-move': {
+          this.handlePointerMove(message.event);
+          break;
+        }
+
+        case 'pointer-up': {
+          this.handlePointerUp(message.event);
+          break;
+        }
+
+        case 'pointer-cancel': {
+          this.handlePointerCancel(message.event);
+          break;
+        }
+
+        case 'wheel': {
+          this.handleWheel(message.event);
+          break;
+        }
+
         default: {
           // Unknown message type
           this.postResponse({
@@ -204,52 +267,197 @@ export abstract class RendererCore {
   }
 
   /**
+   * Initialize world container for camera (M2-T3).
+   * Using a simple Container with manual transforms instead of pixi-viewport
+   * to avoid DOM dependencies (works in both Worker and main-thread modes).
+   */
+  private initializeViewport(width: number, height: number): void {
+    if (!this.app) return;
+
+    // Create a container for the world/scene
+    this.worldContainer = new Container();
+
+    // Add to stage
+    this.app.stage.addChild(this.worldContainer);
+
+    // Center camera on screen center initially
+    this.worldContainer.position.set(width / 2, height / 2);
+
+    // Set initial scale
+    this.worldContainer.scale.set(this.cameraScale);
+  }
+
+  /**
+   * Handle pointer down event (M2-T3).
+   */
+  private handlePointerDown(event: PointerEventData): void {
+    if (!this.worldContainer) return;
+
+    // Track pointer start position for gesture recognition
+    this.pointers.set(event.pointerId, {
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      type: event.pointerType,
+    });
+
+    // Start dragging if this is the primary pointer
+    if (event.isPrimary) {
+      this.isDragging = false; // Will become true once we exceed slop threshold
+    }
+  }
+
+  /**
+   * Handle pointer move event (M2-T3).
+   */
+  private handlePointerMove(event: PointerEventData): void {
+    if (!this.worldContainer || !this.app) return;
+
+    const pointerInfo = this.pointers.get(event.pointerId);
+    if (!pointerInfo) return;
+
+    // Calculate movement delta from start
+    const dx = event.clientX - pointerInfo.startX;
+    const dy = event.clientY - pointerInfo.startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Check if movement exceeds drag slop threshold
+    const pointerType = event.pointerType;
+    const slopThreshold =
+      pointerType === 'mouse' ||
+      pointerType === 'pen' ||
+      pointerType === 'touch'
+        ? DRAG_SLOP[pointerType]
+        : DRAG_SLOP.mouse;
+
+    // Start dragging once we exceed the slop threshold
+    if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
+      this.isDragging = true;
+    }
+
+    // If dragging, manually pan the camera
+    if (this.isDragging && event.isPrimary) {
+      // Calculate delta from last position
+      const deltaX = event.clientX - pointerInfo.lastX;
+      const deltaY = event.clientY - pointerInfo.lastY;
+
+      // Move world container (camera pans by moving the world)
+      this.worldContainer.position.x += deltaX;
+      this.worldContainer.position.y += deltaY;
+
+      // Request render
+      this.app.renderer.render(this.app.stage);
+    }
+
+    // Update last position
+    pointerInfo.lastX = event.clientX;
+    pointerInfo.lastY = event.clientY;
+  }
+
+  /**
+   * Handle pointer up event (M2-T3).
+   */
+  private handlePointerUp(event: PointerEventData): void {
+    if (!this.worldContainer) return;
+
+    // End dragging
+    if (event.isPrimary) {
+      this.isDragging = false;
+    }
+
+    // Clear pointer tracking
+    this.pointers.delete(event.pointerId);
+  }
+
+  /**
+   * Handle pointer cancel event (M2-T3).
+   */
+  private handlePointerCancel(event: PointerEventData): void {
+    if (!this.worldContainer) return;
+
+    // End dragging
+    if (event.isPrimary) {
+      this.isDragging = false;
+    }
+
+    // Clear pointer tracking
+    this.pointers.delete(event.pointerId);
+  }
+
+  /**
+   * Handle wheel event for zooming (M2-T3).
+   */
+  private handleWheel(event: WheelEventData): void {
+    if (!this.worldContainer || !this.app) return;
+
+    // Calculate zoom factor from wheel delta
+    const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05;
+
+    // Calculate new scale
+    const newScale = this.cameraScale * zoomFactor;
+
+    // Clamp zoom between min and max
+    this.cameraScale = Math.max(this.minZoom, Math.min(this.maxZoom, newScale));
+
+    // Apply zoom to world container
+    this.worldContainer.scale.set(this.cameraScale);
+
+    // Request render
+    this.app.renderer.render(this.app.stage);
+  }
+
+  /**
    * Render a simple test scene (M2-T2).
    * This will be replaced with real scene management in later tasks.
    */
   private renderTestScene(): void {
-    if (!this.app) return;
-
-    const stage = this.app.stage;
+    if (!this.worldContainer) return;
 
     // Clear any existing children
-    stage.removeChildren();
+    this.worldContainer.removeChildren();
 
-    // Create a simple colored rectangle to verify rendering
+    // Create objects in world space (0,0 is world origin, camera will be centered)
+    // Create a simple colored rectangle
     const rect = new Graphics();
-    rect.rect(50, 50, 200, 150);
+    rect.rect(-200, -150, 200, 150);
     rect.fill(0x6c5ce7);
-    stage.addChild(rect);
+    this.worldContainer.addChild(rect);
 
     // Create another rectangle
     const rect2 = new Graphics();
-    rect2.rect(300, 100, 150, 200);
+    rect2.rect(50, -100, 150, 200);
     rect2.fill(0x00b894);
-    stage.addChild(rect2);
+    this.worldContainer.addChild(rect2);
 
-    // Create a circle
+    // Create a circle at world origin
     const circle = new Graphics();
-    circle.circle(500, 250, 75);
+    circle.circle(0, 0, 75);
     circle.fill(0xfdcb6e);
-    stage.addChild(circle);
+    this.worldContainer.addChild(circle);
   }
 
   /**
    * Cleanup resources.
    */
   destroy(): void {
+    if (this.worldContainer) {
+      this.worldContainer.destroy();
+      this.worldContainer = null;
+    }
     if (this.app) {
       this.app.destroy();
       this.app = null;
     }
+    this.pointers.clear();
   }
 
   /**
    * Start a test animation to verify ticker enable/disable works.
-   * Rotates the circle for 2 seconds, then stops.
+   * Moves the circle back and forth for 3 seconds.
    */
   private startTestAnimation(): void {
-    if (!this.app || this.isAnimating) {
+    if (!this.app || !this.worldContainer || this.isAnimating) {
       console.warn(
         '[RendererCore] Cannot start animation - app not ready or already animating',
       );
@@ -265,27 +473,45 @@ export abstract class RendererCore {
     this.isAnimating = true;
     this.animationStartTime = Date.now();
 
-    // Get the circle (third child in stage)
-    const circle = this.app.stage.children[2];
+    // Get the circle (third child in worldContainer)
+    const circle = this.worldContainer.children[2];
     if (!circle) {
       console.error('[RendererCore] Circle not found for animation');
       return;
     }
 
-    // Store original rotation
-    const originalRotation = circle.rotation;
+    // Store original position
+    const originalX = circle.x;
+    const originalY = circle.y;
+
+    let frameCount = 0;
 
     // Create ticker callback
     const animationTicker = () => {
+      frameCount++;
       const elapsed = Date.now() - this.animationStartTime;
-      const duration = 2000; // 2 seconds
+      const duration = 3000; // 3 seconds
 
       if (elapsed < duration) {
-        // Rotate the circle (2 full rotations over 2 seconds)
-        circle.rotation = originalRotation + (elapsed / duration) * Math.PI * 4;
+        // Move the circle back and forth
+        const progress = elapsed / duration;
+        const oscillation = Math.sin(progress * Math.PI * 4); // 2 full cycles
+        circle.x = originalX + oscillation * 100;
+        circle.y = originalY + oscillation * 50;
+
+        // Render on each frame
+        this.app!.renderer.render(this.app!.stage);
+
+        if (frameCount % 30 === 0) {
+          console.log(
+            `[RendererCore] Animation frame ${frameCount}, elapsed: ${elapsed}ms`,
+          );
+        }
       } else {
         // Animation complete
-        console.log('[RendererCore] Animation complete, stopping ticker...');
+        console.log(
+          `[RendererCore] Animation complete after ${frameCount} frames, stopping ticker...`,
+        );
         this.app!.ticker.remove(animationTicker);
         this.app!.ticker.stop();
         console.log(
@@ -293,8 +519,9 @@ export abstract class RendererCore {
           this.app!.ticker.started,
         );
 
-        // Reset rotation
-        circle.rotation = originalRotation;
+        // Reset position
+        circle.x = originalX;
+        circle.y = originalY;
         this.isAnimating = false;
 
         // Do final render

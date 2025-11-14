@@ -13,14 +13,9 @@ function Table() {
 
   return (
     <div className="table">
-      <header className="table-header">
-        <h2>Table: {id}</h2>
-      </header>
-      <main className="table-main">
-        <Suspense fallback={<div>Loading board...</div>}>
-          <Board tableId={id} />
-        </Suspense>
-      </main>
+      <Suspense fallback={<div>Loading board...</div>}>
+        <Board tableId={id} />
+      </Suspense>
     </div>
   );
 }

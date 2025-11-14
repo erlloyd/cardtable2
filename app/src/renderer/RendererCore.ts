@@ -28,8 +28,6 @@ export abstract class RendererCore {
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
-  private readonly minZoom = 0.5;
-  private readonly maxZoom = 2.0;
 
   // Pointer tracking for gesture recognition
   private pointers: Map<
@@ -43,6 +41,9 @@ export abstract class RendererCore {
     }
   > = new Map();
   private isDragging = false;
+  private isPinching = false;
+  private initialPinchDistance = 0;
+  private initialPinchScale = 1.0;
 
   /**
    * Send a response message back to the main thread.
@@ -288,6 +289,18 @@ export abstract class RendererCore {
   }
 
   /**
+   * Calculate distance between two pointers (for pinch gesture).
+   */
+  private getPointerDistance(
+    p1: { lastX: number; lastY: number },
+    p2: { lastX: number; lastY: number },
+  ): number {
+    const dx = p2.lastX - p1.lastX;
+    const dy = p2.lastY - p1.lastY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
    * Handle pointer down event (M2-T3).
    */
   private handlePointerDown(event: PointerEventData): void {
@@ -302,14 +315,31 @@ export abstract class RendererCore {
       type: event.pointerType,
     });
 
-    // Start dragging if this is the primary pointer
-    if (event.isPrimary) {
+    // Check if we have 2 touch pointers (pinch gesture)
+    if (this.pointers.size === 2 && event.pointerType === 'touch') {
+      this.isDragging = false;
+      this.isPinching = true;
+
+      // Calculate initial pinch distance
+      const pointerArray = Array.from(this.pointers.values());
+      this.initialPinchDistance = this.getPointerDistance(
+        pointerArray[0],
+        pointerArray[1],
+      );
+      this.initialPinchScale = this.cameraScale;
+
+      console.log(
+        '[RendererCore] Pinch gesture started, distance:',
+        this.initialPinchDistance,
+      );
+    } else if (event.isPrimary) {
+      // Start dragging if this is the primary pointer (and not pinching)
       this.isDragging = false; // Will become true once we exceed slop threshold
     }
   }
 
   /**
-   * Handle pointer move event (M2-T3).
+   * Handle pointer move event (M2-T3 + pinch-to-zoom).
    */
   private handlePointerMove(event: PointerEventData): void {
     if (!this.worldContainer || !this.app) return;
@@ -317,72 +347,111 @@ export abstract class RendererCore {
     const pointerInfo = this.pointers.get(event.pointerId);
     if (!pointerInfo) return;
 
-    // Calculate movement delta from start
-    const dx = event.clientX - pointerInfo.startX;
-    const dy = event.clientY - pointerInfo.startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Store last position for delta calculation
+    const lastX = pointerInfo.lastX;
+    const lastY = pointerInfo.lastY;
 
-    // Check if movement exceeds drag slop threshold
-    const pointerType = event.pointerType;
-    const slopThreshold =
-      pointerType === 'mouse' ||
-      pointerType === 'pen' ||
-      pointerType === 'touch'
-        ? DRAG_SLOP[pointerType]
-        : DRAG_SLOP.mouse;
+    // Update pointer position
+    pointerInfo.lastX = event.clientX;
+    pointerInfo.lastY = event.clientY;
 
-    // Start dragging once we exceed the slop threshold
-    if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
-      this.isDragging = true;
-    }
+    // Handle pinch zoom (2 fingers)
+    if (this.isPinching && this.pointers.size === 2) {
+      const pointerArray = Array.from(this.pointers.values());
+      const currentDistance = this.getPointerDistance(
+        pointerArray[0],
+        pointerArray[1],
+      );
 
-    // If dragging, manually pan the camera
-    if (this.isDragging && event.isPrimary) {
-      // Calculate delta from last position
-      const deltaX = event.clientX - pointerInfo.lastX;
-      const deltaY = event.clientY - pointerInfo.lastY;
+      // Calculate scale change
+      const scaleChange = currentDistance / this.initialPinchDistance;
+      this.cameraScale = this.initialPinchScale * scaleChange;
 
-      // Move world container (camera pans by moving the world)
-      this.worldContainer.position.x += deltaX;
-      this.worldContainer.position.y += deltaY;
+      // Apply zoom (no clamping - unlimited zoom)
+      this.worldContainer.scale.set(this.cameraScale);
 
       // Request render
       this.app.renderer.render(this.app.stage);
+      return;
     }
 
-    // Update last position
-    pointerInfo.lastX = event.clientX;
-    pointerInfo.lastY = event.clientY;
+    // Handle single-pointer pan/drag
+    if (this.pointers.size === 1) {
+      // Calculate movement delta from start
+      const dx = event.clientX - pointerInfo.startX;
+      const dy = event.clientY - pointerInfo.startY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Check if movement exceeds drag slop threshold
+      const pointerType = event.pointerType;
+      const slopThreshold =
+        pointerType === 'mouse' ||
+        pointerType === 'pen' ||
+        pointerType === 'touch'
+          ? DRAG_SLOP[pointerType]
+          : DRAG_SLOP.mouse;
+
+      // Start dragging once we exceed the slop threshold
+      if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
+        this.isDragging = true;
+      }
+
+      // If dragging, manually pan the camera
+      if (this.isDragging && event.isPrimary) {
+        // Calculate delta from last position
+        const deltaX = event.clientX - lastX;
+        const deltaY = event.clientY - lastY;
+
+        // Move world container (camera pans by moving the world)
+        this.worldContainer.position.x += deltaX;
+        this.worldContainer.position.y += deltaY;
+
+        // Request render
+        this.app.renderer.render(this.app.stage);
+      }
+    }
   }
 
   /**
-   * Handle pointer up event (M2-T3).
+   * Handle pointer up event (M2-T3 + pinch-to-zoom).
    */
   private handlePointerUp(event: PointerEventData): void {
     if (!this.worldContainer) return;
 
+    // Clear pointer tracking
+    this.pointers.delete(event.pointerId);
+
+    // If we were pinching and now have less than 2 pointers, end pinch
+    if (this.isPinching && this.pointers.size < 2) {
+      this.isPinching = false;
+      console.log('[RendererCore] Pinch gesture ended');
+    }
+
     // End dragging
     if (event.isPrimary) {
       this.isDragging = false;
     }
-
-    // Clear pointer tracking
-    this.pointers.delete(event.pointerId);
   }
 
   /**
-   * Handle pointer cancel event (M2-T3).
+   * Handle pointer cancel event (M2-T3 + pinch-to-zoom).
    */
   private handlePointerCancel(event: PointerEventData): void {
     if (!this.worldContainer) return;
 
+    // Clear pointer tracking
+    this.pointers.delete(event.pointerId);
+
+    // If we were pinching and now have less than 2 pointers, end pinch
+    if (this.isPinching && this.pointers.size < 2) {
+      this.isPinching = false;
+      console.log('[RendererCore] Pinch gesture cancelled');
+    }
+
     // End dragging
     if (event.isPrimary) {
       this.isDragging = false;
     }
-
-    // Clear pointer tracking
-    this.pointers.delete(event.pointerId);
   }
 
   /**
@@ -394,11 +463,8 @@ export abstract class RendererCore {
     // Calculate zoom factor from wheel delta
     const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05;
 
-    // Calculate new scale
-    const newScale = this.cameraScale * zoomFactor;
-
-    // Clamp zoom between min and max
-    this.cameraScale = Math.max(this.minZoom, Math.min(this.maxZoom, newScale));
+    // Calculate new scale (no clamping - unlimited zoom)
+    this.cameraScale = this.cameraScale * zoomFactor;
 
     // Apply zoom to world container
     this.worldContainer.scale.set(this.cameraScale);

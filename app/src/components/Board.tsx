@@ -326,9 +326,22 @@ function Board({ tableId }: BoardProps) {
 
   return (
     <div className="board" data-testid="board">
-      <h2>Board: {tableId}</h2>
+      <div
+        style={{
+          fontSize: '14px',
+          fontWeight: 'bold',
+          padding: '4px 0',
+          marginBottom: '4px',
+        }}
+      >
+        Board: {tableId}
+      </div>
 
-      <div className="worker-status" data-testid="worker-status">
+      <div
+        className="worker-status"
+        data-testid="worker-status"
+        style={{ fontSize: '12px', marginBottom: '8px' }}
+      >
         Mode: {renderMode} | Worker:{' '}
         {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
         {isCanvasInitialized ? 'Initialized' : 'Not initialized'}

@@ -94,6 +94,14 @@ pnpm run format
 - Object types: `stack`, `token`, `zone`, `mat`, `counter`
 - Yjs for CRDT-based multiplayer sync
 
+### Rendering Architecture
+- Dual-mode rendering: Worker-based (OffscreenCanvas) OR Main-thread (regular canvas)
+- Worker mode for best performance on desktop/modern mobile (60fps with 300+ objects)
+- Main-thread mode for maximum compatibility (iOS 16.x, debugging, user preference)
+- Shared core logic (SceneManager, HitTester, InputHandler, RenderCore)
+- User-toggleable in settings (auto-detect, force mode, debug tools)
+- See `_plans/M2_rendering_architecture.md` for full details
+
 ### Shared Package
 - Direct TypeScript imports (no build step)
 - Contains common types used by both app and server
@@ -124,7 +132,7 @@ pnpm run format
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
 - ✅ M1: App Shell & Navigation (COMPLETED)
-- ⏳ M2: Board Core (Worker, PixiJS, Camera, Hit-Testing, Object Dragging)
+- ⏳ M2: Board Core (Dual-Mode Rendering, Camera, Hit-Testing, Object Dragging)
 - ⏳ M3: Local Yjs
 - ⏳ M4: Set Loader & Assets
 - ⏳ M5: Multiplayer Server

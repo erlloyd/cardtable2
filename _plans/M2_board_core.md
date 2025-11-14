@@ -3,7 +3,9 @@
 ## Overview
 Implement the core board functionality with PixiJS rendering, camera controls, hit-testing, and object manipulation.
 
-**Strategy:** Incremental approach to avoid offscreen canvas issues. Build worker communication first, then add rendering, then full features.
+**Strategy:** Incremental approach to avoid offscreen canvas issues. Build worker communication first, then add rendering, then full features. Implement dual-mode rendering architecture (worker vs main thread) for maximum compatibility and user choice.
+
+**See also:** [M2 Rendering Architecture](./M2_rendering_architecture.md) - Detailed plan for dual-mode rendering strategy.
 
 ## Prerequisites
 - Milestone 1 completed (app shell and navigation)
@@ -177,3 +179,52 @@ Implement the core board functionality with PixiJS rendering, camera controls, h
 - Responsive feel (≤30ms latency from pointer to visual update)
 - Visual feedback provides clear drag state
 - No jitter or lag during drag operations
+
+### M2-T6: Dual-Mode Rendering Architecture
+**Objective:** Implement both worker and main-thread rendering modes with shared core logic for maximum compatibility and user choice.
+
+**Dependencies:** M2-T5
+
+**Spec:**
+- Abstract renderer interface (IRenderer)
+- Worker-based renderer (existing implementation)
+- Main-thread renderer (new, same interface)
+- Shared core: SceneManager, HitTester, InputHandler, RenderCore
+- Capability detection (OffscreenCanvas, WebGL stability)
+- Renderer factory with automatic mode selection
+- Mode selection logic (auto, user preference, debug override)
+
+**Deliverables:**
+- IRenderer interface definition
+- Refactor existing worker code to implement IRenderer
+- Extract shared logic to renderer-core module
+- MainThreadRenderer implementation
+- RendererFactory with capability detection
+- Board component integration using IRenderer
+- Debug tools (URL params, console commands)
+
+**Test Plan:**
+- Unit: Both renderers pass identical feature tests
+- Unit: Capability detection works correctly per platform
+- E2E: Worker mode renders correctly on desktop
+- E2E: Main thread mode renders correctly on iOS 16.x
+- E2E: Mode switching at runtime preserves state
+- Performance: Both modes meet 60fps target (worker on desktop, main on iOS)
+- Cross-platform: Validate on iOS, Android, Desktop browsers
+
+**Success Criteria:**
+- Both rendering modes support all M2 features (T1-T5)
+- No crashes on iOS 16.x with main thread mode
+- Worker mode achieves 60fps with 300 objects on desktop
+- Main thread mode achieves 60fps with 100 objects on iOS
+- App code is mode-agnostic (uses IRenderer interface)
+- Automatic detection chooses correct mode per platform
+- Easy mode toggle for debugging and testing
+
+## Notes
+
+### Rendering Architecture
+The dual-mode rendering architecture (M2-T6) ensures Cardtable 2 works on all platforms while maintaining best-in-class performance. See [M2_rendering_architecture.md](./M2_rendering_architecture.md) for full architectural details.
+
+### Implementation Order
+Tasks M2-T1 through M2-T5 establish the core features using worker-based rendering. M2-T6 refactors to support both modes while maintaining all functionality. This approach allows rapid feature development while ensuring maximum compatibility.

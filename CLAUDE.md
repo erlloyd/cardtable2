@@ -144,12 +144,12 @@ pnpm run format
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
 - ✅ M1: App Shell & Navigation (COMPLETED)
-- ⏳ M2: Board Core (5/6 tasks complete)
+- ✅ M2: Board Core (COMPLETED - all 6 tasks complete)
   - ✅ M2-T1: Basic Web Worker Communication
   - ✅ M2-T2: OffscreenCanvas + Simple PixiJS Rendering
   - ✅ M2-T3: Camera & Gestures (manual implementation with unlimited zoom, 11 E2E tests)
   - ✅ M2-T4: Scene Model + RBush Hit-Test (11 unit + 8 E2E tests, hover feedback)
-  - ⏳ M2-T5: Object Dragging
+  - ✅ M2-T5: Object Dragging (card selection, multi-select, pan/select mode, 16 Board + 11 SceneManager tests)
   - ✅ M2-T6: Dual-Mode Rendering Architecture
 - ⏳ M3: Local Yjs
 - ⏳ M4: Set Loader & Assets
@@ -186,6 +186,23 @@ pnpm run format
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### M2-T5 - Object Dragging with Selection & Interaction Modes (Completed 2025-11-15)
+Implemented comprehensive object manipulation with expanded scope beyond original plan:
+- **Card Selection System**: Single-click select, Cmd/Ctrl multi-select, mobile toggle for touch devices
+- **Multi-Card Dragging**: All selected cards move together maintaining relative positions
+- **Pan/Select Mode Toggle**: Switch between pan mode (drag cards/pan camera) and select mode (draw selection rectangles)
+- **Rectangle Selection**: Draw selection boxes in select mode, all touched cards are selected
+- **Visual Feedback**: Red 4px border for selected cards, blue semi-transparent rectangle for selection area
+- **Z-Order Management**: Dragged cards move to top using fractional indexing (CRDT-compatible)
+- **Gesture Disambiguation**: Hit-test first, then check mode/modifiers to determine action
+- **Performance Optimizations**: Deferred spatial index updates to pointer-up, mode-based shadow rendering
+- **Bug Fixes**: Spatial index bbox caching (ghost hit-testing), selection timing (pointer-up), rectangle state preservation
+- 16 Board component tests passing (4 new for interaction mode/multi-select)
+- 11 SceneManager tests passing (including hitTestRect for rectangle selection)
+- 300-card stress test successful with smooth 60fps performance
+- Works identically in both worker and main-thread modes
+- Files: `app/src/renderer/RendererCore.ts`, `app/src/renderer/SceneManager.ts`, `app/src/components/Board.tsx`, `shared/src/index.ts`
 
 ### M2-T3/T4 - E2E Test Coverage for Camera & Hover (Completed 2025-11-15)
 Comprehensive E2E test suite added for camera and hover features:
@@ -262,5 +279,7 @@ All development tools upgraded to latest stable versions:
 - All linting/formatting tools updated
 
 ## Next Steps
-See `_plans/M2_board_core.md` for next milestone.
+**M2 Board Core is complete!** ✅ All 6 tasks finished with comprehensive test coverage.
+
+Next milestone: **M3 - Local Yjs** (see `_plans/M3_local_yjs.md` when ready to begin)
 - When asked to plan something, always ask if it should be saved in the _plans folder

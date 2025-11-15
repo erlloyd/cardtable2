@@ -401,4 +401,138 @@ describe('Board', () => {
       });
     }
   });
+
+  it('toggles interaction mode between pan and select', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    const toggleButton = screen.getByTestId('interaction-mode-toggle');
+
+    // Initially should be in pan mode
+    expect(toggleButton).toHaveTextContent('Pan Mode');
+
+    // Click to toggle to select mode
+    await user.click(toggleButton);
+    expect(toggleButton).toHaveTextContent('Select Mode');
+
+    // Click again to toggle back to pan mode
+    await user.click(toggleButton);
+    expect(toggleButton).toHaveTextContent('Pan Mode');
+  });
+
+  it('sends interaction mode changes to renderer', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+
+      const toggleButton = screen.getByTestId('interaction-mode-toggle');
+
+      // Toggle to select mode
+      await user.click(toggleButton);
+
+      // Verify set-interaction-mode message was sent
+      await waitFor(() => {
+        expect(postMessageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'set-interaction-mode',
+            mode: 'select',
+          }),
+        );
+      });
+
+      // Toggle back to pan mode
+      await user.click(toggleButton);
+
+      // Verify set-interaction-mode message was sent again
+      await waitFor(() => {
+        expect(postMessageSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'set-interaction-mode',
+            mode: 'pan',
+          }),
+        );
+      });
+    }
+  });
+
+  it('toggles multi-select mode on and off', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    const toggleButton = screen.getByTestId('multi-select-toggle');
+
+    // Initially should be off
+    expect(toggleButton).toHaveTextContent('Multi-Select OFF');
+
+    // Click to toggle on
+    await user.click(toggleButton);
+    expect(toggleButton).toHaveTextContent('Multi-Select ON');
+
+    // Click again to toggle off
+    await user.click(toggleButton);
+    expect(toggleButton).toHaveTextContent('Multi-Select OFF');
+  });
+
+  it('applies multi-select modifier to touch events when multi-select mode is on', async () => {
+    const user = userEvent.setup();
+    render(<Board tableId="test-table" />);
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+
+      // Enable multi-select mode
+      const toggleButton = screen.getByTestId('multi-select-toggle');
+      await user.click(toggleButton);
+
+      const canvas = screen.getByTestId('board-canvas');
+
+      // Simulate touch pointer event
+      await user.pointer({
+        target: canvas,
+        keys: '[TouchA>]',
+        pointerType: 'touch',
+      });
+
+      // Verify pointer-down message has metaKey=true due to multi-select mode
+      await waitFor(() => {
+        const calls = postMessageSpy.mock.calls;
+        const pointerDownCall = calls.find(
+          (call) =>
+            call[0] &&
+            typeof call[0] === 'object' &&
+            'type' in call[0] &&
+            call[0].type === 'pointer-down',
+        );
+        expect(pointerDownCall).toBeDefined();
+        if (pointerDownCall && pointerDownCall[0]) {
+          const msg = pointerDownCall[0] as {
+            event?: { metaKey?: boolean };
+          };
+          expect(msg.event?.metaKey).toBe(true);
+        }
+      });
+    }
+  });
 });

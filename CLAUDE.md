@@ -144,11 +144,11 @@ pnpm run format
 - ✅ M0: Repo & Tooling (COMPLETED)
 - ✅ M0.5: Tool Upgrades to Latest Stable (COMPLETED)
 - ✅ M1: App Shell & Navigation (COMPLETED)
-- ⏳ M2: Board Core (3/6 tasks complete)
+- ⏳ M2: Board Core (5/6 tasks complete)
   - ✅ M2-T1: Basic Web Worker Communication
   - ✅ M2-T2: OffscreenCanvas + Simple PixiJS Rendering
-  - ⏳ M2-T3: Camera (pixi-viewport) & Gestures
-  - ⏳ M2-T4: Scene Model + RBush Hit-Test
+  - ✅ M2-T3: Camera & Gestures (manual implementation with unlimited zoom, 11 E2E tests)
+  - ✅ M2-T4: Scene Model + RBush Hit-Test (11 unit + 8 E2E tests, hover feedback)
   - ⏳ M2-T5: Object Dragging
   - ✅ M2-T6: Dual-Mode Rendering Architecture
 - ⏳ M3: Local Yjs
@@ -186,6 +186,40 @@ pnpm run format
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### M2-T3/T4 - E2E Test Coverage for Camera & Hover (Completed 2025-11-15)
+Comprehensive E2E test suite added for camera and hover features:
+- 11 camera E2E tests (pan, zoom, pinch-to-zoom, gestures)
+- 8 hover E2E tests (visual feedback, pointer types, z-order)
+- Tests use Chrome DevTools Protocol for multi-touch simulation
+- All tests pass in both worker and main-thread modes
+- Formalized M2-T3 as complete (manual camera implementation preferred over pixi-viewport)
+- Confirmed unlimited zoom behavior (no artificial limits)
+- Files: `app/e2e/camera.spec.ts`, `app/e2e/hover.spec.ts`
+
+### M2-T4 - Scene Model + RBush Hit-Test (Completed 2025-11-14)
+Implemented spatial indexing and hit-testing with hover feedback:
+- SceneManager class with RBush spatial index
+- O(log n + k) point and rect queries
+- Z-order management via _sortKey sorting
+- 11 unit tests covering all SceneManager functionality
+- Hover feedback with smooth scale animation and diffuse shadow
+- Pointer type filtering (mouse/pen only, not touch)
+- Zoom-aware blur filter for consistent shadow appearance
+- Works in both worker and main-thread modes
+- Files: `app/src/renderer/SceneManager.ts`, `app/src/renderer/SceneManager.test.ts`
+
+### M2-T3 - Camera & Gestures (Completed 2025-11-14)
+Implemented camera controls with full gesture support:
+- Manual camera implementation (world container transforms)
+- Unlimited zoom in/out (no artificial limits)
+- Pan with drag slop thresholds (touch: 12px, pen: 6px, mouse: 3px)
+- Pinch-to-zoom with locked midpoint (correct zoom behavior)
+- Smooth transition from pinch to pan
+- Wheel zoom towards cursor position
+- 60fps smooth rendering for all gestures
+- Avoids pixi-viewport dependency issues in worker mode
+- Implementation in `app/src/renderer/RendererCore.ts`
 
 ### M2-T6 - Dual-Mode Rendering Architecture (Completed 2025-11-13)
 Implemented unified rendering architecture supporting both worker and main-thread modes:

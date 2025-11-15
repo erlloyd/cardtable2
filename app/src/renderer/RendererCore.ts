@@ -952,6 +952,11 @@ export abstract class RendererCore {
       this.isPinching = false;
       console.log('[RendererCore] Pinch gesture ended');
 
+      // Clear rectangle selection state to prevent ghost selections
+      this.rectangleSelectStartX = 0;
+      this.rectangleSelectStartY = 0;
+      this.isRectangleSelecting = false;
+
       // Transition to pan mode: reset remaining pointer's start position
       // so user doesn't need to exceed drag slop again
       if (this.pointers.size === 1) {

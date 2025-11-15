@@ -441,6 +441,8 @@ export abstract class RendererCore {
         this.isDragging = false; // Will become true once we exceed slop threshold
         this.isObjectDragging = false;
         this.isRectangleSelecting = false;
+        this.rectangleSelectStartX = 0;
+        this.rectangleSelectStartY = 0;
       }
     }
   }
@@ -806,7 +808,7 @@ export abstract class RendererCore {
    * Redraw a card's visual representation (M2-T4, M2-T5).
    * @param isHovered - Whether the card is hovered (black shadow)
    * @param isDragging - Whether the card is being dragged (blue shadow)
-   * @param isSelected - Whether the card is selected (yellow border)
+   * @param isSelected - Whether the card is selected (red border)
    */
   private redrawCardVisual(
     objectId: string,
@@ -1304,7 +1306,7 @@ export abstract class RendererCore {
     this.sceneManager.clear();
     this.objectVisuals.clear();
 
-    // Create 300 test cards with randomized positions for stress testing
+    // Create 20 test cards with randomized positions
     const testCards: Array<{
       id: string;
       x: number;

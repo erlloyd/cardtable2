@@ -589,6 +589,10 @@ export abstract class RendererCore {
                 );
 
                 // Update logical z-order (_sortKey) using fractional indexing format
+                // TODO: Current implementation only supports up to 26 cards in a single drag operation
+                // (a-z = 97-122). For production, implement proper fractional indexing library
+                // that supports unlimited suffix generation (e.g., 'aa', 'ab', ... 'ba', 'bb').
+                // See: https://github.com/rocicorp/fractional-indexing or similar
                 obj._sortKey = `${newPrefix}|${String.fromCharCode(97 + sortKeyCounter++)}`;
               }
             }
@@ -938,6 +942,125 @@ export abstract class RendererCore {
   }
 
   /**
+   * Handle selection logic on pointer end (up or cancel).
+   * Extracted to avoid duplication between handlePointerUp and handlePointerCancel.
+   */
+  private handleSelectionOnPointerEnd(
+    event: PointerEventData,
+    wasRectangleSelecting: boolean,
+  ): void {
+    // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
+    if (
+      event.isPrimary &&
+      !this.isObjectDragging &&
+      !this.isDragging &&
+      !wasRectangleSelecting &&
+      this.pointerDownEvent
+    ) {
+      const worldX =
+        (event.clientX - this.worldContainer!.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer!.position.y) / this.cameraScale;
+
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+
+      if (hitResult) {
+        // Clicked on an object - handle selection logic
+        const isMultiSelectModifier =
+          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
+
+        if (isMultiSelectModifier) {
+          // Cmd/Ctrl+click: toggle selection
+          if (this.selectedObjectIds.has(hitResult.id)) {
+            this.selectedObjectIds.delete(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, false);
+          } else {
+            this.selectedObjectIds.add(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+        } else {
+          // Single click: select only this card (unless already selected)
+          if (!this.selectedObjectIds.has(hitResult.id)) {
+            // Clear previous selection and select new card
+            const prevSelected = Array.from(this.selectedObjectIds);
+            this.selectedObjectIds.clear();
+            this.selectedObjectIds.add(hitResult.id);
+
+            // Redraw previously selected cards (now deselected)
+            for (const id of prevSelected) {
+              if (id !== hitResult.id) {
+                this.redrawCardVisual(id, false, false, false);
+              }
+            }
+            // Redraw newly selected card
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+          // If already selected, don't change selection (allows multi-drag)
+        }
+
+        // Request render to show selection changes
+        this.app!.renderer.render(this.app!.stage);
+      } else {
+        // Clicked on empty space - deselect all
+        if (this.selectedObjectIds.size > 0) {
+          const prevSelected = Array.from(this.selectedObjectIds);
+          this.selectedObjectIds.clear();
+
+          // Redraw all previously selected cards
+          for (const id of prevSelected) {
+            this.redrawCardVisual(id, false, false, false);
+          }
+
+          // Request render to show deselection
+          this.app!.renderer.render(this.app!.stage);
+        }
+      }
+
+      // Clear stored pointer down event
+      this.pointerDownEvent = null;
+    }
+  }
+
+  /**
+   * Clear drag state after pointer end (up or cancel).
+   * Extracted to avoid duplication between handlePointerUp and handlePointerCancel.
+   */
+  private clearDragState(event: PointerEventData): void {
+    // End dragging
+    if (event.isPrimary) {
+      // Clear object drag state (M2-T5)
+      if (this.isObjectDragging && this.draggedObjectId) {
+        // Update SceneManager spatial index for all selected cards now that drag is complete
+        // (deferred from pointer move for performance)
+        for (const objectId of this.selectedObjectIds) {
+          const obj = this.sceneManager.getObject(objectId);
+          if (obj) {
+            this.sceneManager.updateObject(objectId, obj);
+          }
+          // Clear drag visual feedback
+          this.updateDragFeedback(objectId, false);
+        }
+
+        // Clear drag state
+        this.isObjectDragging = false;
+        this.draggedObjectId = null;
+        this.draggedObjectsStartPositions.clear();
+      }
+
+      // Clear rectangle selection state if needed
+      if (this.isRectangleSelecting) {
+        this.clearSelectionRectangle();
+        this.isRectangleSelecting = false;
+        this.rectangleSelectStartX = 0;
+        this.rectangleSelectStartY = 0;
+      }
+
+      // Clear camera drag
+      this.isDragging = false;
+    }
+  }
+
+  /**
    * Handle pointer up event (M2-T3 + pinch-to-zoom + M2-T5 object dragging).
    */
   private handlePointerUp(event: PointerEventData): void {
@@ -1028,108 +1151,11 @@ export abstract class RendererCore {
       this.app!.renderer.render(this.app!.stage);
     }
 
-    // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
-    if (
-      event.isPrimary &&
-      !this.isObjectDragging &&
-      !this.isDragging &&
-      !wasRectangleSelecting &&
-      this.pointerDownEvent
-    ) {
-      const worldX =
-        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+    // Handle selection logic
+    this.handleSelectionOnPointerEnd(event, wasRectangleSelecting);
 
-      const hitResult = this.sceneManager.hitTest(worldX, worldY);
-
-      if (hitResult) {
-        // Clicked on an object - handle selection logic
-        const isMultiSelectModifier =
-          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
-
-        if (isMultiSelectModifier) {
-          // Cmd/Ctrl+click: toggle selection
-          if (this.selectedObjectIds.has(hitResult.id)) {
-            this.selectedObjectIds.delete(hitResult.id);
-            this.redrawCardVisual(hitResult.id, false, false, false);
-          } else {
-            this.selectedObjectIds.add(hitResult.id);
-            this.redrawCardVisual(hitResult.id, false, false, true);
-          }
-        } else {
-          // Single click: select only this card (unless already selected)
-          if (!this.selectedObjectIds.has(hitResult.id)) {
-            // Clear previous selection and select new card
-            const prevSelected = Array.from(this.selectedObjectIds);
-            this.selectedObjectIds.clear();
-            this.selectedObjectIds.add(hitResult.id);
-
-            // Redraw previously selected cards (now deselected)
-            for (const id of prevSelected) {
-              if (id !== hitResult.id) {
-                this.redrawCardVisual(id, false, false, false);
-              }
-            }
-            // Redraw newly selected card
-            this.redrawCardVisual(hitResult.id, false, false, true);
-          }
-          // If already selected, don't change selection (allows multi-drag)
-        }
-
-        // Request render to show selection changes
-        this.app!.renderer.render(this.app!.stage);
-      } else {
-        // Clicked on empty space - deselect all
-        if (this.selectedObjectIds.size > 0) {
-          const prevSelected = Array.from(this.selectedObjectIds);
-          this.selectedObjectIds.clear();
-
-          // Redraw all previously selected cards
-          for (const id of prevSelected) {
-            this.redrawCardVisual(id, false, false, false);
-          }
-
-          // Request render to show deselection
-          this.app!.renderer.render(this.app!.stage);
-        }
-      }
-
-      // Clear stored pointer down event
-      this.pointerDownEvent = null;
-    }
-
-    // End dragging
-    if (event.isPrimary) {
-      // Clear object drag state (M2-T5)
-      if (this.isObjectDragging && this.draggedObjectId) {
-        // Update SceneManager spatial index for all selected cards now that drag is complete
-        // (deferred from pointer move for performance)
-        for (const objectId of this.selectedObjectIds) {
-          const obj = this.sceneManager.getObject(objectId);
-          if (obj) {
-            this.sceneManager.updateObject(objectId, obj);
-          }
-          // Clear drag visual feedback
-          this.updateDragFeedback(objectId, false);
-        }
-
-        // Clear drag state
-        this.isObjectDragging = false;
-        this.draggedObjectId = null;
-        this.draggedObjectsStartPositions.clear();
-      }
-
-      // Clear rectangle selection state if needed
-      if (this.isRectangleSelecting) {
-        this.clearSelectionRectangle();
-        this.isRectangleSelecting = false;
-        this.rectangleSelectStartX = 0;
-        this.rectangleSelectStartY = 0;
-      }
-
-      this.isDragging = false;
-    }
+    // Clear drag state
+    this.clearDragState(event);
   }
 
   /**
@@ -1160,108 +1186,11 @@ export abstract class RendererCore {
       }
     }
 
-    // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
-    if (
-      event.isPrimary &&
-      !this.isObjectDragging &&
-      !this.isDragging &&
-      !wasRectangleSelecting &&
-      this.pointerDownEvent
-    ) {
-      const worldX =
-        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+    // Handle selection logic
+    this.handleSelectionOnPointerEnd(event, wasRectangleSelecting);
 
-      const hitResult = this.sceneManager.hitTest(worldX, worldY);
-
-      if (hitResult) {
-        // Clicked on an object - handle selection logic
-        const isMultiSelectModifier =
-          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
-
-        if (isMultiSelectModifier) {
-          // Cmd/Ctrl+click: toggle selection
-          if (this.selectedObjectIds.has(hitResult.id)) {
-            this.selectedObjectIds.delete(hitResult.id);
-            this.redrawCardVisual(hitResult.id, false, false, false);
-          } else {
-            this.selectedObjectIds.add(hitResult.id);
-            this.redrawCardVisual(hitResult.id, false, false, true);
-          }
-        } else {
-          // Single click: select only this card (unless already selected)
-          if (!this.selectedObjectIds.has(hitResult.id)) {
-            // Clear previous selection and select new card
-            const prevSelected = Array.from(this.selectedObjectIds);
-            this.selectedObjectIds.clear();
-            this.selectedObjectIds.add(hitResult.id);
-
-            // Redraw previously selected cards (now deselected)
-            for (const id of prevSelected) {
-              if (id !== hitResult.id) {
-                this.redrawCardVisual(id, false, false, false);
-              }
-            }
-            // Redraw newly selected card
-            this.redrawCardVisual(hitResult.id, false, false, true);
-          }
-          // If already selected, don't change selection (allows multi-drag)
-        }
-
-        // Request render to show selection changes
-        this.app!.renderer.render(this.app!.stage);
-      } else {
-        // Clicked on empty space - deselect all
-        if (this.selectedObjectIds.size > 0) {
-          const prevSelected = Array.from(this.selectedObjectIds);
-          this.selectedObjectIds.clear();
-
-          // Redraw all previously selected cards
-          for (const id of prevSelected) {
-            this.redrawCardVisual(id, false, false, false);
-          }
-
-          // Request render to show deselection
-          this.app!.renderer.render(this.app!.stage);
-        }
-      }
-
-      // Clear stored pointer down event
-      this.pointerDownEvent = null;
-    }
-
-    // End dragging
-    if (event.isPrimary) {
-      // Clear object drag state (M2-T5)
-      if (this.isObjectDragging && this.draggedObjectId) {
-        // Update SceneManager spatial index for all selected cards now that drag is complete
-        // (deferred from pointer move for performance)
-        for (const objectId of this.selectedObjectIds) {
-          const obj = this.sceneManager.getObject(objectId);
-          if (obj) {
-            this.sceneManager.updateObject(objectId, obj);
-          }
-          // Clear drag visual feedback
-          this.updateDragFeedback(objectId, false);
-        }
-
-        // Clear drag state
-        this.isObjectDragging = false;
-        this.draggedObjectId = null;
-        this.draggedObjectsStartPositions.clear();
-      }
-
-      // Clear rectangle selection state if needed
-      if (this.isRectangleSelecting) {
-        this.clearSelectionRectangle();
-        this.isRectangleSelecting = false;
-        this.rectangleSelectStartX = 0;
-        this.rectangleSelectStartY = 0;
-      }
-
-      this.isDragging = false;
-    }
+    // Clear drag state
+    this.clearDragState(event);
   }
 
   /**

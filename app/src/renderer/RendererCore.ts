@@ -36,6 +36,12 @@ export abstract class RendererCore {
     new Map();
   private hoverAnimationActive = false;
 
+  // Object dragging state (M2-T5)
+  private draggedObjectId: string | null = null;
+  private dragStartWorldX = 0;
+  private dragStartWorldY = 0;
+  private isObjectDragging = false;
+
   // Camera state (M2-T3)
   private cameraScale = 1.0;
 
@@ -323,7 +329,7 @@ export abstract class RendererCore {
   }
 
   /**
-   * Handle pointer down event (M2-T3).
+   * Handle pointer down event (M2-T3 + M2-T5 object dragging).
    */
   private handlePointerDown(event: PointerEventData): void {
     if (!this.worldContainer) return;
@@ -340,6 +346,8 @@ export abstract class RendererCore {
     // Check if we have 2 touch pointers (pinch gesture)
     if (this.pointers.size === 2 && event.pointerType === 'touch') {
       this.isDragging = false;
+      this.isObjectDragging = false;
+      this.draggedObjectId = null;
       this.isPinching = true;
 
       // Calculate initial pinch distance and LOCK the midpoint
@@ -364,8 +372,27 @@ export abstract class RendererCore {
         (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
         this.initialPinchScale;
     } else if (event.isPrimary) {
-      // Start dragging if this is the primary pointer (and not pinching)
-      this.isDragging = false; // Will become true once we exceed slop threshold
+      // Perform hit test to check if clicking on an object (M2-T5)
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+
+      if (hitResult) {
+        // Clicking on an object - prepare for potential object drag
+        this.draggedObjectId = hitResult.id;
+        this.dragStartWorldX = worldX;
+        this.dragStartWorldY = worldY;
+        this.isObjectDragging = false; // Will become true once we exceed slop threshold
+        this.isDragging = false;
+      } else {
+        // Clicking on empty space - prepare for potential camera pan
+        this.draggedObjectId = null;
+        this.isDragging = false; // Will become true once we exceed slop threshold
+        this.isObjectDragging = false;
+      }
     }
   }
 
@@ -417,7 +444,7 @@ export abstract class RendererCore {
         // Don't return - we still want to do hit-test for hover
       }
 
-      // Handle single-pointer pan/drag
+      // Handle single-pointer pan/drag (M2-T3 + M2-T5 object dragging)
       if (this.pointers.size === 1) {
         // Calculate movement delta from start
         const dx = event.clientX - pointerInfo.startX;
@@ -434,12 +461,63 @@ export abstract class RendererCore {
             : DRAG_SLOP.mouse;
 
         // Start dragging once we exceed the slop threshold
-        if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
-          this.isDragging = true;
+        if (
+          !this.isDragging &&
+          !this.isObjectDragging &&
+          distance > slopThreshold &&
+          event.isPrimary
+        ) {
+          if (this.draggedObjectId) {
+            // We're tracking an object - start object drag
+            this.isObjectDragging = true;
+            // Apply drag visual feedback
+            this.updateDragFeedback(this.draggedObjectId, true);
+
+            // Move dragged object to top of z-order (M2-T5)
+            const visual = this.objectVisuals.get(this.draggedObjectId);
+            if (visual && this.worldContainer) {
+              this.worldContainer.setChildIndex(
+                visual,
+                this.worldContainer.children.length - 1,
+              );
+            }
+          } else {
+            // No object - start camera pan
+            this.isDragging = true;
+          }
         }
 
-        // If dragging, manually pan the camera
-        if (this.isDragging && event.isPrimary) {
+        // If dragging an object, update its position
+        if (this.isObjectDragging && this.draggedObjectId && event.isPrimary) {
+          // Calculate current world position
+          const worldX =
+            (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+          const worldY =
+            (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+          // Get the object
+          const obj = this.sceneManager.getObject(this.draggedObjectId);
+          if (obj) {
+            // Update object position
+            obj._pos.x = worldX;
+            obj._pos.y = worldY;
+
+            // Update scene manager
+            this.sceneManager.updateObject(this.draggedObjectId, obj);
+
+            // Update visual position
+            const visual = this.objectVisuals.get(this.draggedObjectId);
+            if (visual) {
+              visual.x = worldX;
+              visual.y = worldY;
+            }
+
+            // Request render
+            this.app.renderer.render(this.app.stage);
+          }
+        }
+        // If dragging camera, manually pan the camera
+        else if (this.isDragging && event.isPrimary) {
           // Calculate delta from last position
           const deltaX = event.clientX - lastX;
           const deltaY = event.clientY - lastY;
@@ -456,11 +534,12 @@ export abstract class RendererCore {
 
     // Hit-test for hover feedback (M2-T4)
     // Only for mouse and pen pointers - touch doesn't have hover
-    // Also skip if we're actively dragging or pinching
+    // Also skip if we're actively dragging, pinching, or dragging an object
     if (
       (event.pointerType === 'mouse' || event.pointerType === 'pen') &&
       !this.isDragging &&
-      !this.isPinching
+      !this.isPinching &&
+      !this.isObjectDragging
     ) {
       // Convert screen coordinates to world coordinates
       const worldX =
@@ -490,7 +569,11 @@ export abstract class RendererCore {
       }
     } else {
       // Clear hover when not applicable (touch, dragging, or pinching)
-      if (this.hoveredObjectId) {
+      // But don't clear if we're dragging the hovered object (M2-T5)
+      if (
+        this.hoveredObjectId &&
+        this.hoveredObjectId !== this.draggedObjectId
+      ) {
         this.updateHoverFeedback(this.hoveredObjectId, false);
         this.hoveredObjectId = null;
         this.app.renderer.render(this.app.stage);
@@ -515,13 +598,39 @@ export abstract class RendererCore {
     }
 
     // Redraw the visual with current hover state
-    this.redrawCardVisual(objectId, isHovered);
+    this.redrawCardVisual(objectId, isHovered, false);
   }
 
   /**
-   * Redraw a card's visual representation (M2-T4).
+   * Update drag visual feedback for an object (M2-T5).
+   * Makes the card appear to lift off the table with colored shadow and scale.
    */
-  private redrawCardVisual(objectId: string, isHovered: boolean): void {
+  private updateDragFeedback(objectId: string, isDragging: boolean): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (!visual) return;
+
+    // Store target scale on the visual object
+    visual.targetScale = isDragging ? 1.05 : 1.0;
+
+    // Start hover animation if not already running (reuses same animation system)
+    if (!this.hoverAnimationActive) {
+      this.startHoverAnimation();
+    }
+
+    // Redraw the visual with current drag state
+    this.redrawCardVisual(objectId, false, isDragging);
+  }
+
+  /**
+   * Redraw a card's visual representation (M2-T4, M2-T5).
+   * @param isHovered - Whether the card is hovered (black shadow)
+   * @param isDragging - Whether the card is being dragged (blue shadow)
+   */
+  private redrawCardVisual(
+    objectId: string,
+    isHovered: boolean,
+    isDragging: boolean,
+  ): void {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
@@ -531,7 +640,8 @@ export abstract class RendererCore {
     // Clear existing children
     visual.removeChildren();
 
-    if (isHovered) {
+    // Apply shadow for both hover and drag states (M2-T4, M2-T5)
+    if (isHovered || isDragging) {
       // Create shadow graphic with blur filter
       const shadowGraphic = new Graphics();
       const shadowPadding = 8;
@@ -544,7 +654,10 @@ export abstract class RendererCore {
         CARD_HEIGHT + shadowPadding * 2,
         borderRadius,
       );
-      shadowGraphic.fill({ color: 0x000000, alpha: 0.3 });
+
+      // Use different shadow colors: black for hover, blue for drag
+      const shadowColor = isDragging ? 0x3b82f6 : 0x000000; // Blue for drag, black for hover
+      shadowGraphic.fill({ color: shadowColor, alpha: 0.3 });
 
       // Apply blur filter for diffuse shadow
       // Scale blur strength by camera scale to maintain consistent appearance at all zoom levels
@@ -631,7 +744,7 @@ export abstract class RendererCore {
   }
 
   /**
-   * Handle pointer up event (M2-T3 + pinch-to-zoom).
+   * Handle pointer up event (M2-T3 + pinch-to-zoom + M2-T5 object dragging).
    */
   private handlePointerUp(event: PointerEventData): void {
     if (!this.worldContainer) return;
@@ -657,12 +770,19 @@ export abstract class RendererCore {
 
     // End dragging
     if (event.isPrimary) {
+      // Clear object drag state (M2-T5)
+      if (this.isObjectDragging && this.draggedObjectId) {
+        this.updateDragFeedback(this.draggedObjectId, false);
+        this.isObjectDragging = false;
+        this.draggedObjectId = null;
+      }
+
       this.isDragging = false;
     }
   }
 
   /**
-   * Handle pointer cancel event (M2-T3 + pinch-to-zoom).
+   * Handle pointer cancel event (M2-T3 + pinch-to-zoom + M2-T5 object dragging).
    */
   private handlePointerCancel(event: PointerEventData): void {
     if (!this.worldContainer) return;
@@ -688,6 +808,13 @@ export abstract class RendererCore {
 
     // End dragging
     if (event.isPrimary) {
+      // Clear object drag state (M2-T5)
+      if (this.isObjectDragging && this.draggedObjectId) {
+        this.updateDragFeedback(this.draggedObjectId, false);
+        this.isObjectDragging = false;
+        this.draggedObjectId = null;
+      }
+
       this.isDragging = false;
     }
   }

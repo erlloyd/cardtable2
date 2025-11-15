@@ -40,11 +40,19 @@ export abstract class RendererCore {
     new Map();
   private hoverAnimationActive = false;
 
+  // Object selection state
+  private selectedObjectIds: Set<string> = new Set();
+
   // Object dragging state (M2-T5)
   private draggedObjectId: string | null = null;
   private dragStartWorldX = 0;
   private dragStartWorldY = 0;
   private isObjectDragging = false;
+  // Track initial positions of all selected cards when drag starts (for multi-drag)
+  private draggedObjectsStartPositions: Map<string, { x: number; y: number }> =
+    new Map();
+  // Store pointer down event for selection logic on pointer up
+  private pointerDownEvent: PointerEventData | null = null;
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
@@ -384,6 +392,9 @@ export abstract class RendererCore {
 
       const hitResult = this.sceneManager.hitTest(worldX, worldY);
 
+      // Store pointer down event for selection logic on pointer up
+      this.pointerDownEvent = event;
+
       if (hitResult) {
         // Clicking on an object - prepare for potential object drag
         this.draggedObjectId = hitResult.id;
@@ -474,16 +485,31 @@ export abstract class RendererCore {
           if (this.draggedObjectId) {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
-            // Apply drag visual feedback
-            this.updateDragFeedback(this.draggedObjectId, true);
 
-            // Move dragged object to top of z-order (M2-T5)
-            const visual = this.objectVisuals.get(this.draggedObjectId);
-            if (visual && this.worldContainer) {
-              this.worldContainer.setChildIndex(
-                visual,
-                this.worldContainer.children.length - 1,
-              );
+            // Save initial positions of all selected cards for multi-drag
+            this.draggedObjectsStartPositions.clear();
+            for (const objectId of this.selectedObjectIds) {
+              const obj = this.sceneManager.getObject(objectId);
+              if (obj) {
+                this.draggedObjectsStartPositions.set(objectId, {
+                  x: obj._pos.x,
+                  y: obj._pos.y,
+                });
+              }
+            }
+
+            // Apply drag visual feedback to all selected cards
+            for (const objectId of this.selectedObjectIds) {
+              this.updateDragFeedback(objectId, true);
+
+              // Move all selected objects to top of z-order
+              const visual = this.objectVisuals.get(objectId);
+              if (visual && this.worldContainer) {
+                this.worldContainer.setChildIndex(
+                  visual,
+                  this.worldContainer.children.length - 1,
+                );
+              }
             }
           } else {
             // No object - start camera pan
@@ -491,7 +517,7 @@ export abstract class RendererCore {
           }
         }
 
-        // If dragging an object, update its position
+        // If dragging an object, update positions of all selected objects
         if (this.isObjectDragging && this.draggedObjectId && event.isPrimary) {
           // Calculate current world position
           const worldX =
@@ -499,25 +525,33 @@ export abstract class RendererCore {
           const worldY =
             (event.clientY - this.worldContainer.position.y) / this.cameraScale;
 
-          // Get the object
-          const obj = this.sceneManager.getObject(this.draggedObjectId);
-          if (obj) {
-            // Update object position in memory
-            obj._pos.x = worldX;
-            obj._pos.y = worldY;
+          // Calculate drag delta from the primary dragged object's start position
+          const deltaX = worldX - this.dragStartWorldX;
+          const deltaY = worldY - this.dragStartWorldY;
 
-            // Update visual position immediately for smooth rendering
-            const visual = this.objectVisuals.get(this.draggedObjectId);
-            if (visual) {
-              visual.x = worldX;
-              visual.y = worldY;
+          // Update all selected objects' positions based on delta
+          for (const objectId of this.selectedObjectIds) {
+            const startPos = this.draggedObjectsStartPositions.get(objectId);
+            const obj = this.sceneManager.getObject(objectId);
+
+            if (startPos && obj) {
+              // Update object position in memory (relative to start position)
+              obj._pos.x = startPos.x + deltaX;
+              obj._pos.y = startPos.y + deltaY;
+
+              // Update visual position immediately for smooth rendering
+              const visual = this.objectVisuals.get(objectId);
+              if (visual) {
+                visual.x = obj._pos.x;
+                visual.y = obj._pos.y;
+              }
             }
-
-            // Request render
-            // Note: SceneManager spatial index update is deferred until drag ends
-            // to avoid expensive RBush removal/insertion on every pointer move
-            this.app.renderer.render(this.app.stage);
           }
+
+          // Request render
+          // Note: SceneManager spatial index update is deferred until drag ends
+          // to avoid expensive RBush removal/insertion on every pointer move
+          this.app.renderer.render(this.app.stage);
         }
         // If dragging camera, manually pan the camera
         else if (this.isDragging && event.isPrimary) {
@@ -601,7 +635,8 @@ export abstract class RendererCore {
     }
 
     // Redraw the visual with current hover state
-    this.redrawCardVisual(objectId, isHovered, false);
+    const isSelected = this.selectedObjectIds.has(objectId);
+    this.redrawCardVisual(objectId, isHovered, false, isSelected);
   }
 
   /**
@@ -621,18 +656,21 @@ export abstract class RendererCore {
     }
 
     // Redraw the visual with current drag state
-    this.redrawCardVisual(objectId, false, isDragging);
+    const isSelected = this.selectedObjectIds.has(objectId);
+    this.redrawCardVisual(objectId, false, isDragging, isSelected);
   }
 
   /**
    * Redraw a card's visual representation (M2-T4, M2-T5).
    * @param isHovered - Whether the card is hovered (black shadow)
    * @param isDragging - Whether the card is being dragged (blue shadow)
+   * @param isSelected - Whether the card is selected (yellow border)
    */
   private redrawCardVisual(
     objectId: string,
     isHovered: boolean,
     isDragging: boolean,
+    isSelected: boolean,
   ): void {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
@@ -688,7 +726,11 @@ export abstract class RendererCore {
       CARD_HEIGHT,
     );
     cardGraphic.fill(color);
-    cardGraphic.stroke({ width: 2, color: 0x2d3436 });
+
+    // Use different border colors for selection state
+    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
+    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
+    cardGraphic.stroke({ width: borderWidth, color: borderColor });
 
     visual.addChild(cardGraphic);
   }
@@ -774,20 +816,95 @@ export abstract class RendererCore {
       }
     }
 
+    // Handle selection on click/tap (only if we didn't drag object or camera)
+    if (
+      event.isPrimary &&
+      !this.isObjectDragging &&
+      !this.isDragging &&
+      this.pointerDownEvent
+    ) {
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+
+      if (hitResult) {
+        // Clicked on an object - handle selection logic
+        const isMultiSelectModifier =
+          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
+
+        if (isMultiSelectModifier) {
+          // Cmd/Ctrl+click: toggle selection
+          if (this.selectedObjectIds.has(hitResult.id)) {
+            this.selectedObjectIds.delete(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, false);
+          } else {
+            this.selectedObjectIds.add(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+        } else {
+          // Single click: select only this card (unless already selected)
+          if (!this.selectedObjectIds.has(hitResult.id)) {
+            // Clear previous selection and select new card
+            const prevSelected = Array.from(this.selectedObjectIds);
+            this.selectedObjectIds.clear();
+            this.selectedObjectIds.add(hitResult.id);
+
+            // Redraw previously selected cards (now deselected)
+            for (const id of prevSelected) {
+              if (id !== hitResult.id) {
+                this.redrawCardVisual(id, false, false, false);
+              }
+            }
+            // Redraw newly selected card
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+          // If already selected, don't change selection (allows multi-drag)
+        }
+
+        // Request render to show selection changes
+        this.app.renderer.render(this.app.stage);
+      } else {
+        // Clicked on empty space - deselect all
+        if (this.selectedObjectIds.size > 0) {
+          const prevSelected = Array.from(this.selectedObjectIds);
+          this.selectedObjectIds.clear();
+
+          // Redraw all previously selected cards
+          for (const id of prevSelected) {
+            this.redrawCardVisual(id, false, false, false);
+          }
+
+          // Request render to show deselection
+          this.app.renderer.render(this.app.stage);
+        }
+      }
+
+      // Clear stored pointer down event
+      this.pointerDownEvent = null;
+    }
+
     // End dragging
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
       if (this.isObjectDragging && this.draggedObjectId) {
-        // Update SceneManager spatial index now that drag is complete
+        // Update SceneManager spatial index for all selected cards now that drag is complete
         // (deferred from pointer move for performance)
-        const obj = this.sceneManager.getObject(this.draggedObjectId);
-        if (obj) {
-          this.sceneManager.updateObject(this.draggedObjectId, obj);
+        for (const objectId of this.selectedObjectIds) {
+          const obj = this.sceneManager.getObject(objectId);
+          if (obj) {
+            this.sceneManager.updateObject(objectId, obj);
+          }
+          // Clear drag visual feedback
+          this.updateDragFeedback(objectId, false);
         }
 
-        this.updateDragFeedback(this.draggedObjectId, false);
+        // Clear drag state
         this.isObjectDragging = false;
         this.draggedObjectId = null;
+        this.draggedObjectsStartPositions.clear();
       }
 
       this.isDragging = false;
@@ -819,20 +936,95 @@ export abstract class RendererCore {
       }
     }
 
+    // Handle selection on click/tap (only if we didn't drag object or camera)
+    if (
+      event.isPrimary &&
+      !this.isObjectDragging &&
+      !this.isDragging &&
+      this.pointerDownEvent
+    ) {
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+
+      if (hitResult) {
+        // Clicked on an object - handle selection logic
+        const isMultiSelectModifier =
+          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
+
+        if (isMultiSelectModifier) {
+          // Cmd/Ctrl+click: toggle selection
+          if (this.selectedObjectIds.has(hitResult.id)) {
+            this.selectedObjectIds.delete(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, false);
+          } else {
+            this.selectedObjectIds.add(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+        } else {
+          // Single click: select only this card (unless already selected)
+          if (!this.selectedObjectIds.has(hitResult.id)) {
+            // Clear previous selection and select new card
+            const prevSelected = Array.from(this.selectedObjectIds);
+            this.selectedObjectIds.clear();
+            this.selectedObjectIds.add(hitResult.id);
+
+            // Redraw previously selected cards (now deselected)
+            for (const id of prevSelected) {
+              if (id !== hitResult.id) {
+                this.redrawCardVisual(id, false, false, false);
+              }
+            }
+            // Redraw newly selected card
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+          // If already selected, don't change selection (allows multi-drag)
+        }
+
+        // Request render to show selection changes
+        this.app.renderer.render(this.app.stage);
+      } else {
+        // Clicked on empty space - deselect all
+        if (this.selectedObjectIds.size > 0) {
+          const prevSelected = Array.from(this.selectedObjectIds);
+          this.selectedObjectIds.clear();
+
+          // Redraw all previously selected cards
+          for (const id of prevSelected) {
+            this.redrawCardVisual(id, false, false, false);
+          }
+
+          // Request render to show deselection
+          this.app.renderer.render(this.app.stage);
+        }
+      }
+
+      // Clear stored pointer down event
+      this.pointerDownEvent = null;
+    }
+
     // End dragging
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
       if (this.isObjectDragging && this.draggedObjectId) {
-        // Update SceneManager spatial index now that drag is complete
+        // Update SceneManager spatial index for all selected cards now that drag is complete
         // (deferred from pointer move for performance)
-        const obj = this.sceneManager.getObject(this.draggedObjectId);
-        if (obj) {
-          this.sceneManager.updateObject(this.draggedObjectId, obj);
+        for (const objectId of this.selectedObjectIds) {
+          const obj = this.sceneManager.getObject(objectId);
+          if (obj) {
+            this.sceneManager.updateObject(objectId, obj);
+          }
+          // Clear drag visual feedback
+          this.updateDragFeedback(objectId, false);
         }
 
-        this.updateDragFeedback(this.draggedObjectId, false);
+        // Clear drag state
         this.isObjectDragging = false;
         this.draggedObjectId = null;
+        this.draggedObjectsStartPositions.clear();
       }
 
       this.isDragging = false;

@@ -25,6 +25,7 @@ function Board({ tableId }: BoardProps) {
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderMode | null>(null);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
   // Initialize renderer on mount
   useEffect(() => {
@@ -289,6 +290,11 @@ function Board({ tableId }: BoardProps) {
       button: event.button,
       buttons: event.buttons,
       isPrimary: event.isPrimary,
+      // Apply multi-select mode for touch events when mode is enabled
+      metaKey:
+        event.metaKey || (isMultiSelectMode && event.pointerType === 'touch'),
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
     };
   };
 
@@ -384,6 +390,35 @@ function Board({ tableId }: BoardProps) {
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
         />
+      </div>
+
+      {/* Mobile multi-select toggle */}
+      <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+        <button
+          onClick={() => setIsMultiSelectMode(!isMultiSelectMode)}
+          data-testid="multi-select-toggle"
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            backgroundColor: isMultiSelectMode ? '#ef4444' : '#6b7280',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          {isMultiSelectMode ? '✓ Multi-Select ON' : 'Multi-Select OFF'}
+        </button>
+        <span
+          style={{
+            marginLeft: '12px',
+            fontSize: '12px',
+            color: '#6b7280',
+          }}
+        >
+          (Mobile: Tap to toggle selection)
+        </span>
       </div>
 
       <div className="controls">

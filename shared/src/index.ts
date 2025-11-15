@@ -54,6 +54,10 @@ export interface PointerEventData {
   button?: number;
   buttons?: number;
   isPrimary: boolean;
+  // Modifier keys for multi-select support
+  metaKey: boolean; // Cmd on Mac, Windows key on Windows
+  ctrlKey: boolean; // Ctrl key
+  shiftKey: boolean; // Shift key (for future range select)
 }
 
 // Wheel event data (M2-T3)

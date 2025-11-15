@@ -113,8 +113,10 @@ Implement the core board functionality with PixiJS rendering, camera controls, h
 - Touch gestures work on mobile
 - Pointer events properly forwarded to worker
 
-### M2-T4: Scene Model + RBush Hit-Test
+### M2-T4: Scene Model + RBush Hit-Test ✅ COMPLETE
 **Objective:** Create scene object model with spatial indexing for efficient hit-testing.
+
+**Status:** COMPLETE - SceneManager with RBush spatial indexing, hit-testing working, 11 tests passing, hover feedback implemented
 
 **Dependencies:** M2-T3
 
@@ -138,10 +140,24 @@ Implement the core board functionality with PixiJS rendering, camera controls, h
 - Performance: ≤2ms hit-test on mid-range mobile with 300 items
 
 **Success Criteria:**
-- Hit-test returns correct object under pointer
-- Z-order respected (topmost object selected)
-- Performance target met (≤2ms)
-- Scene handles 300+ objects efficiently
+- Hit-test returns correct object under pointer ✅
+- Z-order respected (topmost object selected) ✅
+- Performance target met (≤2ms) ⏸️ (deferred - will benchmark during M9 Performance & QA)
+- Scene handles 300+ objects efficiently ⏸️ (deferred - will test during M9 Performance & QA)
+
+**Implementation Details:**
+- SceneManager class with RBush spatial indexing ✅
+- hitTest() for point queries, hitTestRect() for area queries ✅
+- Proper z-order management via _sortKey sorting ✅
+- 11 unit tests covering add/remove/update/hit-testing/z-order ✅
+- Test scene with 5 overlapping colored cards ✅
+- Hover feedback with smooth scale animation and diffuse shadow ✅ (bonus feature)
+- Pointer type filtering (mouse/pen only, not touch) ✅ (bonus feature)
+- PixiJS ticker management with autoStart: false ✅
+- Zoom-aware blur filter for consistent shadow appearance ✅
+
+**Known Issues:**
+- Shadow blur doesn't update when zooming while hovering (requires mouse movement to refresh)
 
 ### M2-T5: Object Dragging
 **Objective:** Implement smooth object dragging with proper gesture disambiguation from camera panning.
@@ -238,11 +254,11 @@ The dual-mode rendering architecture (M2-T6) ensures Cardtable 2 works on all pl
 **Completed:**
 - M2-T1: Basic Web Worker Communication ✅
 - M2-T2: OffscreenCanvas + Simple PixiJS Rendering ✅
+- M2-T4: Scene Model + RBush Hit-Test ✅ (includes hover feedback with smooth animations)
 - M2-T6: Dual-Mode Rendering Architecture ✅ (implemented early to ensure pattern supports future features)
 
 **Remaining:**
 - M2-T3: Camera (pixi-viewport) & Gestures
-- M2-T4: Scene Model + RBush Hit-Test
 - M2-T5: Object Dragging
 
 M2-T6 was implemented immediately after M2-T2 to establish the architectural pattern before adding more features. This ensures M2-T3/T4/T5 will work identically in both rendering modes from day one.

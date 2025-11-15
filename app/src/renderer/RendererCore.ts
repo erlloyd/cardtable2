@@ -1,10 +1,13 @@
-import { Application, Graphics, Container } from 'pixi.js';
+import { Application, Graphics, Container, BlurFilter } from 'pixi.js';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
   PointerEventData,
   WheelEventData,
+  TableObject,
 } from '@cardtable2/shared';
+import { SceneManager } from './SceneManager';
+import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -25,6 +28,13 @@ export abstract class RendererCore {
   protected worldContainer: Container | null = null;
   private animationStartTime: number = 0;
   private isAnimating: boolean = false;
+
+  // Scene management (M2-T4)
+  private sceneManager: SceneManager = new SceneManager();
+  private hoveredObjectId: string | null = null;
+  private objectVisuals: Map<string, Container & { targetScale?: number }> =
+    new Map();
+  private hoverAnimationActive = false;
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
@@ -81,7 +91,7 @@ export abstract class RendererCore {
               height,
               resolution: dpr,
               autoDensity: true,
-              backgroundColor: 0x1a1a2e,
+              backgroundColor: 0xd4d4d4,
               autoStart: false, // CRITICAL: Disable auto-start to prevent iOS crashes
             });
 
@@ -92,7 +102,7 @@ export abstract class RendererCore {
               height,
               resolution: dpr,
               autoDensity: true,
-              backgroundColor: 0x1a1a2e,
+              backgroundColor: 0xd4d4d4,
               autoStart: false, // CRITICAL: Prevent automatic ticker start (causes iOS worker crashes)
               // Remove explicit preference to allow automatic fallback
             });
@@ -360,86 +370,263 @@ export abstract class RendererCore {
   }
 
   /**
-   * Handle pointer move event (M2-T3 + pinch-to-zoom).
+   * Handle pointer move event (M2-T3 + pinch-to-zoom + M2-T4 hover).
    */
   private handlePointerMove(event: PointerEventData): void {
     if (!this.worldContainer || !this.app) return;
 
     const pointerInfo = this.pointers.get(event.pointerId);
-    if (!pointerInfo) return;
 
-    // Store last position for delta calculation
-    const lastX = pointerInfo.lastX;
-    const lastY = pointerInfo.lastY;
+    // Only handle gestures if pointer is being tracked (after pointer-down)
+    if (pointerInfo) {
+      // Store last position for delta calculation
+      const lastX = pointerInfo.lastX;
+      const lastY = pointerInfo.lastY;
 
-    // Update pointer position
-    pointerInfo.lastX = event.clientX;
-    pointerInfo.lastY = event.clientY;
+      // Update pointer position
+      pointerInfo.lastX = event.clientX;
+      pointerInfo.lastY = event.clientY;
 
-    // Handle pinch zoom (2 fingers)
-    if (this.isPinching && this.pointers.size === 2) {
-      const pointerArray = Array.from(this.pointers.values());
-      const currentDistance = this.getPointerDistance(
-        pointerArray[0],
-        pointerArray[1],
-      );
+      // Handle pinch zoom (2 fingers)
+      if (this.isPinching && this.pointers.size === 2) {
+        const pointerArray = Array.from(this.pointers.values());
+        const currentDistance = this.getPointerDistance(
+          pointerArray[0],
+          pointerArray[1],
+        );
 
-      // Calculate scale change
-      const scaleChange = currentDistance / this.initialPinchDistance;
-      this.cameraScale = this.initialPinchScale * scaleChange;
+        // Calculate scale change
+        const scaleChange = currentDistance / this.initialPinchDistance;
+        this.cameraScale = this.initialPinchScale * scaleChange;
 
-      // Apply zoom (no clamping - unlimited zoom)
-      this.worldContainer.scale.set(this.cameraScale);
+        // Apply zoom (no clamping - unlimited zoom)
+        this.worldContainer.scale.set(this.cameraScale);
 
-      // Adjust position so the LOCKED world point stays under the LOCKED screen midpoint
-      // Formula: screenPos = cameraPos + worldPos * scale
-      // Therefore: cameraPos = screenPos - worldPos * scale
-      this.worldContainer.position.x =
-        this.initialPinchMidpoint.x -
-        this.initialPinchWorldPoint.x * this.cameraScale;
-      this.worldContainer.position.y =
-        this.initialPinchMidpoint.y -
-        this.initialPinchWorldPoint.y * this.cameraScale;
-
-      // Request render
-      this.app.renderer.render(this.app.stage);
-      return;
-    }
-
-    // Handle single-pointer pan/drag
-    if (this.pointers.size === 1) {
-      // Calculate movement delta from start
-      const dx = event.clientX - pointerInfo.startX;
-      const dy = event.clientY - pointerInfo.startY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // Check if movement exceeds drag slop threshold
-      const pointerType = event.pointerType;
-      const slopThreshold =
-        pointerType === 'mouse' ||
-        pointerType === 'pen' ||
-        pointerType === 'touch'
-          ? DRAG_SLOP[pointerType]
-          : DRAG_SLOP.mouse;
-
-      // Start dragging once we exceed the slop threshold
-      if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
-        this.isDragging = true;
-      }
-
-      // If dragging, manually pan the camera
-      if (this.isDragging && event.isPrimary) {
-        // Calculate delta from last position
-        const deltaX = event.clientX - lastX;
-        const deltaY = event.clientY - lastY;
-
-        // Move world container (camera pans by moving the world)
-        this.worldContainer.position.x += deltaX;
-        this.worldContainer.position.y += deltaY;
+        // Adjust position so the LOCKED world point stays under the LOCKED screen midpoint
+        // Formula: screenPos = cameraPos + worldPos * scale
+        // Therefore: cameraPos = screenPos - worldPos * scale
+        this.worldContainer.position.x =
+          this.initialPinchMidpoint.x -
+          this.initialPinchWorldPoint.x * this.cameraScale;
+        this.worldContainer.position.y =
+          this.initialPinchMidpoint.y -
+          this.initialPinchWorldPoint.y * this.cameraScale;
 
         // Request render
         this.app.renderer.render(this.app.stage);
+        // Don't return - we still want to do hit-test for hover
       }
+
+      // Handle single-pointer pan/drag
+      if (this.pointers.size === 1) {
+        // Calculate movement delta from start
+        const dx = event.clientX - pointerInfo.startX;
+        const dy = event.clientY - pointerInfo.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Check if movement exceeds drag slop threshold
+        const pointerType = event.pointerType;
+        const slopThreshold =
+          pointerType === 'mouse' ||
+          pointerType === 'pen' ||
+          pointerType === 'touch'
+            ? DRAG_SLOP[pointerType]
+            : DRAG_SLOP.mouse;
+
+        // Start dragging once we exceed the slop threshold
+        if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
+          this.isDragging = true;
+        }
+
+        // If dragging, manually pan the camera
+        if (this.isDragging && event.isPrimary) {
+          // Calculate delta from last position
+          const deltaX = event.clientX - lastX;
+          const deltaY = event.clientY - lastY;
+
+          // Move world container (camera pans by moving the world)
+          this.worldContainer.position.x += deltaX;
+          this.worldContainer.position.y += deltaY;
+
+          // Request render
+          this.app.renderer.render(this.app.stage);
+        }
+      }
+    }
+
+    // Hit-test for hover feedback (M2-T4)
+    // Only for mouse and pen pointers - touch doesn't have hover
+    // Also skip if we're actively dragging or pinching
+    if (
+      (event.pointerType === 'mouse' || event.pointerType === 'pen') &&
+      !this.isDragging &&
+      !this.isPinching
+    ) {
+      // Convert screen coordinates to world coordinates
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      // Perform hit-test
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+      const newHoveredId = hitResult ? hitResult.id : null;
+
+      // Update hover state if changed
+      if (newHoveredId !== this.hoveredObjectId) {
+        // Clear previous hover
+        if (this.hoveredObjectId) {
+          this.updateHoverFeedback(this.hoveredObjectId, false);
+        }
+
+        // Set new hover
+        this.hoveredObjectId = newHoveredId;
+        if (this.hoveredObjectId) {
+          this.updateHoverFeedback(this.hoveredObjectId, true);
+        }
+
+        // Request render to show hover feedback
+        this.app.renderer.render(this.app.stage);
+      }
+    } else {
+      // Clear hover when not applicable (touch, dragging, or pinching)
+      if (this.hoveredObjectId) {
+        this.updateHoverFeedback(this.hoveredObjectId, false);
+        this.hoveredObjectId = null;
+        this.app.renderer.render(this.app.stage);
+      }
+    }
+  }
+
+  /**
+   * Update hover visual feedback for an object (M2-T4).
+   * Makes the card appear to lift off the table with shadow and scale.
+   */
+  private updateHoverFeedback(objectId: string, isHovered: boolean): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (!visual) return;
+
+    // Store target scale on the visual object
+    visual.targetScale = isHovered ? 1.05 : 1.0;
+
+    // Start hover animation if not already running
+    if (!this.hoverAnimationActive) {
+      this.startHoverAnimation();
+    }
+
+    // Redraw the visual with current hover state
+    this.redrawCardVisual(objectId, isHovered);
+  }
+
+  /**
+   * Redraw a card's visual representation (M2-T4).
+   */
+  private redrawCardVisual(objectId: string, isHovered: boolean): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (!visual) return;
+
+    // Get original color from the test card data
+    const color = TEST_CARD_COLORS[objectId] || 0x6c5ce7;
+
+    // Clear existing children
+    visual.removeChildren();
+
+    if (isHovered) {
+      // Create shadow graphic with blur filter
+      const shadowGraphic = new Graphics();
+      const shadowPadding = 8;
+      const borderRadius = 12;
+
+      shadowGraphic.roundRect(
+        -CARD_WIDTH / 2 - shadowPadding,
+        -CARD_HEIGHT / 2 - shadowPadding,
+        CARD_WIDTH + shadowPadding * 2,
+        CARD_HEIGHT + shadowPadding * 2,
+        borderRadius,
+      );
+      shadowGraphic.fill({ color: 0x000000, alpha: 0.3 });
+
+      // Apply blur filter for diffuse shadow
+      // Scale blur strength by camera scale to maintain consistent appearance at all zoom levels
+      // TODO: BUG - If hovering a card while zooming, the shadow doesn't update until hover changes.
+      // This causes the shadow size to be wrong at the new zoom level until you move the mouse.
+      // Fix: Listen to zoom changes and redraw hovered card, or update filter strength directly.
+      const blurFilter = new BlurFilter({
+        strength: 16 * this.cameraScale,
+        quality: 10, // Higher quality for smoother blur at high strengths
+      });
+      shadowGraphic.filters = [blurFilter];
+
+      visual.addChild(shadowGraphic);
+    }
+
+    // Create card graphic (always on top, no filter)
+    const cardGraphic = new Graphics();
+    cardGraphic.rect(
+      -CARD_WIDTH / 2,
+      -CARD_HEIGHT / 2,
+      CARD_WIDTH,
+      CARD_HEIGHT,
+    );
+    cardGraphic.fill(color);
+    cardGraphic.stroke({ width: 2, color: 0x2d3436 });
+
+    visual.addChild(cardGraphic);
+  }
+
+  /**
+   * Start smooth hover animation using ticker (M2-T4).
+   */
+  private startHoverAnimation(): void {
+    if (!this.app || this.hoverAnimationActive) {
+      return;
+    }
+
+    this.hoverAnimationActive = true;
+
+    const hoverTicker = () => {
+      if (!this.app || !this.worldContainer) {
+        this.hoverAnimationActive = false;
+        return;
+      }
+
+      let hasActiveAnimation = false;
+
+      // Animate all visuals towards their target scale
+      for (const [, visual] of this.objectVisuals) {
+        const targetScale = visual.targetScale ?? 1.0;
+        const currentScale = visual.scale.x;
+
+        // Lerp towards target (smooth easing)
+        const lerpFactor = 0.25; // Higher = faster animation
+        const newScale =
+          currentScale + (targetScale - currentScale) * lerpFactor;
+
+        // Only update if there's a meaningful difference
+        if (Math.abs(newScale - currentScale) > 0.001) {
+          visual.scale.set(newScale);
+          hasActiveAnimation = true;
+        } else if (Math.abs(targetScale - currentScale) > 0.001) {
+          // Snap to target if very close
+          visual.scale.set(targetScale);
+        }
+      }
+
+      // Render if animation is active
+      if (hasActiveAnimation) {
+        this.app.renderer.render(this.app.stage);
+      } else {
+        // Stop ticker when all animations complete
+        this.app.ticker.remove(hoverTicker);
+        this.hoverAnimationActive = false;
+      }
+    };
+
+    this.app.ticker.add(hoverTicker);
+
+    // CRITICAL: With autoStart: false (for iOS stability), we must manually start the ticker
+    if (!this.app.ticker.started) {
+      this.app.ticker.start();
     }
   }
 
@@ -536,33 +723,107 @@ export abstract class RendererCore {
   }
 
   /**
-   * Render a simple test scene (M2-T2).
-   * This will be replaced with real scene management in later tasks.
+   * Render a simple test scene with TableObjects (M2-T4).
+   * Creates several portrait-oriented cards at different positions and z-orders.
    */
   private renderTestScene(): void {
     if (!this.worldContainer) return;
 
-    // Clear any existing children
+    // Clear any existing children and scene
     this.worldContainer.removeChildren();
+    this.sceneManager.clear();
+    this.objectVisuals.clear();
 
-    // Create objects in world space (0,0 is world origin, camera will be centered)
-    // Create a simple colored rectangle
-    const rect = new Graphics();
-    rect.rect(-200, -150, 200, 150);
-    rect.fill(0x6c5ce7);
-    this.worldContainer.addChild(rect);
+    // Create test cards at different positions with different z-orders
+    const testCards: Array<{
+      id: string;
+      x: number;
+      y: number;
+      sortKey: string;
+      color: number;
+    }> = [
+      {
+        id: 'card-1',
+        x: -150,
+        y: -100,
+        sortKey: '0|a',
+        color: TEST_CARD_COLORS['card-1'],
+      }, // Purple, bottom
+      {
+        id: 'card-2',
+        x: -50,
+        y: -50,
+        sortKey: '0|b',
+        color: TEST_CARD_COLORS['card-2'],
+      }, // Green, middle
+      {
+        id: 'card-3',
+        x: 50,
+        y: 0,
+        sortKey: '0|c',
+        color: TEST_CARD_COLORS['card-3'],
+      }, // Yellow, top
+      {
+        id: 'card-4',
+        x: -100,
+        y: 100,
+        sortKey: '0|d',
+        color: TEST_CARD_COLORS['card-4'],
+      }, // Red, overlapping
+      {
+        id: 'card-5',
+        x: 100,
+        y: 50,
+        sortKey: '0|e',
+        color: TEST_CARD_COLORS['card-5'],
+      }, // Blue, overlapping
+    ];
 
-    // Create another rectangle
-    const rect2 = new Graphics();
-    rect2.rect(50, -100, 150, 200);
-    rect2.fill(0x00b894);
-    this.worldContainer.addChild(rect2);
+    for (const card of testCards) {
+      // Create TableObject
+      const tableObject: TableObject = {
+        _kind: 'stack',
+        _containerId: null,
+        _pos: { x: card.x, y: card.y, r: 0 },
+        _sortKey: card.sortKey,
+        _locked: false,
+        _selectedBy: null,
+        _meta: {},
+      };
 
-    // Create a circle at world origin
-    const circle = new Graphics();
-    circle.circle(0, 0, 75);
-    circle.fill(0xfdcb6e);
-    this.worldContainer.addChild(circle);
+      // Add to scene manager
+      this.sceneManager.addObject(card.id, tableObject);
+
+      // Create visual representation as Container (so we can have shadow + card separately)
+      const visual = new Container();
+
+      // Create card graphic
+      const cardGraphic = new Graphics();
+      cardGraphic.rect(
+        -CARD_WIDTH / 2,
+        -CARD_HEIGHT / 2,
+        CARD_WIDTH,
+        CARD_HEIGHT,
+      );
+      cardGraphic.fill(card.color);
+      cardGraphic.stroke({ width: 2, color: 0x2d3436 });
+
+      visual.addChild(cardGraphic);
+
+      // Position the visual
+      visual.x = card.x;
+      visual.y = card.y;
+
+      // Store visual reference
+      this.objectVisuals.set(card.id, visual);
+
+      // Add to world container
+      this.worldContainer.addChild(visual);
+    }
+
+    console.log(
+      `[RendererCore] Test scene created with ${testCards.length} cards`,
+    );
   }
 
   /**
@@ -578,6 +839,9 @@ export abstract class RendererCore {
       this.app = null;
     }
     this.pointers.clear();
+    this.sceneManager.clear();
+    this.objectVisuals.clear();
+    this.hoveredObjectId = null;
   }
 
   /**

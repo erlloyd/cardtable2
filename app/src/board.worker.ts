@@ -4,6 +4,7 @@ import type {
   RendererToMainMessage,
 } from '@cardtable2/shared';
 import { RendererCore } from './renderer/RendererCore';
+import { RenderMode } from './renderer/IRendererAdapter';
 
 console.log('[Worker] Starting worker initialization...');
 console.log('[Worker] User Agent:', self.navigator.userAgent);
@@ -29,6 +30,11 @@ try {
  * Extends RendererCore and implements postResponse using self.postMessage.
  */
 class WorkerRendererCore extends RendererCore {
+  constructor() {
+    super();
+    this.renderMode = RenderMode.Worker;
+  }
+
   protected postResponse(message: RendererToMainMessage): void {
     self.postMessage(message);
   }

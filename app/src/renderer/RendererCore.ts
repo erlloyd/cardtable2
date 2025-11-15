@@ -6,6 +6,7 @@ import type {
   WheelEventData,
   TableObject,
 } from '@cardtable2/shared';
+import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
 import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
 
@@ -28,6 +29,9 @@ export abstract class RendererCore {
   protected worldContainer: Container | null = null;
   private animationStartTime: number = 0;
   private isAnimating: boolean = false;
+
+  // Rendering mode (set by subclasses)
+  protected renderMode: RenderMode = RenderMode.Worker; // Default to worker mode
 
   // Scene management (M2-T4)
   private sceneManager: SceneManager = new SceneManager();
@@ -640,7 +644,10 @@ export abstract class RendererCore {
     visual.removeChildren();
 
     // Apply shadow for both hover and drag states (M2-T4, M2-T5)
-    if (isHovered || isDragging) {
+    // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
+    const shouldShowShadow =
+      isHovered || (isDragging && this.renderMode === RenderMode.Worker);
+    if (shouldShowShadow) {
       // Create shadow graphic with blur filter
       const shadowGraphic = new Graphics();
       const shadowPadding = 8;

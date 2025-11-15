@@ -5,6 +5,7 @@ import type {
   PointerEventData,
   WheelEventData,
   TableObject,
+  InteractionMode,
 } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
@@ -74,6 +75,15 @@ export abstract class RendererCore {
   private initialPinchScale = 1.0;
   private initialPinchMidpoint = { x: 0, y: 0 }; // Locked screen point for pinch zoom
   private initialPinchWorldPoint = { x: 0, y: 0 }; // World coords under locked midpoint
+
+  // Interaction mode (pan/select toggle)
+  private interactionMode: InteractionMode = 'pan';
+
+  // Rectangle selection state
+  private isRectangleSelecting = false;
+  private rectangleSelectStartX = 0;
+  private rectangleSelectStartY = 0;
+  private selectionRectangle: Graphics | null = null;
 
   /**
    * Send a response message back to the main thread.
@@ -256,6 +266,14 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'set-interaction-mode': {
+          this.interactionMode = message.mode;
+          console.log(
+            `[RendererCore] Interaction mode set to: ${message.mode}`,
+          );
+          break;
+        }
+
         case 'test-animation': {
           // Test animation with ticker enabled
           console.log('[RendererCore] Starting test animation...');
@@ -384,7 +402,10 @@ export abstract class RendererCore {
         (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
         this.initialPinchScale;
     } else if (event.isPrimary) {
-      // Perform hit test to check if clicking on an object (M2-T5)
+      // Store pointer down event for selection logic on pointer up
+      this.pointerDownEvent = event;
+
+      // Always do hit-testing first to determine if we're over a card
       const worldX =
         (event.clientX - this.worldContainer.position.x) / this.cameraScale;
       const worldY =
@@ -392,21 +413,34 @@ export abstract class RendererCore {
 
       const hitResult = this.sceneManager.hitTest(worldX, worldY);
 
-      // Store pointer down event for selection logic on pointer up
-      this.pointerDownEvent = event;
+      // Determine if we're in rectangle-select mode based on interaction mode + modifiers
+      const modifierPressed = event.metaKey || event.ctrlKey;
+      const shouldRectangleSelect =
+        (this.interactionMode === 'select' && !modifierPressed) ||
+        (this.interactionMode === 'pan' && modifierPressed);
 
       if (hitResult) {
-        // Clicking on an object - prepare for potential object drag
+        // Clicking on a card - always prepare for object drag (regardless of mode)
         this.draggedObjectId = hitResult.id;
         this.dragStartWorldX = worldX;
         this.dragStartWorldY = worldY;
         this.isObjectDragging = false; // Will become true once we exceed slop threshold
         this.isDragging = false;
+        this.isRectangleSelecting = false;
+      } else if (shouldRectangleSelect) {
+        // Clicking on empty space in rectangle select mode - prepare for rectangle selection
+        this.rectangleSelectStartX = worldX;
+        this.rectangleSelectStartY = worldY;
+        this.isRectangleSelecting = false; // Will become true once we exceed slop threshold
+        this.draggedObjectId = null;
+        this.isDragging = false;
+        this.isObjectDragging = false;
       } else {
-        // Clicking on empty space - prepare for potential camera pan
+        // Clicking on empty space in pan mode - prepare for camera pan
         this.draggedObjectId = null;
         this.isDragging = false; // Will become true once we exceed slop threshold
         this.isObjectDragging = false;
+        this.isRectangleSelecting = false;
       }
     }
   }
@@ -479,10 +513,19 @@ export abstract class RendererCore {
         if (
           !this.isDragging &&
           !this.isObjectDragging &&
+          !this.isRectangleSelecting &&
           distance > slopThreshold &&
           event.isPrimary
         ) {
-          if (this.draggedObjectId) {
+          // Check if we should start rectangle selection
+          if (
+            this.rectangleSelectStartX !== 0 ||
+            this.rectangleSelectStartY !== 0
+          ) {
+            // Start rectangle selection
+            this.isRectangleSelecting = true;
+            console.log('[RendererCore] Starting rectangle selection');
+          } else if (this.draggedObjectId) {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
 
@@ -602,17 +645,37 @@ export abstract class RendererCore {
           // Request render
           this.app.renderer.render(this.app.stage);
         }
+        // If rectangle selecting, draw the selection rectangle
+        else if (this.isRectangleSelecting && event.isPrimary) {
+          // Calculate current world position
+          const worldX =
+            (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+          const worldY =
+            (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+          // Update or create selection rectangle
+          this.updateSelectionRectangle(
+            this.rectangleSelectStartX,
+            this.rectangleSelectStartY,
+            worldX,
+            worldY,
+          );
+
+          // Request render
+          this.app.renderer.render(this.app.stage);
+        }
       }
     }
 
     // Hit-test for hover feedback (M2-T4)
     // Only for mouse and pen pointers - touch doesn't have hover
-    // Also skip if we're actively dragging, pinching, or dragging an object
+    // Also skip if we're actively dragging, pinching, dragging an object, or rectangle selecting
     if (
       (event.pointerType === 'mouse' || event.pointerType === 'pen') &&
       !this.isDragging &&
       !this.isPinching &&
-      !this.isObjectDragging
+      !this.isObjectDragging &&
+      !this.isRectangleSelecting
     ) {
       // Convert screen coordinates to world coordinates
       const worldX =
@@ -694,6 +757,49 @@ export abstract class RendererCore {
     // Redraw the visual with current drag state
     const isSelected = this.selectedObjectIds.has(objectId);
     this.redrawCardVisual(objectId, false, isDragging, isSelected);
+  }
+
+  /**
+   * Update or create selection rectangle graphic.
+   */
+  private updateSelectionRectangle(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): void {
+    if (!this.worldContainer) return;
+
+    // Create selection rectangle if it doesn't exist
+    if (!this.selectionRectangle) {
+      this.selectionRectangle = new Graphics();
+      this.worldContainer.addChild(this.selectionRectangle);
+    }
+
+    // Clear and redraw rectangle
+    this.selectionRectangle.clear();
+
+    // Calculate rectangle bounds
+    const minX = Math.min(startX, endX);
+    const minY = Math.min(startY, endY);
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+
+    // Draw filled rectangle with border
+    this.selectionRectangle.rect(minX, minY, width, height);
+    this.selectionRectangle.fill({ color: 0x3b82f6, alpha: 0.2 }); // Blue fill
+    this.selectionRectangle.stroke({ width: 2, color: 0x3b82f6 }); // Blue border
+  }
+
+  /**
+   * Clear selection rectangle graphic.
+   */
+  private clearSelectionRectangle(): void {
+    if (this.selectionRectangle && this.worldContainer) {
+      this.worldContainer.removeChild(this.selectionRectangle);
+      this.selectionRectangle.destroy();
+      this.selectionRectangle = null;
+    }
   }
 
   /**
@@ -835,6 +941,9 @@ export abstract class RendererCore {
   private handlePointerUp(event: PointerEventData): void {
     if (!this.worldContainer) return;
 
+    // Store rectangle selecting state before we potentially reset it
+    const wasRectangleSelecting = this.isRectangleSelecting;
+
     // Clear pointer tracking
     this.pointers.delete(event.pointerId);
 
@@ -854,11 +963,70 @@ export abstract class RendererCore {
       }
     }
 
-    // Handle selection on click/tap (only if we didn't drag object or camera)
+    // Handle rectangle selection completion
+    if (this.isRectangleSelecting && event.isPrimary) {
+      // Calculate current world position
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      // Calculate rectangle bounds
+      const minX = Math.min(this.rectangleSelectStartX, worldX);
+      const minY = Math.min(this.rectangleSelectStartY, worldY);
+      const maxX = Math.max(this.rectangleSelectStartX, worldX);
+      const maxY = Math.max(this.rectangleSelectStartY, worldY);
+
+      // Hit-test all objects within rectangle
+      const objectsInRect = this.sceneManager.hitTestRect({
+        minX,
+        minY,
+        maxX,
+        maxY,
+      });
+
+      // Determine if multi-select (keep existing selections)
+      const isMultiSelectModifier =
+        this.pointerDownEvent?.metaKey || this.pointerDownEvent?.ctrlKey;
+
+      if (!isMultiSelectModifier) {
+        // Clear existing selections
+        const prevSelected = Array.from(this.selectedObjectIds);
+        this.selectedObjectIds.clear();
+
+        for (const id of prevSelected) {
+          this.redrawCardVisual(id, false, false, false);
+        }
+      }
+
+      // Add newly selected objects
+      for (const { id } of objectsInRect) {
+        this.selectedObjectIds.add(id);
+        this.redrawCardVisual(id, false, false, true);
+      }
+
+      console.log(
+        `[RendererCore] Rectangle selected ${objectsInRect.length} cards`,
+      );
+
+      // Clear selection rectangle
+      this.clearSelectionRectangle();
+
+      // Reset rectangle selection state
+      this.isRectangleSelecting = false;
+      this.rectangleSelectStartX = 0;
+      this.rectangleSelectStartY = 0;
+
+      // Request render
+      this.app.renderer.render(this.app.stage);
+    }
+
+    // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
     if (
       event.isPrimary &&
       !this.isObjectDragging &&
       !this.isDragging &&
+      !wasRectangleSelecting &&
       this.pointerDownEvent
     ) {
       const worldX =
@@ -945,6 +1113,14 @@ export abstract class RendererCore {
         this.draggedObjectsStartPositions.clear();
       }
 
+      // Clear rectangle selection state if needed
+      if (this.isRectangleSelecting) {
+        this.clearSelectionRectangle();
+        this.isRectangleSelecting = false;
+        this.rectangleSelectStartX = 0;
+        this.rectangleSelectStartY = 0;
+      }
+
       this.isDragging = false;
     }
   }
@@ -954,6 +1130,9 @@ export abstract class RendererCore {
    */
   private handlePointerCancel(event: PointerEventData): void {
     if (!this.worldContainer) return;
+
+    // Store rectangle selecting state before we potentially reset it
+    const wasRectangleSelecting = this.isRectangleSelecting;
 
     // Clear pointer tracking
     this.pointers.delete(event.pointerId);
@@ -974,11 +1153,12 @@ export abstract class RendererCore {
       }
     }
 
-    // Handle selection on click/tap (only if we didn't drag object or camera)
+    // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
     if (
       event.isPrimary &&
       !this.isObjectDragging &&
       !this.isDragging &&
+      !wasRectangleSelecting &&
       this.pointerDownEvent
     ) {
       const worldX =
@@ -1063,6 +1243,14 @@ export abstract class RendererCore {
         this.isObjectDragging = false;
         this.draggedObjectId = null;
         this.draggedObjectsStartPositions.clear();
+      }
+
+      // Clear rectangle selection state if needed
+      if (this.isRectangleSelecting) {
+        this.clearSelectionRectangle();
+        this.isRectangleSelecting = false;
+        this.rectangleSelectStartX = 0;
+        this.rectangleSelectStartY = 0;
       }
 
       this.isDragging = false;

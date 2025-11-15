@@ -67,6 +67,9 @@ export interface WheelEventData {
   clientY: number;
 }
 
+// Interaction mode for pan/select toggle
+export type InteractionMode = 'pan' | 'select';
+
 // Messages sent from main thread to renderer (worker or main thread)
 export type MainToRendererMessage =
   | { type: 'ping'; data: string }
@@ -80,6 +83,7 @@ export type MainToRendererMessage =
     }
   | { type: 'resize'; width: number; height: number; dpr: number }
   | { type: 'test-animation' }
+  | { type: 'set-interaction-mode'; mode: InteractionMode }
   | { type: 'pointer-down'; event: PointerEventData }
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }

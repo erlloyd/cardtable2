@@ -26,6 +26,9 @@ function Board({ tableId }: BoardProps) {
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderMode | null>(null);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
+    'pan',
+  );
 
   // Initialize renderer on mount
   useEffect(() => {
@@ -220,6 +223,17 @@ function Board({ tableId }: BoardProps) {
     }
   }, [isWorkerReady, renderMode]);
 
+  // Send interaction mode changes to renderer
+  useEffect(() => {
+    if (!rendererRef.current || !isCanvasInitialized) return;
+
+    const message: MainToRendererMessage = {
+      type: 'set-interaction-mode',
+      mode: interactionMode,
+    };
+    rendererRef.current.sendMessage(message);
+  }, [interactionMode, isCanvasInitialized]);
+
   // Send ping message to renderer
   const handlePing = () => {
     if (!rendererRef.current) return;
@@ -392,8 +406,40 @@ function Board({ tableId }: BoardProps) {
         />
       </div>
 
-      {/* Mobile multi-select toggle */}
+      {/* Interaction mode toggle */}
       <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+        <button
+          onClick={() =>
+            setInteractionMode(interactionMode === 'pan' ? 'select' : 'pan')
+          }
+          data-testid="interaction-mode-toggle"
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            backgroundColor:
+              interactionMode === 'select' ? '#3b82f6' : '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+          }}
+        >
+          {interactionMode === 'pan' ? '🖐️ Pan Mode' : '⬚ Select Mode'}
+        </button>
+        <span
+          style={{
+            marginLeft: '12px',
+            fontSize: '12px',
+            color: '#6b7280',
+          }}
+        >
+          (Hold Cmd/Ctrl to invert)
+        </span>
+      </div>
+
+      {/* Mobile multi-select toggle */}
+      <div style={{ marginBottom: '8px' }}>
         <button
           onClick={() => setIsMultiSelectMode(!isMultiSelectMode)}
           data-testid="multi-select-toggle"

@@ -102,6 +102,18 @@ pnpm run format
 - User-toggleable in settings (auto-detect, force mode, debug tools)
 - See `_plans/M2_rendering_architecture.md` for full details
 
+#### PixiJS Ticker Management
+- **CRITICAL**: PixiJS is configured with `autoStart: false` to prevent iOS worker crashes
+- Any code that uses animations via `app.ticker` **must manually start the ticker**:
+  ```typescript
+  this.app.ticker.add(callback);
+  if (!this.app.ticker.started) {
+    this.app.ticker.start();
+  }
+  ```
+- This is intentional for performance: ticker only runs when animations are active
+- Ticker should be stopped when animations complete to save CPU cycles
+
 ### Shared Package
 - Direct TypeScript imports (no build step)
 - Contains common types used by both app and server

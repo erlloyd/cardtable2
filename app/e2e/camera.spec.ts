@@ -1,5 +1,30 @@
 import { test, expect } from '@playwright/test';
 
+/**
+ * E2E tests for camera controls (M2-T3)
+ *
+ * Note: These tests validate that camera gestures don't crash and that
+ * events are properly processed, but they do NOT verify visual correctness
+ * (e.g., that cards actually appear zoomed or camera position changes).
+ * Canvas-based rendering prevents DOM inspection of PixiJS transformations.
+ *
+ * What these tests DO verify:
+ * - Pan/zoom gestures reach the renderer without errors
+ * - Worker/main-thread communication works for all gestures
+ * - Pinch-to-zoom via CDP processes correctly
+ * - Transition from pinch to pan doesn't crash
+ * - Both rendering modes function without crashes
+ * - Unlimited zoom doesn't cause errors
+ *
+ * What these tests DON'T verify:
+ * - Actual camera scale/position values
+ * - Visual appearance of zoomed/panned scene
+ * - Performance (60fps, smooth animations)
+ * - Exact zoom factors or pan distances
+ *
+ * For visual validation, consider adding screenshot comparison or
+ * camera state inspection hooks in future milestones (M9: Performance & QA).
+ */
 test.describe('Camera Pan and Zoom (M2-T3)', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to a test table
@@ -214,6 +239,9 @@ test.describe('Camera Pan and Zoom (M2-T3)', () => {
         ],
       });
 
+      // Brief pause between CDP events to allow event processing
+      // (50ms is sufficient for the renderer to process touch events.
+      //  Canvas rendering prevents DOM-based waiting strategies.)
       await page.waitForTimeout(50);
 
       // Simulate pinch out (zoom in)
@@ -234,10 +262,21 @@ test.describe('Camera Pan and Zoom (M2-T3)', () => {
       });
 
       await page.waitForTimeout(100);
-    } catch (error) {
-      // CDP might not be available in all browsers (e.g., Firefox, WebKit)
-      // This is acceptable - test will pass if CDP is unavailable
-      console.log('CDP not available for pinch test:', error);
+    } catch (err: unknown) {
+      // CDP not available - skip pinch-specific test
+      const error = err as Error;
+      if (
+        error?.message?.includes('CDP') ||
+        error?.message?.includes('not supported') ||
+        error?.message?.includes('browserContext.newCDPSession') ||
+        error?.message?.includes('Protocol error')
+      ) {
+        // CDP unavailable (Firefox, WebKit) - skip this test explicitly
+        test.skip(true, 'CDP not available for pinch-to-zoom test');
+      } else {
+        // Unexpected error - rethrow to fail the test
+        throw err;
+      }
     }
 
     // No errors should have occurred
@@ -298,8 +337,21 @@ test.describe('Camera Pan and Zoom (M2-T3)', () => {
       });
 
       await page.waitForTimeout(100);
-    } catch (error) {
-      console.log('CDP not available for transition test:', error);
+    } catch (err: unknown) {
+      // CDP not available - skip transition-specific test
+      const error = err as Error;
+      if (
+        error?.message?.includes('CDP') ||
+        error?.message?.includes('not supported') ||
+        error?.message?.includes('browserContext.newCDPSession') ||
+        error?.message?.includes('Protocol error')
+      ) {
+        // CDP unavailable (Firefox, WebKit) - skip this test explicitly
+        test.skip(true, 'CDP not available for pinch-to-pan transition test');
+      } else {
+        // Unexpected error - rethrow to fail the test
+        throw err;
+      }
     }
 
     expect(errors).toEqual([]);

@@ -1,5 +1,28 @@
 import { test, expect } from '@playwright/test';
 
+/**
+ * E2E tests for hover feedback (M2-T4)
+ *
+ * Note: These tests validate that hover interactions don't crash and that
+ * events are properly processed, but they do NOT verify visual correctness
+ * (e.g., that shadows actually appear or cards scale to 1.05). Canvas-based
+ * rendering prevents DOM inspection of PixiJS scene graph.
+ *
+ * What these tests DO verify:
+ * - Pointer events reach the renderer without errors
+ * - Worker/main-thread communication works for hover events
+ * - Touch events are filtered correctly (no hover on touch)
+ * - Hover is cleared during camera pan/pinch gestures
+ * - Both rendering modes function without crashes
+ *
+ * What these tests DON'T verify:
+ * - Visual appearance of hover effects (shadow, scale)
+ * - Exact scale values or animation curves
+ * - Performance (animation smoothness, 60fps)
+ *
+ * For visual validation, consider adding screenshot comparison or
+ * renderer state inspection hooks in future milestones (M9: Performance & QA).
+ */
 test.describe('Hover Feedback (M2-T4)', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to a test table
@@ -45,12 +68,15 @@ test.describe('Hover Feedback (M2-T4)', () => {
     await page.mouse.move(centerX, centerY);
 
     // Wait for hover animation to complete
+    // (300ms timeout based on animation lerp factor of 0.25, which takes ~300ms to settle.
+    //  Canvas-based rendering prevents DOM-based waiting strategies like checking for CSS classes.)
     await page.waitForTimeout(300);
 
     // Move mouse away
     await page.mouse.move(box!.x + 10, box!.y + 10);
 
     // Wait for hover animation to reverse
+    // (Same 300ms settling time for reverse animation)
     await page.waitForTimeout(300);
 
     // No errors should have occurred
@@ -92,10 +118,22 @@ test.describe('Hover Feedback (M2-T4)', () => {
       });
 
       await page.waitForTimeout(200);
-    } catch {
-      // CDP not available - skip touch test, but verify mouse hover still works
-      await page.mouse.move(centerX, centerY);
-      await page.waitForTimeout(200);
+    } catch (err: unknown) {
+      // CDP not available - skip touch-specific test
+      const error = err as Error;
+      if (
+        error?.message?.includes('CDP') ||
+        error?.message?.includes('not supported') ||
+        error?.message?.includes('browserContext.newCDPSession') ||
+        error?.message?.includes('Protocol error')
+      ) {
+        // CDP unavailable (Firefox, WebKit) - skip touch test but verify mouse hover works
+        await page.mouse.move(centerX, centerY);
+        await page.waitForTimeout(200);
+      } else {
+        // Unexpected error - rethrow to fail the test
+        throw err;
+      }
     }
 
     // No errors should have occurred

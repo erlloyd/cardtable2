@@ -498,14 +498,11 @@ export abstract class RendererCore {
           // Get the object
           const obj = this.sceneManager.getObject(this.draggedObjectId);
           if (obj) {
-            // Update object position
+            // Update object position in memory
             obj._pos.x = worldX;
             obj._pos.y = worldY;
 
-            // Update scene manager
-            this.sceneManager.updateObject(this.draggedObjectId, obj);
-
-            // Update visual position
+            // Update visual position immediately for smooth rendering
             const visual = this.objectVisuals.get(this.draggedObjectId);
             if (visual) {
               visual.x = worldX;
@@ -513,6 +510,8 @@ export abstract class RendererCore {
             }
 
             // Request render
+            // Note: SceneManager spatial index update is deferred until drag ends
+            // to avoid expensive RBush removal/insertion on every pointer move
             this.app.renderer.render(this.app.stage);
           }
         }
@@ -772,6 +771,13 @@ export abstract class RendererCore {
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
       if (this.isObjectDragging && this.draggedObjectId) {
+        // Update SceneManager spatial index now that drag is complete
+        // (deferred from pointer move for performance)
+        const obj = this.sceneManager.getObject(this.draggedObjectId);
+        if (obj) {
+          this.sceneManager.updateObject(this.draggedObjectId, obj);
+        }
+
         this.updateDragFeedback(this.draggedObjectId, false);
         this.isObjectDragging = false;
         this.draggedObjectId = null;
@@ -810,6 +816,13 @@ export abstract class RendererCore {
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
       if (this.isObjectDragging && this.draggedObjectId) {
+        // Update SceneManager spatial index now that drag is complete
+        // (deferred from pointer move for performance)
+        const obj = this.sceneManager.getObject(this.draggedObjectId);
+        if (obj) {
+          this.sceneManager.updateObject(this.draggedObjectId, obj);
+        }
+
         this.updateDragFeedback(this.draggedObjectId, false);
         this.isObjectDragging = false;
         this.draggedObjectId = null;

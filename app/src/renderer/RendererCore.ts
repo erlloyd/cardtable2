@@ -85,6 +85,10 @@ export abstract class RendererCore {
   private rectangleSelectStartY = 0;
   private selectionRectangle: Graphics | null = null;
 
+  // Cached blur filters for performance (M2-T5 optimization)
+  private hoverBlurFilter: BlurFilter | null = null;
+  private dragBlurFilter: BlurFilter | null = null;
+
   /**
    * Send a response message back to the main thread.
    * Worker mode: uses self.postMessage
@@ -853,16 +857,36 @@ export abstract class RendererCore {
       const shadowColor = isDragging ? 0x3b82f6 : 0x000000; // Blue for drag, black for hover
       shadowGraphic.fill({ color: shadowColor, alpha: 0.3 });
 
-      // Apply blur filter for diffuse shadow
+      // Reuse cached blur filters instead of creating new ones every time (performance optimization)
       // Scale blur strength by camera scale to maintain consistent appearance at all zoom levels
       // TODO: BUG - If hovering a card while zooming, the shadow doesn't update until hover changes.
       // This causes the shadow size to be wrong at the new zoom level until you move the mouse.
       // Fix: Listen to zoom changes and redraw hovered card, or update filter strength directly.
-      const blurFilter = new BlurFilter({
-        strength: 16 * this.cameraScale,
-        quality: 10, // Higher quality for smoother blur at high strengths
-      });
-      shadowGraphic.filters = [blurFilter];
+      const currentStrength = 16 * this.cameraScale;
+
+      if (isDragging) {
+        // Use/create drag blur filter
+        if (!this.dragBlurFilter) {
+          this.dragBlurFilter = new BlurFilter({
+            strength: currentStrength,
+            quality: 4, // Lower quality for drag (performance)
+          });
+        } else {
+          this.dragBlurFilter.strength = currentStrength;
+        }
+        shadowGraphic.filters = [this.dragBlurFilter];
+      } else {
+        // Use/create hover blur filter
+        if (!this.hoverBlurFilter) {
+          this.hoverBlurFilter = new BlurFilter({
+            strength: currentStrength,
+            quality: 8, // Medium quality for hover (balance)
+          });
+        } else {
+          this.hoverBlurFilter.strength = currentStrength;
+        }
+        shadowGraphic.filters = [this.hoverBlurFilter];
+      }
 
       visual.addChild(shadowGraphic);
     }

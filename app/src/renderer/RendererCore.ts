@@ -486,6 +486,21 @@ export abstract class RendererCore {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
 
+            // If the dragged object isn't selected, select it (clearing other selections)
+            if (!this.selectedObjectIds.has(this.draggedObjectId)) {
+              // Clear previous selections and redraw them
+              const prevSelected = Array.from(this.selectedObjectIds);
+              this.selectedObjectIds.clear();
+
+              for (const id of prevSelected) {
+                this.redrawCardVisual(id, false, false, false);
+              }
+
+              // Select the dragged card
+              this.selectedObjectIds.add(this.draggedObjectId);
+              this.redrawCardVisual(this.draggedObjectId, false, false, true);
+            }
+
             // Save initial positions of all selected cards for multi-drag
             this.draggedObjectsStartPositions.clear();
             for (const objectId of this.selectedObjectIds) {
@@ -499,16 +514,37 @@ export abstract class RendererCore {
             }
 
             // Apply drag visual feedback to all selected cards
+            // Also update _sortKey to ensure hit-testing respects the new z-order
+
+            // Find the current maximum sortKey (lexicographic comparison for fractional indexing)
+            let maxSortKey = '0';
+            for (const [, obj] of this.sceneManager.getAllObjects()) {
+              if (obj._sortKey > maxSortKey) {
+                maxSortKey = obj._sortKey;
+              }
+            }
+
+            // Generate new sortKeys for dragged cards using fractional indexing
+            // Increment the prefix to ensure new keys are lexicographically greater
+            const [prefix] = maxSortKey.split('|');
+            const newPrefix = String(Number(prefix) + 1);
+
+            let sortKeyCounter = 0;
             for (const objectId of this.selectedObjectIds) {
               this.updateDragFeedback(objectId, true);
 
-              // Move all selected objects to top of z-order
+              // Move all selected objects to top of z-order (both visual and logical)
               const visual = this.objectVisuals.get(objectId);
-              if (visual && this.worldContainer) {
+              const obj = this.sceneManager.getObject(objectId);
+              if (visual && obj && this.worldContainer) {
+                // Update visual z-order
                 this.worldContainer.setChildIndex(
                   visual,
                   this.worldContainer.children.length - 1,
                 );
+
+                // Update logical z-order (_sortKey) using fractional indexing format
+                obj._sortKey = `${newPrefix}|${String.fromCharCode(97 + sortKeyCounter++)}`;
               }
             }
           } else {
@@ -675,8 +711,10 @@ export abstract class RendererCore {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
-    // Get original color from the test card data
-    const color = TEST_CARD_COLORS[objectId] || 0x6c5ce7;
+    // Get color from object metadata, or fall back to TEST_CARD_COLORS for legacy cards
+    const obj = this.sceneManager.getObject(objectId);
+    const color =
+      (obj?._meta?.color as number) || TEST_CARD_COLORS[objectId] || 0x6c5ce7;
 
     // Clear existing children
     visual.removeChildren();
@@ -1073,50 +1111,39 @@ export abstract class RendererCore {
     this.sceneManager.clear();
     this.objectVisuals.clear();
 
-    // Create test cards at different positions with different z-orders
+    // Create 300 test cards with randomized positions for stress testing
     const testCards: Array<{
       id: string;
       x: number;
       y: number;
       sortKey: string;
       color: number;
-    }> = [
-      {
-        id: 'card-1',
-        x: -150,
-        y: -100,
-        sortKey: '0|a',
-        color: TEST_CARD_COLORS['card-1'],
-      }, // Purple, bottom
-      {
-        id: 'card-2',
-        x: -50,
-        y: -50,
-        sortKey: '0|b',
-        color: TEST_CARD_COLORS['card-2'],
-      }, // Green, middle
-      {
-        id: 'card-3',
-        x: 50,
-        y: 0,
-        sortKey: '0|c',
-        color: TEST_CARD_COLORS['card-3'],
-      }, // Yellow, top
-      {
-        id: 'card-4',
-        x: -100,
-        y: 100,
-        sortKey: '0|d',
-        color: TEST_CARD_COLORS['card-4'],
-      }, // Red, overlapping
-      {
-        id: 'card-5',
-        x: 100,
-        y: 50,
-        sortKey: '0|e',
-        color: TEST_CARD_COLORS['card-5'],
-      }, // Blue, overlapping
+    }> = [];
+
+    const NUM_CARDS = 20;
+    const AREA_WIDTH = 1200; // Random area width
+    const AREA_HEIGHT = 900; // Random area height
+
+    // Available colors from TEST_CARD_COLORS
+    const availableColors = [
+      TEST_CARD_COLORS['card-1'], // Purple
+      TEST_CARD_COLORS['card-2'], // Green
+      TEST_CARD_COLORS['card-3'], // Yellow
+      TEST_CARD_COLORS['card-4'], // Red
+      TEST_CARD_COLORS['card-5'], // Blue
     ];
+
+    for (let i = 0; i < NUM_CARDS; i++) {
+      const cardId = `card-${i + 1}`;
+      // Random position within area, centered around (0, 0)
+      const x = Math.random() * AREA_WIDTH - AREA_WIDTH / 2;
+      const y = Math.random() * AREA_HEIGHT - AREA_HEIGHT / 2;
+      // Generate sortKey using fractional indexing format
+      const sortKey = `0|${String.fromCharCode(97 + Math.floor(i / 26))}${String.fromCharCode(97 + (i % 26))}`;
+      const color = availableColors[i % availableColors.length];
+
+      testCards.push({ id: cardId, x, y, sortKey, color });
+    }
 
     for (const card of testCards) {
       // Create TableObject
@@ -1127,7 +1154,7 @@ export abstract class RendererCore {
         _sortKey: card.sortKey,
         _locked: false,
         _selectedBy: null,
-        _meta: {},
+        _meta: { color: card.color }, // Store color in metadata
       };
 
       // Add to scene manager

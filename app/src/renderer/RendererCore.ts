@@ -1018,7 +1018,7 @@ export abstract class RendererCore {
       this.rectangleSelectStartY = 0;
 
       // Request render
-      this.app.renderer.render(this.app.stage);
+      this.app!.renderer.render(this.app!.stage);
     }
 
     // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
@@ -1071,7 +1071,7 @@ export abstract class RendererCore {
         }
 
         // Request render to show selection changes
-        this.app.renderer.render(this.app.stage);
+        this.app!.renderer.render(this.app!.stage);
       } else {
         // Clicked on empty space - deselect all
         if (this.selectedObjectIds.size > 0) {
@@ -1084,7 +1084,7 @@ export abstract class RendererCore {
           }
 
           // Request render to show deselection
-          this.app.renderer.render(this.app.stage);
+          this.app!.renderer.render(this.app!.stage);
         }
       }
 
@@ -1203,7 +1203,7 @@ export abstract class RendererCore {
         }
 
         // Request render to show selection changes
-        this.app.renderer.render(this.app.stage);
+        this.app!.renderer.render(this.app!.stage);
       } else {
         // Clicked on empty space - deselect all
         if (this.selectedObjectIds.size > 0) {
@@ -1216,7 +1216,7 @@ export abstract class RendererCore {
           }
 
           // Request render to show deselection
-          this.app.renderer.render(this.app.stage);
+          this.app!.renderer.render(this.app!.stage);
         }
       }
 

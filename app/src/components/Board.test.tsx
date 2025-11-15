@@ -512,7 +512,6 @@ describe('Board', () => {
       await user.pointer({
         target: canvas,
         keys: '[TouchA>]',
-        pointerType: 'touch',
       });
 
       // Verify pointer-down message has metaKey=true due to multi-select mode

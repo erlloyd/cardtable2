@@ -1,5 +1,6 @@
 import RBush from 'rbush';
 import type { TableObject } from '@cardtable2/shared';
+import { CARD_WIDTH, CARD_HEIGHT } from './constants';
 
 /**
  * Bounding box for RBush spatial indexing
@@ -19,13 +20,6 @@ interface BBox {
 export class SceneManager {
   private objects: Map<string, TableObject> = new Map();
   private spatialIndex: RBush<BBox> = new RBush();
-
-  /**
-   * Standard card size in world coordinates (portrait orientation)
-   * Poker card aspect ratio: 2.5" x 3.5" → 63x88px at 25.4 DPI
-   */
-  private readonly CARD_WIDTH = 63;
-  private readonly CARD_HEIGHT = 88;
 
   /**
    * Add an object to the scene
@@ -147,8 +141,8 @@ export class SceneManager {
     // const { r } = obj._pos; // TODO: Handle rotation properly with rotated bounding boxes
 
     // For now, ignore rotation and use axis-aligned bounding box
-    const halfWidth = this.CARD_WIDTH / 2;
-    const halfHeight = this.CARD_HEIGHT / 2;
+    const halfWidth = CARD_WIDTH / 2;
+    const halfHeight = CARD_HEIGHT / 2;
 
     return {
       minX: x - halfWidth,

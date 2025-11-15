@@ -7,6 +7,7 @@ import type {
   TableObject,
 } from '@cardtable2/shared';
 import { SceneManager } from './SceneManager';
+import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -524,19 +525,8 @@ export abstract class RendererCore {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
-    // Card size: portrait orientation
-    const cardWidth = 63;
-    const cardHeight = 88;
-
     // Get original color from the test card data
-    const colorMap: Record<string, number> = {
-      'card-1': 0x6c5ce7,
-      'card-2': 0x00b894,
-      'card-3': 0xfdcb6e,
-      'card-4': 0xff7675,
-      'card-5': 0x74b9ff,
-    };
-    const color = colorMap[objectId] || 0x6c5ce7;
+    const color = TEST_CARD_COLORS[objectId] || 0x6c5ce7;
 
     // Clear existing children
     visual.removeChildren();
@@ -548,10 +538,10 @@ export abstract class RendererCore {
       const borderRadius = 12;
 
       shadowGraphic.roundRect(
-        -cardWidth / 2 - shadowPadding,
-        -cardHeight / 2 - shadowPadding,
-        cardWidth + shadowPadding * 2,
-        cardHeight + shadowPadding * 2,
+        -CARD_WIDTH / 2 - shadowPadding,
+        -CARD_HEIGHT / 2 - shadowPadding,
+        CARD_WIDTH + shadowPadding * 2,
+        CARD_HEIGHT + shadowPadding * 2,
         borderRadius,
       );
       shadowGraphic.fill({ color: 0x000000, alpha: 0.3 });
@@ -572,9 +562,13 @@ export abstract class RendererCore {
 
     // Create card graphic (always on top, no filter)
     const cardGraphic = new Graphics();
-    cardGraphic.rect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight);
+    cardGraphic.rect(
+      -CARD_WIDTH / 2,
+      -CARD_HEIGHT / 2,
+      CARD_WIDTH,
+      CARD_HEIGHT,
+    );
     cardGraphic.fill(color);
-    cardGraphic.rect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight);
     cardGraphic.stroke({ width: 2, color: 0x2d3436 });
 
     visual.addChild(cardGraphic);
@@ -740,10 +734,6 @@ export abstract class RendererCore {
     this.sceneManager.clear();
     this.objectVisuals.clear();
 
-    // Card size: portrait orientation, standard poker card aspect ratio
-    const cardWidth = 63;
-    const cardHeight = 88;
-
     // Create test cards at different positions with different z-orders
     const testCards: Array<{
       id: string;
@@ -752,11 +742,41 @@ export abstract class RendererCore {
       sortKey: string;
       color: number;
     }> = [
-      { id: 'card-1', x: -150, y: -100, sortKey: '0|a', color: 0x6c5ce7 }, // Purple, bottom
-      { id: 'card-2', x: -50, y: -50, sortKey: '0|b', color: 0x00b894 }, // Green, middle
-      { id: 'card-3', x: 50, y: 0, sortKey: '0|c', color: 0xfdcb6e }, // Yellow, top
-      { id: 'card-4', x: -100, y: 100, sortKey: '0|d', color: 0xff7675 }, // Red, overlapping
-      { id: 'card-5', x: 100, y: 50, sortKey: '0|e', color: 0x74b9ff }, // Blue, overlapping
+      {
+        id: 'card-1',
+        x: -150,
+        y: -100,
+        sortKey: '0|a',
+        color: TEST_CARD_COLORS['card-1'],
+      }, // Purple, bottom
+      {
+        id: 'card-2',
+        x: -50,
+        y: -50,
+        sortKey: '0|b',
+        color: TEST_CARD_COLORS['card-2'],
+      }, // Green, middle
+      {
+        id: 'card-3',
+        x: 50,
+        y: 0,
+        sortKey: '0|c',
+        color: TEST_CARD_COLORS['card-3'],
+      }, // Yellow, top
+      {
+        id: 'card-4',
+        x: -100,
+        y: 100,
+        sortKey: '0|d',
+        color: TEST_CARD_COLORS['card-4'],
+      }, // Red, overlapping
+      {
+        id: 'card-5',
+        x: 100,
+        y: 50,
+        sortKey: '0|e',
+        color: TEST_CARD_COLORS['card-5'],
+      }, // Blue, overlapping
     ];
 
     for (const card of testCards) {
@@ -779,9 +799,13 @@ export abstract class RendererCore {
 
       // Create card graphic
       const cardGraphic = new Graphics();
-      cardGraphic.rect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight);
+      cardGraphic.rect(
+        -CARD_WIDTH / 2,
+        -CARD_HEIGHT / 2,
+        CARD_WIDTH,
+        CARD_HEIGHT,
+      );
       cardGraphic.fill(card.color);
-      cardGraphic.rect(-cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight);
       cardGraphic.stroke({ width: 2, color: 0x2d3436 });
 
       visual.addChild(cardGraphic);

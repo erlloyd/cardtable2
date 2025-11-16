@@ -877,21 +877,47 @@ export abstract class RendererCore {
   }
 
   /**
+   * Calculate shadow bounds for an object based on its kind and metadata.
+   * Used to determine the size of drop shadows for hover/drag effects.
+   */
+  private getShadowBounds(obj: TableObject): { width: number; height: number } {
+    switch (obj._kind) {
+      case ObjectKind.Stack: {
+        return { width: CARD_WIDTH, height: CARD_HEIGHT };
+      }
+
+      case ObjectKind.Token:
+      case ObjectKind.Mat:
+      case ObjectKind.Counter: {
+        const radius = (obj._meta?.size as number) || 40;
+        return { width: radius * 2, height: radius * 2 };
+      }
+
+      case ObjectKind.Zone: {
+        const width = (obj._meta?.width as number) || 400;
+        const height = (obj._meta?.height as number) || 300;
+        return { width, height };
+      }
+
+      default: {
+        return { width: CARD_WIDTH, height: CARD_HEIGHT };
+      }
+    }
+  }
+
+  /**
    * Create base shape graphic for an object based on its kind.
-   * Does NOT include text label, shadow, or selection border.
-   * Returns { graphic, shadowBounds } where shadowBounds defines the shadow size.
+   * Does NOT include text label or shadow.
    */
   private createBaseShapeGraphic(
     obj: TableObject,
     isSelected: boolean,
-  ): { graphic: Graphics; shadowBounds: { width: number; height: number } } {
+  ): Graphics {
     const graphic = new Graphics();
 
     // Use different border colors for selection state
     const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
     const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
-
-    let shadowBounds = { width: CARD_WIDTH, height: CARD_HEIGHT };
 
     switch (obj._kind) {
       case ObjectKind.Stack: {
@@ -905,7 +931,6 @@ export abstract class RendererCore {
         );
         graphic.fill(color);
         graphic.stroke({ width: borderWidth, color: borderColor });
-        shadowBounds = { width: CARD_WIDTH, height: CARD_HEIGHT };
         break;
       }
 
@@ -916,7 +941,6 @@ export abstract class RendererCore {
         graphic.circle(0, 0, size);
         graphic.fill(color);
         graphic.stroke({ width: borderWidth, color: borderColor });
-        shadowBounds = { width: size * 2, height: size * 2 };
         break;
       }
 
@@ -928,7 +952,6 @@ export abstract class RendererCore {
         graphic.rect(-width / 2, -height / 2, width, height);
         graphic.fill({ color, alpha: 0.1 }); // Semi-transparent fill
         graphic.stroke({ width: isSelected ? 5 : 3, color: borderColor });
-        shadowBounds = { width, height };
         break;
       }
 
@@ -941,12 +964,32 @@ export abstract class RendererCore {
         graphic.circle(0, 0, size);
         graphic.fill(color);
         graphic.stroke({ width: borderWidth, color: borderColor });
-        shadowBounds = { width: size * 2, height: size * 2 };
         break;
       }
     }
 
-    return { graphic, shadowBounds };
+    return graphic;
+  }
+
+  /**
+   * Create a text label showing the object's kind.
+   * Returns a centered Text object ready to be added to a container.
+   */
+  private createKindLabel(kind: string): Text {
+    const kindText = new Text({
+      text: kind,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 24,
+        fill: 0xffffff, // White text
+        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
+        align: 'center',
+      },
+    });
+    kindText.anchor.set(0.5); // Center the text
+    kindText.y = 0; // Center vertically in the object
+
+    return kindText;
   }
 
   /**
@@ -970,8 +1013,8 @@ export abstract class RendererCore {
     // Clear existing children
     visual.removeChildren();
 
-    // Create base shape to get shadow bounds
-    const { shadowBounds } = this.createBaseShapeGraphic(obj, isSelected);
+    // Get shadow bounds for this object type
+    const shadowBounds = this.getShadowBounds(obj);
 
     // Apply shadow for both hover and drag states (M2-T4, M2-T5)
     // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
@@ -1041,27 +1084,11 @@ export abstract class RendererCore {
     }
 
     // Create and add the base shape graphic
-    const { graphic: shapeGraphic } = this.createBaseShapeGraphic(
-      obj,
-      isSelected,
-    );
+    const shapeGraphic = this.createBaseShapeGraphic(obj, isSelected);
     visual.addChild(shapeGraphic);
 
-    // Add text label showing object type (must be re-added after removeChildren)
-    const kindText = new Text({
-      text: obj._kind,
-      style: {
-        fontFamily: 'Arial',
-        fontSize: 24,
-        fill: 0xffffff, // White text
-        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
-        align: 'center',
-      },
-    });
-    kindText.anchor.set(0.5); // Center the text
-    kindText.y = 0; // Center vertically in the object
-
-    visual.addChild(kindText);
+    // Add text label showing object type
+    visual.addChild(this.createKindLabel(obj._kind));
   }
 
   /**
@@ -1532,24 +1559,11 @@ export abstract class RendererCore {
     const container = new Container();
 
     // Create base shape using shared method (no duplication!)
-    const { graphic: shapeGraphic } = this.createBaseShapeGraphic(obj, false);
+    const shapeGraphic = this.createBaseShapeGraphic(obj, false);
     container.addChild(shapeGraphic);
 
     // Add text label showing object type
-    const kindText = new Text({
-      text: obj._kind,
-      style: {
-        fontFamily: 'Arial',
-        fontSize: 24,
-        fill: 0xffffff, // White text
-        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
-        align: 'center',
-      },
-    });
-    kindText.anchor.set(0.5); // Center the text
-    kindText.y = 0; // Center vertically in the object
-
-    container.addChild(kindText);
+    container.addChild(this.createKindLabel(obj._kind));
 
     return container;
   }

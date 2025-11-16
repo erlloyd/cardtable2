@@ -147,7 +147,7 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 **Phase 6: Object Type Rendering (RendererCore.ts)** ✅ COMPLETED
 - ✅ Refactor `createCardVisual()` → `createVisualForObject(obj)`
 - ✅ Switch on `obj._kind`:
-  - Stack: Portrait card (100x140) with color from metadata
+  - Stack: Portrait card (63x88) with color from metadata
   - Token: Circle with size from metadata
   - Zone: Large translucent rectangle with width/height from metadata
   - Mat: Circle (same as token, different default color)

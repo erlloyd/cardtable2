@@ -131,7 +131,7 @@ describe('YjsStore', () => {
 
       store.setObject('stack-1', updated);
       const retrieved = store.getObject('stack-1');
-      expect(retrieved?._pos).toEqual({ x: 300, y: 400 });
+      expect(retrieved?._pos).toEqual({ x: 300, y: 400, r: 0 });
       if (retrieved && retrieved._kind === ObjectKind.Stack) {
         expect((retrieved as StackObject)._faceUp).toBe(false);
       }

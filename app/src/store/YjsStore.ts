@@ -5,6 +5,15 @@ import { ObjectKind } from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
+ * Change information from Yjs observer
+ */
+export interface ObjectChanges {
+  added: Array<{ id: string; obj: TableObject }>;
+  updated: Array<{ id: string; obj: TableObject }>;
+  removed: Array<string>;
+}
+
+/**
  * YjsStore manages the Y.Doc for table state with IndexedDB persistence.
  *
  * Responsibilities (M3-T1):
@@ -155,11 +164,58 @@ export class YjsStore {
   }
 
   /**
-   * Subscribe to object changes (including nested changes)
+   * Subscribe to object changes with detailed change information
    */
-  onObjectsChange(callback: () => void): () => void {
-    const observer = () => {
-      callback();
+  onObjectsChange(callback: (changes: ObjectChanges) => void): () => void {
+    const observer = (events: Y.YEvent<Y.Map<unknown>>[]) => {
+      const changes: ObjectChanges = {
+        added: [],
+        updated: [],
+        removed: [],
+      };
+
+      // Parse Yjs events to determine what changed
+      for (const event of events) {
+        if (event.target === this.objects) {
+          // Changes to the top-level objects map
+          event.changes.keys.forEach((change, key) => {
+            if (change.action === 'add') {
+              const yMap = this.objects.get(key);
+              if (yMap) {
+                changes.added.push({
+                  id: key,
+                  obj: yMap.toJSON() as TableObject,
+                });
+              }
+            } else if (change.action === 'delete') {
+              changes.removed.push(key);
+            }
+          });
+        } else if (
+          'parent' in event.target &&
+          event.target.parent === this.objects
+        ) {
+          // Changes to nested Y.Maps (individual object properties)
+          // Find which object was modified
+          this.objects.forEach((yMap, id) => {
+            if (yMap === event.target) {
+              changes.updated.push({
+                id,
+                obj: yMap.toJSON() as TableObject,
+              });
+            }
+          });
+        }
+      }
+
+      // Only call callback if there were actual changes
+      if (
+        changes.added.length > 0 ||
+        changes.updated.length > 0 ||
+        changes.removed.length > 0
+      ) {
+        callback(changes);
+      }
     };
 
     // Use observeDeep to catch changes to nested Y.Maps (individual objects)

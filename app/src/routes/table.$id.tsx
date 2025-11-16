@@ -72,9 +72,21 @@ function Table() {
         console.log(`[Table] Loaded ${objects.size} objects from IndexedDB`);
 
         // Subscribe to object changes
-        const unsubscribe = store.onObjectsChange(() => {
+        const unsubscribe = store.onObjectsChange((changes) => {
+          // Update object count based on current state
           const updatedObjects = store.getAllObjects();
           setObjectCount(updatedObjects.size);
+
+          // Log changes for debugging
+          if (changes.added.length > 0) {
+            console.log(`[Table] Added ${changes.added.length} object(s)`);
+          }
+          if (changes.updated.length > 0) {
+            console.log(`[Table] Updated ${changes.updated.length} object(s)`);
+          }
+          if (changes.removed.length > 0) {
+            console.log(`[Table] Removed ${changes.removed.length} object(s)`);
+          }
         });
 
         // Store unsubscribe function for cleanup

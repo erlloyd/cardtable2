@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { YjsStore } from './YjsStore';
+import { YjsStore, type ObjectChanges } from './YjsStore';
 import { createObject } from './YjsActions';
 import { ObjectKind } from '@cardtable2/shared';
 
@@ -301,7 +301,7 @@ describe('YjsActions - createObject', () => {
       const callback = vi.fn();
       store.onObjectsChange(callback);
 
-      createObject(store, {
+      const id = createObject(store, {
         kind: ObjectKind.Token,
         pos: { x: 0, y: 0, r: 0 },
       });
@@ -310,6 +310,18 @@ describe('YjsActions - createObject', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(callback).toHaveBeenCalled();
+
+      // Verify the callback received change information
+      const changes = callback.mock.calls[0]?.[0] as ObjectChanges | undefined;
+      expect(changes).toBeDefined();
+      expect(changes).toHaveProperty('added');
+      expect(changes).toHaveProperty('updated');
+      expect(changes).toHaveProperty('removed');
+
+      if (changes) {
+        expect(changes.added).toHaveLength(1);
+        expect(changes.added[0]?.id).toBe(id);
+      }
     });
   });
 });

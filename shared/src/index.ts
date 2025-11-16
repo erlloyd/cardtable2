@@ -95,7 +95,15 @@ export type MainToRendererMessage =
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }
   | { type: 'pointer-cancel'; event: PointerEventData }
-  | { type: 'wheel'; event: WheelEventData };
+  | { type: 'wheel'; event: WheelEventData }
+  | {
+      type: 'sync-objects';
+      objects: Array<{ id: string; obj: TableObject }>;
+    }
+  | { type: 'add-object'; id: string; obj: TableObject }
+  | { type: 'update-object'; id: string; obj: TableObject }
+  | { type: 'remove-object'; id: string }
+  | { type: 'clear-objects' };
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =
@@ -105,7 +113,12 @@ export type RendererToMainMessage =
   | { type: 'initialized' }
   | { type: 'error'; error: string; context?: string }
   | { type: 'warning'; message: string }
-  | { type: 'animation-complete' };
+  | { type: 'animation-complete' }
+  | { type: 'object-moved'; id: string; pos: Position }
+  | {
+      type: 'objects-moved';
+      updates: Array<{ id: string; pos: Position }>;
+    };
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

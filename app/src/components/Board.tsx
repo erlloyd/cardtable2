@@ -10,22 +10,28 @@ import {
   type IRendererAdapter,
 } from '../renderer/IRendererAdapter';
 import { createRenderer } from '../renderer/RendererFactory';
-import type { YjsStore } from '../store/YjsStore';
+import type { YjsStore, ObjectChanges } from '../store/YjsStore';
 
 interface BoardProps {
   tableId: string;
   store: YjsStore;
 }
 
-function Board({ tableId, store: _store }: BoardProps) {
+function Board({ tableId, store }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasTransferredRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const storeUnsubscribeRef = useRef<(() => void) | null>(null);
+  const storeRef = useRef<YjsStore>(store);
+
+  // Keep store ref up to date
+  storeRef.current = store;
 
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
+  const [isSynced, setIsSynced] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderMode | null>(null);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
@@ -82,10 +88,29 @@ function Board({ tableId, store: _store }: BoardProps) {
           setMessages((prev) => [...prev, 'Worker is ready']);
           break;
 
-        case 'initialized':
+        case 'initialized': {
           setIsCanvasInitialized(true);
           setMessages((prev) => [...prev, 'Canvas initialized']);
+
+          // Send initial sync of all objects from store
+          const allObjects = storeRef.current.getAllObjects();
+          const objectsArray = Array.from(allObjects.entries()).map(
+            ([id, obj]) => ({
+              id,
+              obj,
+            }),
+          );
+
+          console.log(
+            `[Board] Syncing ${objectsArray.length} objects to renderer`,
+          );
+          renderer.sendMessage({
+            type: 'sync-objects',
+            objects: objectsArray,
+          });
+          setIsSynced(true);
           break;
+        }
 
         case 'pong':
           setMessages((prev) => [...prev, `Worker: ${message.data}`]);
@@ -102,6 +127,22 @@ function Board({ tableId, store: _store }: BoardProps) {
         case 'animation-complete':
           setMessages((prev) => [...prev, 'Animation completed!']);
           break;
+
+        case 'object-moved': {
+          console.log(
+            `[Board] Object ${message.id} moved to (${message.pos.x}, ${message.pos.y})`,
+          );
+          // TODO: Implement moveObjects action in Phase 4
+          // moveObjects(store, [{ id: message.id, pos: message.pos }]);
+          break;
+        }
+
+        case 'objects-moved': {
+          console.log(`[Board] ${message.updates.length} objects moved`);
+          // TODO: Implement moveObjects action in Phase 4
+          // moveObjects(store, message.updates);
+          break;
+        }
       }
     });
 
@@ -114,6 +155,60 @@ function Board({ tableId, store: _store }: BoardProps) {
       canvasTransferredRef.current = false;
     };
   }, []);
+
+  // Subscribe to store changes and forward to renderer
+  useEffect(() => {
+    // Only subscribe after renderer is initialized and synced
+    if (!isSynced || !rendererRef.current) {
+      return;
+    }
+
+    console.log('[Board] Subscribing to store changes');
+
+    const unsubscribe = store.onObjectsChange((changes: ObjectChanges) => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+
+      // Forward added objects
+      changes.added.forEach(({ id, obj }) => {
+        console.log(`[Board] Forwarding add-object: ${id}`);
+        renderer.sendMessage({
+          type: 'add-object',
+          id,
+          obj,
+        });
+      });
+
+      // Forward updated objects
+      changes.updated.forEach(({ id, obj }) => {
+        console.log(`[Board] Forwarding update-object: ${id}`);
+        renderer.sendMessage({
+          type: 'update-object',
+          id,
+          obj,
+        });
+      });
+
+      // Forward removed objects
+      changes.removed.forEach((id) => {
+        console.log(`[Board] Forwarding remove-object: ${id}`);
+        renderer.sendMessage({
+          type: 'remove-object',
+          id,
+        });
+      });
+    });
+
+    storeUnsubscribeRef.current = unsubscribe;
+
+    return () => {
+      if (storeUnsubscribeRef.current) {
+        console.log('[Board] Unsubscribing from store changes');
+        storeUnsubscribeRef.current();
+        storeUnsubscribeRef.current = null;
+      }
+    };
+  }, [isSynced, store]);
 
   // Add wheel event listener with passive: false to prevent page scroll
   useEffect(() => {

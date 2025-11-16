@@ -593,7 +593,7 @@ private getBoundingBox(id: string, obj: TableObject): BBox {
 
 **Add new import:**
 ```typescript
-import { getBehaviors, getEventHandlers } from './objects';
+import { getBehaviors, getEventHandlers, type EventHandlers } from './objects';
 ```
 
 **Add new method:**
@@ -601,16 +601,30 @@ import { getBehaviors, getEventHandlers } from './objects';
 /**
  * Call an event handler for an object if one is registered.
  * This provides infrastructure for future event-driven behaviors.
+ *
+ * NOTE: Prefixed with _ to indicate this is intentionally unused infrastructure.
+ * It will be integrated when event handlers are needed in the rendering pipeline.
+ *
+ * @param obj - The table object to handle events for
+ * @param eventName - The name of the event to trigger
+ * @param args - Event-specific arguments (unknown type because different events have different arg types)
+ *
+ * Note: Using `unknown` instead of `any` for type safety. This forces proper type checking
+ * when this infrastructure is eventually integrated.
  */
-private callEventHandler(
+// @ts-expect-error TS6133 - Intentionally unused infrastructure for future event handler integration
+private _callEventHandler(
   obj: TableObject,
   eventName: keyof EventHandlers,
-  ...args: any[]
+  args?: unknown,
 ): void {
   const handlers = getEventHandlers(obj._kind);
   const handler = handlers[eventName];
   if (handler) {
-    handler(obj, ...args);
+    // Type assertion needed because EventHandlers creates a complex union type
+    // that TypeScript can't narrow properly. This is safe because we're calling
+    // the handler with the object and args that match the event signature.
+    (handler as (obj: TableObject, args?: unknown) => void)(obj, args);
   }
 }
 ```
@@ -845,3 +859,134 @@ To add custom behavior to an existing type:
 ❌ Visual changes to rendering
 
 This refactoring is **purely architectural** - establishing patterns for future extensibility without changing any user-facing behavior.
+
+---
+
+## Implementation Summary (Completed 2025-11-16)
+
+### Completed Phases
+
+**Phase 1: Directory Structure** ✅
+- Created 34 new files across 5 object types (stack, token, zone, mat, counter)
+- Each type has: constants.ts, types.ts, utils.ts, behaviors.ts, events.ts, index.ts
+- Central registry in `objects/index.ts` with behaviorRegistry and eventHandlerRegistry
+- All object type metadata interfaces extend `Record<string, unknown>` for Yjs compatibility
+
+**Phase 2: RendererCore Refactoring** ✅
+- Replaced `createBaseShapeGraphic()` switch statement (60+ lines → 3 lines)
+- Removed `getShadowBounds()` method entirely (replaced by `behaviors.getShadowConfig()`)
+- Updated shadow rendering to use shape config from behaviors
+- Used `getBehaviors(obj._kind)` registry lookup pattern throughout
+
+**Phase 3: SceneManager Refactoring** ✅
+- Replaced `getBoundingBox()` switch statement (50+ lines → 3 lines)
+- Exported `BBox` interface for use in object behaviors
+- All hit-testing now uses behavior-calculated bounds
+
+**Phase 4: Event Handler Infrastructure** ✅
+- Added `_callEventHandler()` method with `unknown` types (not `any`)
+- Method prefixed with `_` and marked with `@ts-expect-error TS6133` to indicate intentionally unused
+- Used type-safe cast instead of `any` to satisfy strict TypeScript checks
+- Infrastructure ready for future event integration
+
+**Phase 5: Testing & Validation** ✅
+- All 68 tests passing (unit + integration)
+- Visual validation successful - all object types render correctly
+- No performance regressions
+- Fixed React act() warnings in route tests
+
+**Phase 6: Documentation** ✅
+- Created comprehensive `objects/README.md` with architecture guide
+- Updated `CLAUDE.md` with object architecture section
+- Added inline documentation throughout new modules
+
+### Additional Implementation Details
+
+**Type Safety Improvements:**
+- Used `unknown` instead of `any` for maximum type safety
+- All object meta interfaces properly typed and extend `Record<string, unknown>`
+- Type guards for each object type (e.g., `isStackObject()`)
+
+**RendererCore.ts Implementation Notes:**
+- `createBaseShapeGraphic()` now takes `objectId` parameter to get hover/drag state
+- Single source of truth for shape rendering (no duplication)
+- Shadow rendering uses `shadowConfig.shape` ('rect' | 'circle') for correct geometry
+- Border radius from shadow config for consistent rounded corners
+
+**SceneManager.ts Implementation Notes:**
+- `BBox` interface exported for use in behavior implementations
+- Accurate bounding boxes per object type (cards: 100x140, circles: radius-based, zones: width/height)
+
+### CI/CD Infrastructure Improvements
+
+During implementation, discovered and fixed CI/CD gaps:
+
+1. **Pre-commit hook** - Added `--max-warnings 0` to ESLint command
+   - Previously: allowed warnings locally, failed in CI
+   - Now: matches CI strictness
+
+2. **Pre-push hook** - Added `format:check` validation
+   - Previously: only ran `typecheck`
+   - Now: runs both `typecheck` and `format:check`
+   - Matches CI validation steps
+
+### Files Changed
+
+**New Files (34):**
+- `app/src/renderer/objects/types.ts`
+- `app/src/renderer/objects/index.ts`
+- `app/src/renderer/objects/README.md`
+- `app/src/renderer/objects/base/` (2 files)
+- `app/src/renderer/objects/stack/` (6 files)
+- `app/src/renderer/objects/token/` (6 files)
+- `app/src/renderer/objects/zone/` (6 files)
+- `app/src/renderer/objects/mat/` (6 files)
+- `app/src/renderer/objects/counter/` (6 files)
+
+**Modified Files (5):**
+- `app/src/renderer/RendererCore.ts` - Switch statements → registry lookups
+- `app/src/renderer/SceneManager.ts` - Switch statement → registry lookup
+- `app/src/__tests__/routes/index.test.tsx` - Fixed act() warnings
+- `app/src/__tests__/routes/table.$id.test.tsx` - Fixed act() warnings
+- `CLAUDE.md` - Added object architecture documentation
+
+**Infrastructure Files (2):**
+- `package.json` - Updated lint-staged to use `--max-warnings 0`
+- `.husky/pre-push` - Added `format:check` validation
+
+### PR Details
+
+**Branch:** `feature/m3-object-architecture`
+**PR:** #10
+**Status:** Merged
+**Test Results:** All 68 tests passing (52 unit + 16 E2E)
+
+**Commits:**
+1. Phase 1-3: Create object directory structure and refactor core files
+2. Phase 4: Add event handler infrastructure
+3. Phase 5: Fix React act() warnings in tests
+4. Phase 6: Add documentation
+5. Fix: Use `unknown` instead of `any` in callEventHandler
+6. Fix: Add `--max-warnings 0` to lint-staged
+7. Fix: Add `format:check` to pre-push hook
+
+### Success Metrics
+
+✅ **All success criteria met:**
+- Zero switch statements remain in rendering pipeline
+- 34 new files organized by object type
+- Registry pattern successfully handles all 5 object types
+- Event handler infrastructure ready for future use
+- All tests passing
+- TypeScript strict mode with no errors or warnings
+- No visual or performance regressions
+- CI/CD improvements prevent future issues
+- Code maintainability significantly improved
+
+### Lessons Learned
+
+1. **Type Safety**: Using `unknown` instead of `any` caught potential type issues early
+2. **CI/CD Alignment**: Local git hooks should exactly match CI validation steps
+3. **Test Coverage**: Existing test suite validated refactoring didn't break functionality
+4. **Registry Pattern**: Map-based lookups are clean, performant, and type-safe
+5. **Documentation**: README in feature directory helps future contributors understand patterns

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { YjsStore } from '../store/YjsStore';
-import { createObject } from '../store/YjsActions';
+import { createObject, clearAllSelections } from '../store/YjsActions';
 import { ObjectKind } from '@cardtable2/shared';
 
 // Lazy load the Board component
@@ -44,6 +44,14 @@ function Table() {
 
     storeRef.current.clearAllObjects();
     console.log('[Table] Cleared all objects from store');
+  };
+
+  // Handler to clear all selections (M3-T3)
+  const handleClearSelections = () => {
+    if (!storeRef.current) return;
+
+    const cleared = clearAllSelections(storeRef.current);
+    console.log(`[Table] Cleared ${cleared} selection(s)`);
   };
 
   // Handler to reset to test scene (M3-T2.5 Phase 7)
@@ -270,6 +278,21 @@ function Table() {
           }}
         >
           Clear Store
+        </button>
+        <button
+          onClick={handleClearSelections}
+          disabled={!isStoreReady}
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            backgroundColor: isStoreReady ? '#f39c12' : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isStoreReady ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Clear Selections
         </button>
       </div>
 

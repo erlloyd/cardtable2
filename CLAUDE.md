@@ -202,6 +202,10 @@ See `app/src/renderer/objects/README.md` for full documentation.
 - ESLint + Prettier configured
 - Pre-commit hooks auto-format code
 - Pre-push hooks run typecheck
+- **CRITICAL**: Never add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar suppression comments without:
+  1. First attempting to fix the underlying type/lint issue properly
+  2. Explicitly confirming with the user and explaining why it's necessary
+  3. Providing a detailed comment explaining the reason if approved
 
 ### Deployment
 - App deploys to GitHub Pages (beta.card-table.app) on merge to main

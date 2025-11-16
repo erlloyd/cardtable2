@@ -41,7 +41,10 @@ export abstract class RendererCore {
     new Map();
   private hoverAnimationActive = false;
 
-  // Object selection state
+  // Object selection state (M3-T3)
+  // NOTE: This is a DERIVED CACHE from store's _selectedBy field, not independent state.
+  // The store is the single source of truth. This cache is for O(1) lookup performance.
+  private actorId: string = ''; // Set during init
   private selectedObjectIds: Set<string> = new Set();
 
   // Object dragging state (M2-T5)
@@ -105,7 +108,10 @@ export abstract class RendererCore {
       switch (message.type) {
         case 'init': {
           // Initialize PixiJS
-          const { canvas, width, height, dpr } = message;
+          const { canvas, width, height, dpr, actorId } = message;
+
+          // Store actor ID for deriving selection state (M3-T3)
+          this.actorId = actorId;
 
           console.log('[RendererCore] Initializing PixiJS...');
           console.log('[RendererCore] Canvas type:', canvas.constructor.name);
@@ -306,7 +312,6 @@ export abstract class RendererCore {
         }
 
         case 'sync-objects': {
-          // Initial sync of all objects from store
           console.log(
             `[RendererCore] Syncing ${message.objects.length} objects from store`,
           );
@@ -314,7 +319,6 @@ export abstract class RendererCore {
           for (const { id, obj } of message.objects) {
             this.addObjectVisual(id, obj);
           }
-          // Render after sync
           if (this.app) {
             this.app.renderer.render(this.app.stage);
           }
@@ -328,7 +332,6 @@ export abstract class RendererCore {
           for (const { id, obj } of message.objects) {
             this.addObjectVisual(id, obj);
           }
-          // Render after adding
           if (this.app) {
             this.app.renderer.render(this.app.stage);
           }
@@ -342,7 +345,6 @@ export abstract class RendererCore {
           for (const { id, obj } of message.objects) {
             this.updateObjectVisual(id, obj);
           }
-          // Render after updating
           if (this.app) {
             this.app.renderer.render(this.app.stage);
           }
@@ -382,6 +384,10 @@ export abstract class RendererCore {
           });
         }
       }
+
+      // Sync selection cache after ANY message that might affect object state
+      // This is automatic and idempotent - runs once per message, no manual calls needed
+      this.syncSelectionCache();
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.postResponse({
@@ -600,17 +606,7 @@ export abstract class RendererCore {
 
             // If the dragged object isn't selected, select it (clearing other selections)
             if (!this.selectedObjectIds.has(this.draggedObjectId)) {
-              // Clear previous selections and redraw them
-              const prevSelected = Array.from(this.selectedObjectIds);
-              this.selectedObjectIds.clear();
-
-              for (const id of prevSelected) {
-                this.redrawCardVisual(id, false, false, false);
-              }
-
-              // Select the dragged card
-              this.selectedObjectIds.add(this.draggedObjectId);
-              this.redrawCardVisual(this.draggedObjectId, false, false, true);
+              this.selectObjects([this.draggedObjectId], true);
             }
 
             // Save initial positions of all selected cards for multi-drag
@@ -1136,28 +1132,14 @@ export abstract class RendererCore {
         if (isMultiSelectModifier) {
           // Cmd/Ctrl+click: toggle selection
           if (this.selectedObjectIds.has(hitResult.id)) {
-            this.selectedObjectIds.delete(hitResult.id);
-            this.redrawCardVisual(hitResult.id, false, false, false);
+            this.unselectObjects([hitResult.id]);
           } else {
-            this.selectedObjectIds.add(hitResult.id);
-            this.redrawCardVisual(hitResult.id, false, false, true);
+            this.selectObjects([hitResult.id], false);
           }
         } else {
           // Single click: select only this card (unless already selected)
           if (!this.selectedObjectIds.has(hitResult.id)) {
-            // Clear previous selection and select new card
-            const prevSelected = Array.from(this.selectedObjectIds);
-            this.selectedObjectIds.clear();
-            this.selectedObjectIds.add(hitResult.id);
-
-            // Redraw previously selected cards (now deselected)
-            for (const id of prevSelected) {
-              if (id !== hitResult.id) {
-                this.redrawCardVisual(id, false, false, false);
-              }
-            }
-            // Redraw newly selected card
-            this.redrawCardVisual(hitResult.id, false, false, true);
+            this.selectObjects([hitResult.id], true);
           }
           // If already selected, don't change selection (allows multi-drag)
         }
@@ -1167,13 +1149,8 @@ export abstract class RendererCore {
       } else {
         // Clicked on empty space - deselect all
         if (this.selectedObjectIds.size > 0) {
-          const prevSelected = Array.from(this.selectedObjectIds);
-          this.selectedObjectIds.clear();
-
-          // Redraw all previously selected cards
-          for (const id of prevSelected) {
-            this.redrawCardVisual(id, false, false, false);
-          }
+          const toUnselect = Array.from(this.selectedObjectIds);
+          this.unselectObjects(toUnselect);
 
           // Request render to show deselection
           this.app!.renderer.render(this.app!.stage);
@@ -1299,21 +1276,9 @@ export abstract class RendererCore {
       const isMultiSelectModifier =
         this.pointerDownEvent?.metaKey || this.pointerDownEvent?.ctrlKey;
 
-      if (!isMultiSelectModifier) {
-        // Clear existing selections
-        const prevSelected = Array.from(this.selectedObjectIds);
-        this.selectedObjectIds.clear();
-
-        for (const id of prevSelected) {
-          this.redrawCardVisual(id, false, false, false);
-        }
-      }
-
-      // Add newly selected objects
-      for (const { id } of objectsInRect) {
-        this.selectedObjectIds.add(id);
-        this.redrawCardVisual(id, false, false, true);
-      }
+      // Select objects in rectangle
+      const idsToSelect = objectsInRect.map(({ id }) => id);
+      this.selectObjects(idsToSelect, !isMultiSelectModifier);
 
       console.log(
         `[RendererCore] Rectangle selected ${objectsInRect.length} cards`,
@@ -1453,9 +1418,7 @@ export abstract class RendererCore {
     visual.y = obj._pos.y;
     visual.rotation = (obj._pos.r * Math.PI) / 180;
 
-    // For now, just update position/rotation
     // TODO: If kind or meta changed, we may need to recreate the visual
-    // For M3-T2.5, position updates are the primary use case
   }
 
   /**
@@ -1485,6 +1448,91 @@ export abstract class RendererCore {
     if (this.draggedObjectId === id) {
       this.draggedObjectId = null;
       this.isObjectDragging = false;
+    }
+  }
+
+  /**
+   * Sync selection cache from store state (M3-T3 - Derived State Pattern).
+   *
+   * This method rebuilds the selectedObjectIds cache based on the _selectedBy field
+   * for ALL objects currently in the scene. The store is the single source of truth;
+   * this cache exists only for O(1) lookup performance during rendering and drag operations.
+   *
+   * Called automatically after any message that updates object state.
+   */
+  private syncSelectionCache(): void {
+    const previouslySelected = new Set(this.selectedObjectIds);
+    this.selectedObjectIds.clear();
+
+    // Rebuild cache from ALL objects in scene
+    const allObjects = this.sceneManager.getAllObjects();
+    allObjects.forEach((obj, id) => {
+      if (obj._selectedBy === this.actorId) {
+        this.selectedObjectIds.add(id);
+      }
+    });
+
+    // Redraw visuals for objects whose selection state changed
+    const allIds = new Set([...previouslySelected, ...this.selectedObjectIds]);
+
+    allIds.forEach((id) => {
+      const wasSelected = previouslySelected.has(id);
+      const isSelected = this.selectedObjectIds.has(id);
+
+      if (wasSelected !== isSelected) {
+        // Selection state changed - redraw visual
+        this.redrawCardVisual(id, false, false, isSelected);
+      }
+    });
+  }
+
+  /**
+   * Select objects and notify main thread (M3-T3 - Derived State Pattern).
+   *
+   * This method ONLY sends a message to Board. It does NOT update local state.
+   * The flow is:
+   * 1. Send objects-selected → Board
+   * 2. Board calls selectObjects(store)
+   * 3. Store updates _selectedBy field
+   * 4. Store sends objects-updated → Renderer
+   * 5. syncSelectionCache() updates visual state
+   *
+   * @param ids - Object IDs to select
+   * @param clearPrevious - Whether to clear previous selections first
+   */
+  private selectObjects(ids: string[], clearPrevious = false): void {
+    // If clearPrevious, send unselect message for currently selected objects
+    if (clearPrevious && this.selectedObjectIds.size > 0) {
+      const prevSelected = Array.from(this.selectedObjectIds);
+      this.postResponse({
+        type: 'objects-unselected',
+        ids: prevSelected,
+      });
+    }
+
+    // Send selection message (store will update, then sync back to us)
+    if (ids.length > 0) {
+      this.postResponse({
+        type: 'objects-selected',
+        ids,
+      });
+    }
+  }
+
+  /**
+   * Unselect objects and notify main thread (M3-T3 - Derived State Pattern).
+   *
+   * This method ONLY sends a message to Board. Selection cache will be updated
+   * when the store sends objects-updated message.
+   *
+   * @param ids - Object IDs to unselect
+   */
+  private unselectObjects(ids: string[]): void {
+    if (ids.length > 0) {
+      this.postResponse({
+        type: 'objects-unselected',
+        ids,
+      });
     }
   }
 

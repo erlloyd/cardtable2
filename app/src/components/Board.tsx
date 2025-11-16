@@ -11,7 +11,11 @@ import {
 } from '../renderer/IRendererAdapter';
 import { createRenderer } from '../renderer/RendererFactory';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
-import { moveObjects } from '../store/YjsActions';
+import {
+  moveObjects,
+  selectObjects,
+  unselectObjects,
+} from '../store/YjsActions';
 
 interface BoardProps {
   tableId: string;
@@ -135,6 +139,34 @@ function Board({ tableId, store }: BoardProps) {
           moveObjects(storeRef.current, message.updates);
           break;
         }
+
+        case 'objects-selected': {
+          console.log(`[Board] ${message.ids.length} object(s) selected`);
+          // Update store with selection ownership (M3-T3)
+          const result = selectObjects(
+            storeRef.current,
+            message.ids,
+            storeRef.current.getActorId(),
+          );
+          if (result.failed.length > 0) {
+            console.warn(
+              `[Board] Failed to select ${result.failed.length} object(s):`,
+              result.failed,
+            );
+          }
+          break;
+        }
+
+        case 'objects-unselected': {
+          console.log(`[Board] ${message.ids.length} object(s) unselected`);
+          // Release selection ownership (M3-T3)
+          unselectObjects(
+            storeRef.current,
+            message.ids,
+            storeRef.current.getActorId(),
+          );
+          break;
+        }
       }
     });
 
@@ -251,7 +283,8 @@ function Board({ tableId, store }: BoardProps) {
       !isWorkerReady ||
       !canvasRef.current ||
       !rendererRef.current ||
-      !renderMode
+      !renderMode ||
+      !store
     ) {
       return;
     }
@@ -292,6 +325,7 @@ function Board({ tableId, store }: BoardProps) {
         width,
         height,
         dpr,
+        actorId: store.getActorId(), // Pass actor ID for derived selection state (M3-T3)
       };
 
       console.log('[Board] Sending init message to renderer...');
@@ -314,7 +348,7 @@ function Board({ tableId, store }: BoardProps) {
       setMessages((prev) => [...prev, `Canvas init error: ${errorMsg}`]);
       canvasTransferredRef.current = false; // Reset on error
     }
-  }, [isWorkerReady, renderMode]);
+  }, [isWorkerReady, renderMode, store]);
 
   // Send interaction mode changes to renderer
   useEffect(() => {

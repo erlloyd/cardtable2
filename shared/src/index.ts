@@ -87,6 +87,7 @@ export type MainToRendererMessage =
       width: number;
       height: number;
       dpr: number;
+      actorId: string; // Actor ID for deriving selection state (M3-T3)
     }
   | { type: 'resize'; width: number; height: number; dpr: number }
   | { type: 'test-animation' }
@@ -123,7 +124,9 @@ export type RendererToMainMessage =
   | {
       type: 'objects-moved';
       updates: Array<{ id: string; pos: Position }>;
-    };
+    }
+  | { type: 'objects-selected'; ids: string[] }
+  | { type: 'objects-unselected'; ids: string[] };
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

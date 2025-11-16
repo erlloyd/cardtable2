@@ -247,3 +247,14 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - Measure latency <150ms
 - Verify 30Hz update rate
 - Test interpolation smoothness
+
+**Future Enhancement - Other Actors' Selections:**
+- **Current Behavior (M3-T3):** Stale selections from previous sessions are cleared on page load via `YjsStore.clearStaleSelections()`. This is appropriate for solo mode where each refresh creates a new actor ID.
+- **Multiplayer Enhancement:** When implementing true multiplayer (M5-M6), change this behavior:
+  - Remove `clearStaleSelections()` call on load
+  - Add visual differentiation for other actors' selections:
+    - Current actor's selections: Red 4px border (existing)
+    - Other actors' selections: Different colored borders (e.g., blue, green, yellow) based on actor ID hash
+    - Use awareness to distinguish active actors from stale/disconnected ones
+  - Add hover tooltips showing which actor has an object selected
+  - Consider adding actor presence indicators (cursor colors match selection colors)

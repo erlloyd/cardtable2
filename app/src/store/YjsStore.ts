@@ -60,6 +60,13 @@ export class YjsStore {
 
       this.persistence.on('synced', () => {
         console.log('[YjsStore] IndexedDB synced, state restored');
+
+        // Clear stale selections from previous sessions (M3-T3)
+        // Each page load creates a new actor ID, so old selections are orphaned.
+        // For solo mode: always start with clean slate.
+        // For future multiplayer (M3-T4): render other actors' selections with different colors.
+        this.clearStaleSelections();
+
         this.isReady = true;
         resolve();
       });
@@ -234,6 +241,38 @@ export class YjsStore {
     this.doc.transact(() => {
       this.objects.clear();
     });
+  }
+
+  /**
+   * Clear stale selections from previous sessions (M3-T3).
+   *
+   * Called on initialization after IndexedDB loads. Each page load creates a new
+   * actor ID, so selections from previous sessions are orphaned and should be cleared.
+   *
+   * NOTE: In future multiplayer mode (M3-T4), this logic will change:
+   * - Don't clear selections on load
+   * - Render other actors' selections with different colored borders
+   * - Use awareness to distinguish active vs stale selections
+   */
+  private clearStaleSelections(): void {
+    let clearedCount = 0;
+
+    this.doc.transact(() => {
+      this.objects.forEach((yMap, _id) => {
+        const obj = yMap.toJSON() as TableObject;
+        if (obj._selectedBy !== null) {
+          // Clear stale selection
+          yMap.set('_selectedBy', null);
+          clearedCount++;
+        }
+      });
+    });
+
+    if (clearedCount > 0) {
+      console.log(
+        `[YjsStore] Cleared ${clearedCount} stale selection(s) from previous session`,
+      );
+    }
   }
 
   /**

@@ -11,6 +11,7 @@ This directory contains type-specific behaviors for all game objects.
 ## Directory Structure
 
 Each object type has its own directory:
+
 - `constants.ts` - Type-specific constants (dimensions, colors, etc.)
 - `types.ts` - Type-specific interfaces and type guards
 - `utils.ts` - Helper functions for working with the object type
@@ -27,20 +28,23 @@ Each object type has its own directory:
    # Then customize for your object type
    ```
 3. **Register in `objects/index.ts`**:
+
    ```typescript
    import { NewTypeBehaviors, NewTypeEventHandlers } from './newtype';
 
    behaviorRegistry.set(ObjectKind.NewType, NewTypeBehaviors);
    eventHandlerRegistry.set(ObjectKind.NewType, {
      ...defaultEventHandlers,
-     ...NewTypeEventHandlers
+     ...NewTypeEventHandlers,
    });
    ```
+
 4. **Add to ObjectKind enum** in `shared/src/index.ts`
 
 ## Extending Existing Types
 
 To add custom behavior to an existing type:
+
 - **Rendering**: Modify `behaviors.ts` (render function)
 - **Events**: Override in `events.ts` (onHover, onClick, onDrag, onDrop, onDoubleClick)
 - **Helpers**: Add to `utils.ts`
@@ -49,6 +53,7 @@ To add custom behavior to an existing type:
 ## Behavior Interfaces
 
 ### ObjectBehaviors
+
 ```typescript
 interface ObjectBehaviors {
   render: (obj: TableObject, ctx: RenderContext) => Graphics;
@@ -58,6 +63,7 @@ interface ObjectBehaviors {
 ```
 
 ### EventHandlers
+
 ```typescript
 interface EventHandlers {
   onHover?: (obj: TableObject, isHovered: boolean) => void;

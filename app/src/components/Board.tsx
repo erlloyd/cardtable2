@@ -10,12 +10,14 @@ import {
   type IRendererAdapter,
 } from '../renderer/IRendererAdapter';
 import { createRenderer } from '../renderer/RendererFactory';
+import type { YjsStore } from '../store/YjsStore';
 
 interface BoardProps {
   tableId: string;
+  store: YjsStore;
 }
 
-function Board({ tableId }: BoardProps) {
+function Board({ tableId, store: _store }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasTransferredRef = useRef(false);

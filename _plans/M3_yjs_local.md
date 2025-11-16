@@ -26,7 +26,7 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 
 ## Tasks
 
-### M3-T1: Y.Doc Schema + IndexedDB
+### M3-T1: Y.Doc Schema + IndexedDB ✅ COMPLETED (2025-11-15)
 **Objective:** Set up Yjs document structure with local persistence.
 
 **Dependencies:** M2 complete
@@ -38,15 +38,36 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - Restore state on reload
 
 **Deliverables:**
-- Y.Doc schema types and initialization
-- IndexedDB persistence adapter
-- Auto-save mechanism
-- State restoration on app load
+- ✅ Y.Doc schema types and initialization (`shared/src/index.ts`)
+- ✅ IndexedDB persistence adapter (y-indexeddb)
+- ✅ Auto-save mechanism (automatic via y-indexeddb)
+- ✅ State restoration on app load (YjsStore.waitForReady())
 
-**Test Plan:**
-- E2E: create objects, reload page, verify state restored offline
-- Unit: verify schema structure and field types
-- Unit: IndexedDB save/load operations
+**Implementation Details:**
+- Created `YjsStore` class in `app/src/store/YjsStore.ts`
+  - Wraps Y.Doc with type-safe accessors
+  - Automatic IndexedDB persistence via y-indexeddb
+  - Unique actor ID per store instance (UUID v4)
+  - Change observers using `observeDeep` for nested Y.Map updates
+  - Database naming: `cardtable-{tableId}` for per-table isolation
+- Integrated at table route level (`app/src/routes/table.$id.tsx`)
+  - Store initialization with React strict mode guards
+  - Object count tracking and display
+  - Global `window.__TEST_STORE__` for E2E testing (dev only)
+- Added `toJSON()` debug helper for console inspection
+- Dependencies: yjs@13.6.27, y-indexeddb@9.0.12, uuid@13.0.0
+
+**Test Results:**
+- ✅ E2E: 3/3 tests passing
+  - State persistence across page reloads
+  - Multiple tables with separate IndexedDB databases
+  - Store initialization and ready status
+- ✅ Unit: 20/20 tests passing (YjsStore.test.ts)
+  - Initialization and actor ID uniqueness
+  - CRUD operations (create, read, update, delete)
+  - Change observers and subscriptions
+  - Cleanup and destroy
+- ✅ All existing tests still passing (52 unit, 30 E2E)
 
 ### M3-T2: Engine Actions
 **Objective:** Implement core object manipulation actions with transactional updates.

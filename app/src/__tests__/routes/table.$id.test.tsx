@@ -9,9 +9,25 @@ import { routeTree } from '../../routeTree.gen';
 
 // Mock the Board component since it's lazy loaded
 vi.mock('../../components/Board', () => ({
-  default: ({ tableId }: { tableId: string }) => (
+  default: ({ tableId }: { tableId: string; store: unknown }) => (
     <div data-testid="board">Board: {tableId}</div>
   ),
+}));
+
+// Mock YjsStore since it's used by the Table route
+vi.mock('../../store/YjsStore', () => ({
+  YjsStore: class MockYjsStore {
+    async waitForReady() {
+      return Promise.resolve();
+    }
+    getAllObjects() {
+      return new Map();
+    }
+    onObjectsChange(_callback: () => void) {
+      return () => {};
+    }
+    destroy() {}
+  },
 }));
 
 describe('Table Route', () => {

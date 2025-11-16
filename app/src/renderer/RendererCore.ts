@@ -918,26 +918,40 @@ export abstract class RendererCore {
    * Call an event handler for an object if one is registered.
    * This provides infrastructure for future event-driven behaviors.
    *
+   * NOTE: Prefixed with _ to indicate this is intentionally unused infrastructure.
+   * It will be integrated when event handlers are needed in the rendering pipeline.
+   *
+   * @param obj - The table object to handle events for
+   * @param eventName - The name of the event to trigger
+   * @param args - Event-specific arguments (unknown type because different events have different arg types)
+   *
+   * Note: Using `unknown` instead of `any` for type safety. This forces proper type checking
+   * when this infrastructure is eventually integrated. The actual arg types vary by event:
+   * - onHover: boolean
+   * - onClick/onDoubleClick: PointerEventData
+   * - onDrag: { x: number; y: number }
+   * - onDrop: TableObject | null
+   *
    * @example
    * // Future integration example:
    * const obj = this.sceneManager.getObject(objectId);
    * if (obj) {
-   *   this.callEventHandler(obj, 'onHover', true);
+   *   this._callEventHandler(obj, 'onHover', true);
    * }
    */
-   
-  // @ts-expect-error - Infrastructure for future event handler integration
-  private callEventHandler(
+  // @ts-expect-error TS6133 - Intentionally unused infrastructure for future event handler integration
+  private _callEventHandler(
     obj: TableObject,
     eventName: keyof EventHandlers,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    args?: any,
+    args?: unknown,
   ): void {
     const handlers = getEventHandlers(obj._kind);
     const handler = handlers[eventName];
     if (handler) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      (handler as any)(obj, args);
+      // Type assertion needed because EventHandlers creates a complex union type
+      // that TypeScript can't narrow properly. This is safe because we're calling
+      // the handler with the object and args that match the event signature.
+      (handler as (obj: TableObject, args?: unknown) => void)(obj, args);
     }
   }
 

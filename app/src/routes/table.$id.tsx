@@ -53,7 +53,6 @@ function Table() {
     // Clear existing objects
     storeRef.current.clearAllObjects();
 
-    // Create test scene with 10 cards at various positions
     const colors = [
       0x6c5ce7, // Purple
       0x00b894, // Green
@@ -62,21 +61,69 @@ function Table() {
       0x74b9ff, // Blue
     ];
 
-    for (let i = 0; i < 10; i++) {
-      const x = Math.random() * 800 - 400; // -400 to +400
-      const y = Math.random() * 600 - 300; // -300 to +300
-      const color = colors[i % colors.length];
-
+    // Create 5 stacks (cards) - top left area
+    for (let i = 0; i < 5; i++) {
       createObject(storeRef.current, {
         kind: ObjectKind.Stack,
-        pos: { x, y, r: 0 },
+        pos: { x: -300 + i * 80, y: -200, r: 0 },
         cards: [`test-card-${i + 1}`],
         faceUp: true,
-        meta: { color },
+        meta: { color: colors[i % colors.length] },
       });
     }
 
-    console.log('[Table] Reset to test scene with 10 cards');
+    // Create 3 tokens - top right area
+    for (let i = 0; i < 3; i++) {
+      createObject(storeRef.current, {
+        kind: ObjectKind.Token,
+        pos: { x: 150 + i * 100, y: -200, r: 0 },
+        meta: {
+          size: 40,
+          color: colors[(i + 1) % colors.length],
+        },
+      });
+    }
+
+    // Create 2 zones - middle area
+    for (let i = 0; i < 2; i++) {
+      createObject(storeRef.current, {
+        kind: ObjectKind.Zone,
+        pos: { x: -150 + i * 350, y: 0, r: 0 },
+        meta: {
+          width: 300,
+          height: 200,
+          color: colors[(i + 2) % colors.length],
+        },
+      });
+    }
+
+    // Create 3 mats - bottom left area
+    for (let i = 0; i < 3; i++) {
+      createObject(storeRef.current, {
+        kind: ObjectKind.Mat,
+        pos: { x: -250 + i * 100, y: 200, r: 0 },
+        meta: {
+          size: 50,
+          color: colors[(i + 3) % colors.length],
+        },
+      });
+    }
+
+    // Create 2 counters - bottom right area
+    for (let i = 0; i < 2; i++) {
+      createObject(storeRef.current, {
+        kind: ObjectKind.Counter,
+        pos: { x: 150 + i * 120, y: 200, r: 0 },
+        meta: {
+          size: 45,
+          color: colors[(i + 4) % colors.length],
+        },
+      });
+    }
+
+    console.log(
+      '[Table] Reset to test scene: 5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters',
+    );
   };
 
   // Initialize Yjs store on mount (M3-T1)

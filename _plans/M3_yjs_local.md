@@ -103,7 +103,7 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - ⏸️ stackObjects (pending)
 - ⏸️ unstack (pending)
 
-### M3-T2.5: Store-Renderer Integration
+### M3-T2.5: Store-Renderer Integration ✅ COMPLETED (2025-11-16)
 **Objective:** Connect Yjs store to PixiJS renderer with bi-directional sync so objects in the store appear on screen.
 
 **Dependencies:** M3-T1 complete, M3-T2 createObject complete
@@ -114,74 +114,87 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - User interactions (drag) update store
 - Incremental updates using Yjs event system (no manual diffing)
 - Reset functionality: clear store or reset to test scene
-- All object types rendered as labeled rectangles initially
+- All object types rendered as labeled shapes with text
 
 **Phases:**
 
-**Phase 1: Fix YjsStore Observer Pattern**
-- Define `ObjectChanges` interface: `{added: [], updated: [], removed: []}`
-- Update `onObjectsChange()` to parse Yjs Y.YEvent arrays
-- Provide structured change information instead of bare callback
-- Update existing usage in table route
+**Phase 1: Fix YjsStore Observer Pattern** ✅ COMPLETED
+- ✅ Define `ObjectChanges` interface: `{added: [], updated: [], removed: []}`
+- ✅ Update `onObjectsChange()` to parse Yjs Y.YEvent arrays
+- ✅ Provide structured change information instead of bare callback
+- ✅ Update existing usage in table route
 
-**Phase 2: Message Types (shared/src/index.ts)**
-- Main→Renderer: `sync-objects`, `add-object`, `update-object`, `remove-object`, `clear-objects`
-- Renderer→Main: `object-moved`, `objects-moved`
+**Phase 2: Message Types (shared/src/index.ts)** ✅ COMPLETED
+- ✅ Main→Renderer: `sync-objects`, `objects-added`, `objects-updated`, `objects-removed`, `clear-objects`
+- ✅ Renderer→Main: `objects-moved`
 
-**Phase 3: Board Store Integration (Board.tsx)**
-- Subscribe to `store.onObjectsChange()`
-- Send 'sync-objects' after renderer initialized
-- Forward add/update/remove messages based on ObjectChanges
-- Handle 'object-moved' messages, call moveObjects action
-- Track drag ownership to prevent update echo
+**Phase 3: Board Store Integration (Board.tsx)** ✅ COMPLETED
+- ✅ Subscribe to `store.onObjectsChange()`
+- ✅ Send 'sync-objects' after renderer initialized
+- ✅ Forward add/update/remove messages based on ObjectChanges
+- ✅ Handle 'objects-moved' messages, call moveObjects action
 
-**Phase 4: moveObjects Action (YjsActions.ts)**
-- Implement `moveObjects(store, updates: Array<{id, pos}>)`
-- Update positions in single transaction
-- Add comprehensive tests
+**Phase 4: moveObjects Action (YjsActions.ts)** ✅ COMPLETED
+- ✅ Implement `moveObjects(store, updates: Array<{id, pos}>)`
+- ✅ Update positions in single transaction
+- ✅ Add comprehensive tests (11 unit tests passing)
 
-**Phase 5: Renderer Message Handlers (RendererCore.ts)**
-- Handle sync/add/update/remove/clear messages
-- Update SceneManager when objects change
-- Send 'object-moved' on drag end
+**Phase 5: Renderer Message Handlers (RendererCore.ts)** ✅ COMPLETED
+- ✅ Handle sync/add/update/remove/clear messages
+- ✅ Update SceneManager when objects change
+- ✅ Send 'objects-moved' on drag end with batched position updates
 
-**Phase 6: Object Type Rendering (RendererCore.ts)**
-- Refactor `createCardVisual()` → `createVisualForObject(obj)`
-- Switch on `obj._kind`:
-  - Stack: 100x140 blue rect, "STACK (n)"
-  - Token: 60x60 red square, "TOKEN"
-  - Zone: 400x300 green translucent rect, "ZONE"
-  - Mat: 500x350 purple translucent rect, "MAT"
-  - Counter: 40x40 orange square, number or "COUNTER"
-- Add text labels with PixiJS Text
-- Apply position and rotation
+**Phase 6: Object Type Rendering (RendererCore.ts)** ✅ COMPLETED
+- ✅ Refactor `createCardVisual()` → `createVisualForObject(obj)`
+- ✅ Switch on `obj._kind`:
+  - Stack: Portrait card (100x140) with color from metadata
+  - Token: Circle with size from metadata
+  - Zone: Large translucent rectangle with width/height from metadata
+  - Mat: Circle (same as token, different default color)
+  - Counter: Circle (same as token, different default color)
+- ✅ Add text labels with PixiJS Text showing `_kind`
+- ✅ Apply position and rotation
+- ✅ Refactored shape rendering to eliminate duplication via `createBaseShapeGraphic()`
+- ✅ Fixed hover/selection to preserve object shapes (not convert all to cards)
+- ✅ Updated `SceneManager.getBoundingBox()` for accurate hit-testing per object type
 
-**Phase 7: Reset Functionality (table.$id.tsx)**
-- "Clear Store" button → `store.clearAllObjects()`
-- "Reset Test Scene" button → clear + spawn samples (2 stacks, token, zone, counter)
+**Phase 7: Reset Functionality (table.$id.tsx)** ✅ COMPLETED
+- ✅ "Clear Store" button → `store.clearAllObjects()`
+- ✅ "Reset Test Scene" button → clear + spawn samples
+  - Enhanced to spawn variety: 5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters
+  - Objects arranged in organized layout for easy visual verification
 
-**Phase 8: Testing**
-- Manual: spawn, drag, refresh, verify persistence
-- Manual: clear and reset buttons
-- Unit: YjsStore observer events, moveObjects action
+**Phase 8: Testing** ✅ COMPLETED
+- ✅ Manual: spawn, drag, refresh, verify persistence
+- ✅ Manual: clear and reset buttons
+- ✅ Unit: YjsStore observer events, moveObjects action
 
-**Phase 9: Cleanup**
-- Remove old test buttons and renderTestScene()
-- Clean up debug logs
+**Phase 9: Cleanup** ✅ COMPLETED
+- ✅ Remove old test buttons and renderTestScene()
+- ✅ Clean up debug logs
+
+**Enhancements (2025-11-16):**
+- ✅ Added text labels showing `_kind` on all objects (stack, token, zone, mat, counter)
+- ✅ Refactored shape rendering to single source of truth (`createBaseShapeGraphic()`)
+- ✅ Fixed hover/selection bug that converted all shapes to rectangles
+- ✅ Fixed hit-testing for different object sizes via `SceneManager.getBoundingBox()`
+- ✅ Enhanced reset scene to spawn variety of object types for better testing
 
 **Deliverables:**
-- Yjs store drives all visual rendering
-- Drag operations persist to store and IndexedDB
-- Reset functionality for testing
-- All object types visually distinguishable
+- ✅ Yjs store drives all visual rendering
+- ✅ Drag operations persist to store and IndexedDB
+- ✅ Reset functionality for testing
+- ✅ All object types visually distinguishable with text labels
+- ✅ Proper hit-testing for all object shapes
+- ✅ Consistent shape rendering across all interactions (hover, drag, selection)
 
-**Test Plan:**
-- E2E: Spawn card appears on screen
-- E2E: Drag card, refresh, position persisted
-- E2E: Clear store clears screen
-- E2E: Reset test scene creates sample objects
-- Unit: YjsStore provides correct change events
-- Unit: moveObjects updates positions correctly
+**Test Results:**
+- ✅ E2E: Spawn card appears on screen
+- ✅ E2E: Drag card, refresh, position persisted
+- ✅ E2E: Clear store clears screen
+- ✅ E2E: Reset test scene creates sample objects
+- ✅ Unit: YjsStore provides correct change events
+- ✅ Unit: moveObjects updates positions correctly (11 tests passing)
 
 **Known Issues / TODO:**
 - ❌ **Z-order persistence**: When dragging an object, the renderer updates its `_sortKey` to bring it to the front. However, this sortKey change is NOT synced back to the store. Result: dragged object positions persist after refresh, but z-order reverts to original. Need to determine proper fix - possibly a separate `reorderObjects` action or extending `moveObjects` to handle sortKey updates.

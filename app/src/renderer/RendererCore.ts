@@ -1,4 +1,4 @@
-import { Application, Graphics, Container, BlurFilter } from 'pixi.js';
+import { Application, Graphics, Container, BlurFilter, Text } from 'pixi.js';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
@@ -10,7 +10,7 @@ import type {
 import { ObjectKind } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
-import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
+import { CARD_WIDTH, CARD_HEIGHT } from './constants';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -877,10 +877,83 @@ export abstract class RendererCore {
   }
 
   /**
-   * Redraw a card's visual representation (M2-T4, M2-T5).
-   * @param isHovered - Whether the card is hovered (black shadow)
-   * @param isDragging - Whether the card is being dragged (blue shadow)
-   * @param isSelected - Whether the card is selected (red border)
+   * Create base shape graphic for an object based on its kind.
+   * Does NOT include text label, shadow, or selection border.
+   * Returns { graphic, shadowBounds } where shadowBounds defines the shadow size.
+   */
+  private createBaseShapeGraphic(
+    obj: TableObject,
+    isSelected: boolean,
+  ): { graphic: Graphics; shadowBounds: { width: number; height: number } } {
+    const graphic = new Graphics();
+
+    // Use different border colors for selection state
+    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
+    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
+
+    let shadowBounds = { width: CARD_WIDTH, height: CARD_HEIGHT };
+
+    switch (obj._kind) {
+      case ObjectKind.Stack: {
+        // Render as a card (portrait rectangle)
+        const color = (obj._meta?.color as number) || 0x6c5ce7;
+        graphic.rect(
+          -CARD_WIDTH / 2,
+          -CARD_HEIGHT / 2,
+          CARD_WIDTH,
+          CARD_HEIGHT,
+        );
+        graphic.fill(color);
+        graphic.stroke({ width: borderWidth, color: borderColor });
+        shadowBounds = { width: CARD_WIDTH, height: CARD_HEIGHT };
+        break;
+      }
+
+      case ObjectKind.Token: {
+        // Render as a circle
+        const size = (obj._meta?.size as number) || 40;
+        const color = (obj._meta?.color as number) || 0xe74c3c; // Red default
+        graphic.circle(0, 0, size);
+        graphic.fill(color);
+        graphic.stroke({ width: borderWidth, color: borderColor });
+        shadowBounds = { width: size * 2, height: size * 2 };
+        break;
+      }
+
+      case ObjectKind.Zone: {
+        // Render as a rectangle outline
+        const width = (obj._meta?.width as number) || 400;
+        const height = (obj._meta?.height as number) || 300;
+        const color = (obj._meta?.color as number) || 0x3498db; // Blue default
+        graphic.rect(-width / 2, -height / 2, width, height);
+        graphic.fill({ color, alpha: 0.1 }); // Semi-transparent fill
+        graphic.stroke({ width: isSelected ? 5 : 3, color: borderColor });
+        shadowBounds = { width, height };
+        break;
+      }
+
+      case ObjectKind.Mat:
+      case ObjectKind.Counter:
+      default: {
+        // Fallback rendering (same as Token for now)
+        const size = (obj._meta?.size as number) || 40;
+        const color = (obj._meta?.color as number) || 0x95a5a6; // Gray default
+        graphic.circle(0, 0, size);
+        graphic.fill(color);
+        graphic.stroke({ width: borderWidth, color: borderColor });
+        shadowBounds = { width: size * 2, height: size * 2 };
+        break;
+      }
+    }
+
+    return { graphic, shadowBounds };
+  }
+
+  /**
+   * Redraw an object's visual representation (M2-T4, M2-T5).
+   * @param isHovered - Whether the object is hovered (black shadow)
+   * @param isDragging - Whether the object is being dragged (blue shadow)
+   * @param isSelected - Whether the object is selected (red border)
    */
   private redrawCardVisual(
     objectId: string,
@@ -891,13 +964,14 @@ export abstract class RendererCore {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
-    // Get color from object metadata, or fall back to TEST_CARD_COLORS for legacy cards
     const obj = this.sceneManager.getObject(objectId);
-    const color =
-      (obj?._meta?.color as number) || TEST_CARD_COLORS[objectId] || 0x6c5ce7;
+    if (!obj) return;
 
     // Clear existing children
     visual.removeChildren();
+
+    // Create base shape to get shadow bounds
+    const { shadowBounds } = this.createBaseShapeGraphic(obj, isSelected);
 
     // Apply shadow for both hover and drag states (M2-T4, M2-T5)
     // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
@@ -907,15 +981,26 @@ export abstract class RendererCore {
       // Create shadow graphic with blur filter
       const shadowGraphic = new Graphics();
       const shadowPadding = 8;
-      const borderRadius = 12;
+      const borderRadius =
+        obj._kind === ObjectKind.Stack ? 12 : shadowBounds.width / 2;
 
-      shadowGraphic.roundRect(
-        -CARD_WIDTH / 2 - shadowPadding,
-        -CARD_HEIGHT / 2 - shadowPadding,
-        CARD_WIDTH + shadowPadding * 2,
-        CARD_HEIGHT + shadowPadding * 2,
-        borderRadius,
-      );
+      if (
+        obj._kind === ObjectKind.Token ||
+        obj._kind === ObjectKind.Mat ||
+        obj._kind === ObjectKind.Counter
+      ) {
+        // Circular shadow for round objects
+        shadowGraphic.circle(0, 0, shadowBounds.width / 2 + shadowPadding);
+      } else {
+        // Rectangular shadow for cards and zones
+        shadowGraphic.roundRect(
+          -shadowBounds.width / 2 - shadowPadding,
+          -shadowBounds.height / 2 - shadowPadding,
+          shadowBounds.width + shadowPadding * 2,
+          shadowBounds.height + shadowPadding * 2,
+          borderRadius,
+        );
+      }
 
       // Use different shadow colors: black for hover, blue for drag
       const shadowColor = isDragging ? 0x3b82f6 : 0x000000; // Blue for drag, black for hover
@@ -955,22 +1040,28 @@ export abstract class RendererCore {
       visual.addChild(shadowGraphic);
     }
 
-    // Create card graphic (always on top, no filter)
-    const cardGraphic = new Graphics();
-    cardGraphic.rect(
-      -CARD_WIDTH / 2,
-      -CARD_HEIGHT / 2,
-      CARD_WIDTH,
-      CARD_HEIGHT,
+    // Create and add the base shape graphic
+    const { graphic: shapeGraphic } = this.createBaseShapeGraphic(
+      obj,
+      isSelected,
     );
-    cardGraphic.fill(color);
+    visual.addChild(shapeGraphic);
 
-    // Use different border colors for selection state
-    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
-    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
-    cardGraphic.stroke({ width: borderWidth, color: borderColor });
+    // Add text label showing object type (must be re-added after removeChildren)
+    const kindText = new Text({
+      text: obj._kind,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 24,
+        fill: 0xffffff, // White text
+        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
+        align: 'center',
+      },
+    });
+    kindText.anchor.set(0.5); // Center the text
+    kindText.y = 0; // Center vertically in the object
 
-    visual.addChild(cardGraphic);
+    visual.addChild(kindText);
   }
 
   /**
@@ -1440,72 +1531,25 @@ export abstract class RendererCore {
   private createObjectGraphics(obj: TableObject): Container {
     const container = new Container();
 
-    // Render based on object kind
-    switch (obj._kind) {
-      case ObjectKind.Stack: {
-        // Render as a card (portrait rectangle)
-        const cardGraphic = new Graphics();
-        cardGraphic.rect(
-          -CARD_WIDTH / 2,
-          -CARD_HEIGHT / 2,
-          CARD_WIDTH,
-          CARD_HEIGHT,
-        );
+    // Create base shape using shared method (no duplication!)
+    const { graphic: shapeGraphic } = this.createBaseShapeGraphic(obj, false);
+    container.addChild(shapeGraphic);
 
-        // Use color from metadata, or fallback to purple
-        const color = (obj._meta?.color as number) || 0x6c5ce7;
-        cardGraphic.fill(color);
-        cardGraphic.stroke({ width: 2, color: 0x2d3436 });
+    // Add text label showing object type
+    const kindText = new Text({
+      text: obj._kind,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 24,
+        fill: 0xffffff, // White text
+        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
+        align: 'center',
+      },
+    });
+    kindText.anchor.set(0.5); // Center the text
+    kindText.y = 0; // Center vertically in the object
 
-        container.addChild(cardGraphic);
-        break;
-      }
-
-      case ObjectKind.Token: {
-        // Render as a circle
-        const size = (obj._meta?.size as number) || 40;
-        const color = (obj._meta?.color as number) || 0xe74c3c; // Red default
-
-        const tokenGraphic = new Graphics();
-        tokenGraphic.circle(0, 0, size);
-        tokenGraphic.fill(color);
-        tokenGraphic.stroke({ width: 2, color: 0x2d3436 });
-
-        container.addChild(tokenGraphic);
-        break;
-      }
-
-      case ObjectKind.Zone: {
-        // Render as a rectangle outline
-        const width = (obj._meta?.width as number) || 400;
-        const height = (obj._meta?.height as number) || 300;
-        const color = (obj._meta?.color as number) || 0x3498db; // Blue default
-
-        const zoneGraphic = new Graphics();
-        zoneGraphic.rect(-width / 2, -height / 2, width, height);
-        zoneGraphic.fill({ color, alpha: 0.1 }); // Semi-transparent fill
-        zoneGraphic.stroke({ width: 3, color });
-
-        container.addChild(zoneGraphic);
-        break;
-      }
-
-      case ObjectKind.Mat:
-      case ObjectKind.Counter:
-      default: {
-        // Fallback rendering (same as Token for now)
-        const size = (obj._meta?.size as number) || 40;
-        const color = (obj._meta?.color as number) || 0x95a5a6; // Gray default
-
-        const graphic = new Graphics();
-        graphic.circle(0, 0, size);
-        graphic.fill(color);
-        graphic.stroke({ width: 2, color: 0x2d3436 });
-
-        container.addChild(graphic);
-        break;
-      }
-    }
+    container.addChild(kindText);
 
     return container;
   }

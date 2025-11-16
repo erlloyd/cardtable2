@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore, type ObjectChanges } from './YjsStore';
-import { createObject } from './YjsActions';
+import { createObject, moveObjects } from './YjsActions';
 import { ObjectKind } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
@@ -321,6 +321,267 @@ describe('YjsActions - createObject', () => {
       if (changes) {
         expect(changes.added).toHaveLength(1);
         expect(changes.added[0]?.id).toBe(id);
+      }
+    });
+  });
+});
+
+describe('YjsActions - moveObjects', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('Single Object Movement', () => {
+    it('updates position of a single object', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 100, y: 200, r: 0 },
+      });
+
+      moveObjects(store, [{ id, pos: { x: 150, y: 250, r: 45 } }]);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos).toEqual({ x: 150, y: 250, r: 45 });
+    });
+
+    it('preserves all other object properties when moving', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: { color: 'red', value: 5 },
+        locked: true,
+      });
+
+      moveObjects(store, [{ id, pos: { x: 100, y: 100, r: 90 } }]);
+
+      const obj = store.getObject(id);
+      expect(obj?._kind).toBe(ObjectKind.Token);
+      expect(obj?._meta).toEqual({ color: 'red', value: 5 });
+      expect(obj?._locked).toBe(true);
+      expect(obj?._pos).toEqual({ x: 100, y: 100, r: 90 });
+    });
+
+    it('handles rotation changes', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 50, y: 50, r: 0 },
+      });
+
+      moveObjects(store, [{ id, pos: { x: 50, y: 50, r: 180 } }]);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos.r).toBe(180);
+      expect(obj?._pos.x).toBe(50);
+      expect(obj?._pos.y).toBe(50);
+    });
+  });
+
+  describe('Multiple Object Movement', () => {
+    it('moves multiple objects in a single transaction', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+      const id3 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 20, y: 20, r: 0 },
+      });
+
+      moveObjects(store, [
+        { id: id1, pos: { x: 100, y: 100, r: 0 } },
+        { id: id2, pos: { x: 200, y: 200, r: 0 } },
+        { id: id3, pos: { x: 300, y: 300, r: 0 } },
+      ]);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+      const obj3 = store.getObject(id3);
+
+      expect(obj1?._pos).toEqual({ x: 100, y: 100, r: 0 });
+      expect(obj2?._pos).toEqual({ x: 200, y: 200, r: 0 });
+      expect(obj3?._pos).toEqual({ x: 300, y: 300, r: 0 });
+    });
+
+    it('handles partial batch updates correctly', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      // Only move id1, leave id2 unchanged
+      moveObjects(store, [{ id: id1, pos: { x: 500, y: 500, r: 0 } }]);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+
+      expect(obj1?._pos).toEqual({ x: 500, y: 500, r: 0 });
+      expect(obj2?._pos).toEqual({ x: 10, y: 10, r: 0 }); // Unchanged
+    });
+  });
+
+  describe('Stack-Specific Movement', () => {
+    it('preserves stack-specific properties when moving', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['card-1', 'card-2', 'card-3'],
+        faceUp: false,
+      });
+
+      moveObjects(store, [{ id, pos: { x: 250, y: 350, r: 0 } }]);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos).toEqual({ x: 250, y: 350, r: 0 });
+
+      if (
+        obj &&
+        obj._kind === ObjectKind.Stack &&
+        '_cards' in obj &&
+        '_faceUp' in obj
+      ) {
+        expect(obj._cards).toEqual(['card-1', 'card-2', 'card-3']);
+        expect(obj._faceUp).toBe(false);
+      }
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('warns when trying to move non-existent object', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      moveObjects(store, [
+        { id: 'non-existent-id', pos: { x: 100, y: 100, r: 0 } },
+      ]);
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[moveObjects] Object non-existent-id not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('handles empty updates array', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      // Should not throw
+      moveObjects(store, []);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos).toEqual({ x: 0, y: 0, r: 0 }); // Unchanged
+    });
+
+    it('handles mix of valid and invalid object IDs', () => {
+      const validId = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      moveObjects(store, [
+        { id: validId, pos: { x: 100, y: 100, r: 0 } },
+        { id: 'invalid-id', pos: { x: 200, y: 200, r: 0 } },
+      ]);
+
+      // Valid object should be moved
+      const obj = store.getObject(validId);
+      expect(obj?._pos).toEqual({ x: 100, y: 100, r: 0 });
+
+      // Should warn about invalid ID
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[moveObjects] Object invalid-id not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('Store Integration', () => {
+    it('triggers observer callbacks when objects are moved', async () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      // Wait for create event to clear
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const callback = vi.fn();
+      store.onObjectsChange(callback);
+
+      moveObjects(store, [{ id, pos: { x: 100, y: 100, r: 0 } }]);
+
+      // Wait for Yjs to trigger observers
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(callback).toHaveBeenCalled();
+
+      const changes = callback.mock.calls[0]?.[0] as ObjectChanges | undefined;
+      expect(changes).toBeDefined();
+
+      if (changes) {
+        expect(changes.updated).toHaveLength(1);
+        expect(changes.updated[0]?.id).toBe(id);
+        expect(changes.updated[0]?.obj._pos).toEqual({ x: 100, y: 100, r: 0 });
+      }
+    });
+
+    it('uses single transaction for atomic updates', async () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      // Wait for create events
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const callback = vi.fn();
+      store.onObjectsChange(callback);
+
+      moveObjects(store, [
+        { id: id1, pos: { x: 100, y: 100, r: 0 } },
+        { id: id2, pos: { x: 200, y: 200, r: 0 } },
+      ]);
+
+      // Wait for Yjs to trigger observers
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Should be called once with both updates (atomic transaction)
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      const changes = callback.mock.calls[0]?.[0] as ObjectChanges | undefined;
+      expect(changes).toBeDefined();
+
+      if (changes) {
+        expect(changes.updated).toHaveLength(2);
       }
     });
   });

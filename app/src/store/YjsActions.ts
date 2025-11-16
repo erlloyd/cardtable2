@@ -112,3 +112,46 @@ export function createObject(
 
   return id;
 }
+
+/**
+ * Update positions for one or more objects
+ *
+ * @param store - YjsStore instance
+ * @param updates - Array of position updates
+ *
+ * @example
+ * // Move a single object
+ * moveObjects(store, [{
+ *   id: 'obj-123',
+ *   pos: { x: 150, y: 250, r: 45 }
+ * }]);
+ *
+ * @example
+ * // Move multiple objects (e.g., after multi-select drag)
+ * moveObjects(store, [
+ *   { id: 'obj-1', pos: { x: 100, y: 100, r: 0 } },
+ *   { id: 'obj-2', pos: { x: 200, y: 200, r: 0 } }
+ * ]);
+ */
+export function moveObjects(
+  store: YjsStore,
+  updates: Array<{ id: string; pos: Position }>,
+): void {
+  // Use single transaction for atomicity
+  store.getDoc().transact(() => {
+    updates.forEach(({ id, pos }) => {
+      const obj = store.getObject(id);
+      if (!obj) {
+        console.warn(`[moveObjects] Object ${id} not found`);
+        return;
+      }
+
+      // Update position using setObject (which internally uses transactions)
+      // We're already in a transaction, so this will be batched
+      store.setObject(id, {
+        ...obj,
+        _pos: pos,
+      });
+    });
+  });
+}

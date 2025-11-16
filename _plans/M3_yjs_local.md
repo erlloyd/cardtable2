@@ -95,10 +95,98 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - Unit: verify transaction atomicity
 - Unit: test undo/redo functionality
 
+**Status:** In Progress
+- ✅ createObject (completed 2025-11-15)
+- ⏸️ moveObjects (pending)
+- ⏸️ flipCards (pending)
+- ⏸️ rotateObjects (pending)
+- ⏸️ stackObjects (pending)
+- ⏸️ unstack (pending)
+
+### M3-T2.5: Store-Renderer Integration
+**Objective:** Connect Yjs store to PixiJS renderer with bi-directional sync so objects in the store appear on screen.
+
+**Dependencies:** M3-T1 complete, M3-T2 createObject complete
+
+**Spec:**
+- Full bi-directional sync between Yjs store and renderer
+- Store changes automatically update visuals
+- User interactions (drag) update store
+- Incremental updates using Yjs event system (no manual diffing)
+- Reset functionality: clear store or reset to test scene
+- All object types rendered as labeled rectangles initially
+
+**Phases:**
+
+**Phase 1: Fix YjsStore Observer Pattern**
+- Define `ObjectChanges` interface: `{added: [], updated: [], removed: []}`
+- Update `onObjectsChange()` to parse Yjs Y.YEvent arrays
+- Provide structured change information instead of bare callback
+- Update existing usage in table route
+
+**Phase 2: Message Types (shared/src/index.ts)**
+- Main→Renderer: `sync-objects`, `add-object`, `update-object`, `remove-object`, `clear-objects`
+- Renderer→Main: `object-moved`, `objects-moved`
+
+**Phase 3: Board Store Integration (Board.tsx)**
+- Subscribe to `store.onObjectsChange()`
+- Send 'sync-objects' after renderer initialized
+- Forward add/update/remove messages based on ObjectChanges
+- Handle 'object-moved' messages, call moveObjects action
+- Track drag ownership to prevent update echo
+
+**Phase 4: moveObjects Action (YjsActions.ts)**
+- Implement `moveObjects(store, updates: Array<{id, pos}>)`
+- Update positions in single transaction
+- Add comprehensive tests
+
+**Phase 5: Renderer Message Handlers (RendererCore.ts)**
+- Handle sync/add/update/remove/clear messages
+- Update SceneManager when objects change
+- Send 'object-moved' on drag end
+
+**Phase 6: Object Type Rendering (RendererCore.ts)**
+- Refactor `createCardVisual()` → `createVisualForObject(obj)`
+- Switch on `obj._kind`:
+  - Stack: 100x140 blue rect, "STACK (n)"
+  - Token: 60x60 red square, "TOKEN"
+  - Zone: 400x300 green translucent rect, "ZONE"
+  - Mat: 500x350 purple translucent rect, "MAT"
+  - Counter: 40x40 orange square, number or "COUNTER"
+- Add text labels with PixiJS Text
+- Apply position and rotation
+
+**Phase 7: Reset Functionality (table.$id.tsx)**
+- "Clear Store" button → `store.clearAllObjects()`
+- "Reset Test Scene" button → clear + spawn samples (2 stacks, token, zone, counter)
+
+**Phase 8: Testing**
+- Manual: spawn, drag, refresh, verify persistence
+- Manual: clear and reset buttons
+- Unit: YjsStore observer events, moveObjects action
+
+**Phase 9: Cleanup**
+- Remove old test buttons and renderTestScene()
+- Clean up debug logs
+
+**Deliverables:**
+- Yjs store drives all visual rendering
+- Drag operations persist to store and IndexedDB
+- Reset functionality for testing
+- All object types visually distinguishable
+
+**Test Plan:**
+- E2E: Spawn card appears on screen
+- E2E: Drag card, refresh, position persisted
+- E2E: Clear store clears screen
+- E2E: Reset test scene creates sample objects
+- Unit: YjsStore provides correct change events
+- Unit: moveObjects updates positions correctly
+
 ### M3-T3: Selection Ownership + Clear All
 **Objective:** Implement exclusive selection system with ownership tracking.
 
-**Dependencies:** M3-T2
+**Dependencies:** M3-T2.5 (store-renderer integration)
 
 **Spec:**
 - `_selectedBy` field for exclusive ownership

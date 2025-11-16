@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SceneManager } from './SceneManager';
 import type { TableObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 
 describe('SceneManager', () => {
   let sceneManager: SceneManager;
@@ -12,7 +13,7 @@ describe('SceneManager', () => {
   describe('addObject', () => {
     it('adds an object to the scene', () => {
       const obj: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 100, y: 200, r: 0 },
         _sortKey: '0|a',
@@ -31,7 +32,7 @@ describe('SceneManager', () => {
   describe('removeObject', () => {
     it('removes an object from the scene', () => {
       const obj: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 100, y: 200, r: 0 },
         _sortKey: '0|a',
@@ -51,7 +52,7 @@ describe('SceneManager', () => {
   describe('updateObject', () => {
     it('updates an object position', () => {
       const obj: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 100, y: 200, r: 0 },
         _sortKey: '0|a',
@@ -80,7 +81,7 @@ describe('SceneManager', () => {
       // Add test objects at different positions
       // Card size is 63x88 (portrait)
       const obj1: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 0, y: 0, r: 0 }, // Centered at origin
         _sortKey: '0|a',
@@ -90,7 +91,7 @@ describe('SceneManager', () => {
       };
 
       const obj2: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 100, y: 100, r: 0 },
         _sortKey: '0|b',
@@ -120,7 +121,7 @@ describe('SceneManager', () => {
     it('returns topmost object when objects overlap', () => {
       // Add overlapping object with higher sortKey
       const obj3: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 5, y: 5, r: 0 }, // Overlaps with card-1
         _sortKey: '0|c', // Higher than '0|a'
@@ -155,7 +156,7 @@ describe('SceneManager', () => {
   describe('hitTestRect', () => {
     beforeEach(() => {
       const obj1: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 0, y: 0, r: 0 },
         _sortKey: '0|a',
@@ -165,7 +166,7 @@ describe('SceneManager', () => {
       };
 
       const obj2: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 100, y: 100, r: 0 },
         _sortKey: '0|b',
@@ -219,7 +220,7 @@ describe('SceneManager', () => {
   describe('clear', () => {
     it('removes all objects from the scene', () => {
       const obj1: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 0, y: 0, r: 0 },
         _sortKey: '0|a',
@@ -229,7 +230,7 @@ describe('SceneManager', () => {
       };
 
       const obj2: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: 100, y: 100, r: 0 },
         _sortKey: '0|b',

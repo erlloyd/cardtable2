@@ -7,6 +7,7 @@ import type {
   TableObject,
   InteractionMode,
 } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
 import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
@@ -1296,7 +1297,7 @@ export abstract class RendererCore {
     for (const card of testCards) {
       // Create TableObject
       const tableObject: TableObject = {
-        _kind: 'stack',
+        _kind: ObjectKind.Stack,
         _containerId: null,
         _pos: { x: card.x, y: card.y, r: 0 },
         _sortKey: card.sortKey,

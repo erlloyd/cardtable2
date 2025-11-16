@@ -2,8 +2,50 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
-import type { RendererToMainMessage } from '@cardtable2/shared';
+import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
 import type { RenderMode } from '../renderer/RendererFactory';
+import type { YjsStore } from '../store/YjsStore';
+
+// Mock YjsStore
+class MockYjsStore implements Partial<YjsStore> {
+  async waitForReady(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  getActorId(): string {
+    return 'test-actor-id';
+  }
+
+  getAllObjects(): Map<string, TableObject> {
+    return new Map();
+  }
+
+  getObject(_id: string): TableObject | null {
+    return null;
+  }
+
+  setObject(_id: string, _obj: TableObject): void {
+    // Mock implementation
+  }
+
+  deleteObject(_id: string): void {
+    // Mock implementation
+  }
+
+  onObjectsChange(_callback: () => void): () => void {
+    return () => {
+      // Mock unsubscribe
+    };
+  }
+
+  clearAllObjects(): void {
+    // Mock implementation
+  }
+
+  destroy(): void {
+    // Mock implementation
+  }
+}
 
 // Mock Worker
 class MockWorker {
@@ -122,6 +164,7 @@ vi.mock('../renderer/RendererFactory', async () => {
 
 describe('Board', () => {
   let transferControlSpy: () => OffscreenCanvas;
+  let mockStore: MockYjsStore;
 
   beforeEach(() => {
     // Mock Worker constructor
@@ -131,6 +174,9 @@ describe('Board', () => {
     const mockTransfer = (): OffscreenCanvas => ({}) as OffscreenCanvas;
     transferControlSpy = vi.fn(mockTransfer);
     HTMLCanvasElement.prototype.transferControlToOffscreen = transferControlSpy;
+
+    // Create mock store
+    mockStore = new MockYjsStore();
   });
 
   afterEach(() => {
@@ -139,7 +185,9 @@ describe('Board', () => {
   });
 
   it('renders with table ID', () => {
-    render(<Board tableId="happy-clever-elephant" />);
+    render(
+      <Board tableId="happy-clever-elephant" store={mockStore as YjsStore} />,
+    );
 
     expect(screen.getByTestId('board')).toBeInTheDocument();
     expect(
@@ -148,7 +196,7 @@ describe('Board', () => {
   });
 
   it('initializes worker and displays ready status', async () => {
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Initially should show "Initializing..."
     expect(screen.getByTestId('worker-status')).toHaveTextContent(
@@ -168,7 +216,7 @@ describe('Board', () => {
 
   it('sends ping message and receives pong response', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for worker to be ready
     await waitFor(() => {
@@ -187,7 +235,7 @@ describe('Board', () => {
 
   it('sends echo message and receives echo response', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for worker to be ready
     await waitFor(() => {
@@ -205,7 +253,7 @@ describe('Board', () => {
   });
 
   it('disables buttons when worker is not ready', () => {
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     const pingButton = screen.getByTestId('ping-button');
     const echoButton = screen.getByTestId('echo-button');
@@ -216,7 +264,9 @@ describe('Board', () => {
   });
 
   it('cleans up worker on unmount', async () => {
-    const { unmount } = render(<Board tableId="test-table" />);
+    const { unmount } = render(
+      <Board tableId="test-table" store={mockStore as YjsStore} />,
+    );
 
     // Wait for worker to be ready
     await waitFor(() => {
@@ -230,7 +280,7 @@ describe('Board', () => {
   });
 
   it('renders canvas element', () => {
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     const canvas = screen.getByTestId('board-canvas');
     expect(canvas).toBeInTheDocument();
@@ -238,7 +288,7 @@ describe('Board', () => {
   });
 
   it('initializes canvas and transfers to worker', async () => {
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for worker to be ready
     await waitFor(() => {
@@ -262,7 +312,7 @@ describe('Board', () => {
   });
 
   it('prevents double canvas transfer in strict mode', async () => {
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for canvas to be initialized
     await waitFor(() => {
@@ -277,7 +327,7 @@ describe('Board', () => {
 
   it('forwards pointer down events to renderer', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for canvas to be initialized
     await waitFor(() => {
@@ -322,7 +372,7 @@ describe('Board', () => {
 
   it('forwards pointer move events to renderer', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for canvas to be initialized
     await waitFor(() => {
@@ -363,7 +413,7 @@ describe('Board', () => {
 
   it('forwards pointer up events to renderer', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for canvas to be initialized
     await waitFor(() => {
@@ -404,7 +454,7 @@ describe('Board', () => {
 
   it('toggles interaction mode between pan and select', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     const toggleButton = screen.getByTestId('interaction-mode-toggle');
 
@@ -422,7 +472,7 @@ describe('Board', () => {
 
   it('sends interaction mode changes to renderer', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for canvas to be initialized
     await waitFor(() => {
@@ -469,7 +519,7 @@ describe('Board', () => {
 
   it('toggles multi-select mode on and off', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     const toggleButton = screen.getByTestId('multi-select-toggle');
 
@@ -487,7 +537,7 @@ describe('Board', () => {
 
   it('applies multi-select modifier to touch events when multi-select mode is on', async () => {
     const user = userEvent.setup();
-    render(<Board tableId="test-table" />);
+    render(<Board tableId="test-table" store={mockStore as YjsStore} />);
 
     // Wait for canvas to be initialized
     await waitFor(() => {

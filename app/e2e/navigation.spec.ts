@@ -22,8 +22,11 @@ test.describe('Navigation', () => {
     const parts = tableId.split('-');
     expect(parts).toHaveLength(3);
 
-    // Verify we're on the Table page
-    await expect(page.locator('h2')).toContainText(`Table: ${tableId}`);
+    // Verify we're on the Table page by checking for the Board component
+    await expect(page.locator('[data-testid="board"]')).toBeVisible();
+    await expect(page.locator('[data-testid="board"]')).toContainText(
+      `Board: ${tableId}`,
+    );
   });
 
   test('should lazy load Board component', async ({ page }) => {

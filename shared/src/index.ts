@@ -5,7 +5,14 @@ export const CARDTABLE_VERSION = '2.0.0';
 
 // Object types on the table
 // Note: Every card or group of cards is a 'stack' (even a single card is a stack of 1)
-export type ObjectKind = 'stack' | 'token' | 'zone' | 'mat' | 'counter';
+// Object kind enum for type-safe comparisons
+export enum ObjectKind {
+  Stack = 'stack',
+  Token = 'token',
+  Zone = 'zone',
+  Mat = 'mat',
+  Counter = 'counter',
+}
 
 // Position in world coordinates
 export interface Position {
@@ -34,9 +41,9 @@ export interface TableObject {
   _meta: Record<string, unknown>; // Freeform metadata
 }
 
-// Stack-specific properties (when _kind === 'stack')
+// Stack-specific properties (when _kind === ObjectKind.Stack)
 export interface StackObject extends TableObject {
-  _kind: 'stack';
+  _kind: ObjectKind.Stack;
   _cards: string[]; // Array of card IDs in the stack (top to bottom)
   _faceUp: boolean; // Whether stack is face-up or face-down
 }
@@ -99,3 +106,52 @@ export type RendererToMainMessage =
   | { type: 'error'; error: string; context?: string }
   | { type: 'warning'; message: string }
   | { type: 'animation-complete' };
+
+// ============================================================================
+// Yjs Document Schema (M3-T1)
+// ============================================================================
+
+/**
+ * Y.Doc document structure for table state.
+ * Root contains:
+ * - objects: Y.Map<string, Y.Map> keyed by object ID
+ */
+export interface YDocSchema {
+  objects: Map<string, TableObject>;
+}
+
+/**
+ * Actor ID format: random UUID v4
+ * Used for _selectedBy and awareness tracking
+ */
+export type ActorId = string;
+
+/**
+ * Awareness state for real-time collaboration (M3-T4)
+ * Updated at 30Hz, ephemeral (not persisted)
+ */
+export interface AwarenessState {
+  actorId: ActorId;
+  cursor?: {
+    x: number;
+    y: number;
+  };
+  drag?: {
+    gid: string; // gesture ID
+    ids: string[]; // object IDs being dragged
+    anchor: { x: number; y: number }; // drag start point
+    dx: number; // delta x
+    dy: number; // delta y
+    dr: number; // delta rotation
+    ts: number; // timestamp
+  };
+  hover?: string; // object ID being hovered
+  lasso?: {
+    // rectangle selection
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  };
+  toolMode?: 'pan' | 'select' | 'card' | 'token' | 'zone';
+}

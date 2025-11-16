@@ -38,6 +38,47 @@ function Table() {
     );
   };
 
+  // Handler to clear all objects (M3-T2.5 Phase 7)
+  const handleClearStore = () => {
+    if (!storeRef.current) return;
+
+    storeRef.current.clearAllObjects();
+    console.log('[Table] Cleared all objects from store');
+  };
+
+  // Handler to reset to test scene (M3-T2.5 Phase 7)
+  const handleResetToTestScene = () => {
+    if (!storeRef.current) return;
+
+    // Clear existing objects
+    storeRef.current.clearAllObjects();
+
+    // Create test scene with 10 cards at various positions
+    const colors = [
+      0x6c5ce7, // Purple
+      0x00b894, // Green
+      0xfdcb6e, // Yellow
+      0xe17055, // Red
+      0x74b9ff, // Blue
+    ];
+
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * 800 - 400; // -400 to +400
+      const y = Math.random() * 600 - 300; // -300 to +300
+      const color = colors[i % colors.length];
+
+      createObject(storeRef.current, {
+        kind: ObjectKind.Stack,
+        pos: { x, y, r: 0 },
+        cards: [`test-card-${i + 1}`],
+        faceUp: true,
+        meta: { color },
+      });
+    }
+
+    console.log('[Table] Reset to test scene with 10 cards');
+  };
+
   // Initialize Yjs store on mount (M3-T1)
   useEffect(() => {
     // Prevent double initialization in React strict mode
@@ -152,6 +193,36 @@ function Table() {
           }}
         >
           Spawn Card
+        </button>
+        <button
+          onClick={handleResetToTestScene}
+          disabled={!isStoreReady}
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            backgroundColor: isStoreReady ? '#3498db' : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isStoreReady ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Reset to Test Scene
+        </button>
+        <button
+          onClick={handleClearStore}
+          disabled={!isStoreReady}
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            backgroundColor: isStoreReady ? '#e74c3c' : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isStoreReady ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Clear Store
         </button>
       </div>
 

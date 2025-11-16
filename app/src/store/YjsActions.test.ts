@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore, type ObjectChanges } from './YjsStore';
-import { createObject, moveObjects } from './YjsActions';
+import {
+  createObject,
+  moveObjects,
+  selectObjects,
+  unselectObjects,
+  clearAllSelections,
+} from './YjsActions';
 import { ObjectKind } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
@@ -583,6 +589,340 @@ describe('YjsActions - moveObjects', () => {
       if (changes) {
         expect(changes.updated).toHaveLength(2);
       }
+    });
+  });
+});
+
+describe('YjsActions - Selection Ownership (M3-T3)', () => {
+  let store: YjsStore;
+  let actorId: string;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table');
+    await store.waitForReady();
+    actorId = store.getActorId();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('selectObjects', () => {
+    it('selects objects and sets _selectedBy field', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const result = selectObjects(store, [id], actorId);
+
+      expect(result.selected).toEqual([id]);
+      expect(result.failed).toEqual([]);
+
+      const obj = store.getObject(id);
+      expect(obj?._selectedBy).toBe(actorId);
+    });
+
+    it('selects multiple objects at once', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      const result = selectObjects(store, [id1, id2], actorId);
+
+      expect(result.selected).toEqual([id1, id2]);
+      expect(result.failed).toEqual([]);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+      expect(obj1?._selectedBy).toBe(actorId);
+      expect(obj2?._selectedBy).toBe(actorId);
+    });
+
+    it('fails to select objects already owned by another actor', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      // First actor selects
+      const actor1 = 'actor-1';
+      selectObjects(store, [id], actor1);
+
+      // Second actor tries to select
+      const actor2 = 'actor-2';
+      const result = selectObjects(store, [id], actor2);
+
+      expect(result.selected).toEqual([]);
+      expect(result.failed).toEqual([id]);
+
+      // Should still be owned by first actor
+      const obj = store.getObject(id);
+      expect(obj?._selectedBy).toBe(actor1);
+    });
+
+    it('allows same actor to re-select already selected object', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      selectObjects(store, [id], actorId);
+      const result = selectObjects(store, [id], actorId);
+
+      // Should succeed (already owned by same actor)
+      expect(result.selected).toEqual([]);
+      expect(result.failed).toEqual([]);
+
+      const obj = store.getObject(id);
+      expect(obj?._selectedBy).toBe(actorId);
+    });
+
+    it('fails to select locked objects', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+        locked: true,
+      });
+
+      const result = selectObjects(store, [id], actorId);
+
+      expect(result.selected).toEqual([]);
+      expect(result.failed).toEqual([id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._selectedBy).toBeNull();
+    });
+
+    it('handles partial selection (mix of valid and invalid)', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+        locked: true,
+      });
+
+      const result = selectObjects(store, [id1, id2], actorId);
+
+      expect(result.selected).toEqual([id1]);
+      expect(result.failed).toEqual([id2]);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+      expect(obj1?._selectedBy).toBe(actorId);
+      expect(obj2?._selectedBy).toBeNull();
+    });
+
+    it('warns when trying to select non-existent object', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = selectObjects(store, ['non-existent'], actorId);
+
+      expect(result.selected).toEqual([]);
+      expect(result.failed).toEqual(['non-existent']);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[selectObjects] Object non-existent not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('unselectObjects', () => {
+    it('unselects objects owned by actor', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      selectObjects(store, [id], actorId);
+      const result = unselectObjects(store, [id], actorId);
+
+      expect(result).toEqual([id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._selectedBy).toBeNull();
+    });
+
+    it('unselects multiple objects at once', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      selectObjects(store, [id1, id2], actorId);
+      const result = unselectObjects(store, [id1, id2], actorId);
+
+      expect(result).toEqual([id1, id2]);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+      expect(obj1?._selectedBy).toBeNull();
+      expect(obj2?._selectedBy).toBeNull();
+    });
+
+    it('fails to unselect objects owned by another actor', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const actor1 = 'actor-1';
+      selectObjects(store, [id], actor1);
+
+      const actor2 = 'actor-2';
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = unselectObjects(store, [id], actor2);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalled();
+
+      const obj = store.getObject(id);
+      expect(obj?._selectedBy).toBe(actor1); // Still owned by actor1
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('handles unselecting already unselected objects', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = unselectObjects(store, [id], actorId);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('warns when trying to unselect non-existent object', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = unselectObjects(store, ['non-existent'], actorId);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[unselectObjects] Object non-existent not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('clearAllSelections', () => {
+    it('clears all selections in the store', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      selectObjects(store, [id1, id2], actorId);
+
+      const cleared = clearAllSelections(store);
+
+      expect(cleared).toBe(2);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+      expect(obj1?._selectedBy).toBeNull();
+      expect(obj2?._selectedBy).toBeNull();
+    });
+
+    it('clears selections from multiple actors', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      selectObjects(store, [id1], 'actor-1');
+      selectObjects(store, [id2], 'actor-2');
+
+      const cleared = clearAllSelections(store);
+
+      expect(cleared).toBe(2);
+
+      const obj1 = store.getObject(id1);
+      const obj2 = store.getObject(id2);
+      expect(obj1?._selectedBy).toBeNull();
+      expect(obj2?._selectedBy).toBeNull();
+    });
+
+    it('returns 0 when no selections to clear', () => {
+      createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const cleared = clearAllSelections(store);
+
+      expect(cleared).toBe(0);
+    });
+
+    it('only clears selected objects, not all objects', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      // Create second object (not selected)
+      createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      selectObjects(store, [id1], actorId);
+
+      const cleared = clearAllSelections(store);
+
+      expect(cleared).toBe(1);
+      expect(store.getAllObjects().size).toBe(2); // Both objects still exist
+    });
+
+    it('throws error when excludeDragging option is used', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      selectObjects(store, [id], actorId);
+
+      expect(() => {
+        clearAllSelections(store, { excludeDragging: true });
+      }).toThrow('excludeDragging option is not implemented yet');
     });
   });
 });

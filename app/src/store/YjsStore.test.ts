@@ -266,6 +266,10 @@ describe('YjsStore', () => {
     });
   });
 
+  // NOTE: Stale selection clearing is tested in E2E tests (selection.spec.ts)
+  // where real IndexedDB persistence works. Unit tests use mocked persistence
+  // which doesn't actually persist data between store instances.
+
   describe('Cleanup', () => {
     it('can be safely destroyed', () => {
       const localStore = new YjsStore('destroy-test');

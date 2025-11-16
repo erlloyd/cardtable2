@@ -155,3 +155,172 @@ export function moveObjects(
     });
   });
 }
+
+/**
+ * Select objects with exclusive ownership tracking (M3-T3)
+ *
+ * Attempts to claim selection ownership for the given objects. Selection fails
+ * gracefully for objects already owned by another actor.
+ *
+ * @param store - YjsStore instance
+ * @param ids - Array of object IDs to select
+ * @param actorId - Actor ID claiming ownership (typically store.getActorId())
+ * @returns Object with success/failure lists
+ *
+ * @example
+ * const result = selectObjects(store, ['obj-1', 'obj-2'], store.getActorId());
+ * console.log('Selected:', result.selected);
+ * console.log('Failed (already owned):', result.failed);
+ */
+export function selectObjects(
+  store: YjsStore,
+  ids: string[],
+  actorId: string,
+): { selected: string[]; failed: string[] } {
+  const selected: string[] = [];
+  const failed: string[] = [];
+
+  store.getDoc().transact(() => {
+    ids.forEach((id) => {
+      const obj = store.getObject(id);
+      if (!obj) {
+        console.warn(`[selectObjects] Object ${id} not found`);
+        failed.push(id);
+        return;
+      }
+
+      // Check if already selected by another actor
+      if (obj._selectedBy !== null && obj._selectedBy !== actorId) {
+        console.warn(
+          `[selectObjects] Object ${id} already selected by ${obj._selectedBy}`,
+        );
+        failed.push(id);
+        return;
+      }
+
+      // Skip if already selected by this actor (idempotent)
+      if (obj._selectedBy === actorId) {
+        return;
+      }
+
+      // Check if object is locked
+      if (obj._locked) {
+        console.warn(`[selectObjects] Object ${id} is locked`);
+        failed.push(id);
+        return;
+      }
+
+      // Claim ownership
+      store.setObject(id, {
+        ...obj,
+        _selectedBy: actorId,
+      });
+      selected.push(id);
+    });
+  });
+
+  return { selected, failed };
+}
+
+/**
+ * Unselect objects, releasing ownership (M3-T3)
+ *
+ * Only releases selection if the object is currently selected by the given actor.
+ *
+ * @param store - YjsStore instance
+ * @param ids - Array of object IDs to unselect
+ * @param actorId - Actor ID releasing ownership
+ * @returns Array of successfully unselected object IDs
+ *
+ * @example
+ * const unselected = unselectObjects(store, ['obj-1', 'obj-2'], store.getActorId());
+ * console.log('Unselected:', unselected);
+ */
+export function unselectObjects(
+  store: YjsStore,
+  ids: string[],
+  actorId: string,
+): string[] {
+  const unselected: string[] = [];
+
+  store.getDoc().transact(() => {
+    ids.forEach((id) => {
+      const obj = store.getObject(id);
+      if (!obj) {
+        console.warn(`[unselectObjects] Object ${id} not found`);
+        return;
+      }
+
+      // Only unselect if currently selected by this actor
+      if (obj._selectedBy !== actorId) {
+        console.warn(
+          `[unselectObjects] Object ${id} not selected by ${actorId} (currently: ${obj._selectedBy})`,
+        );
+        return;
+      }
+
+      // Release ownership
+      store.setObject(id, {
+        ...obj,
+        _selectedBy: null,
+      });
+      unselected.push(id);
+    });
+  });
+
+  return unselected;
+}
+
+/**
+ * Clear all selections in the store, optionally excluding objects being dragged (M3-T3)
+ *
+ * This is a force-clear that removes all selection ownership, useful for
+ * "reset" scenarios or cleaning up stale selections.
+ *
+ * @param store - YjsStore instance
+ * @param options - Configuration options
+ * @param options.excludeDragging - If true, don't clear objects currently being dragged
+ * @returns Number of selections cleared
+ *
+ * @example
+ * // Clear all selections
+ * const cleared = clearAllSelections(store);
+ * console.log(`Cleared ${cleared} selections`);
+ *
+ * @example
+ * // Clear all except dragging objects
+ * const cleared = clearAllSelections(store, { excludeDragging: true });
+ */
+export function clearAllSelections(
+  store: YjsStore,
+  options: { excludeDragging?: boolean } = {},
+): number {
+  let cleared = 0;
+
+  store.getDoc().transact(() => {
+    const allObjects = store.getAllObjects();
+    allObjects.forEach((obj, id) => {
+      // Skip if no selection to clear
+      if (obj._selectedBy === null) {
+        return;
+      }
+
+      // TODO: Implement excludeDragging logic when awareness/drag state is available (M3-T4)
+      // For now, excludeDragging is not implemented as we don't have drag state tracking yet
+      if (options.excludeDragging) {
+        throw new Error(
+          '[clearAllSelections] excludeDragging option is not implemented yet (requires M3-T4 awareness)',
+        );
+      }
+
+      // Clear selection
+      store.setObject(id, {
+        ...obj,
+        _selectedBy: null,
+      });
+      cleared++;
+    });
+  });
+
+  return cleared;
+}

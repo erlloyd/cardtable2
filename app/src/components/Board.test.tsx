@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
 import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
 import type { RenderMode } from '../renderer/RendererFactory';
-import type { YjsStore } from '../store/YjsStore';
+import type { YjsStore, ObjectChanges } from '../store/YjsStore';
 
 // Mock YjsStore
 class MockYjsStore implements Partial<YjsStore> {
@@ -32,7 +32,7 @@ class MockYjsStore implements Partial<YjsStore> {
     // Mock implementation
   }
 
-  onObjectsChange(_callback: () => void): () => void {
+  onObjectsChange(_callback: (changes: ObjectChanges) => void): () => void {
     return () => {
       // Mock unsubscribe
     };

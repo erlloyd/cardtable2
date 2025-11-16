@@ -1,4 +1,4 @@
-import { Application, Graphics, Container, BlurFilter } from 'pixi.js';
+import { Application, Graphics, Container, BlurFilter, Text } from 'pixi.js';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
@@ -10,7 +10,7 @@ import type {
 import { ObjectKind } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
-import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
+import { CARD_WIDTH, CARD_HEIGHT } from './constants';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -184,15 +184,10 @@ export abstract class RendererCore {
             this.initializeViewport(width, height);
             console.log('[RendererCore] ✓ Viewport initialized');
 
-            // Render a simple test scene
-            console.log('[RendererCore] Rendering test scene...');
-            this.renderTestScene();
-            console.log('[RendererCore] ✓ Test scene rendered');
-
-            // Do ONE manual render
-            console.log('[RendererCore] Performing manual render...');
+            // Do ONE manual render (blank canvas - objects will come from store sync)
+            console.log('[RendererCore] Performing initial render...');
             this.app.renderer.render(this.app.stage);
-            console.log('[RendererCore] ✓ Manual render complete');
+            console.log('[RendererCore] ✓ Initial render complete');
 
             // IMPORTANT: In main-thread mode, PixiJS sets canvas.style to explicit pixel dimensions
             // which breaks our responsive layout. Reset to 100% to fill container.
@@ -308,6 +303,74 @@ export abstract class RendererCore {
 
         case 'wheel': {
           this.handleWheel(message.event);
+          break;
+        }
+
+        case 'sync-objects': {
+          // Initial sync of all objects from store
+          console.log(
+            `[RendererCore] Syncing ${message.objects.length} objects from store`,
+          );
+          this.clearObjects();
+          for (const { id, obj } of message.objects) {
+            this.addObjectVisual(id, obj);
+          }
+          // Render after sync
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'objects-added': {
+          console.log(
+            `[RendererCore] Adding ${message.objects.length} object(s)`,
+          );
+          for (const { id, obj } of message.objects) {
+            this.addObjectVisual(id, obj);
+          }
+          // Render after adding
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'objects-updated': {
+          console.log(
+            `[RendererCore] Updating ${message.objects.length} object(s)`,
+          );
+          for (const { id, obj } of message.objects) {
+            this.updateObjectVisual(id, obj);
+          }
+          // Render after updating
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'objects-removed': {
+          console.log(
+            `[RendererCore] Removing ${message.ids.length} object(s)`,
+          );
+          for (const id of message.ids) {
+            this.removeObjectVisual(id);
+          }
+          // Render after removing
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'clear-objects': {
+          console.log('[RendererCore] Clearing all objects');
+          this.clearObjects();
+          // Render after clearing
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
           break;
         }
 
@@ -814,10 +877,126 @@ export abstract class RendererCore {
   }
 
   /**
-   * Redraw a card's visual representation (M2-T4, M2-T5).
-   * @param isHovered - Whether the card is hovered (black shadow)
-   * @param isDragging - Whether the card is being dragged (blue shadow)
-   * @param isSelected - Whether the card is selected (red border)
+   * Calculate shadow bounds for an object based on its kind and metadata.
+   * Used to determine the size of drop shadows for hover/drag effects.
+   */
+  private getShadowBounds(obj: TableObject): { width: number; height: number } {
+    switch (obj._kind) {
+      case ObjectKind.Stack: {
+        return { width: CARD_WIDTH, height: CARD_HEIGHT };
+      }
+
+      case ObjectKind.Token:
+      case ObjectKind.Mat:
+      case ObjectKind.Counter: {
+        const radius = (obj._meta?.size as number) || 40;
+        return { width: radius * 2, height: radius * 2 };
+      }
+
+      case ObjectKind.Zone: {
+        const width = (obj._meta?.width as number) || 400;
+        const height = (obj._meta?.height as number) || 300;
+        return { width, height };
+      }
+
+      default: {
+        return { width: CARD_WIDTH, height: CARD_HEIGHT };
+      }
+    }
+  }
+
+  /**
+   * Create base shape graphic for an object based on its kind.
+   * Does NOT include text label or shadow.
+   */
+  private createBaseShapeGraphic(
+    obj: TableObject,
+    isSelected: boolean,
+  ): Graphics {
+    const graphic = new Graphics();
+
+    // Use different border colors for selection state
+    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
+    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
+
+    switch (obj._kind) {
+      case ObjectKind.Stack: {
+        // Render as a card (portrait rectangle)
+        const color = (obj._meta?.color as number) || 0x6c5ce7;
+        graphic.rect(
+          -CARD_WIDTH / 2,
+          -CARD_HEIGHT / 2,
+          CARD_WIDTH,
+          CARD_HEIGHT,
+        );
+        graphic.fill(color);
+        graphic.stroke({ width: borderWidth, color: borderColor });
+        break;
+      }
+
+      case ObjectKind.Token: {
+        // Render as a circle
+        const size = (obj._meta?.size as number) || 40;
+        const color = (obj._meta?.color as number) || 0xe74c3c; // Red default
+        graphic.circle(0, 0, size);
+        graphic.fill(color);
+        graphic.stroke({ width: borderWidth, color: borderColor });
+        break;
+      }
+
+      case ObjectKind.Zone: {
+        // Render as a rectangle outline
+        const width = (obj._meta?.width as number) || 400;
+        const height = (obj._meta?.height as number) || 300;
+        const color = (obj._meta?.color as number) || 0x3498db; // Blue default
+        graphic.rect(-width / 2, -height / 2, width, height);
+        graphic.fill({ color, alpha: 0.1 }); // Semi-transparent fill
+        graphic.stroke({ width: isSelected ? 5 : 3, color: borderColor });
+        break;
+      }
+
+      case ObjectKind.Mat:
+      case ObjectKind.Counter:
+      default: {
+        // Fallback rendering (same as Token for now)
+        const size = (obj._meta?.size as number) || 40;
+        const color = (obj._meta?.color as number) || 0x95a5a6; // Gray default
+        graphic.circle(0, 0, size);
+        graphic.fill(color);
+        graphic.stroke({ width: borderWidth, color: borderColor });
+        break;
+      }
+    }
+
+    return graphic;
+  }
+
+  /**
+   * Create a text label showing the object's kind.
+   * Returns a centered Text object ready to be added to a container.
+   */
+  private createKindLabel(kind: string): Text {
+    const kindText = new Text({
+      text: kind,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 24,
+        fill: 0xffffff, // White text
+        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
+        align: 'center',
+      },
+    });
+    kindText.anchor.set(0.5); // Center the text
+    kindText.y = 0; // Center vertically in the object
+
+    return kindText;
+  }
+
+  /**
+   * Redraw an object's visual representation (M2-T4, M2-T5).
+   * @param isHovered - Whether the object is hovered (black shadow)
+   * @param isDragging - Whether the object is being dragged (blue shadow)
+   * @param isSelected - Whether the object is selected (red border)
    */
   private redrawCardVisual(
     objectId: string,
@@ -828,13 +1007,14 @@ export abstract class RendererCore {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
-    // Get color from object metadata, or fall back to TEST_CARD_COLORS for legacy cards
     const obj = this.sceneManager.getObject(objectId);
-    const color =
-      (obj?._meta?.color as number) || TEST_CARD_COLORS[objectId] || 0x6c5ce7;
+    if (!obj) return;
 
     // Clear existing children
     visual.removeChildren();
+
+    // Get shadow bounds for this object type
+    const shadowBounds = this.getShadowBounds(obj);
 
     // Apply shadow for both hover and drag states (M2-T4, M2-T5)
     // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
@@ -844,15 +1024,26 @@ export abstract class RendererCore {
       // Create shadow graphic with blur filter
       const shadowGraphic = new Graphics();
       const shadowPadding = 8;
-      const borderRadius = 12;
+      const borderRadius =
+        obj._kind === ObjectKind.Stack ? 12 : shadowBounds.width / 2;
 
-      shadowGraphic.roundRect(
-        -CARD_WIDTH / 2 - shadowPadding,
-        -CARD_HEIGHT / 2 - shadowPadding,
-        CARD_WIDTH + shadowPadding * 2,
-        CARD_HEIGHT + shadowPadding * 2,
-        borderRadius,
-      );
+      if (
+        obj._kind === ObjectKind.Token ||
+        obj._kind === ObjectKind.Mat ||
+        obj._kind === ObjectKind.Counter
+      ) {
+        // Circular shadow for round objects
+        shadowGraphic.circle(0, 0, shadowBounds.width / 2 + shadowPadding);
+      } else {
+        // Rectangular shadow for cards and zones
+        shadowGraphic.roundRect(
+          -shadowBounds.width / 2 - shadowPadding,
+          -shadowBounds.height / 2 - shadowPadding,
+          shadowBounds.width + shadowPadding * 2,
+          shadowBounds.height + shadowPadding * 2,
+          borderRadius,
+        );
+      }
 
       // Use different shadow colors: black for hover, blue for drag
       const shadowColor = isDragging ? 0x3b82f6 : 0x000000; // Blue for drag, black for hover
@@ -892,22 +1083,12 @@ export abstract class RendererCore {
       visual.addChild(shadowGraphic);
     }
 
-    // Create card graphic (always on top, no filter)
-    const cardGraphic = new Graphics();
-    cardGraphic.rect(
-      -CARD_WIDTH / 2,
-      -CARD_HEIGHT / 2,
-      CARD_WIDTH,
-      CARD_HEIGHT,
-    );
-    cardGraphic.fill(color);
+    // Create and add the base shape graphic
+    const shapeGraphic = this.createBaseShapeGraphic(obj, isSelected);
+    visual.addChild(shapeGraphic);
 
-    // Use different border colors for selection state
-    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
-    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
-    cardGraphic.stroke({ width: borderWidth, color: borderColor });
-
-    visual.addChild(cardGraphic);
+    // Add text label showing object type
+    visual.addChild(this.createKindLabel(obj._kind));
   }
 
   /**
@@ -1055,15 +1236,31 @@ export abstract class RendererCore {
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
       if (this.isObjectDragging && this.draggedObjectId) {
+        // Collect position updates for all dragged objects (M3-T2.5 bi-directional sync)
+        const positionUpdates: Array<{
+          id: string;
+          pos: { x: number; y: number; r: number };
+        }> = [];
+
         // Update SceneManager spatial index for all selected cards now that drag is complete
         // (deferred from pointer move for performance)
         for (const objectId of this.selectedObjectIds) {
           const obj = this.sceneManager.getObject(objectId);
           if (obj) {
             this.sceneManager.updateObject(objectId, obj);
+            // Collect position update
+            positionUpdates.push({ id: objectId, pos: obj._pos });
           }
           // Clear drag visual feedback
           this.updateDragFeedback(objectId, false);
+        }
+
+        // Send position updates to Board (which will update the store)
+        if (positionUpdates.length > 0) {
+          this.postResponse({
+            type: 'objects-moved',
+            updates: positionUpdates,
+          });
         }
 
         // Clear drag state
@@ -1249,96 +1446,126 @@ export abstract class RendererCore {
   }
 
   /**
-   * Render a simple test scene with TableObjects (M2-T4).
-   * Creates several portrait-oriented cards at different positions and z-orders.
+   * Add a visual representation for a TableObject (M3-T2.5 Phase 5-6).
+   * Creates PixiJS Container with Graphics and adds to scene.
    */
-  private renderTestScene(): void {
+  private addObjectVisual(id: string, obj: TableObject): void {
     if (!this.worldContainer) return;
 
-    // Clear any existing children and scene
-    this.worldContainer.removeChildren();
-    this.sceneManager.clear();
+    // Skip if visual already exists
+    if (this.objectVisuals.has(id)) {
+      console.warn(`[RendererCore] Visual for object ${id} already exists`);
+      return;
+    }
+
+    // Add to scene manager for hit-testing
+    this.sceneManager.addObject(id, obj);
+
+    // Create visual representation
+    const visual = this.createObjectGraphics(obj);
+
+    // Position the visual
+    visual.x = obj._pos.x;
+    visual.y = obj._pos.y;
+    visual.rotation = (obj._pos.r * Math.PI) / 180; // Convert degrees to radians
+
+    // Store visual reference
+    this.objectVisuals.set(id, visual);
+
+    // Add to world container
+    this.worldContainer.addChild(visual);
+  }
+
+  /**
+   * Update an existing object visual (M3-T2.5 Phase 5-6).
+   * Updates position, rotation, and potentially re-renders if kind/meta changed.
+   */
+  private updateObjectVisual(id: string, obj: TableObject): void {
+    const visual = this.objectVisuals.get(id);
+    if (!visual || !this.worldContainer) {
+      console.warn(`[RendererCore] Visual for object ${id} not found`);
+      return;
+    }
+
+    // Update scene manager
+    this.sceneManager.updateObject(id, obj);
+
+    // Update visual position and rotation
+    visual.x = obj._pos.x;
+    visual.y = obj._pos.y;
+    visual.rotation = (obj._pos.r * Math.PI) / 180;
+
+    // For now, just update position/rotation
+    // TODO: If kind or meta changed, we may need to recreate the visual
+    // For M3-T2.5, position updates are the primary use case
+  }
+
+  /**
+   * Remove an object visual (M3-T2.5 Phase 5-6).
+   */
+  private removeObjectVisual(id: string): void {
+    const visual = this.objectVisuals.get(id);
+    if (visual && this.worldContainer) {
+      this.worldContainer.removeChild(visual);
+      visual.destroy();
+    }
+
+    this.objectVisuals.delete(id);
+    this.sceneManager.removeObject(id);
+
+    // Clear selection if this object was selected
+    if (this.selectedObjectIds.has(id)) {
+      this.selectedObjectIds.delete(id);
+    }
+
+    // Clear hover if this object was hovered
+    if (this.hoveredObjectId === id) {
+      this.hoveredObjectId = null;
+    }
+
+    // Clear drag if this object was being dragged
+    if (this.draggedObjectId === id) {
+      this.draggedObjectId = null;
+      this.isObjectDragging = false;
+    }
+  }
+
+  /**
+   * Clear all object visuals (M3-T2.5 Phase 5-6).
+   */
+  private clearObjects(): void {
+    if (!this.worldContainer) return;
+
+    // Remove all visuals from world container and destroy them
+    for (const [, visual] of this.objectVisuals) {
+      this.worldContainer.removeChild(visual);
+      visual.destroy();
+    }
+
+    // Clear data structures
     this.objectVisuals.clear();
+    this.sceneManager.clear();
+    this.selectedObjectIds.clear();
+    this.hoveredObjectId = null;
+    this.draggedObjectId = null;
+    this.isObjectDragging = false;
+  }
 
-    // Create 20 test cards with randomized positions
-    const testCards: Array<{
-      id: string;
-      x: number;
-      y: number;
-      sortKey: string;
-      color: number;
-    }> = [];
+  /**
+   * Create PixiJS Graphics for a TableObject (M3-T2.5 Phase 6).
+   * Handles different object types (Stack, Token, Zone, etc.).
+   */
+  private createObjectGraphics(obj: TableObject): Container {
+    const container = new Container();
 
-    const NUM_CARDS = 20;
-    const AREA_WIDTH = 1200; // Random area width
-    const AREA_HEIGHT = 900; // Random area height
+    // Create base shape using shared method (no duplication!)
+    const shapeGraphic = this.createBaseShapeGraphic(obj, false);
+    container.addChild(shapeGraphic);
 
-    // Available colors from TEST_CARD_COLORS
-    const availableColors = [
-      TEST_CARD_COLORS['card-1'], // Purple
-      TEST_CARD_COLORS['card-2'], // Green
-      TEST_CARD_COLORS['card-3'], // Yellow
-      TEST_CARD_COLORS['card-4'], // Red
-      TEST_CARD_COLORS['card-5'], // Blue
-    ];
+    // Add text label showing object type
+    container.addChild(this.createKindLabel(obj._kind));
 
-    for (let i = 0; i < NUM_CARDS; i++) {
-      const cardId = `card-${i + 1}`;
-      // Random position within area, centered around (0, 0)
-      const x = Math.random() * AREA_WIDTH - AREA_WIDTH / 2;
-      const y = Math.random() * AREA_HEIGHT - AREA_HEIGHT / 2;
-      // Generate sortKey using fractional indexing format
-      const sortKey = `0|${String.fromCharCode(97 + Math.floor(i / 26))}${String.fromCharCode(97 + (i % 26))}`;
-      const color = availableColors[i % availableColors.length];
-
-      testCards.push({ id: cardId, x, y, sortKey, color });
-    }
-
-    for (const card of testCards) {
-      // Create TableObject
-      const tableObject: TableObject = {
-        _kind: ObjectKind.Stack,
-        _containerId: null,
-        _pos: { x: card.x, y: card.y, r: 0 },
-        _sortKey: card.sortKey,
-        _locked: false,
-        _selectedBy: null,
-        _meta: { color: card.color }, // Store color in metadata
-      };
-
-      // Add to scene manager
-      this.sceneManager.addObject(card.id, tableObject);
-
-      // Create visual representation as Container (so we can have shadow + card separately)
-      const visual = new Container();
-
-      // Create card graphic
-      const cardGraphic = new Graphics();
-      cardGraphic.rect(
-        -CARD_WIDTH / 2,
-        -CARD_HEIGHT / 2,
-        CARD_WIDTH,
-        CARD_HEIGHT,
-      );
-      cardGraphic.fill(card.color);
-      cardGraphic.stroke({ width: 2, color: 0x2d3436 });
-
-      visual.addChild(cardGraphic);
-
-      // Position the visual
-      visual.x = card.x;
-      visual.y = card.y;
-
-      // Store visual reference
-      this.objectVisuals.set(card.id, visual);
-
-      // Add to world container
-      this.worldContainer.addChild(visual);
-    }
-
-    console.log(
-      `[RendererCore] Test scene created with ${testCards.length} cards`,
-    );
+    return container;
   }
 
   /**

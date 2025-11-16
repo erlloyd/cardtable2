@@ -151,14 +151,19 @@ pnpm run format
   - ✅ M2-T4: Scene Model + RBush Hit-Test (11 unit + 8 E2E tests, hover feedback)
   - ✅ M2-T5: Object Dragging (card selection, multi-select, pan/select mode, 16 Board + 11 SceneManager tests)
   - ✅ M2-T6: Dual-Mode Rendering Architecture
-- ⏳ M3: Local Yjs
-- ⏳ M4: Set Loader & Assets
-- ⏳ M5: Multiplayer Server
-- ⏳ M6: Frontend Multiplayer
-- ⏳ M7: Offline Support
-- ⏳ M8: Mobile & Input Polish
-- ⏳ M9: Performance & QA
-- ⏳ M10: Packaging & Documentation
+- ⏳ M3: Local Yjs (In Progress)
+  - ✅ M3-T1: Y.Doc Schema + IndexedDB (20 unit + 3 E2E tests)
+  - ✅ M3-T2: Engine Actions (createObject + moveObjects complete, 11 tests)
+  - ✅ M3-T2.5: Store-Renderer Integration (bi-directional sync, all object types)
+  - ⏸️ M3-T3: Selection Ownership + Clear All
+  - ⏸️ M3-T4: Awareness (Cursors + Drag Ghosts)
+- ⏸️ M4: Set Loader & Assets
+- ⏸️ M5: Multiplayer Server
+- ⏸️ M6: Frontend Multiplayer
+- ⏸️ M7: Offline Support
+- ⏸️ M8: Mobile & Input Polish
+- ⏸️ M9: Performance & QA
+- ⏸️ M10: Packaging & Documentation
 
 ## Important Notes
 
@@ -186,6 +191,19 @@ pnpm run format
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### M3-T2.5 Enhancements - Object Type Rendering & Hit-Testing (Completed 2025-11-16)
+Polish improvements to store-renderer integration:
+- **Text Labels**: All objects display their `_kind` type as text (stack, token, zone, mat, counter)
+- **Refactored Shape Rendering**: Created `createBaseShapeGraphic()` as single source of truth for all object shapes
+- **Fixed Hover Bug**: Objects now preserve their correct shapes during hover/selection (previously converted all to rectangles)
+- **Fixed Hit-Testing**: Updated `SceneManager.getBoundingBox()` to calculate accurate bounding boxes per object type
+  - Stacks: 100x140 card dimensions
+  - Tokens/Mats/Counters: Circular with radius from metadata
+  - Zones: Width/height from metadata
+- **Enhanced Test Scene**: Reset button now spawns variety (5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters) in organized layout
+- Code quality: Eliminated duplication, single maintenance point for shape rendering
+- Files: `app/src/renderer/RendererCore.ts`, `app/src/renderer/SceneManager.ts`, `app/src/routes/table.$id.tsx`
 
 ### M2-T5 - Object Dragging with Selection & Interaction Modes (Completed 2025-11-15)
 Implemented comprehensive object manipulation with expanded scope beyond original plan:
@@ -279,7 +297,10 @@ All development tools upgraded to latest stable versions:
 - All linting/formatting tools updated
 
 ## Next Steps
-**M2 Board Core is complete!** ✅ All 6 tasks finished with comprehensive test coverage.
+**M3-T2.5 Store-Renderer Integration is complete!** ✅ Full bi-directional sync between Yjs store and PixiJS renderer.
 
-Next milestone: **M3 - Local Yjs** (see `_plans/M3_local_yjs.md` when ready to begin)
+Next task: **M3-T3 - Selection Ownership + Clear All** (see `_plans/M3_yjs_local.md`)
+- Implement exclusive selection system with `_selectedBy` field
+- Selection actions: selectObjects, unselectObjects, clearAllSelections
+- Actor ID management and conflict resolution
 - When asked to plan something, always ask if it should be saved in the _plans folder

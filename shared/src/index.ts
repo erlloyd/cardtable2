@@ -95,7 +95,21 @@ export type MainToRendererMessage =
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }
   | { type: 'pointer-cancel'; event: PointerEventData }
-  | { type: 'wheel'; event: WheelEventData };
+  | { type: 'wheel'; event: WheelEventData }
+  | {
+      type: 'sync-objects';
+      objects: Array<{ id: string; obj: TableObject }>;
+    }
+  | {
+      type: 'objects-added';
+      objects: Array<{ id: string; obj: TableObject }>;
+    }
+  | {
+      type: 'objects-updated';
+      objects: Array<{ id: string; obj: TableObject }>;
+    }
+  | { type: 'objects-removed'; ids: Array<string> }
+  | { type: 'clear-objects' };
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =
@@ -105,7 +119,11 @@ export type RendererToMainMessage =
   | { type: 'initialized' }
   | { type: 'error'; error: string; context?: string }
   | { type: 'warning'; message: string }
-  | { type: 'animation-complete' };
+  | { type: 'animation-complete' }
+  | {
+      type: 'objects-moved';
+      updates: Array<{ id: string; pos: Position }>;
+    };
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)
@@ -139,11 +157,10 @@ export interface AwarenessState {
   drag?: {
     gid: string; // gesture ID
     ids: string[]; // object IDs being dragged
-    anchor: { x: number; y: number }; // drag start point
-    dx: number; // delta x
-    dy: number; // delta y
-    dr: number; // delta rotation
+    pos: { x: number; y: number; r: number }; // absolute world position (primary object)
     ts: number; // timestamp
+    // Note: Uses absolute position instead of anchor+deltas for simplicity and resilience
+    // to dropped frames. Receiving clients render ghost at this exact position.
   };
   hover?: string; // object ID being hovered
   lasso?: {

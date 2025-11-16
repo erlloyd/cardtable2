@@ -9,7 +9,7 @@ import type {
 } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
-import { getBehaviors } from './objects';
+import { getBehaviors, getEventHandlers, type EventHandlers } from './objects';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -912,6 +912,33 @@ export abstract class RendererCore {
     kindText.y = 0; // Center vertically in the object
 
     return kindText;
+  }
+
+  /**
+   * Call an event handler for an object if one is registered.
+   * This provides infrastructure for future event-driven behaviors.
+   *
+   * @example
+   * // Future integration example:
+   * const obj = this.sceneManager.getObject(objectId);
+   * if (obj) {
+   *   this.callEventHandler(obj, 'onHover', true);
+   * }
+   */
+   
+  // @ts-expect-error - Infrastructure for future event handler integration
+  private callEventHandler(
+    obj: TableObject,
+    eventName: keyof EventHandlers,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    args?: any,
+  ): void {
+    const handlers = getEventHandlers(obj._kind);
+    const handler = handlers[eventName];
+    if (handler) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      (handler as any)(obj, args);
+    }
   }
 
   /**

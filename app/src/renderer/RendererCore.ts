@@ -311,6 +311,62 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'sync-objects': {
+          // Initial sync of all objects from store
+          console.log(
+            `[RendererCore] Syncing ${message.objects.length} objects from store`,
+          );
+          this.clearObjects();
+          for (const { id, obj } of message.objects) {
+            this.addObjectVisual(id, obj);
+          }
+          // Render after sync
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'add-object': {
+          console.log(`[RendererCore] Adding object ${message.id}`);
+          this.addObjectVisual(message.id, message.obj);
+          // Render after adding
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'update-object': {
+          console.log(`[RendererCore] Updating object ${message.id}`);
+          this.updateObjectVisual(message.id, message.obj);
+          // Render after updating
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'remove-object': {
+          console.log(`[RendererCore] Removing object ${message.id}`);
+          this.removeObjectVisual(message.id);
+          // Render after removing
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
+        case 'clear-objects': {
+          console.log('[RendererCore] Clearing all objects');
+          this.clearObjects();
+          // Render after clearing
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
         default: {
           // Unknown message type
           this.postResponse({
@@ -1339,6 +1395,189 @@ export abstract class RendererCore {
     console.log(
       `[RendererCore] Test scene created with ${testCards.length} cards`,
     );
+  }
+
+  /**
+   * Add a visual representation for a TableObject (M3-T2.5 Phase 5-6).
+   * Creates PixiJS Container with Graphics and adds to scene.
+   */
+  private addObjectVisual(id: string, obj: TableObject): void {
+    if (!this.worldContainer) return;
+
+    // Skip if visual already exists
+    if (this.objectVisuals.has(id)) {
+      console.warn(`[RendererCore] Visual for object ${id} already exists`);
+      return;
+    }
+
+    // Add to scene manager for hit-testing
+    this.sceneManager.addObject(id, obj);
+
+    // Create visual representation
+    const visual = this.createObjectGraphics(obj);
+
+    // Position the visual
+    visual.x = obj._pos.x;
+    visual.y = obj._pos.y;
+    visual.rotation = (obj._pos.r * Math.PI) / 180; // Convert degrees to radians
+
+    // Store visual reference
+    this.objectVisuals.set(id, visual);
+
+    // Add to world container
+    this.worldContainer.addChild(visual);
+  }
+
+  /**
+   * Update an existing object visual (M3-T2.5 Phase 5-6).
+   * Updates position, rotation, and potentially re-renders if kind/meta changed.
+   */
+  private updateObjectVisual(id: string, obj: TableObject): void {
+    const visual = this.objectVisuals.get(id);
+    if (!visual || !this.worldContainer) {
+      console.warn(`[RendererCore] Visual for object ${id} not found`);
+      return;
+    }
+
+    // Update scene manager
+    this.sceneManager.updateObject(id, obj);
+
+    // Update visual position and rotation
+    visual.x = obj._pos.x;
+    visual.y = obj._pos.y;
+    visual.rotation = (obj._pos.r * Math.PI) / 180;
+
+    // For now, just update position/rotation
+    // TODO: If kind or meta changed, we may need to recreate the visual
+    // For M3-T2.5, position updates are the primary use case
+  }
+
+  /**
+   * Remove an object visual (M3-T2.5 Phase 5-6).
+   */
+  private removeObjectVisual(id: string): void {
+    const visual = this.objectVisuals.get(id);
+    if (visual && this.worldContainer) {
+      this.worldContainer.removeChild(visual);
+      visual.destroy();
+    }
+
+    this.objectVisuals.delete(id);
+    this.sceneManager.removeObject(id);
+
+    // Clear selection if this object was selected
+    if (this.selectedObjectIds.has(id)) {
+      this.selectedObjectIds.delete(id);
+    }
+
+    // Clear hover if this object was hovered
+    if (this.hoveredObjectId === id) {
+      this.hoveredObjectId = null;
+    }
+
+    // Clear drag if this object was being dragged
+    if (this.draggedObjectId === id) {
+      this.draggedObjectId = null;
+      this.isObjectDragging = false;
+    }
+  }
+
+  /**
+   * Clear all object visuals (M3-T2.5 Phase 5-6).
+   */
+  private clearObjects(): void {
+    if (!this.worldContainer) return;
+
+    // Remove all visuals from world container and destroy them
+    for (const [, visual] of this.objectVisuals) {
+      this.worldContainer.removeChild(visual);
+      visual.destroy();
+    }
+
+    // Clear data structures
+    this.objectVisuals.clear();
+    this.sceneManager.clear();
+    this.selectedObjectIds.clear();
+    this.hoveredObjectId = null;
+    this.draggedObjectId = null;
+    this.isObjectDragging = false;
+  }
+
+  /**
+   * Create PixiJS Graphics for a TableObject (M3-T2.5 Phase 6).
+   * Handles different object types (Stack, Token, Zone, etc.).
+   */
+  private createObjectGraphics(obj: TableObject): Container {
+    const container = new Container();
+
+    // Render based on object kind
+    switch (obj._kind) {
+      case ObjectKind.Stack: {
+        // Render as a card (portrait rectangle)
+        const cardGraphic = new Graphics();
+        cardGraphic.rect(
+          -CARD_WIDTH / 2,
+          -CARD_HEIGHT / 2,
+          CARD_WIDTH,
+          CARD_HEIGHT,
+        );
+
+        // Use color from metadata, or fallback to purple
+        const color = (obj._meta?.color as number) || 0x6c5ce7;
+        cardGraphic.fill(color);
+        cardGraphic.stroke({ width: 2, color: 0x2d3436 });
+
+        container.addChild(cardGraphic);
+        break;
+      }
+
+      case ObjectKind.Token: {
+        // Render as a circle
+        const size = (obj._meta?.size as number) || 40;
+        const color = (obj._meta?.color as number) || 0xe74c3c; // Red default
+
+        const tokenGraphic = new Graphics();
+        tokenGraphic.circle(0, 0, size);
+        tokenGraphic.fill(color);
+        tokenGraphic.stroke({ width: 2, color: 0x2d3436 });
+
+        container.addChild(tokenGraphic);
+        break;
+      }
+
+      case ObjectKind.Zone: {
+        // Render as a rectangle outline
+        const width = (obj._meta?.width as number) || 400;
+        const height = (obj._meta?.height as number) || 300;
+        const color = (obj._meta?.color as number) || 0x3498db; // Blue default
+
+        const zoneGraphic = new Graphics();
+        zoneGraphic.rect(-width / 2, -height / 2, width, height);
+        zoneGraphic.fill({ color, alpha: 0.1 }); // Semi-transparent fill
+        zoneGraphic.stroke({ width: 3, color });
+
+        container.addChild(zoneGraphic);
+        break;
+      }
+
+      case ObjectKind.Mat:
+      case ObjectKind.Counter:
+      default: {
+        // Fallback rendering (same as Token for now)
+        const size = (obj._meta?.size as number) || 40;
+        const color = (obj._meta?.color as number) || 0x95a5a6; // Gray default
+
+        const graphic = new Graphics();
+        graphic.circle(0, 0, size);
+        graphic.fill(color);
+        graphic.stroke({ width: 2, color: 0x2d3436 });
+
+        container.addChild(graphic);
+        break;
+      }
+    }
+
+    return container;
   }
 
   /**

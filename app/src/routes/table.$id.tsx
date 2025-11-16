@@ -12,6 +12,7 @@ export const Route = createFileRoute('/table/$id')({
 function Table() {
   const { id } = Route.useParams();
   const storeRef = useRef<YjsStore | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   const [isStoreReady, setIsStoreReady] = useState(false);
   const [objectCount, setObjectCount] = useState(0);
 
@@ -50,7 +51,7 @@ function Table() {
         });
 
         // Store unsubscribe function for cleanup
-        return unsubscribe;
+        unsubscribeRef.current = unsubscribe;
       })
       .catch((error) => {
         console.error('[Table] Failed to initialize YjsStore:', error);
@@ -58,6 +59,13 @@ function Table() {
 
     // Cleanup on unmount
     return () => {
+      // Unsubscribe from object changes
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+
+      // Destroy store
       if (storeRef.current) {
         storeRef.current.destroy();
         storeRef.current = null;

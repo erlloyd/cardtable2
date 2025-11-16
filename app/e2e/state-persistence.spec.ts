@@ -55,7 +55,7 @@ test.describe('State Persistence (M3-T1)', () => {
         __TEST_STORE__.setObject('test-stack-1', {
           _kind: stackKind,
           _containerId: 'table',
-          _pos: { x: 100, y: 200 },
+          _pos: { x: 100, y: 200, r: 0 },
           _sortKey: '1.0',
           _locked: false,
           _selectedBy: null,
@@ -68,7 +68,7 @@ test.describe('State Persistence (M3-T1)', () => {
         __TEST_STORE__.setObject('test-token-1', {
           _kind: tokenKind,
           _containerId: 'table',
-          _pos: { x: 50, y: 75 },
+          _pos: { x: 50, y: 75, r: 0 },
           _sortKey: '2.0',
           _locked: false,
           _selectedBy: null,
@@ -154,7 +154,7 @@ test.describe('State Persistence (M3-T1)', () => {
         __TEST_STORE__.setObject('table1-object', {
           _kind: tokenKind,
           _containerId: 'table',
-          _pos: { x: 10, y: 10 },
+          _pos: { x: 10, y: 10, r: 0 },
           _sortKey: '1.0',
           _locked: false,
           _selectedBy: null,

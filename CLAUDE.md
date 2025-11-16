@@ -114,6 +114,23 @@ pnpm run format
 - This is intentional for performance: ticker only runs when animations are active
 - Ticker should be stopped when animations complete to save CPU cycles
 
+### Object Architecture
+- **Registry Pattern**: Object behaviors mapped by `ObjectKind` (no switch statements)
+- **Modular Structure**: Each object type has dedicated directory in `app/src/renderer/objects/`
+- **Behavior Interface**: Three methods per type: `render()`, `getBounds()`, `getShadowConfig()`
+- **Event System**: Default handlers with type-specific overrides (onHover, onClick, onDrag, onDrop, onDoubleClick)
+- **Plain Data Model**: Objects remain plain `TableObject` data (Yjs-compatible, no class instances)
+- **Type Safety**: TypeScript interfaces ensure correct implementations
+- **Extensibility**: Add new object types without modifying core renderer code
+
+To add a new object type:
+1. Create directory in `app/src/renderer/objects/newtype/`
+2. Implement behaviors (render, getBounds, getShadowConfig)
+3. Register in `objects/index.ts`
+4. Add to `ObjectKind` enum in `shared/src/index.ts`
+
+See `app/src/renderer/objects/README.md` for full documentation.
+
 ### Shared Package
 - Direct TypeScript imports (no build step)
 - Contains common types used by both app and server
@@ -155,6 +172,7 @@ pnpm run format
   - ✅ M3-T1: Y.Doc Schema + IndexedDB (20 unit + 3 E2E tests)
   - ✅ M3-T2: Engine Actions (createObject + moveObjects complete, 11 tests)
   - ✅ M3-T2.5: Store-Renderer Integration (bi-directional sync, all object types)
+  - ✅ M3-Object-Architecture: Registry-Based Behavior System (eliminates switch statements, 34 files, 68 tests passing)
   - ⏸️ M3-T3: Selection Ownership + Clear All
   - ⏸️ M3-T4: Awareness (Cursors + Drag Ghosts)
 - ⏸️ M4: Set Loader & Assets
@@ -191,6 +209,23 @@ pnpm run format
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### M3 Object Architecture Refactoring (Completed 2025-11-16)
+Complete refactoring from switch-statement-based object handling to modular, registry-based behavior system:
+- **Phase 1**: Created object type modules (Stack, Token, Zone, Mat, Counter) with dedicated directories
+- **Phase 2-3**: Replaced all switch statements in RendererCore and SceneManager with behavior registry lookups
+- **Phase 4**: Added event handler infrastructure for future custom behaviors per object type
+- **Architecture Benefits**:
+  - Zero switch statements (eliminated 3 total)
+  - Each object type isolated in own directory (constants, types, utils, behaviors, events)
+  - Easy to add new object types without touching core renderer
+  - Type-safe behavior implementations via TypeScript interfaces
+  - Event system ready for type-specific interactions (grid snapping, card flipping, etc.)
+- **Files Changed**: 34 new files, 8 modified files (-177 lines of switch statements)
+- **Testing**: All 68 tests passing (52 unit + 16 integration)
+- **Documentation**: Added objects/README.md and updated CLAUDE.md with architecture guide
+- See `_plans/M3_object_architecture_refactor.md` for full implementation plan
+- Branch: `feature/m3-object-architecture`
 
 ### M3-T2.5 Enhancements - Object Type Rendering & Hit-Testing (Completed 2025-11-16)
 Polish improvements to store-renderer integration:

@@ -76,10 +76,10 @@ describe('YjsStore', () => {
   });
 
   describe('Object Operations', () => {
-    const testStack: TableObject = {
+    const testStack: StackObject = {
       _kind: ObjectKind.Stack,
       _containerId: 'table',
-      _pos: { x: 100, y: 200 },
+      _pos: { x: 100, y: 200, r: 0 },
       _sortKey: '1.0',
       _locked: false,
       _selectedBy: null,
@@ -89,9 +89,9 @@ describe('YjsStore', () => {
     };
 
     const testToken: TableObject = {
-      _kind: 'token',
+      _kind: ObjectKind.Token,
       _containerId: 'table',
-      _pos: { x: 50, y: 75 },
+      _pos: { x: 50, y: 75, r: 0 },
       _sortKey: '2.0',
       _locked: false,
       _selectedBy: null,
@@ -123,9 +123,9 @@ describe('YjsStore', () => {
     it('can update an existing object', () => {
       store.setObject('stack-1', testStack);
 
-      const updated: TableObject = {
+      const updated: StackObject = {
         ...testStack,
-        _pos: { x: 300, y: 400 },
+        _pos: { x: 300, y: 400, r: 0 },
         _faceUp: false,
       };
 
@@ -166,10 +166,10 @@ describe('YjsStore', () => {
   });
 
   describe('Change Observers', () => {
-    const testStack: TableObject = {
+    const testStack: StackObject = {
       _kind: ObjectKind.Stack,
       _containerId: 'table',
-      _pos: { x: 100, y: 200 },
+      _pos: { x: 100, y: 200, r: 0 },
       _sortKey: '1.0',
       _locked: false,
       _selectedBy: null,
@@ -196,7 +196,7 @@ describe('YjsStore', () => {
       const callback = vi.fn();
       store.onObjectsChange(callback);
 
-      const updated = { ...testStack, _pos: { x: 300, y: 400 } };
+      const updated = { ...testStack, _pos: { x: 300, y: 400, r: 0 } };
       store.setObject('stack-1', updated);
 
       // Wait for Yjs to trigger observers

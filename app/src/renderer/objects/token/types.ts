@@ -1,7 +1,7 @@
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 
 /** Token-specific metadata interface */
-export interface TokenMeta {
+export interface TokenMeta extends Record<string, unknown> {
   color?: number;
   size?: number;
 }
@@ -13,6 +13,5 @@ export function isTokenObject(obj: TableObject): obj is TokenObject {
 
 /** Full Token object type with required fields */
 export interface TokenObject extends TableObject {
-  _kind: 'token';
-  _meta?: TokenMeta;
+  _kind: ObjectKind.Token;
 }

@@ -1,7 +1,7 @@
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 
 /** Stack-specific metadata interface */
-export interface StackMeta {
+export interface StackMeta extends Record<string, unknown> {
   color?: number;
 }
 
@@ -12,8 +12,7 @@ export function isStackObject(obj: TableObject): obj is StackObject {
 
 /** Full Stack object type with required fields */
 export interface StackObject extends TableObject {
-  _kind: 'stack';
+  _kind: ObjectKind.Stack;
   _cards: string[];
   _faceUp: boolean;
-  _meta?: StackMeta;
 }

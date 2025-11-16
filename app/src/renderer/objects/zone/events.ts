@@ -16,7 +16,7 @@ export const ZoneEventHandlers: Partial<EventHandlers> = {
       droppedObj._pos.y = snappedY;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    droppedObj._containerId = zone._id;
+    // TODO: Set droppedObj._containerId when drop events are fully implemented
+    // Will need zone ID to be passed to event handler
   },
 };

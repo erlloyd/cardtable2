@@ -1,7 +1,7 @@
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 
 /** Counter-specific metadata interface */
-export interface CounterMeta {
+export interface CounterMeta extends Record<string, unknown> {
   color?: number;
   size?: number;
 }
@@ -13,6 +13,5 @@ export function isCounterObject(obj: TableObject): obj is CounterObject {
 
 /** Full Counter object type with required fields */
 export interface CounterObject extends TableObject {
-  _kind: 'counter';
-  _meta?: CounterMeta;
+  _kind: ObjectKind.Counter;
 }

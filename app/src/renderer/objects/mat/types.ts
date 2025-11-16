@@ -1,7 +1,7 @@
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 
 /** Mat-specific metadata interface */
-export interface MatMeta {
+export interface MatMeta extends Record<string, unknown> {
   color?: number;
   size?: number;
 }
@@ -13,6 +13,5 @@ export function isMatObject(obj: TableObject): obj is MatObject {
 
 /** Full Mat object type with required fields */
 export interface MatObject extends TableObject {
-  _kind: 'mat';
-  _meta?: MatMeta;
+  _kind: ObjectKind.Mat;
 }

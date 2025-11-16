@@ -1,7 +1,7 @@
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 
 /** Zone-specific metadata interface */
-export interface ZoneMeta {
+export interface ZoneMeta extends Record<string, unknown> {
   color?: number;
   width?: number;
   height?: number;
@@ -16,6 +16,5 @@ export function isZoneObject(obj: TableObject): obj is ZoneObject {
 
 /** Full Zone object type with required fields */
 export interface ZoneObject extends TableObject {
-  _kind: 'zone';
-  _meta?: ZoneMeta;
+  _kind: ObjectKind.Zone;
 }

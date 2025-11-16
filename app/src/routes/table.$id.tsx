@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { YjsStore } from '../store/YjsStore';
+import { createObject } from '../store/YjsActions';
+import { ObjectKind } from '@cardtable2/shared';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -15,6 +17,26 @@ function Table() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const [isStoreReady, setIsStoreReady] = useState(false);
   const [objectCount, setObjectCount] = useState(0);
+
+  // Handler to spawn a test card (M3-T2 testing)
+  const handleSpawnCard = () => {
+    if (!storeRef.current) return;
+
+    // Spawn at random position near center
+    const x = Math.random() * 400 - 200; // -200 to +200
+    const y = Math.random() * 400 - 200;
+
+    const id = createObject(storeRef.current, {
+      kind: ObjectKind.Stack,
+      pos: { x, y, r: 0 },
+      cards: ['test-card'],
+      faceUp: true,
+    });
+
+    console.log(
+      `[Table] Spawned card at (${x.toFixed(0)}, ${y.toFixed(0)}), id: ${id}`,
+    );
+  };
 
   // Initialize Yjs store on mount (M3-T1)
   useEffect(() => {
@@ -36,6 +58,11 @@ function Table() {
     void store
       .waitForReady()
       .then(() => {
+        // Check if this store is still the current one (not destroyed by cleanup)
+        if (storeRef.current !== store) {
+          return;
+        }
+
         console.log('[Table] YjsStore ready');
         setIsStoreReady(true);
 
@@ -81,18 +108,39 @@ function Table() {
 
   return (
     <div className="table">
-      {/* Store status display */}
+      {/* Store status display and test controls */}
       <div
         style={{
           fontSize: '12px',
           padding: '8px',
           marginBottom: '8px',
-          backgroundColor: '#f0f0f0',
+          backgroundColor: '#2d3748',
+          color: '#ffffff',
           borderRadius: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
         }}
       >
-        Store: {isStoreReady ? '✓ Ready' : '⏳ Loading...'} | Objects:{' '}
-        {objectCount}
+        <div>
+          Store: {isStoreReady ? '✓ Ready' : '⏳ Loading...'} | Objects:{' '}
+          {objectCount}
+        </div>
+        <button
+          onClick={handleSpawnCard}
+          disabled={!isStoreReady}
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            backgroundColor: isStoreReady ? '#4CAF50' : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isStoreReady ? 'pointer' : 'not-allowed',
+          }}
+        >
+          Spawn Card
+        </button>
       </div>
 
       <Suspense fallback={<div>Loading board...</div>}>

@@ -125,8 +125,14 @@ export type RendererToMainMessage =
       type: 'objects-moved';
       updates: Array<{ id: string; pos: Position }>;
     }
-  | { type: 'objects-selected'; ids: string[] }
-  | { type: 'objects-unselected'; ids: string[] };
+  | {
+      type: 'objects-selected';
+      ids: string[];
+    }
+  | {
+      type: 'objects-unselected';
+      ids: string[];
+    };
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

@@ -385,9 +385,11 @@ export abstract class RendererCore {
         }
       }
 
-      // Sync selection cache after ANY message that might affect object state
-      // This is automatic and idempotent - runs once per message, no manual calls needed
-      this.syncSelectionCache();
+      // Sync selection cache only for messages that affect object state (M3-T3)
+      // Most messages (init, resize, pointer events) don't modify objects, so no sync needed
+      if (this.shouldSyncSelectionCache(message.type)) {
+        this.syncSelectionCache();
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.postResponse({
@@ -1449,6 +1451,30 @@ export abstract class RendererCore {
       this.draggedObjectId = null;
       this.isObjectDragging = false;
     }
+  }
+
+  /**
+   * Determine if a message type requires syncing the selection cache (M3-T3).
+   *
+   * Returns true only for message types that could affect object presence or _selectedBy field:
+   * - sync-objects: Full object sync
+   * - objects-added: New objects (may have _selectedBy set)
+   * - objects-updated: Object properties changed (including _selectedBy)
+   * - objects-removed: Objects deleted (may be selected)
+   *
+   * Other message types (init, resize, pointer events, etc.) don't affect object state,
+   * so selection cache remains valid.
+   *
+   * @param messageType - The type of message being processed
+   * @returns true if selection cache should be synced after this message
+   */
+  private shouldSyncSelectionCache(messageType: string): boolean {
+    return (
+      messageType === 'sync-objects' ||
+      messageType === 'objects-added' ||
+      messageType === 'objects-updated' ||
+      messageType === 'objects-removed'
+    );
   }
 
   /**

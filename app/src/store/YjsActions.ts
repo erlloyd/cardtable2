@@ -308,8 +308,8 @@ export function clearAllSelections(
       // TODO: Implement excludeDragging logic when awareness/drag state is available (M3-T4)
       // For now, excludeDragging is not implemented as we don't have drag state tracking yet
       if (options.excludeDragging) {
-        console.warn(
-          '[clearAllSelections] excludeDragging option not yet implemented (requires M3-T4 awareness)',
+        throw new Error(
+          '[clearAllSelections] excludeDragging option is not implemented yet (requires M3-T4 awareness)',
         );
       }
 

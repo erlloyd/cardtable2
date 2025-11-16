@@ -912,7 +912,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(store.getAllObjects().size).toBe(2); // Both objects still exist
     });
 
-    it('warns about excludeDragging option not being implemented', () => {
+    it('throws error when excludeDragging option is used', () => {
       const id = createObject(store, {
         kind: ObjectKind.Token,
         pos: { x: 0, y: 0, r: 0 },
@@ -920,17 +920,9 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 
       selectObjects(store, [id], actorId);
 
-      const consoleWarnSpy = vi
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
-
-      clearAllSelections(store, { excludeDragging: true });
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('excludeDragging option not yet implemented'),
-      );
-
-      consoleWarnSpy.mockRestore();
+      expect(() => {
+        clearAllSelections(store, { excludeDragging: true });
+      }).toThrow('excludeDragging option is not implemented yet');
     });
   });
 });

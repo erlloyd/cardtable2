@@ -54,6 +54,10 @@ export interface PointerEventData {
   button?: number;
   buttons?: number;
   isPrimary: boolean;
+  // Modifier keys for multi-select support
+  metaKey: boolean; // Cmd on Mac, Windows key on Windows
+  ctrlKey: boolean; // Ctrl key
+  shiftKey: boolean; // Shift key (for future range select)
 }
 
 // Wheel event data (M2-T3)
@@ -62,6 +66,9 @@ export interface WheelEventData {
   clientX: number;
   clientY: number;
 }
+
+// Interaction mode for pan/select toggle
+export type InteractionMode = 'pan' | 'select';
 
 // Messages sent from main thread to renderer (worker or main thread)
 export type MainToRendererMessage =
@@ -76,6 +83,7 @@ export type MainToRendererMessage =
     }
   | { type: 'resize'; width: number; height: number; dpr: number }
   | { type: 'test-animation' }
+  | { type: 'set-interaction-mode'; mode: InteractionMode }
   | { type: 'pointer-down'; event: PointerEventData }
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }

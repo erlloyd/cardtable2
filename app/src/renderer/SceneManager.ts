@@ -20,6 +20,7 @@ interface BBox {
 export class SceneManager {
   private objects: Map<string, TableObject> = new Map();
   private spatialIndex: RBush<BBox> = new RBush();
+  private bboxCache: Map<string, BBox> = new Map(); // Cache bboxes for accurate removal
 
   /**
    * Add an object to the scene
@@ -30,6 +31,7 @@ export class SceneManager {
     // Calculate bounding box and add to spatial index
     const bbox = this.getBoundingBox(id, obj);
     this.spatialIndex.insert(bbox);
+    this.bboxCache.set(id, bbox); // Cache for accurate removal later
   }
 
   /**
@@ -39,9 +41,12 @@ export class SceneManager {
     const obj = this.objects.get(id);
     if (!obj) return;
 
-    // Remove from spatial index
-    const bbox = this.getBoundingBox(id, obj);
-    this.spatialIndex.remove(bbox, (a, b) => a.id === b.id);
+    // Remove from spatial index using cached bbox (critical for objects that moved!)
+    const bbox = this.bboxCache.get(id);
+    if (bbox) {
+      this.spatialIndex.remove(bbox, (a, b) => a.id === b.id);
+      this.bboxCache.delete(id);
+    }
 
     this.objects.delete(id);
   }
@@ -129,6 +134,7 @@ export class SceneManager {
   clear(): void {
     this.objects.clear();
     this.spatialIndex.clear();
+    this.bboxCache.clear();
   }
 
   /**

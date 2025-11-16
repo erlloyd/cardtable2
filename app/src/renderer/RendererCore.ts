@@ -5,7 +5,9 @@ import type {
   PointerEventData,
   WheelEventData,
   TableObject,
+  InteractionMode,
 } from '@cardtable2/shared';
+import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
 import { CARD_WIDTH, CARD_HEIGHT, TEST_CARD_COLORS } from './constants';
 
@@ -29,12 +31,29 @@ export abstract class RendererCore {
   private animationStartTime: number = 0;
   private isAnimating: boolean = false;
 
+  // Rendering mode (set by subclasses)
+  protected renderMode: RenderMode = RenderMode.Worker; // Default to worker mode
+
   // Scene management (M2-T4)
   private sceneManager: SceneManager = new SceneManager();
   private hoveredObjectId: string | null = null;
   private objectVisuals: Map<string, Container & { targetScale?: number }> =
     new Map();
   private hoverAnimationActive = false;
+
+  // Object selection state
+  private selectedObjectIds: Set<string> = new Set();
+
+  // Object dragging state (M2-T5)
+  private draggedObjectId: string | null = null;
+  private dragStartWorldX = 0;
+  private dragStartWorldY = 0;
+  private isObjectDragging = false;
+  // Track initial positions of all selected cards when drag starts (for multi-drag)
+  private draggedObjectsStartPositions: Map<string, { x: number; y: number }> =
+    new Map();
+  // Store pointer down event for selection logic on pointer up
+  private pointerDownEvent: PointerEventData | null = null;
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
@@ -56,6 +75,19 @@ export abstract class RendererCore {
   private initialPinchScale = 1.0;
   private initialPinchMidpoint = { x: 0, y: 0 }; // Locked screen point for pinch zoom
   private initialPinchWorldPoint = { x: 0, y: 0 }; // World coords under locked midpoint
+
+  // Interaction mode (pan/select toggle)
+  private interactionMode: InteractionMode = 'pan';
+
+  // Rectangle selection state
+  private isRectangleSelecting = false;
+  private rectangleSelectStartX = 0;
+  private rectangleSelectStartY = 0;
+  private selectionRectangle: Graphics | null = null;
+
+  // Cached blur filters for performance (M2-T5 optimization)
+  private hoverBlurFilter: BlurFilter | null = null;
+  private dragBlurFilter: BlurFilter | null = null;
 
   /**
    * Send a response message back to the main thread.
@@ -238,6 +270,14 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'set-interaction-mode': {
+          this.interactionMode = message.mode;
+          console.log(
+            `[RendererCore] Interaction mode set to: ${message.mode}`,
+          );
+          break;
+        }
+
         case 'test-animation': {
           // Test animation with ticker enabled
           console.log('[RendererCore] Starting test animation...');
@@ -323,7 +363,7 @@ export abstract class RendererCore {
   }
 
   /**
-   * Handle pointer down event (M2-T3).
+   * Handle pointer down event (M2-T3 + M2-T5 object dragging).
    */
   private handlePointerDown(event: PointerEventData): void {
     if (!this.worldContainer) return;
@@ -340,6 +380,8 @@ export abstract class RendererCore {
     // Check if we have 2 touch pointers (pinch gesture)
     if (this.pointers.size === 2 && event.pointerType === 'touch') {
       this.isDragging = false;
+      this.isObjectDragging = false;
+      this.draggedObjectId = null;
       this.isPinching = true;
 
       // Calculate initial pinch distance and LOCK the midpoint
@@ -364,8 +406,48 @@ export abstract class RendererCore {
         (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
         this.initialPinchScale;
     } else if (event.isPrimary) {
-      // Start dragging if this is the primary pointer (and not pinching)
-      this.isDragging = false; // Will become true once we exceed slop threshold
+      // Store pointer down event for selection logic on pointer up
+      this.pointerDownEvent = event;
+
+      // Always do hit-testing first to determine if we're over a card
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+
+      // Determine if we're in rectangle-select mode based on interaction mode + modifiers
+      const modifierPressed = event.metaKey || event.ctrlKey;
+      const shouldRectangleSelect =
+        (this.interactionMode === 'select' && !modifierPressed) ||
+        (this.interactionMode === 'pan' && modifierPressed);
+
+      if (hitResult) {
+        // Clicking on a card - always prepare for object drag (regardless of mode)
+        this.draggedObjectId = hitResult.id;
+        this.dragStartWorldX = worldX;
+        this.dragStartWorldY = worldY;
+        this.isObjectDragging = false; // Will become true once we exceed slop threshold
+        this.isDragging = false;
+        this.isRectangleSelecting = false;
+      } else if (shouldRectangleSelect) {
+        // Clicking on empty space in rectangle select mode - prepare for rectangle selection
+        this.rectangleSelectStartX = worldX;
+        this.rectangleSelectStartY = worldY;
+        this.isRectangleSelecting = false; // Will become true once we exceed slop threshold
+        this.draggedObjectId = null;
+        this.isDragging = false;
+        this.isObjectDragging = false;
+      } else {
+        // Clicking on empty space in pan mode - prepare for camera pan
+        this.draggedObjectId = null;
+        this.isDragging = false; // Will become true once we exceed slop threshold
+        this.isObjectDragging = false;
+        this.isRectangleSelecting = false;
+        this.rectangleSelectStartX = 0;
+        this.rectangleSelectStartY = 0;
+      }
     }
   }
 
@@ -417,7 +499,7 @@ export abstract class RendererCore {
         // Don't return - we still want to do hit-test for hover
       }
 
-      // Handle single-pointer pan/drag
+      // Handle single-pointer pan/drag (M2-T3 + M2-T5 object dragging)
       if (this.pointers.size === 1) {
         // Calculate movement delta from start
         const dx = event.clientX - pointerInfo.startX;
@@ -434,12 +516,134 @@ export abstract class RendererCore {
             : DRAG_SLOP.mouse;
 
         // Start dragging once we exceed the slop threshold
-        if (!this.isDragging && distance > slopThreshold && event.isPrimary) {
-          this.isDragging = true;
+        if (
+          !this.isDragging &&
+          !this.isObjectDragging &&
+          !this.isRectangleSelecting &&
+          distance > slopThreshold &&
+          event.isPrimary
+        ) {
+          // Check if we should start rectangle selection
+          if (
+            this.rectangleSelectStartX !== 0 ||
+            this.rectangleSelectStartY !== 0
+          ) {
+            // Start rectangle selection
+            this.isRectangleSelecting = true;
+            console.log('[RendererCore] Starting rectangle selection');
+          } else if (this.draggedObjectId) {
+            // We're tracking an object - start object drag
+            this.isObjectDragging = true;
+
+            // If the dragged object isn't selected, select it (clearing other selections)
+            if (!this.selectedObjectIds.has(this.draggedObjectId)) {
+              // Clear previous selections and redraw them
+              const prevSelected = Array.from(this.selectedObjectIds);
+              this.selectedObjectIds.clear();
+
+              for (const id of prevSelected) {
+                this.redrawCardVisual(id, false, false, false);
+              }
+
+              // Select the dragged card
+              this.selectedObjectIds.add(this.draggedObjectId);
+              this.redrawCardVisual(this.draggedObjectId, false, false, true);
+            }
+
+            // Save initial positions of all selected cards for multi-drag
+            this.draggedObjectsStartPositions.clear();
+            for (const objectId of this.selectedObjectIds) {
+              const obj = this.sceneManager.getObject(objectId);
+              if (obj) {
+                this.draggedObjectsStartPositions.set(objectId, {
+                  x: obj._pos.x,
+                  y: obj._pos.y,
+                });
+              }
+            }
+
+            // Apply drag visual feedback to all selected cards
+            // Also update _sortKey to ensure hit-testing respects the new z-order
+
+            // Find the current maximum sortKey (lexicographic comparison for fractional indexing)
+            let maxSortKey = '0';
+            for (const [, obj] of this.sceneManager.getAllObjects()) {
+              if (obj._sortKey > maxSortKey) {
+                maxSortKey = obj._sortKey;
+              }
+            }
+
+            // Generate new sortKeys for dragged cards using fractional indexing
+            // Increment the prefix to ensure new keys are lexicographically greater
+            const [prefix] = maxSortKey.split('|');
+            const newPrefix = String(Number(prefix) + 1);
+
+            let sortKeyCounter = 0;
+            for (const objectId of this.selectedObjectIds) {
+              this.updateDragFeedback(objectId, true);
+
+              // Move all selected objects to top of z-order (both visual and logical)
+              const visual = this.objectVisuals.get(objectId);
+              const obj = this.sceneManager.getObject(objectId);
+              if (visual && obj && this.worldContainer) {
+                // Update visual z-order
+                this.worldContainer.setChildIndex(
+                  visual,
+                  this.worldContainer.children.length - 1,
+                );
+
+                // Update logical z-order (_sortKey) using fractional indexing format
+                // TODO: Current implementation only supports up to 26 cards in a single drag operation
+                // (a-z = 97-122). For production, implement proper fractional indexing library
+                // that supports unlimited suffix generation (e.g., 'aa', 'ab', ... 'ba', 'bb').
+                // See: https://github.com/rocicorp/fractional-indexing or similar
+                obj._sortKey = `${newPrefix}|${String.fromCharCode(97 + sortKeyCounter++)}`;
+              }
+            }
+          } else {
+            // No object - start camera pan
+            this.isDragging = true;
+          }
         }
 
-        // If dragging, manually pan the camera
-        if (this.isDragging && event.isPrimary) {
+        // If dragging an object, update positions of all selected objects
+        if (this.isObjectDragging && this.draggedObjectId && event.isPrimary) {
+          // Calculate current world position
+          const worldX =
+            (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+          const worldY =
+            (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+          // Calculate drag delta from the primary dragged object's start position
+          const deltaX = worldX - this.dragStartWorldX;
+          const deltaY = worldY - this.dragStartWorldY;
+
+          // Update all selected objects' positions based on delta
+          for (const objectId of this.selectedObjectIds) {
+            const startPos = this.draggedObjectsStartPositions.get(objectId);
+            const obj = this.sceneManager.getObject(objectId);
+
+            if (startPos && obj) {
+              // Update object position in memory (relative to start position)
+              obj._pos.x = startPos.x + deltaX;
+              obj._pos.y = startPos.y + deltaY;
+
+              // Update visual position immediately for smooth rendering
+              const visual = this.objectVisuals.get(objectId);
+              if (visual) {
+                visual.x = obj._pos.x;
+                visual.y = obj._pos.y;
+              }
+            }
+          }
+
+          // Request render
+          // Note: SceneManager spatial index update is deferred until drag ends
+          // to avoid expensive RBush removal/insertion on every pointer move
+          this.app.renderer.render(this.app.stage);
+        }
+        // If dragging camera, manually pan the camera
+        else if (this.isDragging && event.isPrimary) {
           // Calculate delta from last position
           const deltaX = event.clientX - lastX;
           const deltaY = event.clientY - lastY;
@@ -451,16 +655,37 @@ export abstract class RendererCore {
           // Request render
           this.app.renderer.render(this.app.stage);
         }
+        // If rectangle selecting, draw the selection rectangle
+        else if (this.isRectangleSelecting && event.isPrimary) {
+          // Calculate current world position
+          const worldX =
+            (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+          const worldY =
+            (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+          // Update or create selection rectangle
+          this.updateSelectionRectangle(
+            this.rectangleSelectStartX,
+            this.rectangleSelectStartY,
+            worldX,
+            worldY,
+          );
+
+          // Request render
+          this.app.renderer.render(this.app.stage);
+        }
       }
     }
 
     // Hit-test for hover feedback (M2-T4)
     // Only for mouse and pen pointers - touch doesn't have hover
-    // Also skip if we're actively dragging or pinching
+    // Also skip if we're actively dragging, pinching, dragging an object, or rectangle selecting
     if (
       (event.pointerType === 'mouse' || event.pointerType === 'pen') &&
       !this.isDragging &&
-      !this.isPinching
+      !this.isPinching &&
+      !this.isObjectDragging &&
+      !this.isRectangleSelecting
     ) {
       // Convert screen coordinates to world coordinates
       const worldX =
@@ -490,7 +715,11 @@ export abstract class RendererCore {
       }
     } else {
       // Clear hover when not applicable (touch, dragging, or pinching)
-      if (this.hoveredObjectId) {
+      // But don't clear if we're dragging the hovered object (M2-T5)
+      if (
+        this.hoveredObjectId &&
+        this.hoveredObjectId !== this.draggedObjectId
+      ) {
         this.updateHoverFeedback(this.hoveredObjectId, false);
         this.hoveredObjectId = null;
         this.app.renderer.render(this.app.stage);
@@ -515,23 +744,102 @@ export abstract class RendererCore {
     }
 
     // Redraw the visual with current hover state
-    this.redrawCardVisual(objectId, isHovered);
+    const isSelected = this.selectedObjectIds.has(objectId);
+    this.redrawCardVisual(objectId, isHovered, false, isSelected);
   }
 
   /**
-   * Redraw a card's visual representation (M2-T4).
+   * Update drag visual feedback for an object (M2-T5).
+   * Makes the card appear to lift off the table with colored shadow and scale.
    */
-  private redrawCardVisual(objectId: string, isHovered: boolean): void {
+  private updateDragFeedback(objectId: string, isDragging: boolean): void {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
-    // Get original color from the test card data
-    const color = TEST_CARD_COLORS[objectId] || 0x6c5ce7;
+    // Store target scale on the visual object
+    visual.targetScale = isDragging ? 1.05 : 1.0;
+
+    // Start hover animation if not already running (reuses same animation system)
+    if (!this.hoverAnimationActive) {
+      this.startHoverAnimation();
+    }
+
+    // Redraw the visual with current drag state
+    const isSelected = this.selectedObjectIds.has(objectId);
+    this.redrawCardVisual(objectId, false, isDragging, isSelected);
+  }
+
+  /**
+   * Update or create selection rectangle graphic.
+   */
+  private updateSelectionRectangle(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): void {
+    if (!this.worldContainer) return;
+
+    // Create selection rectangle if it doesn't exist
+    if (!this.selectionRectangle) {
+      this.selectionRectangle = new Graphics();
+      this.worldContainer.addChild(this.selectionRectangle);
+    }
+
+    // Clear and redraw rectangle
+    this.selectionRectangle.clear();
+
+    // Calculate rectangle bounds
+    const minX = Math.min(startX, endX);
+    const minY = Math.min(startY, endY);
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+
+    // Draw filled rectangle with border
+    this.selectionRectangle.rect(minX, minY, width, height);
+    this.selectionRectangle.fill({ color: 0x3b82f6, alpha: 0.2 }); // Blue fill
+    this.selectionRectangle.stroke({ width: 2, color: 0x3b82f6 }); // Blue border
+  }
+
+  /**
+   * Clear selection rectangle graphic.
+   */
+  private clearSelectionRectangle(): void {
+    if (this.selectionRectangle && this.worldContainer) {
+      this.worldContainer.removeChild(this.selectionRectangle);
+      this.selectionRectangle.destroy();
+      this.selectionRectangle = null;
+    }
+  }
+
+  /**
+   * Redraw a card's visual representation (M2-T4, M2-T5).
+   * @param isHovered - Whether the card is hovered (black shadow)
+   * @param isDragging - Whether the card is being dragged (blue shadow)
+   * @param isSelected - Whether the card is selected (red border)
+   */
+  private redrawCardVisual(
+    objectId: string,
+    isHovered: boolean,
+    isDragging: boolean,
+    isSelected: boolean,
+  ): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (!visual) return;
+
+    // Get color from object metadata, or fall back to TEST_CARD_COLORS for legacy cards
+    const obj = this.sceneManager.getObject(objectId);
+    const color =
+      (obj?._meta?.color as number) || TEST_CARD_COLORS[objectId] || 0x6c5ce7;
 
     // Clear existing children
     visual.removeChildren();
 
-    if (isHovered) {
+    // Apply shadow for both hover and drag states (M2-T4, M2-T5)
+    // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
+    const shouldShowShadow =
+      isHovered || (isDragging && this.renderMode === RenderMode.Worker);
+    if (shouldShowShadow) {
       // Create shadow graphic with blur filter
       const shadowGraphic = new Graphics();
       const shadowPadding = 8;
@@ -544,18 +852,41 @@ export abstract class RendererCore {
         CARD_HEIGHT + shadowPadding * 2,
         borderRadius,
       );
-      shadowGraphic.fill({ color: 0x000000, alpha: 0.3 });
 
-      // Apply blur filter for diffuse shadow
+      // Use different shadow colors: black for hover, blue for drag
+      const shadowColor = isDragging ? 0x3b82f6 : 0x000000; // Blue for drag, black for hover
+      shadowGraphic.fill({ color: shadowColor, alpha: 0.3 });
+
+      // Reuse cached blur filters instead of creating new ones every time (performance optimization)
       // Scale blur strength by camera scale to maintain consistent appearance at all zoom levels
       // TODO: BUG - If hovering a card while zooming, the shadow doesn't update until hover changes.
       // This causes the shadow size to be wrong at the new zoom level until you move the mouse.
       // Fix: Listen to zoom changes and redraw hovered card, or update filter strength directly.
-      const blurFilter = new BlurFilter({
-        strength: 16 * this.cameraScale,
-        quality: 10, // Higher quality for smoother blur at high strengths
-      });
-      shadowGraphic.filters = [blurFilter];
+      const currentStrength = 16 * this.cameraScale;
+
+      if (isDragging) {
+        // Use/create drag blur filter
+        if (!this.dragBlurFilter) {
+          this.dragBlurFilter = new BlurFilter({
+            strength: currentStrength,
+            quality: 4, // Lower quality for drag (performance)
+          });
+        } else {
+          this.dragBlurFilter.strength = currentStrength;
+        }
+        shadowGraphic.filters = [this.dragBlurFilter];
+      } else {
+        // Use/create hover blur filter
+        if (!this.hoverBlurFilter) {
+          this.hoverBlurFilter = new BlurFilter({
+            strength: currentStrength,
+            quality: 8, // Medium quality for hover (balance)
+          });
+        } else {
+          this.hoverBlurFilter.strength = currentStrength;
+        }
+        shadowGraphic.filters = [this.hoverBlurFilter];
+      }
 
       visual.addChild(shadowGraphic);
     }
@@ -569,7 +900,11 @@ export abstract class RendererCore {
       CARD_HEIGHT,
     );
     cardGraphic.fill(color);
-    cardGraphic.stroke({ width: 2, color: 0x2d3436 });
+
+    // Use different border colors for selection state
+    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
+    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
+    cardGraphic.stroke({ width: borderWidth, color: borderColor });
 
     visual.addChild(cardGraphic);
   }
@@ -631,10 +966,132 @@ export abstract class RendererCore {
   }
 
   /**
-   * Handle pointer up event (M2-T3 + pinch-to-zoom).
+   * Handle selection logic on pointer end (up or cancel).
+   * Extracted to avoid duplication between handlePointerUp and handlePointerCancel.
+   */
+  private handleSelectionOnPointerEnd(
+    event: PointerEventData,
+    wasRectangleSelecting: boolean,
+  ): void {
+    // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
+    if (
+      event.isPrimary &&
+      !this.isObjectDragging &&
+      !this.isDragging &&
+      !wasRectangleSelecting &&
+      this.pointerDownEvent
+    ) {
+      const worldX =
+        (event.clientX - this.worldContainer!.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer!.position.y) / this.cameraScale;
+
+      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+
+      if (hitResult) {
+        // Clicked on an object - handle selection logic
+        const isMultiSelectModifier =
+          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
+
+        if (isMultiSelectModifier) {
+          // Cmd/Ctrl+click: toggle selection
+          if (this.selectedObjectIds.has(hitResult.id)) {
+            this.selectedObjectIds.delete(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, false);
+          } else {
+            this.selectedObjectIds.add(hitResult.id);
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+        } else {
+          // Single click: select only this card (unless already selected)
+          if (!this.selectedObjectIds.has(hitResult.id)) {
+            // Clear previous selection and select new card
+            const prevSelected = Array.from(this.selectedObjectIds);
+            this.selectedObjectIds.clear();
+            this.selectedObjectIds.add(hitResult.id);
+
+            // Redraw previously selected cards (now deselected)
+            for (const id of prevSelected) {
+              if (id !== hitResult.id) {
+                this.redrawCardVisual(id, false, false, false);
+              }
+            }
+            // Redraw newly selected card
+            this.redrawCardVisual(hitResult.id, false, false, true);
+          }
+          // If already selected, don't change selection (allows multi-drag)
+        }
+
+        // Request render to show selection changes
+        this.app!.renderer.render(this.app!.stage);
+      } else {
+        // Clicked on empty space - deselect all
+        if (this.selectedObjectIds.size > 0) {
+          const prevSelected = Array.from(this.selectedObjectIds);
+          this.selectedObjectIds.clear();
+
+          // Redraw all previously selected cards
+          for (const id of prevSelected) {
+            this.redrawCardVisual(id, false, false, false);
+          }
+
+          // Request render to show deselection
+          this.app!.renderer.render(this.app!.stage);
+        }
+      }
+
+      // Clear stored pointer down event
+      this.pointerDownEvent = null;
+    }
+  }
+
+  /**
+   * Clear drag state after pointer end (up or cancel).
+   * Extracted to avoid duplication between handlePointerUp and handlePointerCancel.
+   */
+  private clearDragState(event: PointerEventData): void {
+    // End dragging
+    if (event.isPrimary) {
+      // Clear object drag state (M2-T5)
+      if (this.isObjectDragging && this.draggedObjectId) {
+        // Update SceneManager spatial index for all selected cards now that drag is complete
+        // (deferred from pointer move for performance)
+        for (const objectId of this.selectedObjectIds) {
+          const obj = this.sceneManager.getObject(objectId);
+          if (obj) {
+            this.sceneManager.updateObject(objectId, obj);
+          }
+          // Clear drag visual feedback
+          this.updateDragFeedback(objectId, false);
+        }
+
+        // Clear drag state
+        this.isObjectDragging = false;
+        this.draggedObjectId = null;
+        this.draggedObjectsStartPositions.clear();
+      }
+
+      // Clear rectangle selection state if needed
+      if (this.isRectangleSelecting) {
+        this.clearSelectionRectangle();
+        this.isRectangleSelecting = false;
+        this.rectangleSelectStartX = 0;
+        this.rectangleSelectStartY = 0;
+      }
+
+      // Clear camera drag
+      this.isDragging = false;
+    }
+  }
+
+  /**
+   * Handle pointer up event (M2-T3 + pinch-to-zoom + M2-T5 object dragging).
    */
   private handlePointerUp(event: PointerEventData): void {
     if (!this.worldContainer) return;
+
+    // Store rectangle selecting state before we potentially reset it
+    const wasRectangleSelecting = this.isRectangleSelecting;
 
     // Clear pointer tracking
     this.pointers.delete(event.pointerId);
@@ -643,6 +1100,11 @@ export abstract class RendererCore {
     if (this.isPinching && this.pointers.size < 2) {
       this.isPinching = false;
       console.log('[RendererCore] Pinch gesture ended');
+
+      // Clear rectangle selection state to prevent ghost selections
+      this.rectangleSelectStartX = 0;
+      this.rectangleSelectStartY = 0;
+      this.isRectangleSelecting = false;
 
       // Transition to pan mode: reset remaining pointer's start position
       // so user doesn't need to exceed drag slop again
@@ -655,17 +1117,79 @@ export abstract class RendererCore {
       }
     }
 
-    // End dragging
-    if (event.isPrimary) {
-      this.isDragging = false;
+    // Handle rectangle selection completion
+    if (this.isRectangleSelecting && event.isPrimary) {
+      // Calculate current world position
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+      // Calculate rectangle bounds
+      const minX = Math.min(this.rectangleSelectStartX, worldX);
+      const minY = Math.min(this.rectangleSelectStartY, worldY);
+      const maxX = Math.max(this.rectangleSelectStartX, worldX);
+      const maxY = Math.max(this.rectangleSelectStartY, worldY);
+
+      // Hit-test all objects within rectangle
+      const objectsInRect = this.sceneManager.hitTestRect({
+        minX,
+        minY,
+        maxX,
+        maxY,
+      });
+
+      // Determine if multi-select (keep existing selections)
+      const isMultiSelectModifier =
+        this.pointerDownEvent?.metaKey || this.pointerDownEvent?.ctrlKey;
+
+      if (!isMultiSelectModifier) {
+        // Clear existing selections
+        const prevSelected = Array.from(this.selectedObjectIds);
+        this.selectedObjectIds.clear();
+
+        for (const id of prevSelected) {
+          this.redrawCardVisual(id, false, false, false);
+        }
+      }
+
+      // Add newly selected objects
+      for (const { id } of objectsInRect) {
+        this.selectedObjectIds.add(id);
+        this.redrawCardVisual(id, false, false, true);
+      }
+
+      console.log(
+        `[RendererCore] Rectangle selected ${objectsInRect.length} cards`,
+      );
+
+      // Clear selection rectangle
+      this.clearSelectionRectangle();
+
+      // Reset rectangle selection state
+      this.isRectangleSelecting = false;
+      this.rectangleSelectStartX = 0;
+      this.rectangleSelectStartY = 0;
+
+      // Request render
+      this.app!.renderer.render(this.app!.stage);
     }
+
+    // Handle selection logic
+    this.handleSelectionOnPointerEnd(event, wasRectangleSelecting);
+
+    // Clear drag state
+    this.clearDragState(event);
   }
 
   /**
-   * Handle pointer cancel event (M2-T3 + pinch-to-zoom).
+   * Handle pointer cancel event (M2-T3 + pinch-to-zoom + M2-T5 object dragging).
    */
   private handlePointerCancel(event: PointerEventData): void {
     if (!this.worldContainer) return;
+
+    // Store rectangle selecting state before we potentially reset it
+    const wasRectangleSelecting = this.isRectangleSelecting;
 
     // Clear pointer tracking
     this.pointers.delete(event.pointerId);
@@ -686,10 +1210,11 @@ export abstract class RendererCore {
       }
     }
 
-    // End dragging
-    if (event.isPrimary) {
-      this.isDragging = false;
-    }
+    // Handle selection logic
+    this.handleSelectionOnPointerEnd(event, wasRectangleSelecting);
+
+    // Clear drag state
+    this.clearDragState(event);
   }
 
   /**
@@ -734,50 +1259,39 @@ export abstract class RendererCore {
     this.sceneManager.clear();
     this.objectVisuals.clear();
 
-    // Create test cards at different positions with different z-orders
+    // Create 20 test cards with randomized positions
     const testCards: Array<{
       id: string;
       x: number;
       y: number;
       sortKey: string;
       color: number;
-    }> = [
-      {
-        id: 'card-1',
-        x: -150,
-        y: -100,
-        sortKey: '0|a',
-        color: TEST_CARD_COLORS['card-1'],
-      }, // Purple, bottom
-      {
-        id: 'card-2',
-        x: -50,
-        y: -50,
-        sortKey: '0|b',
-        color: TEST_CARD_COLORS['card-2'],
-      }, // Green, middle
-      {
-        id: 'card-3',
-        x: 50,
-        y: 0,
-        sortKey: '0|c',
-        color: TEST_CARD_COLORS['card-3'],
-      }, // Yellow, top
-      {
-        id: 'card-4',
-        x: -100,
-        y: 100,
-        sortKey: '0|d',
-        color: TEST_CARD_COLORS['card-4'],
-      }, // Red, overlapping
-      {
-        id: 'card-5',
-        x: 100,
-        y: 50,
-        sortKey: '0|e',
-        color: TEST_CARD_COLORS['card-5'],
-      }, // Blue, overlapping
+    }> = [];
+
+    const NUM_CARDS = 20;
+    const AREA_WIDTH = 1200; // Random area width
+    const AREA_HEIGHT = 900; // Random area height
+
+    // Available colors from TEST_CARD_COLORS
+    const availableColors = [
+      TEST_CARD_COLORS['card-1'], // Purple
+      TEST_CARD_COLORS['card-2'], // Green
+      TEST_CARD_COLORS['card-3'], // Yellow
+      TEST_CARD_COLORS['card-4'], // Red
+      TEST_CARD_COLORS['card-5'], // Blue
     ];
+
+    for (let i = 0; i < NUM_CARDS; i++) {
+      const cardId = `card-${i + 1}`;
+      // Random position within area, centered around (0, 0)
+      const x = Math.random() * AREA_WIDTH - AREA_WIDTH / 2;
+      const y = Math.random() * AREA_HEIGHT - AREA_HEIGHT / 2;
+      // Generate sortKey using fractional indexing format
+      const sortKey = `0|${String.fromCharCode(97 + Math.floor(i / 26))}${String.fromCharCode(97 + (i % 26))}`;
+      const color = availableColors[i % availableColors.length];
+
+      testCards.push({ id: cardId, x, y, sortKey, color });
+    }
 
     for (const card of testCards) {
       // Create TableObject
@@ -788,7 +1302,7 @@ export abstract class RendererCore {
         _sortKey: card.sortKey,
         _locked: false,
         _selectedBy: null,
-        _meta: {},
+        _meta: { color: card.color }, // Store color in metadata
       };
 
       // Add to scene manager

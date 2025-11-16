@@ -14,6 +14,11 @@ import { RendererCore } from './RendererCore';
 class MainThreadRendererCore extends RendererCore {
   private callback: ((message: RendererToMainMessage) => void) | null = null;
 
+  constructor() {
+    super();
+    this.renderMode = RenderMode.MainThread;
+  }
+
   setCallback(callback: (message: RendererToMainMessage) => void): void {
     this.callback = callback;
   }

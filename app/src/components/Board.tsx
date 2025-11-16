@@ -11,6 +11,7 @@ import {
 } from '../renderer/IRendererAdapter';
 import { createRenderer } from '../renderer/RendererFactory';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
+import { moveObjects } from '../store/YjsActions';
 
 interface BoardProps {
   tableId: string;
@@ -128,19 +129,10 @@ function Board({ tableId, store }: BoardProps) {
           setMessages((prev) => [...prev, 'Animation completed!']);
           break;
 
-        case 'object-moved': {
-          console.log(
-            `[Board] Object ${message.id} moved to (${message.pos.x}, ${message.pos.y})`,
-          );
-          // TODO: Implement moveObjects action in Phase 4
-          // moveObjects(store, [{ id: message.id, pos: message.pos }]);
-          break;
-        }
-
         case 'objects-moved': {
-          console.log(`[Board] ${message.updates.length} objects moved`);
-          // TODO: Implement moveObjects action in Phase 4
-          // moveObjects(store, message.updates);
+          console.log(`[Board] ${message.updates.length} object(s) moved`);
+          // Update store with new positions (M3-T2.5 bi-directional sync)
+          moveObjects(storeRef.current, message.updates);
           break;
         }
       }
@@ -169,34 +161,38 @@ function Board({ tableId, store }: BoardProps) {
       const renderer = rendererRef.current;
       if (!renderer) return;
 
-      // Forward added objects
-      changes.added.forEach(({ id, obj }) => {
-        console.log(`[Board] Forwarding add-object: ${id}`);
+      // Forward added objects (batched)
+      if (changes.added.length > 0) {
+        console.log(
+          `[Board] Forwarding ${changes.added.length} added object(s)`,
+        );
         renderer.sendMessage({
-          type: 'add-object',
-          id,
-          obj,
+          type: 'objects-added',
+          objects: changes.added,
         });
-      });
+      }
 
-      // Forward updated objects
-      changes.updated.forEach(({ id, obj }) => {
-        console.log(`[Board] Forwarding update-object: ${id}`);
+      // Forward updated objects (batched)
+      if (changes.updated.length > 0) {
+        console.log(
+          `[Board] Forwarding ${changes.updated.length} updated object(s)`,
+        );
         renderer.sendMessage({
-          type: 'update-object',
-          id,
-          obj,
+          type: 'objects-updated',
+          objects: changes.updated,
         });
-      });
+      }
 
-      // Forward removed objects
-      changes.removed.forEach((id) => {
-        console.log(`[Board] Forwarding remove-object: ${id}`);
+      // Forward removed objects (batched)
+      if (changes.removed.length > 0) {
+        console.log(
+          `[Board] Forwarding ${changes.removed.length} removed object(s)`,
+        );
         renderer.sendMessage({
-          type: 'remove-object',
-          id,
+          type: 'objects-removed',
+          ids: changes.removed,
         });
-      });
+      }
     });
 
     storeUnsubscribeRef.current = unsubscribe;

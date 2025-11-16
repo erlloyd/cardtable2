@@ -183,6 +183,9 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - Unit: YjsStore provides correct change events
 - Unit: moveObjects updates positions correctly
 
+**Known Issues / TODO:**
+- ❌ **Z-order persistence**: When dragging an object, the renderer updates its `_sortKey` to bring it to the front. However, this sortKey change is NOT synced back to the store. Result: dragged object positions persist after refresh, but z-order reverts to original. Need to determine proper fix - possibly a separate `reorderObjects` action or extending `moveObjects` to handle sortKey updates.
+
 ### M3-T3: Selection Ownership + Clear All
 **Objective:** Implement exclusive selection system with ownership tracking.
 
@@ -216,7 +219,7 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 - 30Hz update rate
 - Payload formats:
   - `{cursor:{x,y}}`
-  - `{drag:{gid,ids,anchor,dx,dy,dr,ts}}`
+  - `{drag:{gid,ids,pos,ts}}` - uses absolute position instead of anchor+deltas for simplicity and resilience to dropped frames
 - Lerp interpolation on receive
 - <150ms observed latency
 

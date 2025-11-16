@@ -184,15 +184,10 @@ export abstract class RendererCore {
             this.initializeViewport(width, height);
             console.log('[RendererCore] ✓ Viewport initialized');
 
-            // Render a simple test scene
-            console.log('[RendererCore] Rendering test scene...');
-            this.renderTestScene();
-            console.log('[RendererCore] ✓ Test scene rendered');
-
-            // Do ONE manual render
-            console.log('[RendererCore] Performing manual render...');
+            // Do ONE manual render (blank canvas - objects will come from store sync)
+            console.log('[RendererCore] Performing initial render...');
             this.app.renderer.render(this.app.stage);
-            console.log('[RendererCore] ✓ Manual render complete');
+            console.log('[RendererCore] ✓ Initial render complete');
 
             // IMPORTANT: In main-thread mode, PixiJS sets canvas.style to explicit pixel dimensions
             // which breaks our responsive layout. Reset to 100% to fill container.
@@ -327,9 +322,13 @@ export abstract class RendererCore {
           break;
         }
 
-        case 'add-object': {
-          console.log(`[RendererCore] Adding object ${message.id}`);
-          this.addObjectVisual(message.id, message.obj);
+        case 'objects-added': {
+          console.log(
+            `[RendererCore] Adding ${message.objects.length} object(s)`,
+          );
+          for (const { id, obj } of message.objects) {
+            this.addObjectVisual(id, obj);
+          }
           // Render after adding
           if (this.app) {
             this.app.renderer.render(this.app.stage);
@@ -337,9 +336,13 @@ export abstract class RendererCore {
           break;
         }
 
-        case 'update-object': {
-          console.log(`[RendererCore] Updating object ${message.id}`);
-          this.updateObjectVisual(message.id, message.obj);
+        case 'objects-updated': {
+          console.log(
+            `[RendererCore] Updating ${message.objects.length} object(s)`,
+          );
+          for (const { id, obj } of message.objects) {
+            this.updateObjectVisual(id, obj);
+          }
           // Render after updating
           if (this.app) {
             this.app.renderer.render(this.app.stage);
@@ -347,9 +350,13 @@ export abstract class RendererCore {
           break;
         }
 
-        case 'remove-object': {
-          console.log(`[RendererCore] Removing object ${message.id}`);
-          this.removeObjectVisual(message.id);
+        case 'objects-removed': {
+          console.log(
+            `[RendererCore] Removing ${message.ids.length} object(s)`,
+          );
+          for (const id of message.ids) {
+            this.removeObjectVisual(id);
+          }
           // Render after removing
           if (this.app) {
             this.app.renderer.render(this.app.stage);
@@ -1111,15 +1118,31 @@ export abstract class RendererCore {
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
       if (this.isObjectDragging && this.draggedObjectId) {
+        // Collect position updates for all dragged objects (M3-T2.5 bi-directional sync)
+        const positionUpdates: Array<{
+          id: string;
+          pos: { x: number; y: number; r: number };
+        }> = [];
+
         // Update SceneManager spatial index for all selected cards now that drag is complete
         // (deferred from pointer move for performance)
         for (const objectId of this.selectedObjectIds) {
           const obj = this.sceneManager.getObject(objectId);
           if (obj) {
             this.sceneManager.updateObject(objectId, obj);
+            // Collect position update
+            positionUpdates.push({ id: objectId, pos: obj._pos });
           }
           // Clear drag visual feedback
           this.updateDragFeedback(objectId, false);
+        }
+
+        // Send position updates to Board (which will update the store)
+        if (positionUpdates.length > 0) {
+          this.postResponse({
+            type: 'objects-moved',
+            updates: positionUpdates,
+          });
         }
 
         // Clear drag state
@@ -1302,99 +1325,6 @@ export abstract class RendererCore {
 
     // Request render
     this.app.renderer.render(this.app.stage);
-  }
-
-  /**
-   * Render a simple test scene with TableObjects (M2-T4).
-   * Creates several portrait-oriented cards at different positions and z-orders.
-   */
-  private renderTestScene(): void {
-    if (!this.worldContainer) return;
-
-    // Clear any existing children and scene
-    this.worldContainer.removeChildren();
-    this.sceneManager.clear();
-    this.objectVisuals.clear();
-
-    // Create 20 test cards with randomized positions
-    const testCards: Array<{
-      id: string;
-      x: number;
-      y: number;
-      sortKey: string;
-      color: number;
-    }> = [];
-
-    const NUM_CARDS = 20;
-    const AREA_WIDTH = 1200; // Random area width
-    const AREA_HEIGHT = 900; // Random area height
-
-    // Available colors from TEST_CARD_COLORS
-    const availableColors = [
-      TEST_CARD_COLORS['card-1'], // Purple
-      TEST_CARD_COLORS['card-2'], // Green
-      TEST_CARD_COLORS['card-3'], // Yellow
-      TEST_CARD_COLORS['card-4'], // Red
-      TEST_CARD_COLORS['card-5'], // Blue
-    ];
-
-    for (let i = 0; i < NUM_CARDS; i++) {
-      const cardId = `card-${i + 1}`;
-      // Random position within area, centered around (0, 0)
-      const x = Math.random() * AREA_WIDTH - AREA_WIDTH / 2;
-      const y = Math.random() * AREA_HEIGHT - AREA_HEIGHT / 2;
-      // Generate sortKey using fractional indexing format
-      const sortKey = `0|${String.fromCharCode(97 + Math.floor(i / 26))}${String.fromCharCode(97 + (i % 26))}`;
-      const color = availableColors[i % availableColors.length];
-
-      testCards.push({ id: cardId, x, y, sortKey, color });
-    }
-
-    for (const card of testCards) {
-      // Create TableObject
-      const tableObject: TableObject = {
-        _kind: ObjectKind.Stack,
-        _containerId: null,
-        _pos: { x: card.x, y: card.y, r: 0 },
-        _sortKey: card.sortKey,
-        _locked: false,
-        _selectedBy: null,
-        _meta: { color: card.color }, // Store color in metadata
-      };
-
-      // Add to scene manager
-      this.sceneManager.addObject(card.id, tableObject);
-
-      // Create visual representation as Container (so we can have shadow + card separately)
-      const visual = new Container();
-
-      // Create card graphic
-      const cardGraphic = new Graphics();
-      cardGraphic.rect(
-        -CARD_WIDTH / 2,
-        -CARD_HEIGHT / 2,
-        CARD_WIDTH,
-        CARD_HEIGHT,
-      );
-      cardGraphic.fill(card.color);
-      cardGraphic.stroke({ width: 2, color: 0x2d3436 });
-
-      visual.addChild(cardGraphic);
-
-      // Position the visual
-      visual.x = card.x;
-      visual.y = card.y;
-
-      // Store visual reference
-      this.objectVisuals.set(card.id, visual);
-
-      // Add to world container
-      this.worldContainer.addChild(visual);
-    }
-
-    console.log(
-      `[RendererCore] Test scene created with ${testCards.length} cards`,
-    );
   }
 
   /**

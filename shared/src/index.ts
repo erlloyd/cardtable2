@@ -100,9 +100,15 @@ export type MainToRendererMessage =
       type: 'sync-objects';
       objects: Array<{ id: string; obj: TableObject }>;
     }
-  | { type: 'add-object'; id: string; obj: TableObject }
-  | { type: 'update-object'; id: string; obj: TableObject }
-  | { type: 'remove-object'; id: string }
+  | {
+      type: 'objects-added';
+      objects: Array<{ id: string; obj: TableObject }>;
+    }
+  | {
+      type: 'objects-updated';
+      objects: Array<{ id: string; obj: TableObject }>;
+    }
+  | { type: 'objects-removed'; ids: Array<string> }
   | { type: 'clear-objects' };
 
 // Messages sent from renderer to main thread
@@ -114,7 +120,6 @@ export type RendererToMainMessage =
   | { type: 'error'; error: string; context?: string }
   | { type: 'warning'; message: string }
   | { type: 'animation-complete' }
-  | { type: 'object-moved'; id: string; pos: Position }
   | {
       type: 'objects-moved';
       updates: Array<{ id: string; pos: Position }>;
@@ -152,11 +157,10 @@ export interface AwarenessState {
   drag?: {
     gid: string; // gesture ID
     ids: string[]; // object IDs being dragged
-    anchor: { x: number; y: number }; // drag start point
-    dx: number; // delta x
-    dy: number; // delta y
-    dr: number; // delta rotation
+    pos: { x: number; y: number; r: number }; // absolute world position (primary object)
     ts: number; // timestamp
+    // Note: Uses absolute position instead of anchor+deltas for simplicity and resilience
+    // to dropped frames. Receiving clients render ghost at this exact position.
   };
   hover?: string; // object ID being hovered
   lasso?: {

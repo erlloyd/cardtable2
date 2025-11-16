@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { act } from 'react';
 import {
   createMemoryHistory,
   createRouter,
@@ -40,10 +41,12 @@ describe('Table Route', () => {
       history: memoryHistory,
       defaultPendingMinMs: 0,
     });
-    render(<RouterProvider router={router} />);
 
-    // Wait for router to load
-    await router.load();
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      // Wait for router to load
+      await router.load();
+    });
 
     // Wait for lazy loaded Board component
     expect(await screen.findByTestId('board')).toBeInTheDocument();

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { act } from 'react';
 import {
   createMemoryHistory,
   createRouter,
@@ -42,10 +43,12 @@ describe('Index Route (GameSelect)', () => {
       history: memoryHistory,
       defaultPendingMinMs: 0,
     });
-    render(<RouterProvider router={router} />);
 
-    // Wait for router to load
-    await router.load();
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      // Wait for router to load
+      await router.load();
+    });
 
     // Wait for games to load (may skip loading state)
     await waitFor(() => {
@@ -70,10 +73,12 @@ describe('Index Route (GameSelect)', () => {
       history: memoryHistory,
       defaultPendingMinMs: 0,
     });
-    render(<RouterProvider router={router} />);
 
-    // Wait for router to load
-    await router.load();
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      // Wait for router to load
+      await router.load();
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/Error: Failed to load/i)).toBeInTheDocument();

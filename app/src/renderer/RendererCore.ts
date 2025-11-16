@@ -7,10 +7,9 @@ import type {
   TableObject,
   InteractionMode,
 } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
-import { CARD_WIDTH, CARD_HEIGHT } from './constants';
+import { getBehaviors, getEventHandlers, type EventHandlers } from './objects';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -877,98 +876,21 @@ export abstract class RendererCore {
   }
 
   /**
-   * Calculate shadow bounds for an object based on its kind and metadata.
-   * Used to determine the size of drop shadows for hover/drag effects.
-   */
-  private getShadowBounds(obj: TableObject): { width: number; height: number } {
-    switch (obj._kind) {
-      case ObjectKind.Stack: {
-        return { width: CARD_WIDTH, height: CARD_HEIGHT };
-      }
-
-      case ObjectKind.Token:
-      case ObjectKind.Mat:
-      case ObjectKind.Counter: {
-        const radius = (obj._meta?.size as number) || 40;
-        return { width: radius * 2, height: radius * 2 };
-      }
-
-      case ObjectKind.Zone: {
-        const width = (obj._meta?.width as number) || 400;
-        const height = (obj._meta?.height as number) || 300;
-        return { width, height };
-      }
-
-      default: {
-        return { width: CARD_WIDTH, height: CARD_HEIGHT };
-      }
-    }
-  }
-
-  /**
    * Create base shape graphic for an object based on its kind.
    * Does NOT include text label or shadow.
    */
   private createBaseShapeGraphic(
+    objectId: string,
     obj: TableObject,
     isSelected: boolean,
   ): Graphics {
-    const graphic = new Graphics();
-
-    // Use different border colors for selection state
-    const borderColor = isSelected ? 0xef4444 : 0x2d3436; // Red for selected, dark gray otherwise
-    const borderWidth = isSelected ? 4 : 2; // Thicker border when selected
-
-    switch (obj._kind) {
-      case ObjectKind.Stack: {
-        // Render as a card (portrait rectangle)
-        const color = (obj._meta?.color as number) || 0x6c5ce7;
-        graphic.rect(
-          -CARD_WIDTH / 2,
-          -CARD_HEIGHT / 2,
-          CARD_WIDTH,
-          CARD_HEIGHT,
-        );
-        graphic.fill(color);
-        graphic.stroke({ width: borderWidth, color: borderColor });
-        break;
-      }
-
-      case ObjectKind.Token: {
-        // Render as a circle
-        const size = (obj._meta?.size as number) || 40;
-        const color = (obj._meta?.color as number) || 0xe74c3c; // Red default
-        graphic.circle(0, 0, size);
-        graphic.fill(color);
-        graphic.stroke({ width: borderWidth, color: borderColor });
-        break;
-      }
-
-      case ObjectKind.Zone: {
-        // Render as a rectangle outline
-        const width = (obj._meta?.width as number) || 400;
-        const height = (obj._meta?.height as number) || 300;
-        const color = (obj._meta?.color as number) || 0x3498db; // Blue default
-        graphic.rect(-width / 2, -height / 2, width, height);
-        graphic.fill({ color, alpha: 0.1 }); // Semi-transparent fill
-        graphic.stroke({ width: isSelected ? 5 : 3, color: borderColor });
-        break;
-      }
-
-      case ObjectKind.Mat:
-      case ObjectKind.Counter:
-      default: {
-        // Fallback rendering (same as Token for now)
-        const size = (obj._meta?.size as number) || 40;
-        const color = (obj._meta?.color as number) || 0x95a5a6; // Gray default
-        graphic.circle(0, 0, size);
-        graphic.fill(color);
-        graphic.stroke({ width: borderWidth, color: borderColor });
-        break;
-      }
-    }
-
-    return graphic;
+    const behaviors = getBehaviors(obj._kind);
+    return behaviors.render(obj, {
+      isSelected,
+      isHovered: this.hoveredObjectId === objectId,
+      isDragging: this.draggedObjectId === objectId,
+      cameraScale: this.cameraScale,
+    });
   }
 
   /**
@@ -993,6 +915,47 @@ export abstract class RendererCore {
   }
 
   /**
+   * Call an event handler for an object if one is registered.
+   * This provides infrastructure for future event-driven behaviors.
+   *
+   * NOTE: Prefixed with _ to indicate this is intentionally unused infrastructure.
+   * It will be integrated when event handlers are needed in the rendering pipeline.
+   *
+   * @param obj - The table object to handle events for
+   * @param eventName - The name of the event to trigger
+   * @param args - Event-specific arguments (unknown type because different events have different arg types)
+   *
+   * Note: Using `unknown` instead of `any` for type safety. This forces proper type checking
+   * when this infrastructure is eventually integrated. The actual arg types vary by event:
+   * - onHover: boolean
+   * - onClick/onDoubleClick: PointerEventData
+   * - onDrag: { x: number; y: number }
+   * - onDrop: TableObject | null
+   *
+   * @example
+   * // Future integration example:
+   * const obj = this.sceneManager.getObject(objectId);
+   * if (obj) {
+   *   this._callEventHandler(obj, 'onHover', true);
+   * }
+   */
+  // @ts-expect-error TS6133 - Intentionally unused infrastructure for future event handler integration
+  private _callEventHandler(
+    obj: TableObject,
+    eventName: keyof EventHandlers,
+    args?: unknown,
+  ): void {
+    const handlers = getEventHandlers(obj._kind);
+    const handler = handlers[eventName];
+    if (handler) {
+      // Type assertion needed because EventHandlers creates a complex union type
+      // that TypeScript can't narrow properly. This is safe because we're calling
+      // the handler with the object and args that match the event signature.
+      (handler as (obj: TableObject, args?: unknown) => void)(obj, args);
+    }
+  }
+
+  /**
    * Redraw an object's visual representation (M2-T4, M2-T5).
    * @param isHovered - Whether the object is hovered (black shadow)
    * @param isDragging - Whether the object is being dragged (blue shadow)
@@ -1013,9 +976,6 @@ export abstract class RendererCore {
     // Clear existing children
     visual.removeChildren();
 
-    // Get shadow bounds for this object type
-    const shadowBounds = this.getShadowBounds(obj);
-
     // Apply shadow for both hover and drag states (M2-T4, M2-T5)
     // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
     const shouldShowShadow =
@@ -1024,24 +984,22 @@ export abstract class RendererCore {
       // Create shadow graphic with blur filter
       const shadowGraphic = new Graphics();
       const shadowPadding = 8;
-      const borderRadius =
-        obj._kind === ObjectKind.Stack ? 12 : shadowBounds.width / 2;
 
-      if (
-        obj._kind === ObjectKind.Token ||
-        obj._kind === ObjectKind.Mat ||
-        obj._kind === ObjectKind.Counter
-      ) {
+      // Get shadow config from behaviors
+      const behaviors = getBehaviors(obj._kind);
+      const shadowConfig = behaviors.getShadowConfig(obj);
+
+      if (shadowConfig.shape === 'circle') {
         // Circular shadow for round objects
-        shadowGraphic.circle(0, 0, shadowBounds.width / 2 + shadowPadding);
+        shadowGraphic.circle(0, 0, shadowConfig.width / 2 + shadowPadding);
       } else {
         // Rectangular shadow for cards and zones
         shadowGraphic.roundRect(
-          -shadowBounds.width / 2 - shadowPadding,
-          -shadowBounds.height / 2 - shadowPadding,
-          shadowBounds.width + shadowPadding * 2,
-          shadowBounds.height + shadowPadding * 2,
-          borderRadius,
+          -shadowConfig.width / 2 - shadowPadding,
+          -shadowConfig.height / 2 - shadowPadding,
+          shadowConfig.width + shadowPadding * 2,
+          shadowConfig.height + shadowPadding * 2,
+          shadowConfig.borderRadius,
         );
       }
 
@@ -1084,7 +1042,7 @@ export abstract class RendererCore {
     }
 
     // Create and add the base shape graphic
-    const shapeGraphic = this.createBaseShapeGraphic(obj, isSelected);
+    const shapeGraphic = this.createBaseShapeGraphic(objectId, obj, isSelected);
     visual.addChild(shapeGraphic);
 
     // Add text label showing object type
@@ -1462,7 +1420,7 @@ export abstract class RendererCore {
     this.sceneManager.addObject(id, obj);
 
     // Create visual representation
-    const visual = this.createObjectGraphics(obj);
+    const visual = this.createObjectGraphics(id, obj);
 
     // Position the visual
     visual.x = obj._pos.x;
@@ -1555,11 +1513,11 @@ export abstract class RendererCore {
    * Create PixiJS Graphics for a TableObject (M3-T2.5 Phase 6).
    * Handles different object types (Stack, Token, Zone, etc.).
    */
-  private createObjectGraphics(obj: TableObject): Container {
+  private createObjectGraphics(objectId: string, obj: TableObject): Container {
     const container = new Container();
 
     // Create base shape using shared method (no duplication!)
-    const shapeGraphic = this.createBaseShapeGraphic(obj, false);
+    const shapeGraphic = this.createBaseShapeGraphic(objectId, obj, false);
     container.addChild(shapeGraphic);
 
     // Add text label showing object type

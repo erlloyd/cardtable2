@@ -1,12 +1,11 @@
 import RBush from 'rbush';
 import type { TableObject } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
-import { CARD_WIDTH, CARD_HEIGHT } from './constants';
+import { getBehaviors } from './objects';
 
 /**
  * Bounding box for RBush spatial indexing
  */
-interface BBox {
+export interface BBox {
   minX: number;
   minY: number;
   maxX: number;
@@ -142,55 +141,8 @@ export class SceneManager {
    * Calculate bounding box for an object based on its type and metadata
    */
   private getBoundingBox(id: string, obj: TableObject): BBox {
-    const { x, y } = obj._pos;
-    // const { r } = obj._pos; // TODO: Handle rotation properly with rotated bounding boxes
-
-    let halfWidth: number;
-    let halfHeight: number;
-
-    // Calculate dimensions based on object kind
-    switch (obj._kind) {
-      case ObjectKind.Stack: {
-        // Cards use standard card dimensions
-        halfWidth = CARD_WIDTH / 2;
-        halfHeight = CARD_HEIGHT / 2;
-        break;
-      }
-
-      case ObjectKind.Token:
-      case ObjectKind.Mat:
-      case ObjectKind.Counter: {
-        // Circular objects use size (radius) from metadata
-        const radius = (obj._meta?.size as number) || 40;
-        halfWidth = radius;
-        halfHeight = radius;
-        break;
-      }
-
-      case ObjectKind.Zone: {
-        // Zones use width/height from metadata
-        const width = (obj._meta?.width as number) || 400;
-        const height = (obj._meta?.height as number) || 300;
-        halfWidth = width / 2;
-        halfHeight = height / 2;
-        break;
-      }
-
-      default: {
-        // Fallback to card size
-        halfWidth = CARD_WIDTH / 2;
-        halfHeight = CARD_HEIGHT / 2;
-        break;
-      }
-    }
-
-    // For now, ignore rotation and use axis-aligned bounding box
-    return {
-      minX: x - halfWidth,
-      minY: y - halfHeight,
-      maxX: x + halfWidth,
-      maxY: y + halfHeight,
-      id,
-    };
+    const behaviors = getBehaviors(obj._kind);
+    const bounds = behaviors.getBounds(obj);
+    return { ...bounds, id };
   }
 }

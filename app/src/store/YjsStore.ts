@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
-import type { TableObject, ActorId } from '@cardtable2/shared';
+import { Awareness } from 'y-protocols/awareness';
+import type { TableObject, ActorId, AwarenessState } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,16 +17,14 @@ export interface ObjectChanges {
 /**
  * YjsStore manages the Y.Doc for table state with IndexedDB persistence.
  *
- * Responsibilities (M3-T1):
- * - Initialize Y.Doc with schema (objects: Y.Map)
- * - Set up IndexedDB auto-save
- * - Restore state on load
- * - Provide type-safe access to document
- *
- * Future (M3-T2+):
- * - Engine actions (create, move, flip, rotate, stack, unstack)
- * - Selection ownership
- * - Awareness (cursors, drag ghosts)
+ * Responsibilities:
+ * - Initialize Y.Doc with schema (objects: Y.Map) (M3-T1)
+ * - Set up IndexedDB auto-save (M3-T1)
+ * - Restore state on load (M3-T1)
+ * - Provide type-safe access to document (M3-T1)
+ * - Engine actions (create, move, flip, rotate, stack, unstack) (M3-T2)
+ * - Selection ownership (M3-T3)
+ * - Awareness (cursors, drag ghosts) (M3-T4)
  */
 export class YjsStore {
   private doc: Y.Doc;
@@ -37,12 +36,19 @@ export class YjsStore {
   // Typed access to Y.Doc maps
   public objects: Y.Map<Y.Map<unknown>>;
 
+  // Awareness for ephemeral state (M3-T4)
+  public awareness: Awareness;
+
   constructor(tableId: string) {
     this.doc = new Y.Doc();
     this.actorId = uuidv4();
 
     // Get or create objects map
     this.objects = this.doc.getMap('objects');
+
+    // Initialize awareness (M3-T4)
+    this.awareness = new Awareness(this.doc);
+    this.awareness.setLocalStateField('actorId', this.actorId);
 
     // Set up IndexedDB persistence
     // Database name format: cardtable-{tableId}
@@ -287,10 +293,109 @@ export class YjsStore {
     return result;
   }
 
+  // ============================================================================
+  // Awareness Methods (M3-T4)
+  // ============================================================================
+
+  /**
+   * Set cursor position in world coordinates (ephemeral)
+   * Updates at 30Hz (throttling handled by caller)
+   *
+   * @param x - X coordinate in world space
+   * @param y - Y coordinate in world space
+   */
+  setCursor(x: number, y: number): void {
+    this.awareness.setLocalStateField('cursor', { x, y });
+  }
+
+  /**
+   * Clear cursor position (when pointer leaves canvas)
+   */
+  clearCursor(): void {
+    this.awareness.setLocalStateField('cursor', null);
+  }
+
+  /**
+   * Set drag state (ephemeral, active drag)
+   * Updates at 30Hz (throttling handled by caller)
+   *
+   * @param gid - Gesture ID (unique per drag operation)
+   * @param ids - Object IDs being dragged
+   * @param pos - Absolute world position of primary object
+   */
+  setDragState(
+    gid: string,
+    ids: string[],
+    pos: { x: number; y: number; r: number },
+  ): void {
+    this.awareness.setLocalStateField('drag', {
+      gid,
+      ids,
+      pos,
+      ts: Date.now(),
+    });
+  }
+
+  /**
+   * Clear drag state (when drag ends)
+   */
+  clearDragState(): void {
+    this.awareness.setLocalStateField('drag', null);
+  }
+
+  /**
+   * Subscribe to awareness changes from other actors
+   *
+   * @param callback - Called when remote awareness state changes
+   * @returns Unsubscribe function
+   */
+  onAwarenessChange(
+    callback: (states: Map<number, AwarenessState>) => void,
+  ): () => void {
+    const handler = () => {
+      // Get all awareness states (Map<clientID, AwarenessState>)
+      const states = this.awareness.getStates() as Map<number, AwarenessState>;
+      callback(states);
+    };
+
+    this.awareness.on('change', handler);
+
+    return () => {
+      this.awareness.off('change', handler);
+    };
+  }
+
+  /**
+   * Get current local awareness state (for debugging)
+   */
+  getLocalAwarenessState(): AwarenessState | null {
+    return this.awareness.getLocalState() as AwarenessState | null;
+  }
+
+  /**
+   * Get all remote awareness states (for debugging)
+   */
+  getRemoteAwarenessStates(): Map<number, AwarenessState> {
+    const localClientId = this.doc.clientID;
+    const allStates = this.awareness.getStates() as Map<number, AwarenessState>;
+    const remoteStates = new Map<number, AwarenessState>();
+
+    allStates.forEach((state, clientId) => {
+      if (clientId !== localClientId) {
+        remoteStates.set(clientId, state);
+      }
+    });
+
+    return remoteStates;
+  }
+
   /**
    * Clean up resources
    */
   destroy(): void {
+    // Clean up awareness
+    this.awareness.destroy();
+
     if (this.persistence) {
       void this.persistence.destroy();
       this.persistence = null;

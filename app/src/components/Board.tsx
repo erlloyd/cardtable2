@@ -4,6 +4,7 @@ import type {
   RendererToMainMessage,
   PointerEventData,
   WheelEventData,
+  AwarenessState,
 } from '@cardtable2/shared';
 import {
   RenderMode,
@@ -16,6 +17,7 @@ import {
   selectObjects,
   unselectObjects,
 } from '../store/YjsActions';
+import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 
 interface BoardProps {
   tableId: string;
@@ -28,10 +30,18 @@ function Board({ tableId, store }: BoardProps) {
   const canvasTransferredRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const storeUnsubscribeRef = useRef<(() => void) | null>(null);
+  const awarenessUnsubscribeRef = useRef<(() => void) | null>(null);
   const storeRef = useRef<YjsStore>(store);
 
   // Keep store ref up to date
   storeRef.current = store;
+
+  // Throttled cursor position update (M3-T4)
+  const throttledCursorUpdate = useRef(
+    throttle((x: number, y: number) => {
+      storeRef.current.setCursor(x, y);
+    }, AWARENESS_UPDATE_INTERVAL_MS),
+  );
 
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
@@ -167,6 +177,13 @@ function Board({ tableId, store }: BoardProps) {
           );
           break;
         }
+
+        case 'cursor-position': {
+          // M3-T4: Renderer sends world coordinates for cursor
+          // Throttled update to awareness at 30Hz
+          throttledCursorUpdate.current(message.x, message.y);
+          break;
+        }
       }
     });
 
@@ -234,6 +251,48 @@ function Board({ tableId, store }: BoardProps) {
         console.log('[Board] Unsubscribing from store changes');
         storeUnsubscribeRef.current();
         storeUnsubscribeRef.current = null;
+      }
+    };
+  }, [isSynced, store]);
+
+  // Subscribe to awareness changes and forward to renderer (M3-T4)
+  useEffect(() => {
+    // Only subscribe after renderer is initialized and synced
+    if (!isSynced || !rendererRef.current) {
+      return;
+    }
+
+    console.log('[Board] Subscribing to awareness changes');
+
+    const unsubscribe = store.onAwarenessChange((states) => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+
+      // Filter out local client (only send remote awareness)
+      const localClientId = store.getDoc().clientID;
+      const remoteStates: Array<{ clientId: number; state: AwarenessState }> =
+        [];
+
+      states.forEach((state, clientId) => {
+        if (clientId !== localClientId) {
+          remoteStates.push({ clientId, state });
+        }
+      });
+
+      // Forward to renderer
+      renderer.sendMessage({
+        type: 'awareness-update',
+        states: remoteStates,
+      });
+    });
+
+    awarenessUnsubscribeRef.current = unsubscribe;
+
+    return () => {
+      if (awarenessUnsubscribeRef.current) {
+        console.log('[Board] Unsubscribing from awareness changes');
+        awarenessUnsubscribeRef.current();
+        awarenessUnsubscribeRef.current = null;
       }
     };
   }, [isSynced, store]);
@@ -483,6 +542,23 @@ function Board({ tableId, store }: BoardProps) {
     rendererRef.current.sendMessage(message);
   };
 
+  // Handle pointer leave (M3-T4)
+  const handlePointerLeave = () => {
+    if (!rendererRef.current || !isCanvasInitialized) return;
+
+    // Cancel any pending throttled updates
+    throttledCursorUpdate.current.cancel();
+
+    // Clear cursor from awareness
+    store.clearCursor();
+
+    // Notify renderer
+    const message: MainToRendererMessage = {
+      type: 'pointer-leave',
+    };
+    rendererRef.current.sendMessage(message);
+  };
+
   return (
     <div className="board" data-testid="board">
       <div
@@ -530,6 +606,7 @@ function Board({ tableId, store }: BoardProps) {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerLeave}
         />
       </div>
 

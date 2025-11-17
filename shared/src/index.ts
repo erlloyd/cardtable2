@@ -96,6 +96,7 @@ export type MainToRendererMessage =
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }
   | { type: 'pointer-cancel'; event: PointerEventData }
+  | { type: 'pointer-leave' } // Cursor left canvas (M3-T4)
   | { type: 'wheel'; event: WheelEventData }
   | {
       type: 'sync-objects';
@@ -110,7 +111,14 @@ export type MainToRendererMessage =
       objects: Array<{ id: string; obj: TableObject }>;
     }
   | { type: 'objects-removed'; ids: Array<string> }
-  | { type: 'clear-objects' };
+  | { type: 'clear-objects' }
+  | {
+      type: 'awareness-update'; // M3-T4: Remote awareness states
+      states: Array<{
+        clientId: number;
+        state: AwarenessState;
+      }>;
+    };
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =
@@ -132,6 +140,11 @@ export type RendererToMainMessage =
   | {
       type: 'objects-unselected';
       ids: string[];
+    }
+  | {
+      type: 'cursor-position'; // M3-T4: Cursor position in world coordinates
+      x: number;
+      y: number;
     };
 
 // ============================================================================

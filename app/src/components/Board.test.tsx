@@ -2,9 +2,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
-import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
+import type {
+  RendererToMainMessage,
+  TableObject,
+  AwarenessState,
+} from '@cardtable2/shared';
 import type { RenderMode } from '../renderer/RendererFactory';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
+import type * as Y from 'yjs';
 
 // Mock YjsStore
 class MockYjsStore implements Partial<YjsStore> {
@@ -36,6 +41,20 @@ class MockYjsStore implements Partial<YjsStore> {
     return () => {
       // Mock unsubscribe
     };
+  }
+
+  onAwarenessChange(
+    _callback: (states: Map<number, AwarenessState>) => void,
+  ): () => void {
+    // Mock awareness subscription (M3-T4)
+    return () => {
+      // Mock unsubscribe
+    };
+  }
+
+  getDoc(): Y.Doc {
+    // Mock Y.Doc
+    return { clientID: 12345 } as Y.Doc;
   }
 
   clearAllObjects(): void {

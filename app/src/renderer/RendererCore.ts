@@ -6,6 +6,7 @@ import type {
   WheelEventData,
   TableObject,
   InteractionMode,
+  AwarenessState,
 } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
@@ -91,6 +92,20 @@ export abstract class RendererCore {
   // Cached blur filters for performance (M2-T5 optimization)
   private hoverBlurFilter: BlurFilter | null = null;
   private dragBlurFilter: BlurFilter | null = null;
+
+  // Remote awareness state (M3-T4)
+  private remoteAwareness: Map<
+    number,
+    {
+      state: AwarenessState;
+      cursor?: Container; // Visual cursor indicator
+      dragGhost?: Container; // Visual drag ghost
+      draggedObjectIds?: string[]; // Track which objects are being dragged for change detection
+      lastUpdate: number; // Timestamp for lerp
+      lerpFrom?: { x: number; y: number }; // Previous position for interpolation
+    }
+  > = new Map();
+  private awarenessContainer: Container | null = null; // Top-level container for all awareness visuals
 
   /**
    * Send a response message back to the main thread.
@@ -306,6 +321,19 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'pointer-leave': {
+          // M3-T4: Pointer left the canvas
+          // Clear hover state
+          if (this.hoveredObjectId) {
+            this.updateHoverFeedback(this.hoveredObjectId, false);
+            this.hoveredObjectId = null;
+            if (this.app) {
+              this.app.renderer.render(this.app.stage);
+            }
+          }
+          break;
+        }
+
         case 'wheel': {
           this.handleWheel(message.event);
           break;
@@ -375,6 +403,16 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'awareness-update': {
+          // M3-T4: Handle remote awareness updates
+          this.updateRemoteAwareness(message.states);
+          // Render to show awareness changes
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+          break;
+        }
+
         default: {
           // Unknown message type
           this.postResponse({
@@ -419,6 +457,12 @@ export abstract class RendererCore {
 
     // Set initial scale
     this.worldContainer.scale.set(this.cameraScale);
+
+    // Create awareness container (M3-T4)
+    // This sits on top of the world container for rendering remote cursors and drag ghosts
+    this.awarenessContainer = new Container();
+    this.app.stage.addChild(this.awarenessContainer);
+    console.log('[RendererCore] ✓ Awareness container initialized');
   }
 
   /**
@@ -823,6 +867,19 @@ export abstract class RendererCore {
         this.app.renderer.render(this.app.stage);
       }
     }
+
+    // Send cursor position in world coordinates (M3-T4)
+    // This will be throttled at 30Hz by the Board component
+    const worldX =
+      (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+    const worldY =
+      (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+
+    this.postResponse({
+      type: 'cursor-position',
+      x: worldX,
+      y: worldY,
+    });
   }
 
   /**
@@ -1746,5 +1803,223 @@ export abstract class RendererCore {
       this.app.ticker.started,
     );
     console.log('[RendererCore] Animation running...');
+  }
+
+  // ============================================================================
+  // Awareness Rendering Methods (M3-T4)
+  // ============================================================================
+
+  /**
+   * Update remote awareness states and render cursors/drag ghosts
+   */
+  private updateRemoteAwareness(
+    states: Array<{ clientId: number; state: AwarenessState }>,
+  ): void {
+    if (!this.awarenessContainer || !this.worldContainer) return;
+
+    const now = Date.now();
+    const activeClientIds = new Set<number>();
+
+    // Update or create visuals for each remote actor
+    for (const { clientId, state } of states) {
+      activeClientIds.add(clientId);
+
+      let awarenessData = this.remoteAwareness.get(clientId);
+      if (!awarenessData) {
+        // New remote actor
+        awarenessData = {
+          state,
+          lastUpdate: now,
+        };
+        this.remoteAwareness.set(clientId, awarenessData);
+      } else {
+        // Store previous position for lerp
+        if (state.cursor) {
+          awarenessData.lerpFrom = awarenessData.state.cursor || state.cursor;
+        }
+        awarenessData.state = state;
+        awarenessData.lastUpdate = now;
+      }
+
+      // Render cursor if present
+      if (state.cursor) {
+        this.renderRemoteCursor(clientId, state, awarenessData);
+      } else if (awarenessData.cursor) {
+        // Remove cursor visual if cursor data is gone
+        this.awarenessContainer.removeChild(awarenessData.cursor);
+        awarenessData.cursor.destroy();
+        awarenessData.cursor = undefined;
+      }
+
+      // Render drag ghost if present
+      if (state.drag) {
+        this.renderDragGhost(clientId, state, awarenessData);
+      } else if (awarenessData.dragGhost) {
+        // Remove drag ghost if drag data is gone
+        this.awarenessContainer.removeChild(awarenessData.dragGhost);
+        awarenessData.dragGhost.destroy();
+        awarenessData.dragGhost = undefined;
+      }
+    }
+
+    // Clean up actors that are no longer present
+    for (const [clientId, data] of this.remoteAwareness.entries()) {
+      if (!activeClientIds.has(clientId)) {
+        // Remove visuals
+        if (data.cursor) {
+          this.awarenessContainer.removeChild(data.cursor);
+          data.cursor.destroy();
+        }
+        if (data.dragGhost) {
+          this.awarenessContainer.removeChild(data.dragGhost);
+          data.dragGhost.destroy();
+        }
+        this.remoteAwareness.delete(clientId);
+      }
+    }
+  }
+
+  /**
+   * Render a remote cursor indicator
+   */
+  private renderRemoteCursor(
+    clientId: number,
+    state: AwarenessState,
+    awarenessData: {
+      state: AwarenessState;
+      cursor?: Container;
+      lastUpdate: number;
+      lerpFrom?: { x: number; y: number };
+    },
+  ): void {
+    if (!this.awarenessContainer || !this.worldContainer || !state.cursor)
+      return;
+
+    // Create cursor visual if it doesn't exist
+    if (!awarenessData.cursor) {
+      const cursorContainer = new Container();
+
+      // Cursor pointer (triangle)
+      const pointer = new Graphics();
+      pointer.moveTo(0, 0);
+      pointer.lineTo(12, 4);
+      pointer.lineTo(4, 12);
+      pointer.closePath();
+      pointer.fill(0x3b82f6); // Blue color
+      pointer.stroke({ width: 1, color: 0xffffff });
+
+      // Actor name label
+      const actorName = state.actorId || `Actor ${clientId}`;
+      const label = new Text({
+        text: actorName,
+        style: {
+          fontSize: 12,
+          fill: 0xffffff,
+          fontFamily: 'Arial',
+        },
+      });
+      label.x = 16;
+      label.y = 0;
+
+      // Label background
+      const labelBg = new Graphics();
+      labelBg.roundRect(14, -2, label.width + 8, label.height + 4, 4);
+      labelBg.fill(0x3b82f6);
+
+      cursorContainer.addChild(labelBg);
+      cursorContainer.addChild(pointer);
+      cursorContainer.addChild(label);
+
+      this.awarenessContainer.addChild(cursorContainer);
+      awarenessData.cursor = cursorContainer;
+    }
+
+    // Convert world coordinates to screen coordinates
+    const screenX =
+      this.worldContainer.position.x + state.cursor.x * this.cameraScale;
+    const screenY =
+      this.worldContainer.position.y + state.cursor.y * this.cameraScale;
+
+    // Simple lerp for smooth 30Hz → 60fps
+    // TODO: Implement proper time-based lerp in next iteration
+    awarenessData.cursor.x = screenX;
+    awarenessData.cursor.y = screenY;
+  }
+
+  /**
+   * Render a remote drag ghost
+   */
+  private renderDragGhost(
+    _clientId: number,
+    state: AwarenessState,
+    awarenessData: {
+      state: AwarenessState;
+      dragGhost?: Container;
+      draggedObjectIds?: string[];
+      lastUpdate: number;
+    },
+  ): void {
+    if (!this.awarenessContainer || !this.worldContainer || !state.drag) return;
+
+    // Check if dragged object IDs have changed
+    const currentIds = state.drag.ids;
+    const hasIdsChanged =
+      !awarenessData.draggedObjectIds ||
+      awarenessData.draggedObjectIds.length !== currentIds.length ||
+      !awarenessData.draggedObjectIds.every(
+        (id, idx) => id === currentIds[idx],
+      );
+
+    // Destroy and recreate ghost if object IDs changed
+    if (hasIdsChanged && awarenessData.dragGhost) {
+      awarenessData.dragGhost.destroy({ children: true });
+      awarenessData.dragGhost = undefined;
+    }
+
+    // Create drag ghost visual if it doesn't exist
+    if (!awarenessData.dragGhost) {
+      const ghostContainer = new Container();
+
+      // Get the first object being dragged to determine size/shape
+      const firstObjId = state.drag.ids[0];
+      const obj = this.sceneManager.getObject(firstObjId);
+
+      if (obj) {
+        // Create a semi-transparent copy of the object
+        const behaviors = getBehaviors(obj._kind);
+        const ghostGraphic = behaviors.render(obj, {
+          isSelected: false,
+          isHovered: false,
+          isDragging: false,
+          cameraScale: this.cameraScale,
+        });
+        ghostGraphic.alpha = 0.5; // Semi-transparent
+
+        ghostContainer.addChild(ghostGraphic);
+      } else {
+        // Fallback: render a generic rectangle if object not found
+        const fallback = new Graphics();
+        fallback.rect(-50, -70, 100, 140); // Stack size
+        fallback.fill(0x3b82f6);
+        fallback.alpha = 0.5;
+        ghostContainer.addChild(fallback);
+      }
+
+      this.awarenessContainer.addChild(ghostContainer);
+      awarenessData.dragGhost = ghostContainer;
+      awarenessData.draggedObjectIds = [...currentIds]; // Track current IDs
+    }
+
+    // Convert world coordinates to screen coordinates
+    const screenX =
+      this.worldContainer.position.x + state.drag.pos.x * this.cameraScale;
+    const screenY =
+      this.worldContainer.position.y + state.drag.pos.y * this.cameraScale;
+
+    // Apply position and scale
+    awarenessData.dragGhost.x = screenX;
+    awarenessData.dragGhost.y = screenY;
+    awarenessData.dragGhost.scale.set(this.cameraScale);
+    awarenessData.dragGhost.rotation = (state.drag.pos.r * Math.PI) / 180;
   }
 }

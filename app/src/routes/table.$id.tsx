@@ -18,6 +18,14 @@ function Table() {
   const [isStoreReady, setIsStoreReady] = useState(false);
   const [objectCount, setObjectCount] = useState(0);
 
+  // Awareness simulation state (M3-T4 testing)
+  const [isSimulatingCursor, setIsSimulatingCursor] = useState(false);
+  const [isSimulatingDrag, setIsSimulatingDrag] = useState(false);
+  const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const fakeClientId = 999999; // Fake client ID for simulation
+
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
     if (!storeRef.current) return;
@@ -52,6 +60,118 @@ function Table() {
 
     const cleared = clearAllSelections(storeRef.current);
     console.log(`[Table] Cleared ${cleared} selection(s)`);
+  };
+
+  // Handler to simulate remote cursor (M3-T4 testing)
+  const handleToggleSimulateCursor = () => {
+    if (!storeRef.current) return;
+
+    if (isSimulatingCursor) {
+      // Stop simulation
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+        simulationIntervalRef.current = null;
+      }
+      // Remove fake client from awareness
+      storeRef.current.awareness.states.delete(fakeClientId);
+      storeRef.current.awareness.meta.delete(fakeClientId);
+      storeRef.current.awareness.emit('change', [
+        { added: [], updated: [], removed: [fakeClientId] },
+      ]);
+      setIsSimulatingCursor(false);
+      console.log('[Table] Stopped simulating remote cursor');
+    } else {
+      // Start simulation - move cursor in a circle
+      let angle = 0;
+      simulationIntervalRef.current = setInterval(() => {
+        if (!storeRef.current) return;
+
+        const radius = 200;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        angle += 0.1;
+
+        // Manually set awareness state for fake client
+        storeRef.current.awareness.states.set(fakeClientId, {
+          actorId: 'fake-actor-alice',
+          cursor: { x, y },
+        });
+        storeRef.current.awareness.meta.set(fakeClientId, {
+          clock: Date.now(),
+          lastUpdated: Date.now(),
+        });
+        storeRef.current.awareness.emit('change', [
+          { added: [], updated: [fakeClientId], removed: [] },
+        ]);
+      }, 33); // 30Hz updates
+
+      setIsSimulatingCursor(true);
+      console.log('[Table] Started simulating remote cursor');
+    }
+  };
+
+  // Handler to simulate remote drag (M3-T4 testing)
+  const handleToggleSimulateDrag = () => {
+    if (!storeRef.current) return;
+
+    if (isSimulatingDrag) {
+      // Stop simulation
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+        simulationIntervalRef.current = null;
+      }
+      // Remove fake client from awareness
+      storeRef.current.awareness.states.delete(fakeClientId);
+      storeRef.current.awareness.meta.delete(fakeClientId);
+      storeRef.current.awareness.emit('change', [
+        { added: [], updated: [], removed: [fakeClientId] },
+      ]);
+      setIsSimulatingDrag(false);
+      console.log('[Table] Stopped simulating remote drag');
+    } else {
+      // Start simulation - drag in a line
+      let offset = 0;
+      const startX = -300;
+      const startY = 0;
+
+      simulationIntervalRef.current = setInterval(() => {
+        if (!storeRef.current) return;
+
+        // Get first object from store to simulate dragging it
+        const objects = storeRef.current.getAllObjects();
+        const firstObjectId =
+          objects.size > 0 ? Array.from(objects.keys())[0] : 'fake-object';
+
+        const x = startX + offset;
+        const y = startY + Math.sin(offset / 50) * 50; // Sine wave movement
+        offset += 5;
+
+        if (offset > 600) {
+          offset = 0; // Loop back
+        }
+
+        // Manually set awareness state for fake client with drag
+        storeRef.current.awareness.states.set(fakeClientId, {
+          actorId: 'fake-actor-bob',
+          drag: {
+            gid: 'fake-gesture-123',
+            ids: [firstObjectId],
+            pos: { x, y, r: 0 },
+            ts: Date.now(),
+          },
+        });
+        storeRef.current.awareness.meta.set(fakeClientId, {
+          clock: Date.now(),
+          lastUpdated: Date.now(),
+        });
+        storeRef.current.awareness.emit('change', [
+          { added: [], updated: [fakeClientId], removed: [] },
+        ]);
+      }, 33); // 30Hz updates
+
+      setIsSimulatingDrag(true);
+      console.log('[Table] Started simulating remote drag');
+    }
   };
 
   // Handler to reset to test scene (M3-T2.5 Phase 7)
@@ -194,6 +314,12 @@ function Table() {
 
     // Cleanup on unmount
     return () => {
+      // Stop any running simulations
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+        simulationIntervalRef.current = null;
+      }
+
       // Unsubscribe from object changes
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
@@ -293,6 +419,52 @@ function Table() {
           }}
         >
           Clear Selections
+        </button>
+        <div
+          style={{
+            borderLeft: '1px solid #4a5568',
+            height: '24px',
+            margin: '0 4px',
+          }}
+        />
+        <button
+          onClick={handleToggleSimulateCursor}
+          disabled={!isStoreReady}
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            backgroundColor: isStoreReady
+              ? isSimulatingCursor
+                ? '#e74c3c'
+                : '#9b59b6'
+              : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: isStoreReady ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {isSimulatingCursor ? '⏸ Stop Cursor' : '▶ Simulate Cursor'}
+        </button>
+        <button
+          onClick={handleToggleSimulateDrag}
+          disabled={!isStoreReady || isSimulatingCursor}
+          style={{
+            padding: '4px 12px',
+            fontSize: '12px',
+            backgroundColor: isStoreReady
+              ? isSimulatingDrag
+                ? '#e74c3c'
+                : '#8e44ad'
+              : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor:
+              isStoreReady && !isSimulatingCursor ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {isSimulatingDrag ? '⏸ Stop Drag' : '▶ Simulate Drag'}
         </button>
       </div>
 

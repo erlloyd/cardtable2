@@ -100,6 +100,7 @@ export abstract class RendererCore {
       state: AwarenessState;
       cursor?: Container; // Visual cursor indicator
       dragGhost?: Container; // Visual drag ghost
+      draggedObjectIds?: string[]; // Track which objects are being dragged for change detection
       lastUpdate: number; // Timestamp for lerp
       lerpFrom?: { x: number; y: number }; // Previous position for interpolation
     }
@@ -1954,10 +1955,26 @@ export abstract class RendererCore {
     awarenessData: {
       state: AwarenessState;
       dragGhost?: Container;
+      draggedObjectIds?: string[];
       lastUpdate: number;
     },
   ): void {
     if (!this.awarenessContainer || !this.worldContainer || !state.drag) return;
+
+    // Check if dragged object IDs have changed
+    const currentIds = state.drag.ids;
+    const hasIdsChanged =
+      !awarenessData.draggedObjectIds ||
+      awarenessData.draggedObjectIds.length !== currentIds.length ||
+      !awarenessData.draggedObjectIds.every(
+        (id, idx) => id === currentIds[idx],
+      );
+
+    // Destroy and recreate ghost if object IDs changed
+    if (hasIdsChanged && awarenessData.dragGhost) {
+      awarenessData.dragGhost.destroy({ children: true });
+      awarenessData.dragGhost = undefined;
+    }
 
     // Create drag ghost visual if it doesn't exist
     if (!awarenessData.dragGhost) {
@@ -1990,6 +2007,7 @@ export abstract class RendererCore {
 
       this.awarenessContainer.addChild(ghostContainer);
       awarenessData.dragGhost = ghostContainer;
+      awarenessData.draggedObjectIds = [...currentIds]; // Track current IDs
     }
 
     // Convert world coordinates to screen coordinates

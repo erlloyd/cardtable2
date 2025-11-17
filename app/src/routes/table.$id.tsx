@@ -21,9 +21,12 @@ function Table() {
   // Awareness simulation state (M3-T4 testing)
   const [isSimulatingCursor, setIsSimulatingCursor] = useState(false);
   const [isSimulatingDrag, setIsSimulatingDrag] = useState(false);
-  const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
+  const cursorSimulationIntervalRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
+  const dragSimulationIntervalRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
   const fakeClientId = 999999; // Fake client ID for simulation
 
   // Handler to spawn a test card (M3-T2 testing)
@@ -68,9 +71,9 @@ function Table() {
 
     if (isSimulatingCursor) {
       // Stop simulation
-      if (simulationIntervalRef.current) {
-        clearInterval(simulationIntervalRef.current);
-        simulationIntervalRef.current = null;
+      if (cursorSimulationIntervalRef.current) {
+        clearInterval(cursorSimulationIntervalRef.current);
+        cursorSimulationIntervalRef.current = null;
       }
       // Remove fake client from awareness
       storeRef.current.awareness.states.delete(fakeClientId);
@@ -83,7 +86,7 @@ function Table() {
     } else {
       // Start simulation - move cursor in a circle
       let angle = 0;
-      simulationIntervalRef.current = setInterval(() => {
+      cursorSimulationIntervalRef.current = setInterval(() => {
         if (!storeRef.current) return;
 
         const radius = 200;
@@ -116,9 +119,9 @@ function Table() {
 
     if (isSimulatingDrag) {
       // Stop simulation
-      if (simulationIntervalRef.current) {
-        clearInterval(simulationIntervalRef.current);
-        simulationIntervalRef.current = null;
+      if (dragSimulationIntervalRef.current) {
+        clearInterval(dragSimulationIntervalRef.current);
+        dragSimulationIntervalRef.current = null;
       }
       // Remove fake client from awareness
       storeRef.current.awareness.states.delete(fakeClientId);
@@ -134,7 +137,7 @@ function Table() {
       const startX = -300;
       const startY = 0;
 
-      simulationIntervalRef.current = setInterval(() => {
+      dragSimulationIntervalRef.current = setInterval(() => {
         if (!storeRef.current) return;
 
         // Get first object from store to simulate dragging it
@@ -315,9 +318,13 @@ function Table() {
     // Cleanup on unmount
     return () => {
       // Stop any running simulations
-      if (simulationIntervalRef.current) {
-        clearInterval(simulationIntervalRef.current);
-        simulationIntervalRef.current = null;
+      if (cursorSimulationIntervalRef.current) {
+        clearInterval(cursorSimulationIntervalRef.current);
+        cursorSimulationIntervalRef.current = null;
+      }
+      if (dragSimulationIntervalRef.current) {
+        clearInterval(dragSimulationIntervalRef.current);
+        dragSimulationIntervalRef.current = null;
       }
 
       // Unsubscribe from object changes

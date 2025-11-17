@@ -68,6 +68,8 @@ export class MainThreadRendererAdapter implements IRendererAdapter {
   sendMessage(message: MainToRendererMessage): void {
     // Call handleMessage directly (no postMessage needed)
     this.renderer.handleMessage(message).catch((error) => {
+      console.error('[MainThreadRendererAdapter] handleMessage error:', error);
+
       // Forward any unhandled errors to the message handler
       if (this.messageHandler) {
         const errorMsg = error instanceof Error ? error.message : String(error);

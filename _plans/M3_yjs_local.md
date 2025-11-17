@@ -199,7 +199,7 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
 **Known Issues / TODO:**
 - ❌ **Z-order persistence**: When dragging an object, the renderer updates its `_sortKey` to bring it to the front. However, this sortKey change is NOT synced back to the store. Result: dragged object positions persist after refresh, but z-order reverts to original. Need to determine proper fix - possibly a separate `reorderObjects` action or extending `moveObjects` to handle sortKey updates.
 
-### M3-T3: Selection Ownership + Clear All
+### M3-T3: Selection Ownership + Clear All ✅ COMPLETED (2025-11-16)
 **Objective:** Implement exclusive selection system with ownership tracking.
 
 **Dependencies:** M3-T2.5 (store-renderer integration)
@@ -213,15 +213,53 @@ objects: Y.Map<string, Y.Map> // keyed by object ID
   - `clearAllSelections({excludeDragging:true})`: force clear
 
 **Deliverables:**
-- Selection action implementations
-- Actor ID generation and management
-- Conflict resolution logic
-- "Clear All Selections" UI trigger
+- ✅ Selection action implementations
+- ✅ Actor ID generation and management
+- ✅ Conflict resolution logic
+- ✅ "Clear All Selections" UI trigger
+
+**Implementation Details:**
+- Created three new selection actions in `YjsActions.ts`:
+  - `selectObjects(store, actorId, ids)`: Claims ownership, fails if already owned by another actor
+  - `unselectObjects(store, actorId, ids)`: Releases ownership, only if owned by this actor
+  - `clearAllSelections(store, actorId, excludeDragging)`: Force clears all selections (admin action)
+- Added `clearStaleSelections()` to YjsStore - automatically clears orphaned selections on page load/refresh
+- Renderer maintains derived selection state cache synced via messages
+- Selection state automatically syncs after every object state change
+- Visual feedback: Red 4px border for selected objects
+- UI: "Clear Selections" button on table page
+- Actor ID passed to renderer in init message for derived state management
+
+**Architecture Pattern: Single Source of Truth**
+- Yjs store maintains selection state (`_selectedBy` field)
+- Renderer caches selection state for performance (hit-testing, visual feedback)
+- One sync point in `handleMessage()` runs after every message
+- Message-based communication: Renderer → Board → Store (no tight coupling)
+- Automatic syncing ensures consistency without manual coordination
+
+**Test Results:**
+- ✅ Unit: 22 new tests for selection actions
+  - Ownership tracking and conflict detection
+  - Locked object protection
+  - Idempotent operations
+  - Stale selection clearing
+- ✅ E2E: 5 new tests
+  - Click to select objects
+  - Clear selections button
+  - Stale selection clearing on refresh
+  - Object persistence across refresh
+  - Multiple select/unselect cycles
+- ✅ All 96 unit tests + 35 E2E tests passing
+
+**Known Issue Fixed (2025-11-16):**
+- **Drag regression**: Fixed bug where dragging unselected objects didn't work
+- **Root cause**: Selection state updates are async (message-based), but drag needed immediate action
+- **Solution**: When dragging unselected object, send select message AND immediately drag just that object (don't wait for round-trip)
 
 **Test Plan:**
-- Unit: two actors contend for selection, verify exclusivity
-- Unit: clear all frees non-dragging objects
-- E2E: selection UI reflects ownership state
+- ✅ Unit: two actors contend for selection, verify exclusivity
+- ✅ Unit: clear all frees non-dragging objects
+- ✅ E2E: selection UI reflects ownership state
 
 ### M3-T4: Awareness (Cursors + Drag Ghosts)
 **Objective:** Implement real-time awareness for cursors and drag operations.

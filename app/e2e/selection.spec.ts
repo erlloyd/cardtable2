@@ -61,6 +61,11 @@ test.describe('Selection Ownership E2E', () => {
   });
 
   test('shows selection border when clicking an object', async ({ page }) => {
+    // Listen to console messages
+    page.on('console', (msg) => {
+      console.log(`[Browser ${msg.type()}]:`, msg.text());
+    });
+
     // Reset to test scene to have objects
     await page.click('button:has-text("Reset to Test Scene")');
 
@@ -352,5 +357,493 @@ test.describe('Selection Ownership E2E', () => {
     });
 
     expect(selectedCount).toBeGreaterThan(0);
+  });
+
+  test('dragging an unselected object selects and moves it', async ({
+    page,
+  }) => {
+    // Listen to console messages
+    page.on('console', (msg) => {
+      console.log(`[Browser ${msg.type()}]:`, msg.text());
+    });
+
+    // Reset to test scene
+    await page.click('button:has-text("Reset to Test Scene")');
+    await expect(page.locator('text=Objects: 15')).toBeVisible();
+    await page.waitForTimeout(500); // Wait for rendering
+
+    // Get an object's ID, initial position, and canvas-relative screen position
+    const objectData = await page.evaluate(() => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+
+      const objects = __TEST_STORE__.getAllObjects();
+      const firstEntry = Array.from(objects.entries())[0];
+      if (!firstEntry) return null;
+
+      const [id, obj] = firstEntry;
+
+      // Convert world coordinates to canvas-relative screen coordinates
+      const screenX = obj._pos.x + canvasWidth / 2;
+      const screenY = obj._pos.y + canvasHeight / 2;
+
+      return {
+        id,
+        initialPos: { x: obj._pos.x, y: obj._pos.y },
+        screenPos: { x: screenX, y: screenY },
+        initiallySelected: obj._selectedBy !== null,
+      };
+    });
+
+    if (!objectData) {
+      throw new Error('No objects found in store');
+    }
+
+    // Verify object is NOT initially selected
+    expect(objectData.initiallySelected).toBe(false);
+
+    const canvas = page.locator('canvas');
+
+    // Get canvas bounding box to convert canvas-relative coords to viewport coords
+    const canvasBBox = await canvas.boundingBox();
+    if (!canvasBBox) {
+      throw new Error('Canvas bounding box not available');
+    }
+
+    // Convert canvas-relative position to viewport-absolute coordinates
+    const startX = canvasBBox.x + objectData.screenPos.x;
+    const startY = canvasBBox.y + objectData.screenPos.y;
+
+    // Drag 100px to the right and 50px down
+    const dragDeltaX = 100;
+    const dragDeltaY = 50;
+    const endX = startX + dragDeltaX;
+    const endY = startY + dragDeltaY;
+
+    // Dispatch pointerdown event
+    await canvas.dispatchEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: startX,
+      clientY: startY,
+      screenX: startX,
+      screenY: startY,
+      pageX: startX,
+      pageY: startY,
+      button: 0,
+      buttons: 1,
+    });
+    await page.waitForTimeout(50);
+
+    // Dispatch pointermove events (simulate drag with multiple steps)
+    const steps = 5;
+    for (let i = 1; i <= steps; i++) {
+      const moveX = startX + (dragDeltaX * i) / steps;
+      const moveY = startY + (dragDeltaY * i) / steps;
+
+      await canvas.dispatchEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+        clientX: moveX,
+        clientY: moveY,
+        screenX: moveX,
+        screenY: moveY,
+        pageX: moveX,
+        pageY: moveY,
+        button: 0,
+        buttons: 1,
+      });
+      await page.waitForTimeout(16); // ~60fps
+    }
+
+    // Dispatch pointerup event at final position
+    await canvas.dispatchEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: endX,
+      clientY: endY,
+      screenX: endX,
+      screenY: endY,
+      pageX: endX,
+      pageY: endY,
+      button: 0,
+      buttons: 0,
+    });
+
+    // Wait for drag and selection to complete (worker message processing time)
+    await page.waitForTimeout(300);
+
+    // Verify object is now selected AND has moved
+    const afterDrag = await page.evaluate((id: string) => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const objects = __TEST_STORE__.getAllObjects();
+      const obj = objects.get(id);
+      if (!obj) return null;
+
+      return {
+        selected: obj._selectedBy !== null,
+        selectedBy: obj._selectedBy,
+        finalPos: { x: obj._pos.x, y: obj._pos.y },
+      };
+    }, objectData.id);
+
+    if (!afterDrag) {
+      throw new Error('Object not found after drag');
+    }
+
+    // Verify object is now selected
+    expect(afterDrag.selected).toBe(true);
+
+    // Debug: Log position changes
+    const deltaX = afterDrag.finalPos.x - objectData.initialPos.x;
+    const deltaY = afterDrag.finalPos.y - objectData.initialPos.y;
+    console.log(`[E2E] Position change: (${deltaX}, ${deltaY})`);
+    console.log(
+      `[E2E] Initial: (${objectData.initialPos.x}, ${objectData.initialPos.y})`,
+    );
+    console.log(
+      `[E2E] Final: (${afterDrag.finalPos.x}, ${afterDrag.finalPos.y})`,
+    );
+
+    // Verify object position has changed (should have moved by approximately dragDeltaX/Y)
+    const positionChanged =
+      Math.abs(afterDrag.finalPos.x - objectData.initialPos.x) > 50 ||
+      Math.abs(afterDrag.finalPos.y - objectData.initialPos.y) > 25;
+
+    expect(positionChanged).toBe(true);
+  });
+
+  test('dragging an already selected object keeps it selected and moves it', async ({
+    page,
+  }) => {
+    // Reset to test scene
+    await page.click('button:has-text("Reset to Test Scene")');
+    await expect(page.locator('text=Objects: 15')).toBeVisible();
+    await page.waitForTimeout(500);
+
+    // Get first object data
+    const objectData = await page.evaluate(() => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+      const objects = __TEST_STORE__.getAllObjects();
+      const [id, obj] = Array.from(objects.entries())[0];
+      const screenX = obj._pos.x + canvasWidth / 2;
+      const screenY = obj._pos.y + canvasHeight / 2;
+
+      return {
+        id,
+        initialPos: { x: obj._pos.x, y: obj._pos.y },
+        screenPos: { x: screenX, y: screenY },
+      };
+    });
+
+    if (!objectData) throw new Error('No objects found');
+
+    const canvas = page.locator('canvas');
+    const canvasBBox = await canvas.boundingBox();
+    if (!canvasBBox) throw new Error('Canvas not found');
+
+    const clickX = canvasBBox.x + objectData.screenPos.x;
+    const clickY = canvasBBox.y + objectData.screenPos.y;
+
+    // Click to select the object first
+    await canvas.dispatchEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: clickX,
+      clientY: clickY,
+      button: 0,
+      buttons: 1,
+    });
+
+    await canvas.dispatchEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: clickX,
+      clientY: clickY,
+      button: 0,
+      buttons: 0,
+    });
+
+    await page.waitForTimeout(100); // Wait for selection
+
+    // Verify it's selected
+    const isSelected = await page.evaluate((id: string) => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const obj = __TEST_STORE__.getAllObjects().get(id);
+      return obj?._selectedBy !== null;
+    }, objectData.id);
+
+    expect(isSelected).toBe(true);
+
+    // Now drag it
+    const dragDeltaX = 100;
+    const dragDeltaY = 50;
+    const endX = clickX + dragDeltaX;
+    const endY = clickY + dragDeltaY;
+
+    await canvas.dispatchEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: clickX,
+      clientY: clickY,
+      button: 0,
+      buttons: 1,
+    });
+
+    for (let i = 1; i <= 5; i++) {
+      const moveX = clickX + (dragDeltaX * i) / 5;
+      const moveY = clickY + (dragDeltaY * i) / 5;
+      await canvas.dispatchEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+        clientX: moveX,
+        clientY: moveY,
+        button: 0,
+        buttons: 1,
+      });
+      await page.waitForTimeout(16);
+    }
+
+    await canvas.dispatchEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: endX,
+      clientY: endY,
+      button: 0,
+      buttons: 0,
+    });
+
+    await page.waitForTimeout(300);
+
+    // Verify still selected and moved
+    const afterDrag = await page.evaluate((id: string) => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const obj = __TEST_STORE__.getAllObjects().get(id);
+      return {
+        selected: obj?._selectedBy !== null,
+        finalPos: { x: obj?._pos.x ?? 0, y: obj?._pos.y ?? 0 },
+      };
+    }, objectData.id);
+
+    expect(afterDrag.selected).toBe(true);
+    const positionChanged =
+      Math.abs(afterDrag.finalPos.x - objectData.initialPos.x) > 50 ||
+      Math.abs(afterDrag.finalPos.y - objectData.initialPos.y) > 25;
+    expect(positionChanged).toBe(true);
+  });
+
+  test('CMD-dragging an unselected object with other selected objects moves all', async ({
+    page,
+  }) => {
+    // Reset to test scene
+    await page.click('button:has-text("Reset to Test Scene")');
+    await expect(page.locator('text=Objects: 15')).toBeVisible();
+    await page.waitForTimeout(500);
+
+    // Get two objects
+    const objectsData = await page.evaluate(() => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+      const objects = __TEST_STORE__.getAllObjects();
+      const entries = Array.from(objects.entries());
+
+      const obj1 = entries[0];
+      const obj2 = entries[1];
+
+      return {
+        obj1: {
+          id: obj1[0],
+          initialPos: { x: obj1[1]._pos.x, y: obj1[1]._pos.y },
+          screenPos: {
+            x: obj1[1]._pos.x + canvasWidth / 2,
+            y: obj1[1]._pos.y + canvasHeight / 2,
+          },
+        },
+        obj2: {
+          id: obj2[0],
+          initialPos: { x: obj2[1]._pos.x, y: obj2[1]._pos.y },
+          screenPos: {
+            x: obj2[1]._pos.x + canvasWidth / 2,
+            y: obj2[1]._pos.y + canvasHeight / 2,
+          },
+        },
+      };
+    });
+
+    if (!objectsData) throw new Error('No objects found');
+
+    const canvas = page.locator('canvas');
+    const canvasBBox = await canvas.boundingBox();
+    if (!canvasBBox) throw new Error('Canvas not found');
+
+    // Select first object (without CMD)
+    const click1X = canvasBBox.x + objectsData.obj1.screenPos.x;
+    const click1Y = canvasBBox.y + objectsData.obj1.screenPos.y;
+
+    await canvas.dispatchEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: click1X,
+      clientY: click1Y,
+      button: 0,
+      buttons: 1,
+    });
+
+    await canvas.dispatchEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: click1X,
+      clientY: click1Y,
+      button: 0,
+      buttons: 0,
+    });
+
+    await page.waitForTimeout(100);
+
+    // Now CMD-drag the second object
+    const click2X = canvasBBox.x + objectsData.obj2.screenPos.x;
+    const click2Y = canvasBBox.y + objectsData.obj2.screenPos.y;
+    const dragDeltaX = 100;
+    const dragDeltaY = 50;
+    const endX = click2X + dragDeltaX;
+    const endY = click2Y + dragDeltaY;
+
+    await canvas.dispatchEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: click2X,
+      clientY: click2Y,
+      button: 0,
+      buttons: 1,
+      metaKey: true, // CMD modifier
+    });
+
+    for (let i = 1; i <= 5; i++) {
+      const moveX = click2X + (dragDeltaX * i) / 5;
+      const moveY = click2Y + (dragDeltaY * i) / 5;
+      await canvas.dispatchEvent('pointermove', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+        clientX: moveX,
+        clientY: moveY,
+        button: 0,
+        buttons: 1,
+        metaKey: true,
+      });
+      await page.waitForTimeout(16);
+    }
+
+    await canvas.dispatchEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: endX,
+      clientY: endY,
+      button: 0,
+      buttons: 0,
+      metaKey: true,
+    });
+
+    await page.waitForTimeout(300);
+
+    // Verify both objects moved
+    const afterDrag = await page.evaluate((data: typeof objectsData) => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const obj1 = __TEST_STORE__.getAllObjects().get(data.obj1.id);
+      const obj2 = __TEST_STORE__.getAllObjects().get(data.obj2.id);
+
+      return {
+        obj1: {
+          selected: obj1?._selectedBy !== null,
+          finalPos: { x: obj1?._pos.x ?? 0, y: obj1?._pos.y ?? 0 },
+        },
+        obj2: {
+          selected: obj2?._selectedBy !== null,
+          finalPos: { x: obj2?._pos.x ?? 0, y: obj2?._pos.y ?? 0 },
+        },
+      };
+    }, objectsData);
+
+    // Both should be selected
+    expect(afterDrag.obj1.selected).toBe(true);
+    expect(afterDrag.obj2.selected).toBe(true);
+
+    // Both should have moved
+    const obj1Moved =
+      Math.abs(afterDrag.obj1.finalPos.x - objectsData.obj1.initialPos.x) >
+        50 ||
+      Math.abs(afterDrag.obj1.finalPos.y - objectsData.obj1.initialPos.y) > 25;
+    const obj2Moved =
+      Math.abs(afterDrag.obj2.finalPos.x - objectsData.obj2.initialPos.x) >
+        50 ||
+      Math.abs(afterDrag.obj2.finalPos.y - objectsData.obj2.initialPos.y) > 25;
+
+    expect(obj1Moved).toBe(true);
+    expect(obj2Moved).toBe(true);
   });
 });

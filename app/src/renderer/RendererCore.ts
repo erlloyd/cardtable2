@@ -606,14 +606,48 @@ export abstract class RendererCore {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
 
-            // If the dragged object isn't selected, select it (clearing other selections)
-            if (!this.selectedObjectIds.has(this.draggedObjectId)) {
-              this.selectObjects([this.draggedObjectId], true);
+            // Determine which objects to drag
+            // If the dragged object is already selected, drag all selected objects (multi-drag)
+            // If not selected:
+            //   - With modifier: add to selection and drag all
+            //   - Without modifier: select only this one and drag it
+            const objectsToDrag = new Set<string>();
+            const isDraggedObjectSelected = this.selectedObjectIds.has(
+              this.draggedObjectId,
+            );
+            const isMultiSelectModifier =
+              this.pointerDownEvent &&
+              (this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey);
+
+            if (isDraggedObjectSelected) {
+              // Dragging a selected object - drag all selected objects
+              for (const id of this.selectedObjectIds) {
+                objectsToDrag.add(id);
+              }
+            } else {
+              // Dragging an unselected object
+              if (isMultiSelectModifier) {
+                // With modifier: add to selection and drag all
+                this.selectObjects([this.draggedObjectId], false);
+                // Drag all currently selected objects PLUS the new one
+                // Note: selectObjects() is async, so selectedObjectIds won't be updated yet
+                // We need to manually add both the existing selections and the new one
+                for (const id of this.selectedObjectIds) {
+                  objectsToDrag.add(id);
+                }
+                objectsToDrag.add(this.draggedObjectId);
+              } else {
+                // Without modifier: select only this and drag just this one
+                this.selectObjects([this.draggedObjectId], true);
+                // Only drag the newly selected object
+                // (don't use selectedObjectIds as it hasn't been updated yet from the async message)
+                objectsToDrag.add(this.draggedObjectId);
+              }
             }
 
-            // Save initial positions of all selected cards for multi-drag
+            // Save initial positions of all objects to drag
             this.draggedObjectsStartPositions.clear();
-            for (const objectId of this.selectedObjectIds) {
+            for (const objectId of objectsToDrag) {
               const obj = this.sceneManager.getObject(objectId);
               if (obj) {
                 this.draggedObjectsStartPositions.set(objectId, {
@@ -623,7 +657,7 @@ export abstract class RendererCore {
               }
             }
 
-            // Apply drag visual feedback to all selected cards
+            // Apply drag visual feedback to all dragged objects
             // Also update _sortKey to ensure hit-testing respects the new z-order
 
             // Find the current maximum sortKey (lexicographic comparison for fractional indexing)
@@ -640,10 +674,10 @@ export abstract class RendererCore {
             const newPrefix = String(Number(prefix) + 1);
 
             let sortKeyCounter = 0;
-            for (const objectId of this.selectedObjectIds) {
+            for (const objectId of objectsToDrag) {
               this.updateDragFeedback(objectId, true);
 
-              // Move all selected objects to top of z-order (both visual and logical)
+              // Move all dragged objects to top of z-order (both visual and logical)
               const visual = this.objectVisuals.get(objectId);
               const obj = this.sceneManager.getObject(objectId);
               if (visual && obj && this.worldContainer) {
@@ -667,7 +701,7 @@ export abstract class RendererCore {
           }
         }
 
-        // If dragging an object, update positions of all selected objects
+        // If dragging an object, update positions of all dragged objects
         if (this.isObjectDragging && this.draggedObjectId && event.isPrimary) {
           // Calculate current world position
           const worldX =
@@ -679,8 +713,11 @@ export abstract class RendererCore {
           const deltaX = worldX - this.dragStartWorldX;
           const deltaY = worldY - this.dragStartWorldY;
 
-          // Update all selected objects' positions based on delta
-          for (const objectId of this.selectedObjectIds) {
+          // Update all dragged objects' positions based on delta
+          // Use draggedObjectsStartPositions instead of selectedObjectIds to avoid race condition:
+          // When dragging an unselected object, selectObjects() is async so selectedObjectIds
+          // won't be updated yet. draggedObjectsStartPositions has the definitive list.
+          for (const objectId of this.draggedObjectsStartPositions.keys()) {
             const startPos = this.draggedObjectsStartPositions.get(objectId);
             const obj = this.sceneManager.getObject(objectId);
 
@@ -1179,9 +1216,11 @@ export abstract class RendererCore {
           pos: { x: number; y: number; r: number };
         }> = [];
 
-        // Update SceneManager spatial index for all selected cards now that drag is complete
+        // Update SceneManager spatial index for all dragged cards now that drag is complete
         // (deferred from pointer move for performance)
-        for (const objectId of this.selectedObjectIds) {
+        // IMPORTANT: Use draggedObjectsStartPositions instead of selectedObjectIds to avoid race condition
+        // when dragging unselected objects (selection update is async)
+        for (const objectId of this.draggedObjectsStartPositions.keys()) {
           const obj = this.sceneManager.getObject(objectId);
           if (obj) {
             this.sceneManager.updateObject(objectId, obj);

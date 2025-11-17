@@ -173,7 +173,7 @@ See `app/src/renderer/objects/README.md` for full documentation.
   - ✅ M3-T2: Engine Actions (createObject + moveObjects complete, 11 tests)
   - ✅ M3-T2.5: Store-Renderer Integration (bi-directional sync, all object types)
   - ✅ M3-Object-Architecture: Registry-Based Behavior System (eliminates switch statements, 34 files, 68 tests passing)
-  - ⏸️ M3-T3: Selection Ownership + Clear All
+  - ✅ M3-T3: Selection Ownership + Clear All (22 unit + 5 E2E tests, drag regression fixed)
   - ⏸️ M3-T4: Awareness (Cursors + Drag Ghosts)
 - ⏸️ M4: Set Loader & Assets
 - ⏸️ M5: Multiplayer Server
@@ -196,6 +196,46 @@ See `app/src/renderer/objects/README.md` for full documentation.
 - Unit tests use Vitest
 - E2E tests use Playwright
 - All tests must pass before merge to main
+
+#### E2E Testing Best Practices
+
+**Testing Pointer Events on Canvas:**
+When writing E2E tests that interact with canvas elements (especially React components with `onPointerDown/Up/Move` handlers):
+
+1. **Don't use `page.mouse`** - It dispatches `mousedown/mousemove/mouseup` events, which won't trigger React's `onPointer*` handlers
+2. **Use `canvas.dispatchEvent()`** instead:
+   ```typescript
+   await canvas.dispatchEvent('pointerdown', {
+     bubbles: true,
+     cancelable: true,
+     composed: true,
+     pointerId: 1,
+     pointerType: 'mouse',
+     isPrimary: true,
+     clientX: viewportX,
+     clientY: viewportY,
+     screenX: viewportX,
+     screenY: viewportY,
+     pageX: viewportX,
+     pageY: viewportY,
+     button: 0,
+     buttons: 1,
+   });
+   ```
+3. **Coordinate Systems Matter**:
+   - World coordinates: Object positions in the game/scene space
+   - Canvas-relative: `worldX + canvasWidth/2, worldY + canvasHeight/2`
+   - Viewport-absolute: Canvas-relative + canvas bounding box offset
+   - `clientX/clientY` in pointer events are **viewport-absolute**, not canvas-relative
+4. **Always query canvas position dynamically**:
+   ```typescript
+   const canvasBBox = await canvas.boundingBox();
+   const viewportX = canvasBBox.x + canvasRelativeX;
+   const viewportY = canvasBBox.y + canvasRelativeY;
+   ```
+5. **Why this matters**: Canvas position in the viewport can change due to layout, responsive design, or viewport size. Dynamic queries ensure tests remain robust.
+
+See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") for a complete example.
 
 ### Code Style
 - TypeScript strict mode enabled

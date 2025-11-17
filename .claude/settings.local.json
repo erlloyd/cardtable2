@@ -19,7 +19,9 @@
       "Bash(gh run view:*)",
       "Bash(gh pr view:*)",
       "Bash(gh api:*)",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(npx playwright test:*)",
+      "WebFetch(domain:playwright.dev)"
     ],
     "deny": []
   },

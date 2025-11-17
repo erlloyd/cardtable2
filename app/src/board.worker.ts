@@ -49,6 +49,7 @@ self.addEventListener(
   (event: MessageEvent<MainToRendererMessage>) => {
     renderer.handleMessage(event.data).catch((error) => {
       // Catch any unhandled errors from the promise
+      console.error('[Worker] handleMessage error:', error);
       const errorMsg = error instanceof Error ? error.message : String(error);
       self.postMessage({
         type: 'error',

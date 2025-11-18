@@ -1,6 +1,13 @@
 import express from 'express';
 import { createServer } from 'http';
-import { WebSocketServer } from 'ws';
+import type { IncomingMessage } from 'http';
+import { WebSocketServer, type WebSocket } from 'ws';
+
+// Import y-websocket utility with proper typing
+// Note: y-websocket v2 doesn't export types, so we define the signature
+const { setupWSConnection } = (await import('y-websocket/bin/utils')) as {
+  setupWSConnection: (ws: WebSocket, req: IncomingMessage) => void;
+};
 
 const app = express();
 const server = createServer(app);
@@ -13,29 +20,30 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
 });
 
-// WebSocket upgrade handling
+// WebSocket upgrade handling with y-websocket integration (M5-T1)
 server.on('upgrade', (request, socket, head) => {
-  // In the future, this will handle y-websocket connections
-  // For now, just a placeholder
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
   });
 });
 
-wss.on('connection', (ws) => {
-  console.log('New WebSocket connection');
+// y-websocket connection handling (M5-T1)
+// Uses the official y-websocket server utilities for proper Yjs sync
+wss.on('connection', (ws, request) => {
+  console.log('[Server] New WebSocket connection');
 
-  ws.on('message', (message) => {
-    console.log('Received:', message.toString());
-  });
-
-  ws.on('close', () => {
-    console.log('Connection closed');
-  });
+  // setupWSConnection handles all Yjs synchronization automatically
+  // It manages:
+  // - Initial sync (sending current document state)
+  // - Applying updates from clients
+  // - Broadcasting updates to other clients
+  // - Awareness state propagation
+  setupWSConnection(ws, request);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`WebSocket endpoint: ws://localhost:${PORT}/ws`);
-  console.log(`Network: Server accessible on local network at port ${PORT}`);
+  console.log(`[Server] Running on http://localhost:${PORT}`);
+  console.log(`[Server] WebSocket endpoint: ws://localhost:${PORT}`);
+  console.log(`[Server] Health check: http://localhost:${PORT}/health`);
+  console.log(`[Server] Network: Accessible on local network at port ${PORT}`);
 });

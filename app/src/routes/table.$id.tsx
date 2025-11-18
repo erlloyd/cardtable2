@@ -265,7 +265,15 @@ function Table() {
     }
 
     console.log(`[Table] Initializing YjsStore for table: ${id}`);
-    const store = new YjsStore(id);
+
+    // WebSocket server URL (M5-T1)
+    // In development: connect to local server
+    // In production: use env var or leave undefined for offline mode
+    const wsUrl: string =
+      (import.meta.env.VITE_WS_URL as string | undefined) ||
+      'ws://localhost:3001?room=' + id;
+
+    const store = new YjsStore(id, wsUrl);
     storeRef.current = store;
 
     // Expose store globally for E2E testing (development only)

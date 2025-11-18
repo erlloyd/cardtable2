@@ -19,7 +19,8 @@
     "@cardtable2/shared": "workspace:*",
     "express": "^5.1.0",
     "ws": "^8.18.0",
-    "y-websocket": "^3.0.0",
+    "y-protocols": "^1.0.6",
+    "y-websocket": "^2.1.0",
     "yjs": "^13.6.20"
   },
   "devDependencies": {

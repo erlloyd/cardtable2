@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
+import { WebsocketProvider } from 'y-websocket';
 import { Awareness } from 'y-protocols/awareness';
 import type { TableObject, ActorId, AwarenessState } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
@@ -29,6 +30,7 @@ export interface ObjectChanges {
 export class YjsStore {
   private doc: Y.Doc;
   private persistence: IndexeddbPersistence | null = null;
+  private wsProvider: WebsocketProvider | null = null; // M5-T1
   private actorId: ActorId;
   private isReady = false;
   private readyPromise: Promise<void>;
@@ -39,7 +41,7 @@ export class YjsStore {
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
-  constructor(tableId: string) {
+  constructor(tableId: string, wsUrl?: string) {
     this.doc = new Y.Doc();
     this.actorId = uuidv4();
 
@@ -56,6 +58,25 @@ export class YjsStore {
       `cardtable-${tableId}`,
       this.doc,
     );
+
+    // Set up WebSocket provider for multiplayer (M5-T1)
+    // Optional - only connects if wsUrl is provided
+    if (wsUrl) {
+      console.log(`[YjsStore] Connecting to multiplayer server: ${wsUrl}`);
+      this.wsProvider = new WebsocketProvider(wsUrl, tableId, this.doc, {
+        awareness: this.awareness,
+      });
+
+      this.wsProvider.on('status', (event: { status: string }) => {
+        console.log(`[YjsStore] WebSocket status: ${event.status}`);
+      });
+
+      this.wsProvider.on('connection-error', (event: Error) => {
+        console.error('[YjsStore] WebSocket connection error:', event);
+      });
+    } else {
+      console.log('[YjsStore] Running in offline mode (no server connection)');
+    }
 
     // Wait for persistence to load existing state
     this.readyPromise = new Promise<void>((resolve, reject) => {
@@ -395,6 +416,12 @@ export class YjsStore {
   destroy(): void {
     // Clean up awareness
     this.awareness.destroy();
+
+    // Clean up WebSocket provider (M5-T1)
+    if (this.wsProvider) {
+      this.wsProvider.destroy();
+      this.wsProvider = null;
+    }
 
     if (this.persistence) {
       void this.persistence.destroy();

@@ -22,9 +22,10 @@ import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 interface BoardProps {
   tableId: string;
   store: YjsStore;
+  connectionStatus: string;
 }
 
-function Board({ tableId, store }: BoardProps) {
+function Board({ tableId, store, connectionStatus }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasTransferredRef = useRef(false);
@@ -48,10 +49,14 @@ function Board({ tableId, store }: BoardProps) {
     throttle(
       (
         gid: string,
-        ids: string[],
+        primaryId: string,
         pos: { x: number; y: number; r: number },
+        secondaryOffsets?: Record<
+          string,
+          { dx: number; dy: number; dr: number }
+        >,
       ) => {
-        storeRef.current.setDragState(gid, ids, pos);
+        storeRef.current.setDragState(gid, primaryId, pos, secondaryOffsets);
       },
       AWARENESS_UPDATE_INTERVAL_MS,
     ),
@@ -204,8 +209,9 @@ function Board({ tableId, store }: BoardProps) {
           // Throttled update to awareness at 30Hz
           throttledDragStateUpdate.current(
             message.gid,
-            message.ids,
+            message.primaryId,
             message.pos,
+            message.secondaryOffsets,
           );
           break;
         }
@@ -612,7 +618,8 @@ function Board({ tableId, store }: BoardProps) {
       >
         Mode: {renderMode} | Worker:{' '}
         {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
-        {isCanvasInitialized ? 'Initialized' : 'Not initialized'}
+        {isCanvasInitialized ? 'Initialized' : 'Not initialized'} | WS:{' '}
+        {connectionStatus}
       </div>
 
       <div

@@ -34,6 +34,12 @@ export class YjsStore {
   private actorId: ActorId;
   private isReady = false;
   private readyPromise: Promise<void>;
+  private connectionStatus:
+    | 'offline'
+    | 'connecting'
+    | 'connected'
+    | 'disconnected' = 'offline'; // M5-T1
+  private connectionStatusCallbacks: Set<(status: string) => void> = new Set();
 
   // Typed access to Y.Doc maps
   public objects: Y.Map<Y.Map<unknown>>;
@@ -69,11 +75,23 @@ export class YjsStore {
 
       this.wsProvider.on('status', (event: { status: string }) => {
         console.log(`[YjsStore] WebSocket status: ${event.status}`);
+        // Map y-websocket status to our status type
+        if (event.status === 'connected') {
+          this.setConnectionStatus('connected');
+        } else if (event.status === 'disconnected') {
+          this.setConnectionStatus('disconnected');
+        } else {
+          this.setConnectionStatus('connecting');
+        }
       });
 
       this.wsProvider.on('connection-error', (event: Error) => {
         console.error('[YjsStore] WebSocket connection error:', event);
+        this.setConnectionStatus('disconnected');
       });
+
+      // Set initial connecting status
+      this.setConnectionStatus('connecting');
 
       // Debug: Log when Y.Doc updates are sent/received
       this.doc.on('update', (update: Uint8Array, origin: unknown) => {
@@ -354,13 +372,15 @@ export class YjsStore {
    */
   setDragState(
     gid: string,
-    ids: string[],
+    primaryId: string,
     pos: { x: number; y: number; r: number },
+    secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
   ): void {
     this.awareness.setLocalStateField('drag', {
       gid,
-      ids,
+      primaryId,
       pos,
+      secondaryOffsets,
       ts: Date.now(),
     });
   }
@@ -416,6 +436,46 @@ export class YjsStore {
     });
 
     return remoteStates;
+  }
+
+  /**
+   * Get current WebSocket connection status (M5-T1)
+   */
+  getConnectionStatus():
+    | 'offline'
+    | 'connecting'
+    | 'connected'
+    | 'disconnected' {
+    return this.connectionStatus;
+  }
+
+  /**
+   * Subscribe to connection status changes (M5-T1)
+   * @returns Unsubscribe function
+   */
+  onConnectionStatusChange(callback: (status: string) => void): () => void {
+    this.connectionStatusCallbacks.add(callback);
+    // Immediately call with current status
+    callback(this.connectionStatus);
+    // Return unsubscribe function
+    return () => {
+      this.connectionStatusCallbacks.delete(callback);
+    };
+  }
+
+  /**
+   * Set connection status and notify subscribers (M5-T1)
+   */
+  private setConnectionStatus(
+    status: 'offline' | 'connecting' | 'connected' | 'disconnected',
+  ): void {
+    if (this.connectionStatus !== status) {
+      this.connectionStatus = status;
+      // Notify all subscribers
+      for (const callback of this.connectionStatusCallbacks) {
+        callback(status);
+      }
+    }
   }
 
   /**

@@ -15,8 +15,10 @@ function Table() {
   const { id } = Route.useParams();
   const storeRef = useRef<YjsStore | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const connectionStatusUnsubscribeRef = useRef<(() => void) | null>(null);
   const [isStoreReady, setIsStoreReady] = useState(false);
   const [objectCount, setObjectCount] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<string>('offline');
 
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
@@ -144,14 +146,23 @@ function Table() {
     console.log(`[Table] Initializing YjsStore for table: ${id}`);
 
     // WebSocket server URL (M5-T1)
-    // In development: connect to local server
+    // In development: connect to server using current hostname (works for mobile on LAN)
     // In production: use env var or leave undefined for offline mode
     const wsUrl: string =
       (import.meta.env.VITE_WS_URL as string | undefined) ||
-      'ws://localhost:3001?room=' + id;
+      `ws://${window.location.hostname}:3001?room=${id}`;
 
     const store = new YjsStore(id, wsUrl);
     storeRef.current = store;
+
+    // Subscribe to connection status changes (M5-T1)
+    const connectionStatusUnsubscribe = store.onConnectionStatusChange(
+      (status) => {
+        setConnectionStatus(status);
+        console.log(`[Table] Connection status: ${status}`);
+      },
+    );
+    connectionStatusUnsubscribeRef.current = connectionStatusUnsubscribe;
 
     // Expose store globally for E2E testing (development only)
     if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
@@ -202,6 +213,12 @@ function Table() {
 
     // Cleanup on unmount
     return () => {
+      // Unsubscribe from connection status changes
+      if (connectionStatusUnsubscribeRef.current) {
+        connectionStatusUnsubscribeRef.current();
+        connectionStatusUnsubscribeRef.current = null;
+      }
+
       // Unsubscribe from object changes
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
@@ -306,7 +323,11 @@ function Table() {
 
       <Suspense fallback={<div>Loading board...</div>}>
         {storeRef.current && isStoreReady ? (
-          <Board tableId={id} store={storeRef.current} />
+          <Board
+            tableId={id}
+            store={storeRef.current}
+            connectionStatus={connectionStatus}
+          />
         ) : (
           <div>Initializing table state...</div>
         )}

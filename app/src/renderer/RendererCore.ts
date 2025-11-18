@@ -790,15 +790,38 @@ export abstract class RendererCore {
               this.draggedObjectId,
             );
             if (primaryObj) {
+              // Calculate relative offsets for secondary objects (if dragging multiple)
+              const secondaryOffsets: Record<
+                string,
+                { dx: number; dy: number; dr: number }
+              > = {};
+              let hasSecondary = false;
+
+              for (const [id] of this.draggedObjectsStartPositions) {
+                if (id !== this.draggedObjectId) {
+                  // This is a secondary object
+                  const secondaryObj = this.sceneManager.getObject(id);
+                  if (secondaryObj) {
+                    secondaryOffsets[id] = {
+                      dx: secondaryObj._pos.x - primaryObj._pos.x,
+                      dy: secondaryObj._pos.y - primaryObj._pos.y,
+                      dr: secondaryObj._pos.r - primaryObj._pos.r,
+                    };
+                    hasSecondary = true;
+                  }
+                }
+              }
+
               this.postResponse({
                 type: 'drag-state-update',
                 gid: this.currentDragGestureId,
-                ids: Array.from(this.draggedObjectsStartPositions.keys()),
+                primaryId: this.draggedObjectId,
                 pos: {
                   x: primaryObj._pos.x,
                   y: primaryObj._pos.y,
                   r: primaryObj._pos.r,
                 },
+                secondaryOffsets: hasSecondary ? secondaryOffsets : undefined,
               });
             }
           }
@@ -1993,14 +2016,19 @@ export abstract class RendererCore {
   ): void {
     if (!this.awarenessContainer || !this.worldContainer || !state.drag) return;
 
+    // Build set of current IDs (primary + secondaries)
+    const currentIds = new Set<string>([state.drag.primaryId]);
+    if (state.drag.secondaryOffsets) {
+      for (const id of Object.keys(state.drag.secondaryOffsets)) {
+        currentIds.add(id);
+      }
+    }
+
     // Check if dragged object IDs have changed
-    const currentIds = state.drag.ids;
+    const previousIds = awarenessData.draggedObjectIds || [];
     const hasIdsChanged =
-      !awarenessData.draggedObjectIds ||
-      awarenessData.draggedObjectIds.length !== currentIds.length ||
-      !awarenessData.draggedObjectIds.every(
-        (id, idx) => id === currentIds[idx],
-      );
+      previousIds.length !== currentIds.size ||
+      !previousIds.every((id) => currentIds.has(id));
 
     // Destroy and recreate ghost if object IDs changed
     if (hasIdsChanged && awarenessData.dragGhost) {
@@ -2012,14 +2040,13 @@ export abstract class RendererCore {
     if (!awarenessData.dragGhost) {
       const ghostContainer = new Container();
 
-      // Get the first object being dragged to determine size/shape
-      const firstObjId = state.drag.ids[0];
-      const obj = this.sceneManager.getObject(firstObjId);
+      // Render the primary object
+      const primaryObj = this.sceneManager.getObject(state.drag.primaryId);
 
-      if (obj) {
-        // Create a semi-transparent copy of the object
-        const behaviors = getBehaviors(obj._kind);
-        const ghostGraphic = behaviors.render(obj, {
+      if (primaryObj) {
+        // Create a semi-transparent copy of the primary object
+        const behaviors = getBehaviors(primaryObj._kind);
+        const ghostGraphic = behaviors.render(primaryObj, {
           isSelected: false,
           isHovered: false,
           isDragging: false,
@@ -2028,6 +2055,33 @@ export abstract class RendererCore {
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
         ghostContainer.addChild(ghostGraphic);
+
+        // Render secondary objects if we have offsets
+        if (state.drag.secondaryOffsets) {
+          for (const [secondaryObjId, offset] of Object.entries(
+            state.drag.secondaryOffsets,
+          )) {
+            const secondaryObj = this.sceneManager.getObject(secondaryObjId);
+
+            if (secondaryObj) {
+              const secondaryBehaviors = getBehaviors(secondaryObj._kind);
+              const secondaryGraphic = secondaryBehaviors.render(secondaryObj, {
+                isSelected: false,
+                isHovered: false,
+                isDragging: false,
+                cameraScale: this.cameraScale,
+              });
+              secondaryGraphic.alpha = 0.5; // Semi-transparent
+
+              // Position relative to primary object
+              secondaryGraphic.x = offset.dx;
+              secondaryGraphic.y = offset.dy;
+              secondaryGraphic.rotation = (offset.dr * Math.PI) / 180;
+
+              ghostContainer.addChild(secondaryGraphic);
+            }
+          }
+        }
       } else {
         // Fallback: render a generic rectangle if object not found
         const fallback = new Graphics();
@@ -2039,7 +2093,7 @@ export abstract class RendererCore {
 
       this.awarenessContainer.addChild(ghostContainer);
       awarenessData.dragGhost = ghostContainer;
-      awarenessData.draggedObjectIds = [...currentIds]; // Track current IDs
+      awarenessData.draggedObjectIds = Array.from(currentIds); // Track current IDs
     }
 
     // Convert world coordinates to screen coordinates

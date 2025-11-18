@@ -43,6 +43,20 @@ function Board({ tableId, store }: BoardProps) {
     }, AWARENESS_UPDATE_INTERVAL_MS),
   );
 
+  // Throttled drag state update (M5-T1)
+  const throttledDragStateUpdate = useRef(
+    throttle(
+      (
+        gid: string,
+        ids: string[],
+        pos: { x: number; y: number; r: number },
+      ) => {
+        storeRef.current.setDragState(gid, ids, pos);
+      },
+      AWARENESS_UPDATE_INTERVAL_MS,
+    ),
+  );
+
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
@@ -182,6 +196,25 @@ function Board({ tableId, store }: BoardProps) {
           // M3-T4: Renderer sends world coordinates for cursor
           // Throttled update to awareness at 30Hz
           throttledCursorUpdate.current(message.x, message.y);
+          break;
+        }
+
+        case 'drag-state-update': {
+          // M5-T1: Update drag awareness
+          // Throttled update to awareness at 30Hz
+          throttledDragStateUpdate.current(
+            message.gid,
+            message.ids,
+            message.pos,
+          );
+          break;
+        }
+
+        case 'drag-state-clear': {
+          // M5-T1: Clear drag awareness
+          // Cancel any pending throttled updates
+          throttledDragStateUpdate.current.cancel();
+          storeRef.current.clearDragState();
           break;
         }
       }

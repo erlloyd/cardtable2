@@ -145,7 +145,14 @@ export type RendererToMainMessage =
       type: 'cursor-position'; // M3-T4: Cursor position in world coordinates
       x: number;
       y: number;
-    };
+    }
+  | {
+      type: 'drag-state-update'; // M5-T1: Drag awareness
+      gid: string;
+      ids: string[];
+      pos: Position;
+    }
+  | { type: 'drag-state-clear' }; // M5-T1: Clear drag awareness
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

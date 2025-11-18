@@ -58,6 +58,8 @@ export abstract class RendererCore {
     new Map();
   // Store pointer down event for selection logic on pointer up
   private pointerDownEvent: PointerEventData | null = null;
+  // Gesture ID for drag awareness (M5-T1)
+  private currentDragGestureId: string | null = null;
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
@@ -650,6 +652,9 @@ export abstract class RendererCore {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
 
+            // Generate unique gesture ID for drag awareness (M5-T1)
+            this.currentDragGestureId = `drag-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
             // Determine which objects to drag
             // If the dragged object is already selected, drag all selected objects (multi-drag)
             // If not selected:
@@ -776,6 +781,25 @@ export abstract class RendererCore {
                 visual.x = obj._pos.x;
                 visual.y = obj._pos.y;
               }
+            }
+          }
+
+          // Send drag state update for awareness (M5-T1)
+          if (this.currentDragGestureId && this.draggedObjectId) {
+            const primaryObj = this.sceneManager.getObject(
+              this.draggedObjectId,
+            );
+            if (primaryObj) {
+              this.postResponse({
+                type: 'drag-state-update',
+                gid: this.currentDragGestureId,
+                ids: Array.from(this.draggedObjectsStartPositions.keys()),
+                pos: {
+                  x: primaryObj._pos.x,
+                  y: primaryObj._pos.y,
+                  r: primaryObj._pos.r,
+                },
+              });
             }
           }
 
@@ -1296,10 +1320,18 @@ export abstract class RendererCore {
           });
         }
 
+        // Send drag state clear for awareness (M5-T1)
+        if (this.currentDragGestureId) {
+          this.postResponse({
+            type: 'drag-state-clear',
+          });
+        }
+
         // Clear drag state
         this.isObjectDragging = false;
         this.draggedObjectId = null;
         this.draggedObjectsStartPositions.clear();
+        this.currentDragGestureId = null;
       }
 
       // Clear rectangle selection state if needed

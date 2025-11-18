@@ -168,15 +168,16 @@ See `app/src/renderer/objects/README.md` for full documentation.
   - ✅ M2-T4: Scene Model + RBush Hit-Test (11 unit + 8 E2E tests, hover feedback)
   - ✅ M2-T5: Object Dragging (card selection, multi-select, pan/select mode, 16 Board + 11 SceneManager tests)
   - ✅ M2-T6: Dual-Mode Rendering Architecture
-- ⏳ M3: Local Yjs (In Progress)
+- ✅ M3: Local Yjs (COMPLETED)
   - ✅ M3-T1: Y.Doc Schema + IndexedDB (20 unit + 3 E2E tests)
-  - ✅ M3-T2: Engine Actions (createObject + moveObjects complete, 11 tests)
+  - ✅ M3-T2: Engine Actions - Core (createObject + moveObjects, 11 tests)
   - ✅ M3-T2.5: Store-Renderer Integration (bi-directional sync, all object types)
   - ✅ M3-Object-Architecture: Registry-Based Behavior System (eliminates switch statements, 34 files, 68 tests passing)
   - ✅ M3-T3: Selection Ownership + Clear All (22 unit + 5 E2E tests, drag regression fixed)
-  - ⏸️ M3-T4: Awareness (Cursors + Drag Ghosts)
+  - ✅ M3-T4: Awareness - Cursors & Drag Ghosts (17 tests, PR #13 merged)
+- ⏸️ M5: Multiplayer Server (NEXT)
+- ⏸️ M3.5: Additional Functionality (flip, rotate, stack, unstack)
 - ⏸️ M4: Set Loader & Assets
-- ⏸️ M5: Multiplayer Server
 - ⏸️ M6: Frontend Multiplayer
 - ⏸️ M7: Offline Support
 - ⏸️ M8: Mobile & Input Polish
@@ -253,6 +254,35 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### Milestone Reordering (2025-11-17)
+Reorganized project roadmap to prioritize multiplayer implementation:
+- **M3 Complete**: All local Yjs tasks finished (112 unit + 41 E2E tests passing)
+- **M3-T4 Merged**: Awareness features (cursors & drag ghosts) completed in PR #13
+- **New Milestone Order**:
+  1. M5 — Multiplayer Server (NEXT)
+  2. M3.5 — Additional Functionality (flip, rotate, stack, unstack)
+  3. M4 — Set Loader & Assets
+  4. M6-M10 — Remaining milestones
+- **Rationale**: M3-T4 awareness features are designed for multiplayer. Completing M5 next enables real multiplayer testing, while additional object actions (M3.5) enhance gameplay but aren't blockers for core multiplayer functionality.
+- **Deferred Actions**: Moved `flipCards`, `rotateObjects`, `stackObjects`, `unstack` from M3-T2 to new M3.5 milestone
+- Files updated: `_plans/M3_yjs_local.md`, new `_plans/M3.5_additional_functionality.md`, `CLAUDE.md`
+
+### M3-T4 - Awareness (Cursors & Drag Ghosts) (Completed 2025-11-17)
+Complete awareness system for real-time remote cursor and drag ghost rendering:
+- **Infrastructure**: Integrated `y-protocols/awareness` with YjsStore, created reusable 30Hz throttle utility
+- **Features**:
+  - Remote cursor rendering (blue triangle with actor labels)
+  - Drag ghost rendering (semi-transparent object copies)
+  - 30Hz throttled awareness updates
+  - Simulation UI for testing without multiplayer
+- **Architecture**: Message passing Store → Board → Renderer, ephemeral state (not persisted), drop-in compatible with y-websocket
+- **Testing**: 10 unit tests (YjsStore awareness), 7 unit tests (throttle), 6 E2E tests (simulation UI)
+- **Copilot Feedback Addressed**:
+  - Split simulation interval refs (defensive programming)
+  - Drag ghost now updates when dragged object IDs change
+- Files: `YjsStore.ts` (+127), `RendererCore.ts` (+257), `Board.tsx` (+77), new `throttle.ts`
+- Branch: `feature/m3-t4-awareness`, merged via PR #13
 
 ### M3 Object Architecture Refactoring (Completed 2025-11-16)
 Complete refactoring from switch-statement-based object handling to modular, registry-based behavior system:

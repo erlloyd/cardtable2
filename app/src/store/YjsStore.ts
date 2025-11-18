@@ -74,6 +74,14 @@ export class YjsStore {
       this.wsProvider.on('connection-error', (event: Error) => {
         console.error('[YjsStore] WebSocket connection error:', event);
       });
+
+      // Debug: Log when Y.Doc updates are sent/received
+      this.doc.on('update', (update: Uint8Array, origin: unknown) => {
+        const isRemote = origin === this.wsProvider;
+        console.log(
+          `[YjsStore] Y.Doc update: ${update.byteLength} bytes, ${isRemote ? 'FROM REMOTE' : 'LOCAL'}`,
+        );
+      });
     } else {
       console.log('[YjsStore] Running in offline mode (no server connection)');
     }

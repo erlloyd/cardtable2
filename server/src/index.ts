@@ -30,7 +30,13 @@ server.on('upgrade', (request, socket, head) => {
 // y-websocket connection handling (M5-T1)
 // Uses the official y-websocket server utilities for proper Yjs sync
 wss.on('connection', (ws, request) => {
-  console.log('[Server] New WebSocket connection');
+  const url = request.url || '';
+  console.log(`[Server] New WebSocket connection: ${url}`);
+
+  // Debug: Log messages received from client
+  ws.on('message', (data: Buffer) => {
+    console.log(`[Server] Received message: ${data.byteLength} bytes`);
+  });
 
   // setupWSConnection handles all Yjs synchronization automatically
   // It manages:

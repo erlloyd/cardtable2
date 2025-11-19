@@ -153,7 +153,11 @@ export type RendererToMainMessage =
       pos: Position; // primary object position
       secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>; // offsets by object ID
     }
-  | { type: 'drag-state-clear' }; // M5-T1: Clear drag awareness
+  | { type: 'drag-state-clear' } // M5-T1: Clear drag awareness
+  | {
+      type: 'awareness-update-rate'; // M5-T1: Awareness update frequency monitoring
+      hz: number; // Updates per second
+    };
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

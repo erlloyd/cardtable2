@@ -109,6 +109,11 @@ export abstract class RendererCore {
   > = new Map();
   private awarenessContainer: Container | null = null; // Top-level container for all awareness visuals
 
+  // Awareness update rate monitoring (M5-T1)
+  private awarenessUpdateTimestamps: number[] = []; // Rolling window of update timestamps (last 1 second)
+  private lastReportedAwarenessHz: number = 0; // Last reported Hz (to avoid spamming updates)
+  private lastAwarenessHzReportTime: number = 0; // When we last sent an Hz update
+
   /**
    * Send a response message back to the main thread.
    * Worker mode: uses self.postMessage
@@ -916,17 +921,20 @@ export abstract class RendererCore {
     }
 
     // Send cursor position in world coordinates (M3-T4)
-    // This will be throttled at 30Hz by the Board component
-    const worldX =
-      (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-    const worldY =
-      (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+    // Skip cursor updates during object drag (drag-state-update already sent)
+    // This avoids double awareness updates (cursor + drag = 60Hz instead of 30Hz)
+    if (!this.isObjectDragging) {
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
 
-    this.postResponse({
-      type: 'cursor-position',
-      x: worldX,
-      y: worldY,
-    });
+      this.postResponse({
+        type: 'cursor-position',
+        x: worldX,
+        y: worldY,
+      });
+    }
   }
 
   /**
@@ -1875,8 +1883,37 @@ export abstract class RendererCore {
     const now = Date.now();
     const activeClientIds = new Set<number>();
 
+    // Track awareness update rate (M5-T1)
+    // Only count when we actually receive remote awareness states
+    if (states.length > 0) {
+      this.awarenessUpdateTimestamps.push(now);
+      // Remove timestamps older than 1 second (rolling window)
+      this.awarenessUpdateTimestamps = this.awarenessUpdateTimestamps.filter(
+        (ts) => now - ts < 1000,
+      );
+      // Calculate Hz (updates in the last second)
+      const currentHz = this.awarenessUpdateTimestamps.length;
+      // Report Hz to UI every 250ms if changed significantly (±2 Hz)
+      if (
+        now - this.lastAwarenessHzReportTime > 250 &&
+        Math.abs(currentHz - this.lastReportedAwarenessHz) >= 2
+      ) {
+        this.postResponse({
+          type: 'awareness-update-rate',
+          hz: currentHz,
+        });
+        this.lastReportedAwarenessHz = currentHz;
+        this.lastAwarenessHzReportTime = now;
+      }
+    }
+
     // Update or create visuals for each remote actor
     for (const { clientId, state } of states) {
+      // Skip our own awareness state (we render locally, not as a ghost)
+      if (state.actorId === this.actorId) {
+        continue;
+      }
+
       activeClientIds.add(clientId);
 
       let awarenessData = this.remoteAwareness.get(clientId);

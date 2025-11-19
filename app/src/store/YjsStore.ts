@@ -5,6 +5,7 @@ import { Awareness } from 'y-protocols/awareness';
 import type { TableObject, ActorId, AwarenessState } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
+import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 
 /**
  * Change information from Yjs observer
@@ -47,6 +48,25 @@ export class YjsStore {
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
+  // Throttled drag state update (30Hz)
+  private throttledDragStateUpdate = throttle(
+    (
+      gid: string,
+      primaryId: string,
+      pos: { x: number; y: number; r: number },
+      secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
+    ) => {
+      this.awareness.setLocalStateField('drag', {
+        gid,
+        primaryId,
+        pos,
+        secondaryOffsets,
+        ts: Date.now(),
+      });
+    },
+    AWARENESS_UPDATE_INTERVAL_MS,
+  );
+
   constructor(tableId: string, wsUrl?: string) {
     this.doc = new Y.Doc();
     this.actorId = uuidv4();
@@ -85,7 +105,7 @@ export class YjsStore {
         }
       });
 
-      this.wsProvider.on('connection-error', (event: Error) => {
+      this.wsProvider.on('connection-error', (event: Event) => {
         console.error('[YjsStore] WebSocket connection error:', event);
         this.setConnectionStatus('disconnected');
       });
@@ -364,11 +384,12 @@ export class YjsStore {
 
   /**
    * Set drag state (ephemeral, active drag)
-   * Updates at 30Hz (throttling handled by caller)
+   * Throttled to 30Hz to reduce network overhead
    *
    * @param gid - Gesture ID (unique per drag operation)
-   * @param ids - Object IDs being dragged
+   * @param primaryId - Primary object ID being dragged
    * @param pos - Absolute world position of primary object
+   * @param secondaryOffsets - Relative offsets for secondary dragged objects
    */
   setDragState(
     gid: string,
@@ -376,13 +397,7 @@ export class YjsStore {
     pos: { x: number; y: number; r: number },
     secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
   ): void {
-    this.awareness.setLocalStateField('drag', {
-      gid,
-      primaryId,
-      pos,
-      secondaryOffsets,
-      ts: Date.now(),
-    });
+    this.throttledDragStateUpdate(gid, primaryId, pos, secondaryOffsets);
   }
 
   /**
@@ -482,6 +497,9 @@ export class YjsStore {
    * Clean up resources
    */
   destroy(): void {
+    // Cancel any pending throttled awareness updates
+    this.throttledDragStateUpdate.cancel();
+
     // Clean up awareness
     this.awareness.destroy();
 

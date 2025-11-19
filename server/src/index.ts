@@ -1,13 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
-import type { IncomingMessage } from 'http';
-import { WebSocketServer, type WebSocket } from 'ws';
-
-// Import y-websocket utility with proper typing
-// Note: y-websocket v2 doesn't export types, so we define the signature
-const { setupWSConnection } = (await import('y-websocket/bin/utils')) as {
-  setupWSConnection: (ws: WebSocket, req: IncomingMessage) => void;
-};
+import { WebSocketServer } from 'ws';
+import { setupWSConnection } from '@y/websocket-server/utils';
 
 const app = express();
 const server = createServer(app);

@@ -71,6 +71,7 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
+  const [awarenessHz, setAwarenessHz] = useState<number>(0);
 
   // Initialize renderer on mount
   useEffect(() => {
@@ -221,6 +222,12 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
           // Cancel any pending throttled updates
           throttledDragStateUpdate.current.cancel();
           storeRef.current.clearDragState();
+          break;
+        }
+
+        case 'awareness-update-rate': {
+          // M5-T1: Update awareness Hz display
+          setAwarenessHz(message.hz);
           break;
         }
       }
@@ -619,7 +626,7 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
         Mode: {renderMode} | Worker:{' '}
         {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
         {isCanvasInitialized ? 'Initialized' : 'Not initialized'} | WS:{' '}
-        {connectionStatus}
+        {connectionStatus} | Awareness: {awarenessHz} Hz
       </div>
 
       <div

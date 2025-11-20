@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write  # Needed to push Docker images to GHCR
 
 jobs:
   lint-and-typecheck:
@@ -132,3 +133,85 @@ jobs:
         with:
           name: server-dist
           path: server/dist/
+
+  docker-build-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need history to compare branches
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if Docker image exists
+        id: image_check
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}"
+          echo "Checking for image: $IMAGE_NAME"
+
+          # Try to pull image manifest (doesn't download layers, just checks existence)
+          if docker manifest inspect "$IMAGE_NAME" > /dev/null 2>&1; then
+            echo "image_exists=true" >> $GITHUB_OUTPUT
+            echo "Image exists"
+          else
+            echo "image_exists=false" >> $GITHUB_OUTPUT
+            echo "Image does not exist (first build for this PR)"
+          fi
+
+      - name: Check for server/shared changes
+        id: changes
+        run: |
+          # Check if server or its dependencies changed since base branch
+          if pnpm --filter "{server}[origin/${{ github.base_ref }}]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
+            echo "server_changed=true" >> $GITHUB_OUTPUT
+            echo "Server or shared files changed"
+          else
+            echo "server_changed=false" >> $GITHUB_OUTPUT
+            echo "No server/shared changes"
+          fi
+
+      - name: Determine if build is needed
+        id: should_build
+        run: |
+          if [ "${{ steps.image_check.outputs.image_exists }}" = "false" ] || [ "${{ steps.changes.outputs.server_changed }}" = "true" ]; then
+            echo "build_needed=true" >> $GITHUB_OUTPUT
+            echo "Build needed (image_exists=${{ steps.image_check.outputs.image_exists }}, server_changed=${{ steps.changes.outputs.server_changed }})"
+          else
+            echo "build_needed=false" >> $GITHUB_OUTPUT
+            echo "Skipping build (image exists and no server/shared changes)"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.should_build.outputs.build_needed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        if: steps.should_build.outputs.build_needed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

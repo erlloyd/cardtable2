@@ -27,17 +27,12 @@ wss.on('connection', (ws, request) => {
   const url = request.url || '';
   console.log(`[Server] New WebSocket connection: ${url}`);
 
-  // Debug: Log messages received from client
-  ws.on('message', (data: Buffer) => {
-    console.log(`[Server] Received message: ${data.byteLength} bytes`);
-  });
-
   // setupWSConnection handles all Yjs synchronization automatically
   // It manages:
   // - Initial sync (sending current document state)
   // - Applying updates from clients
   // - Broadcasting updates to other clients
-  // - Awareness state propagation
+  // - Awareness state propagation (30Hz, no need to log every message)
   setupWSConnection(ws, request);
 });
 

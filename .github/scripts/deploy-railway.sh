@@ -100,6 +100,34 @@ EOF
   fi
 
   echo "✅ Redeploy triggered successfully!"
+
+  # Query for existing service domain
+  echo "Fetching service domain..."
+  DOMAIN_QUERY=$(cat <<EOF
+query {
+  serviceDomains(
+    environmentId: "$RAILWAY_ENVIRONMENT_ID"
+    serviceId: "$SERVICE_ID"
+  ) {
+    domain
+  }
+}
+EOF
+  )
+
+  DOMAIN_QUERY_RESPONSE=$(curl -s -X POST "$RAILWAY_API" \
+    -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":$(echo "$DOMAIN_QUERY" | jq -Rs .)}")
+
+  # Extract domain URL
+  DOMAIN_URL=$(echo "$DOMAIN_QUERY_RESPONSE" | jq -r '.data.serviceDomains[0].domain')
+
+  if [ -z "$DOMAIN_URL" ] || [ "$DOMAIN_URL" = "null" ]; then
+    echo "Warning: Could not fetch domain URL"
+  else
+    echo "Domain URL: https://$DOMAIN_URL"
+  fi
 else
   # Service doesn't exist, create it
   echo "Service not found, creating new service..."
@@ -241,6 +269,13 @@ EOF
 
     if [ "$DEPLOYMENT_STATUS" = "SUCCESS" ]; then
       echo "✅ Deployment completed successfully!"
+
+      # Output URL for GitHub Actions
+      if [ -n "$DOMAIN_URL" ] && [ "$DOMAIN_URL" != "null" ] && [ -n "${GITHUB_OUTPUT:-}" ]; then
+        echo "url=https://$DOMAIN_URL" >> "$GITHUB_OUTPUT"
+        echo "Deployment URL exported to GitHub Actions: https://$DOMAIN_URL"
+      fi
+
       exit 0
     elif [ "$DEPLOYMENT_STATUS" = "FAILED" ] || [ "$DEPLOYMENT_STATUS" = "CRASHED" ]; then
       echo "❌ Deployment failed with status: $DEPLOYMENT_STATUS"

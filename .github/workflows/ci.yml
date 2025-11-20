@@ -236,6 +236,10 @@ jobs:
           # Install Railway CLI
           npm install -g @railway/cli
 
+          # Debug: Check if tokens are set (without revealing values)
+          echo "RAILWAY_API_TOKEN set: $( [ -n "$RAILWAY_API_TOKEN" ] && echo 'yes' || echo 'NO' )"
+          echo "RAILWAY_PROJECT_ID set: $( [ -n "$RAILWAY_PROJECT_ID" ] && echo 'yes' || echo 'NO' )"
+
           # Link to Railway project first
           railway link --project $RAILWAY_PROJECT_ID
 

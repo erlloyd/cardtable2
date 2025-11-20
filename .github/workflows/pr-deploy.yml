@@ -165,9 +165,21 @@ jobs:
             echo "Skipping build (image exists and no app changes)"
           fi
 
-      - name: Set up Docker Buildx
+      - uses: pnpm/action-setup@v3
         if: steps.should_build.outputs.build_needed == 'true'
-        uses: docker/setup-buildx-action@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        if: steps.should_build.outputs.build_needed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: steps.should_build.outputs.build_needed == 'true'
+        run: pnpm install --frozen-lockfile
 
       - name: Construct server domain
         if: steps.should_build.outputs.build_needed == 'true'
@@ -178,16 +190,24 @@ jobs:
           echo "domain=$SERVER_DOMAIN" >> $GITHUB_OUTPUT
           echo "Server domain: $SERVER_DOMAIN"
 
+      - name: Build app
+        if: steps.should_build.outputs.build_needed == 'true'
+        env:
+          VITE_WS_URL: wss://${{ steps.server_domain.outputs.domain }}
+        run: pnpm --filter @cardtable2/app run build
+
+      - name: Set up Docker Buildx
+        if: steps.should_build.outputs.build_needed == 'true'
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push Docker image
         if: steps.should_build.outputs.build_needed == 'true'
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: app/Dockerfile
+          context: ./app
+          file: ./app/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/cardtable2-app:pr-${{ github.event.pull_request.number }}
-          build-args: |
-            VITE_WS_URL=wss://${{ steps.server_domain.outputs.domain }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

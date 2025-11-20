@@ -164,6 +164,16 @@ jobs:
         if: steps.should_build.outputs.build_needed == 'true'
         uses: docker/setup-buildx-action@v3
 
+      - name: Extract server domain
+        if: steps.should_build.outputs.build_needed == 'true'
+        id: server_domain
+        run: |
+          # Strip https:// from server URL to get just the domain
+          SERVER_DOMAIN="${{ needs.deploy-railway-server.outputs.server_url }}"
+          SERVER_DOMAIN="${SERVER_DOMAIN#https://}"
+          echo "domain=$SERVER_DOMAIN" >> $GITHUB_OUTPUT
+          echo "Server domain: $SERVER_DOMAIN"
+
       - name: Build and push Docker image
         if: steps.should_build.outputs.build_needed == 'true'
         uses: docker/build-push-action@v5
@@ -173,7 +183,7 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/cardtable2-app:pr-${{ github.event.pull_request.number }}
           build-args: |
-            VITE_WS_URL=wss://${{ needs.deploy-railway-server.outputs.server_url }}
+            VITE_WS_URL=wss://${{ steps.server_domain.outputs.domain }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

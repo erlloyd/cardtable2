@@ -145,6 +145,18 @@ export type RendererToMainMessage =
       type: 'cursor-position'; // M3-T4: Cursor position in world coordinates
       x: number;
       y: number;
+    }
+  | {
+      type: 'drag-state-update'; // M5-T1: Drag awareness
+      gid: string;
+      primaryId: string; // primary object ID
+      pos: Position; // primary object position
+      secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>; // offsets by object ID
+    }
+  | { type: 'drag-state-clear' } // M5-T1: Clear drag awareness
+  | {
+      type: 'awareness-update-rate'; // M5-T1: Awareness update frequency monitoring
+      hz: number; // Updates per second
     };
 
 // ============================================================================
@@ -178,8 +190,9 @@ export interface AwarenessState {
   };
   drag?: {
     gid: string; // gesture ID
-    ids: string[]; // object IDs being dragged
+    primaryId: string; // primary object ID (the one being dragged)
     pos: { x: number; y: number; r: number }; // absolute world position (primary object)
+    secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>; // offsets of secondary objects by ID
     ts: number; // timestamp
     // Note: Uses absolute position instead of anchor+deltas for simplicity and resilience
     // to dropped frames. Receiving clients render ghost at this exact position.

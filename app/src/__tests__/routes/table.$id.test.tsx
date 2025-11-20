@@ -27,6 +27,12 @@ vi.mock('../../store/YjsStore', () => ({
     onObjectsChange(_callback: () => void) {
       return () => {};
     }
+    onConnectionStatusChange(_callback: () => void) {
+      return () => {};
+    }
+    getConnectionStatus() {
+      return 'offline';
+    }
     destroy() {}
   },
 }));

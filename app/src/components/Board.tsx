@@ -22,9 +22,10 @@ import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 interface BoardProps {
   tableId: string;
   store: YjsStore;
+  connectionStatus: string;
 }
 
-function Board({ tableId, store }: BoardProps) {
+function Board({ tableId, store, connectionStatus }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasTransferredRef = useRef(false);
@@ -43,6 +44,24 @@ function Board({ tableId, store }: BoardProps) {
     }, AWARENESS_UPDATE_INTERVAL_MS),
   );
 
+  // Throttled drag state update (M5-T1)
+  const throttledDragStateUpdate = useRef(
+    throttle(
+      (
+        gid: string,
+        primaryId: string,
+        pos: { x: number; y: number; r: number },
+        secondaryOffsets?: Record<
+          string,
+          { dx: number; dy: number; dr: number }
+        >,
+      ) => {
+        storeRef.current.setDragState(gid, primaryId, pos, secondaryOffsets);
+      },
+      AWARENESS_UPDATE_INTERVAL_MS,
+    ),
+  );
+
   const [messages, setMessages] = useState<string[]>([]);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
@@ -52,6 +71,7 @@ function Board({ tableId, store }: BoardProps) {
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
+  const [awarenessHz, setAwarenessHz] = useState<number>(0);
 
   // Initialize renderer on mount
   useEffect(() => {
@@ -182,6 +202,32 @@ function Board({ tableId, store }: BoardProps) {
           // M3-T4: Renderer sends world coordinates for cursor
           // Throttled update to awareness at 30Hz
           throttledCursorUpdate.current(message.x, message.y);
+          break;
+        }
+
+        case 'drag-state-update': {
+          // M5-T1: Update drag awareness
+          // Throttled update to awareness at 30Hz
+          throttledDragStateUpdate.current(
+            message.gid,
+            message.primaryId,
+            message.pos,
+            message.secondaryOffsets,
+          );
+          break;
+        }
+
+        case 'drag-state-clear': {
+          // M5-T1: Clear drag awareness
+          // Cancel any pending throttled updates
+          throttledDragStateUpdate.current.cancel();
+          storeRef.current.clearDragState();
+          break;
+        }
+
+        case 'awareness-update-rate': {
+          // M5-T1: Update awareness Hz display
+          setAwarenessHz(message.hz);
           break;
         }
       }
@@ -579,7 +625,8 @@ function Board({ tableId, store }: BoardProps) {
       >
         Mode: {renderMode} | Worker:{' '}
         {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
-        {isCanvasInitialized ? 'Initialized' : 'Not initialized'}
+        {isCanvasInitialized ? 'Initialized' : 'Not initialized'} | WS:{' '}
+        {connectionStatus} | Awareness: {awarenessHz} Hz
       </div>
 
       <div

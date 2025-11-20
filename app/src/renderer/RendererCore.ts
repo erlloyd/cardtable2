@@ -58,6 +58,8 @@ export abstract class RendererCore {
     new Map();
   // Store pointer down event for selection logic on pointer up
   private pointerDownEvent: PointerEventData | null = null;
+  // Gesture ID for drag awareness (M5-T1)
+  private currentDragGestureId: string | null = null;
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
@@ -106,6 +108,11 @@ export abstract class RendererCore {
     }
   > = new Map();
   private awarenessContainer: Container | null = null; // Top-level container for all awareness visuals
+
+  // Awareness update rate monitoring (M5-T1)
+  private awarenessUpdateTimestamps: number[] = []; // Rolling window of update timestamps (last 1 second)
+  private lastReportedAwarenessHz: number = 0; // Last reported Hz (to avoid spamming updates)
+  private lastAwarenessHzReportTime: number = 0; // When we last sent an Hz update
 
   /**
    * Send a response message back to the main thread.
@@ -650,6 +657,9 @@ export abstract class RendererCore {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
 
+            // Generate unique gesture ID for drag awareness (M5-T1)
+            this.currentDragGestureId = `drag-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
             // Determine which objects to drag
             // If the dragged object is already selected, drag all selected objects (multi-drag)
             // If not selected:
@@ -779,6 +789,48 @@ export abstract class RendererCore {
             }
           }
 
+          // Send drag state update for awareness (M5-T1)
+          if (this.currentDragGestureId && this.draggedObjectId) {
+            const primaryObj = this.sceneManager.getObject(
+              this.draggedObjectId,
+            );
+            if (primaryObj) {
+              // Calculate relative offsets for secondary objects (if dragging multiple)
+              const secondaryOffsets: Record<
+                string,
+                { dx: number; dy: number; dr: number }
+              > = {};
+              let hasSecondary = false;
+
+              for (const [id] of this.draggedObjectsStartPositions) {
+                if (id !== this.draggedObjectId) {
+                  // This is a secondary object
+                  const secondaryObj = this.sceneManager.getObject(id);
+                  if (secondaryObj) {
+                    secondaryOffsets[id] = {
+                      dx: secondaryObj._pos.x - primaryObj._pos.x,
+                      dy: secondaryObj._pos.y - primaryObj._pos.y,
+                      dr: secondaryObj._pos.r - primaryObj._pos.r,
+                    };
+                    hasSecondary = true;
+                  }
+                }
+              }
+
+              this.postResponse({
+                type: 'drag-state-update',
+                gid: this.currentDragGestureId,
+                primaryId: this.draggedObjectId,
+                pos: {
+                  x: primaryObj._pos.x,
+                  y: primaryObj._pos.y,
+                  r: primaryObj._pos.r,
+                },
+                secondaryOffsets: hasSecondary ? secondaryOffsets : undefined,
+              });
+            }
+          }
+
           // Request render
           // Note: SceneManager spatial index update is deferred until drag ends
           // to avoid expensive RBush removal/insertion on every pointer move
@@ -869,17 +921,20 @@ export abstract class RendererCore {
     }
 
     // Send cursor position in world coordinates (M3-T4)
-    // This will be throttled at 30Hz by the Board component
-    const worldX =
-      (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-    const worldY =
-      (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+    // Skip cursor updates during object drag (drag-state-update already sent)
+    // This avoids double awareness updates (cursor + drag = 60Hz instead of 30Hz)
+    if (!this.isObjectDragging) {
+      const worldX =
+        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
+      const worldY =
+        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
 
-    this.postResponse({
-      type: 'cursor-position',
-      x: worldX,
-      y: worldY,
-    });
+      this.postResponse({
+        type: 'cursor-position',
+        x: worldX,
+        y: worldY,
+      });
+    }
   }
 
   /**
@@ -1296,10 +1351,18 @@ export abstract class RendererCore {
           });
         }
 
+        // Send drag state clear for awareness (M5-T1)
+        if (this.currentDragGestureId) {
+          this.postResponse({
+            type: 'drag-state-clear',
+          });
+        }
+
         // Clear drag state
         this.isObjectDragging = false;
         this.draggedObjectId = null;
         this.draggedObjectsStartPositions.clear();
+        this.currentDragGestureId = null;
       }
 
       // Clear rectangle selection state if needed
@@ -1820,8 +1883,37 @@ export abstract class RendererCore {
     const now = Date.now();
     const activeClientIds = new Set<number>();
 
+    // Track awareness update rate (M5-T1)
+    // Only count when we actually receive remote awareness states
+    if (states.length > 0) {
+      this.awarenessUpdateTimestamps.push(now);
+      // Remove timestamps older than 1 second (rolling window)
+      this.awarenessUpdateTimestamps = this.awarenessUpdateTimestamps.filter(
+        (ts) => now - ts < 1000,
+      );
+      // Calculate Hz (updates in the last second)
+      const currentHz = this.awarenessUpdateTimestamps.length;
+      // Report Hz to UI every 250ms if changed significantly (±2 Hz)
+      if (
+        now - this.lastAwarenessHzReportTime > 250 &&
+        Math.abs(currentHz - this.lastReportedAwarenessHz) >= 2
+      ) {
+        this.postResponse({
+          type: 'awareness-update-rate',
+          hz: currentHz,
+        });
+        this.lastReportedAwarenessHz = currentHz;
+        this.lastAwarenessHzReportTime = now;
+      }
+    }
+
     // Update or create visuals for each remote actor
     for (const { clientId, state } of states) {
+      // Skip our own awareness state (we render locally, not as a ghost)
+      if (state.actorId === this.actorId) {
+        continue;
+      }
+
       activeClientIds.add(clientId);
 
       let awarenessData = this.remoteAwareness.get(clientId);
@@ -1961,14 +2053,19 @@ export abstract class RendererCore {
   ): void {
     if (!this.awarenessContainer || !this.worldContainer || !state.drag) return;
 
+    // Build set of current IDs (primary + secondaries)
+    const currentIds = new Set<string>([state.drag.primaryId]);
+    if (state.drag.secondaryOffsets) {
+      for (const id of Object.keys(state.drag.secondaryOffsets)) {
+        currentIds.add(id);
+      }
+    }
+
     // Check if dragged object IDs have changed
-    const currentIds = state.drag.ids;
+    const previousIds = awarenessData.draggedObjectIds || [];
     const hasIdsChanged =
-      !awarenessData.draggedObjectIds ||
-      awarenessData.draggedObjectIds.length !== currentIds.length ||
-      !awarenessData.draggedObjectIds.every(
-        (id, idx) => id === currentIds[idx],
-      );
+      previousIds.length !== currentIds.size ||
+      !previousIds.every((id) => currentIds.has(id));
 
     // Destroy and recreate ghost if object IDs changed
     if (hasIdsChanged && awarenessData.dragGhost) {
@@ -1980,14 +2077,13 @@ export abstract class RendererCore {
     if (!awarenessData.dragGhost) {
       const ghostContainer = new Container();
 
-      // Get the first object being dragged to determine size/shape
-      const firstObjId = state.drag.ids[0];
-      const obj = this.sceneManager.getObject(firstObjId);
+      // Render the primary object
+      const primaryObj = this.sceneManager.getObject(state.drag.primaryId);
 
-      if (obj) {
-        // Create a semi-transparent copy of the object
-        const behaviors = getBehaviors(obj._kind);
-        const ghostGraphic = behaviors.render(obj, {
+      if (primaryObj) {
+        // Create a semi-transparent copy of the primary object
+        const behaviors = getBehaviors(primaryObj._kind);
+        const ghostGraphic = behaviors.render(primaryObj, {
           isSelected: false,
           isHovered: false,
           isDragging: false,
@@ -1996,6 +2092,33 @@ export abstract class RendererCore {
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
         ghostContainer.addChild(ghostGraphic);
+
+        // Render secondary objects if we have offsets
+        if (state.drag.secondaryOffsets) {
+          for (const [secondaryObjId, offset] of Object.entries(
+            state.drag.secondaryOffsets,
+          )) {
+            const secondaryObj = this.sceneManager.getObject(secondaryObjId);
+
+            if (secondaryObj) {
+              const secondaryBehaviors = getBehaviors(secondaryObj._kind);
+              const secondaryGraphic = secondaryBehaviors.render(secondaryObj, {
+                isSelected: false,
+                isHovered: false,
+                isDragging: false,
+                cameraScale: this.cameraScale,
+              });
+              secondaryGraphic.alpha = 0.5; // Semi-transparent
+
+              // Position relative to primary object
+              secondaryGraphic.x = offset.dx;
+              secondaryGraphic.y = offset.dy;
+              secondaryGraphic.rotation = (offset.dr * Math.PI) / 180;
+
+              ghostContainer.addChild(secondaryGraphic);
+            }
+          }
+        }
       } else {
         // Fallback: render a generic rectangle if object not found
         const fallback = new Graphics();
@@ -2007,7 +2130,7 @@ export abstract class RendererCore {
 
       this.awarenessContainer.addChild(ghostContainer);
       awarenessData.dragGhost = ghostContainer;
-      awarenessData.draggedObjectIds = [...currentIds]; // Track current IDs
+      awarenessData.draggedObjectIds = Array.from(currentIds); // Track current IDs
     }
 
     // Convert world coordinates to screen coordinates

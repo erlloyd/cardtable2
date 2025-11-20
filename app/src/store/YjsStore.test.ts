@@ -292,22 +292,33 @@ describe('YjsStore', () => {
     it('sets drag state in awareness', () => {
       const dragState = {
         gid: 'gesture-123',
-        ids: ['obj-1', 'obj-2'],
+        primaryId: 'obj-1',
         pos: { x: 150, y: 250, r: 45 },
+        secondaryOffsets: {
+          'obj-2': { dx: 10, dy: 20, dr: 5 },
+        },
       };
 
-      store.setDragState(dragState.gid, dragState.ids, dragState.pos);
+      store.setDragState(
+        dragState.gid,
+        dragState.primaryId,
+        dragState.pos,
+        dragState.secondaryOffsets,
+      );
 
       const localState = store.getLocalAwarenessState();
       expect(localState?.drag).toBeDefined();
       expect(localState?.drag?.gid).toBe(dragState.gid);
-      expect(localState?.drag?.ids).toEqual(dragState.ids);
+      expect(localState?.drag?.primaryId).toBe(dragState.primaryId);
       expect(localState?.drag?.pos).toEqual(dragState.pos);
+      expect(localState?.drag?.secondaryOffsets).toEqual(
+        dragState.secondaryOffsets,
+      );
       expect(localState?.drag?.ts).toBeDefined();
     });
 
     it('clears drag state', () => {
-      store.setDragState('gesture-123', ['obj-1'], { x: 100, y: 100, r: 0 });
+      store.setDragState('gesture-123', 'obj-1', { x: 100, y: 100, r: 0 });
       expect(store.getLocalAwarenessState()?.drag).toBeDefined();
 
       store.clearDragState();
@@ -346,7 +357,7 @@ describe('YjsStore', () => {
       const callback = vi.fn();
 
       const unsubscribe = store.onAwarenessChange(callback);
-      store.setDragState('g1', ['obj-123'], { x: 0, y: 0, r: 0 });
+      store.setDragState('g1', 'obj-123', { x: 0, y: 0, r: 0 });
 
       // Wait for callback to be invoked
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -354,14 +365,14 @@ describe('YjsStore', () => {
       expect(callback).toHaveBeenCalled();
       const states = callback.mock.calls[0][0] as Map<
         number,
-        { drag?: { ids: string[] } }
+        { drag?: { primaryId: string } }
       >;
 
       const localClientId = store.getDoc().clientID;
       const ourState = states.get(localClientId);
 
       expect(ourState?.drag).toBeDefined();
-      expect(ourState?.drag?.ids).toEqual(['obj-123']);
+      expect(ourState?.drag?.primaryId).toEqual('obj-123');
 
       unsubscribe();
     });
@@ -405,12 +416,12 @@ describe('YjsStore', () => {
 
     it('combines cursor and drag in awareness state', () => {
       store.setCursor(100, 200);
-      store.setDragState('g1', ['obj-1'], { x: 50, y: 50, r: 0 });
+      store.setDragState('g1', 'obj-1', { x: 50, y: 50, r: 0 });
 
       const localState = store.getLocalAwarenessState();
       expect(localState?.cursor).toEqual({ x: 100, y: 200 });
       expect(localState?.drag).toBeDefined();
-      expect(localState?.drag?.ids).toEqual(['obj-1']);
+      expect(localState?.drag?.primaryId).toEqual('obj-1');
     });
   });
 

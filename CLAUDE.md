@@ -243,10 +243,19 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
 - ESLint + Prettier configured
 - Pre-commit hooks auto-format code
 - Pre-push hooks run typecheck
-- **CRITICAL**: Never add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar suppression comments without:
-  1. First attempting to fix the underlying type/lint issue properly
-  2. Explicitly confirming with the user and explaining why it's necessary
-  3. Providing a detailed comment explaining the reason if approved
+- **CRITICAL - NEVER VIOLATE THIS RULE**: Suppression comments are FORBIDDEN without explicit user approval
+  - **NEVER** add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments
+  - **ALWAYS** fix the underlying type/lint issue properly first
+  - Common solutions:
+    - Type assertions: `import('module') as { export: Type }`
+    - Proper type imports: `import type { Type } from 'module'`
+    - Type guards and narrowing
+    - Refactoring to satisfy type safety
+  - **ONLY IF** a proper fix is impossible:
+    1. Stop and ask the user for permission
+    2. Explain why suppression is necessary
+    3. Wait for explicit approval before proceeding
+  - If you add a suppression comment without asking first, you have failed
 
 ### Deployment
 - App deploys to GitHub Pages (beta.card-table.app) on merge to main

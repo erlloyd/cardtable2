@@ -1,9 +1,11 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
+import { WebsocketProvider } from 'y-websocket';
 import { Awareness } from 'y-protocols/awareness';
 import type { TableObject, ActorId, AwarenessState } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
+import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 
 /**
  * Change information from Yjs observer
@@ -29,9 +31,16 @@ export interface ObjectChanges {
 export class YjsStore {
   private doc: Y.Doc;
   private persistence: IndexeddbPersistence | null = null;
+  private wsProvider: WebsocketProvider | null = null; // M5-T1
   private actorId: ActorId;
   private isReady = false;
   private readyPromise: Promise<void>;
+  private connectionStatus:
+    | 'offline'
+    | 'connecting'
+    | 'connected'
+    | 'disconnected' = 'offline'; // M5-T1
+  private connectionStatusCallbacks: Set<(status: string) => void> = new Set();
 
   // Typed access to Y.Doc maps
   public objects: Y.Map<Y.Map<unknown>>;
@@ -39,7 +48,26 @@ export class YjsStore {
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
-  constructor(tableId: string) {
+  // Throttled drag state update (30Hz)
+  private throttledDragStateUpdate = throttle(
+    (
+      gid: string,
+      primaryId: string,
+      pos: { x: number; y: number; r: number },
+      secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
+    ) => {
+      this.awareness.setLocalStateField('drag', {
+        gid,
+        primaryId,
+        pos,
+        secondaryOffsets,
+        ts: Date.now(),
+      });
+    },
+    AWARENESS_UPDATE_INTERVAL_MS,
+  );
+
+  constructor(tableId: string, wsUrl?: string) {
     this.doc = new Y.Doc();
     this.actorId = uuidv4();
 
@@ -56,6 +84,45 @@ export class YjsStore {
       `cardtable-${tableId}`,
       this.doc,
     );
+
+    // Set up WebSocket provider for multiplayer (M5-T1)
+    // Optional - only connects if wsUrl is provided
+    if (wsUrl) {
+      console.log(`[YjsStore] Connecting to multiplayer server: ${wsUrl}`);
+      this.wsProvider = new WebsocketProvider(wsUrl, tableId, this.doc, {
+        awareness: this.awareness,
+      });
+
+      this.wsProvider.on('status', (event: { status: string }) => {
+        console.log(`[YjsStore] WebSocket status: ${event.status}`);
+        // Map y-websocket status to our status type
+        if (event.status === 'connected') {
+          this.setConnectionStatus('connected');
+        } else if (event.status === 'disconnected') {
+          this.setConnectionStatus('disconnected');
+        } else {
+          this.setConnectionStatus('connecting');
+        }
+      });
+
+      this.wsProvider.on('connection-error', (event: Event) => {
+        console.error('[YjsStore] WebSocket connection error:', event);
+        this.setConnectionStatus('disconnected');
+      });
+
+      // Set initial connecting status
+      this.setConnectionStatus('connecting');
+
+      // Debug: Log when Y.Doc updates are sent/received
+      this.doc.on('update', (update: Uint8Array, origin: unknown) => {
+        const isRemote = origin === this.wsProvider;
+        console.log(
+          `[YjsStore] Y.Doc update: ${update.byteLength} bytes, ${isRemote ? 'FROM REMOTE' : 'LOCAL'}`,
+        );
+      });
+    } else {
+      console.log('[YjsStore] Running in offline mode (no server connection)');
+    }
 
     // Wait for persistence to load existing state
     this.readyPromise = new Promise<void>((resolve, reject) => {
@@ -317,23 +384,20 @@ export class YjsStore {
 
   /**
    * Set drag state (ephemeral, active drag)
-   * Updates at 30Hz (throttling handled by caller)
+   * Throttled to 30Hz to reduce network overhead
    *
    * @param gid - Gesture ID (unique per drag operation)
-   * @param ids - Object IDs being dragged
+   * @param primaryId - Primary object ID being dragged
    * @param pos - Absolute world position of primary object
+   * @param secondaryOffsets - Relative offsets for secondary dragged objects
    */
   setDragState(
     gid: string,
-    ids: string[],
+    primaryId: string,
     pos: { x: number; y: number; r: number },
+    secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
   ): void {
-    this.awareness.setLocalStateField('drag', {
-      gid,
-      ids,
-      pos,
-      ts: Date.now(),
-    });
+    this.throttledDragStateUpdate(gid, primaryId, pos, secondaryOffsets);
   }
 
   /**
@@ -390,11 +454,60 @@ export class YjsStore {
   }
 
   /**
+   * Get current WebSocket connection status (M5-T1)
+   */
+  getConnectionStatus():
+    | 'offline'
+    | 'connecting'
+    | 'connected'
+    | 'disconnected' {
+    return this.connectionStatus;
+  }
+
+  /**
+   * Subscribe to connection status changes (M5-T1)
+   * @returns Unsubscribe function
+   */
+  onConnectionStatusChange(callback: (status: string) => void): () => void {
+    this.connectionStatusCallbacks.add(callback);
+    // Immediately call with current status
+    callback(this.connectionStatus);
+    // Return unsubscribe function
+    return () => {
+      this.connectionStatusCallbacks.delete(callback);
+    };
+  }
+
+  /**
+   * Set connection status and notify subscribers (M5-T1)
+   */
+  private setConnectionStatus(
+    status: 'offline' | 'connecting' | 'connected' | 'disconnected',
+  ): void {
+    if (this.connectionStatus !== status) {
+      this.connectionStatus = status;
+      // Notify all subscribers
+      for (const callback of this.connectionStatusCallbacks) {
+        callback(status);
+      }
+    }
+  }
+
+  /**
    * Clean up resources
    */
   destroy(): void {
+    // Cancel any pending throttled awareness updates
+    this.throttledDragStateUpdate.cancel();
+
     // Clean up awareness
     this.awareness.destroy();
+
+    // Clean up WebSocket provider (M5-T1)
+    if (this.wsProvider) {
+      this.wsProvider.destroy();
+      this.wsProvider = null;
+    }
 
     if (this.persistence) {
       void this.persistence.destroy();

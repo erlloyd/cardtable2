@@ -1,7 +1,7 @@
 /**
  * Throttle utility for awareness updates (M3-T4)
  *
- * Ensures a function is called at most once per interval (30Hz = 33ms).
+ * Ensures a function is called at most once per interval (e.g., 30Hz = 33ms).
  * Uses trailing edge execution to ensure the latest value is always sent.
  */
 
@@ -74,7 +74,8 @@ export function throttle<T extends (...args: any[]) => void>(
 }
 
 /**
- * 30Hz throttle interval (33.33ms)
+ * 30Hz throttle interval (33ms)
  * Used for awareness updates (cursor, drag)
+ * Provides smooth remote drag/cursor updates with minimal network overhead
  */
 export const AWARENESS_UPDATE_INTERVAL_MS = 33;

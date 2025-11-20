@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import GameCombobox from '../components/GameCombobox';
 import { Game, GamesIndex } from '../types/game';
 
+// Game selection route
 export const Route = createFileRoute('/')({
   component: GameSelect,
 });

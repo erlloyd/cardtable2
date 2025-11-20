@@ -226,3 +226,11 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Deploy to Railway
+        if: steps.should_build.outputs.build_needed == 'true'
+        uses: docker://ghcr.io/railwayapp/cli:latest
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        with:
+          args: add --service --image ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}

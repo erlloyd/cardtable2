@@ -19,6 +19,6 @@ jobs:
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
-          SERVICE_NAME: pr-${{ github.event.pull_request.number }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_PR_ENVIRONMENT_ID }}
+          SERVICE_NAME: cardtable2-server-pr-${{ github.event.pull_request.number }}
         run: .github/scripts/delete-railway-service.sh

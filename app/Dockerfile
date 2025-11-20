@@ -32,15 +32,21 @@ FROM nginx:alpine
 # Copy built assets from builder
 COPY --from=builder /app/app/dist /usr/share/nginx/html
 
-# Copy nginx configuration (optional - nginx default works for most SPAs)
+# Expose port (Railway will override with PORT env var)
+EXPOSE 80
+
+# Create nginx config template that will use PORT env var
 RUN echo 'server { \
-    listen 80; \
+    listen ${PORT}; \
     location / { \
         root /usr/share/nginx/html; \
         try_files $uri $uri/ /index.html; \
     } \
-}' > /etc/nginx/conf.d/default.conf
+}' > /etc/nginx/conf.d/default.conf.template
 
-EXPOSE 80
+# Create startup script to substitute PORT and start nginx
+RUN echo '#!/bin/sh\n\
+envsubst "\$PORT" < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf\n\
+exec nginx -g "daemon off;"' > /start.sh && chmod +x /start.sh
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/start.sh"]

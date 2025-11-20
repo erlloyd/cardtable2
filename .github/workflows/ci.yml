@@ -184,7 +184,12 @@ jobs:
           # Check if server or its dependencies changed in this commit (vs previous commit)
           # This ensures we only rebuild when server/shared actually changed in this push
           COMPARE_REF="HEAD~1"
-          if pnpm --filter "{server}[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
+          echo "Running: pnpm --filter \"{server}[$COMPARE_REF]\" list --depth=0"
+          FILTER_OUTPUT=$(pnpm --filter "{server}[$COMPARE_REF]" list --depth=0 2>&1)
+          echo "Full output:"
+          echo "$FILTER_OUTPUT"
+
+          if echo "$FILTER_OUTPUT" | grep -q "@cardtable2/server"; then
             echo "server_changed=true" >> $GITHUB_OUTPUT
             echo "Server or shared files changed in this commit"
           else

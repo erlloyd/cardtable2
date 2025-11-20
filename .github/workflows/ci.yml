@@ -182,14 +182,14 @@ jobs:
         id: changes
         run: |
           # Check if server or its dependencies changed in this commit (vs previous commit)
-          # This ensures we only rebuild when server/shared actually changed in this push
-          COMPARE_REF="HEAD~1"
+          # Use GitHub's event.before SHA for reliable previous commit reference
+          COMPARE_REF="${{ github.event.before }}"
 
           echo "=== Git Debug Info ==="
           echo "Current commit (HEAD): $(git rev-parse HEAD)"
-          echo "Previous commit (HEAD~1): $(git rev-parse HEAD~1)"
+          echo "Previous commit (event.before): $COMPARE_REF"
           echo "Files changed in current commit:"
-          git diff --name-only HEAD~1 HEAD
+          git diff --name-only $COMPARE_REF HEAD
           echo "=== End Git Debug ==="
 
           echo "Running: pnpm --filter \"{server}[$COMPARE_REF]\" list --depth=0"

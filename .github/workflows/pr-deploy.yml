@@ -133,15 +133,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch server URL from Railway
-        id: fetch_url
-        env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
-          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_PR_ENVIRONMENT_ID }}
-          SERVICE_NAME: cardtable2-server-pr-${{ github.event.pull_request.number }}
-        run: .github/scripts/get-railway-url.sh
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -178,13 +169,12 @@ jobs:
         if: steps.should_build.outputs.build_needed == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract server domain
+      - name: Construct server domain
         if: steps.should_build.outputs.build_needed == 'true'
         id: server_domain
         run: |
-          # Strip https:// from server URL to get just the domain
-          SERVER_DOMAIN="${{ steps.fetch_url.outputs.url }}"
-          SERVER_DOMAIN="${SERVER_DOMAIN#https://}"
+          # Construct Railway domain from PR number
+          SERVER_DOMAIN="cardtable2-server-pr-${{ github.event.pull_request.number }}-prs.up.railway.app"
           echo "domain=$SERVER_DOMAIN" >> $GITHUB_OUTPUT
           echo "Server domain: $SERVER_DOMAIN"
 

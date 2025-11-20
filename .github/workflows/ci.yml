@@ -178,42 +178,38 @@ jobs:
             echo "Image does not exist (first build for this PR)"
           fi
 
-      - name: Check for server/shared changes
+      - name: Check for server/shared/workflow changes
         id: changes
         run: |
-          # Check if server or its dependencies changed in this commit (vs previous commit)
+          # Check if server, its dependencies, or workflow files changed
           # Use GitHub's event.before SHA for reliable previous commit reference
           COMPARE_REF="${{ github.event.before }}"
 
-          echo "=== Git Debug Info ==="
-          echo "Current commit (HEAD): $(git rev-parse HEAD)"
-          echo "Previous commit (event.before): $COMPARE_REF"
-          echo "Files changed in current commit:"
-          git diff --name-only $COMPARE_REF HEAD
-          echo "=== End Git Debug ==="
-
-          echo "Running: pnpm --filter \"{server}[$COMPARE_REF]\" list --depth=0"
-          FILTER_OUTPUT=$(pnpm --filter "{server}[$COMPARE_REF]" list --depth=0 2>&1)
-          echo "Full output:"
-          echo "$FILTER_OUTPUT"
-
-          if echo "$FILTER_OUTPUT" | grep -q "@cardtable2/server"; then
+          # Check for server/shared changes using PNPM filter
+          if pnpm --filter "{server}[$COMPARE_REF]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
             echo "server_changed=true" >> $GITHUB_OUTPUT
-            echo "Server or shared files changed in this commit"
+            echo "Server or shared files changed"
           else
             echo "server_changed=false" >> $GITHUB_OUTPUT
-            echo "No server/shared changes in this commit"
+          fi
+
+          # Check for workflow file changes (rebuild image to be safe)
+          if ! git diff --quiet $COMPARE_REF HEAD -- .github/workflows/; then
+            echo "workflow_changed=true" >> $GITHUB_OUTPUT
+            echo "Workflow files changed"
+          else
+            echo "workflow_changed=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Determine if build is needed
         id: should_build
         run: |
-          if [ "${{ steps.image_check.outputs.image_exists }}" = "false" ] || [ "${{ steps.changes.outputs.server_changed }}" = "true" ]; then
+          if [ "${{ steps.image_check.outputs.image_exists }}" = "false" ] || [ "${{ steps.changes.outputs.server_changed }}" = "true" ] || [ "${{ steps.changes.outputs.workflow_changed }}" = "true" ]; then
             echo "build_needed=true" >> $GITHUB_OUTPUT
-            echo "Build needed (image_exists=${{ steps.image_check.outputs.image_exists }}, server_changed=${{ steps.changes.outputs.server_changed }})"
+            echo "Build needed (image_exists=${{ steps.image_check.outputs.image_exists }}, server_changed=${{ steps.changes.outputs.server_changed }}, workflow_changed=${{ steps.changes.outputs.workflow_changed }})"
           else
             echo "build_needed=false" >> $GITHUB_OUTPUT
-            echo "Skipping build (image exists and no server/shared changes)"
+            echo "Skipping build (image exists and no changes)"
           fi
 
       - name: Set up Docker Buildx

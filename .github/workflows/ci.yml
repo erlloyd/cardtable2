@@ -184,6 +184,14 @@ jobs:
           # Check if server or its dependencies changed in this commit (vs previous commit)
           # This ensures we only rebuild when server/shared actually changed in this push
           COMPARE_REF="HEAD~1"
+
+          echo "=== Git Debug Info ==="
+          echo "Current commit (HEAD): $(git rev-parse HEAD)"
+          echo "Previous commit (HEAD~1): $(git rev-parse HEAD~1)"
+          echo "Files changed in current commit:"
+          git diff --name-only HEAD~1 HEAD
+          echo "=== End Git Debug ==="
+
           echo "Running: pnpm --filter \"{server}[$COMPARE_REF]\" list --depth=0"
           FILTER_OUTPUT=$(pnpm --filter "{server}[$COMPARE_REF]" list --depth=0 2>&1)
           echo "Full output:"

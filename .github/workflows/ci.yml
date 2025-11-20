@@ -181,13 +181,14 @@ jobs:
       - name: Check for server/shared changes
         id: changes
         run: |
-          # Check if server or its dependencies changed since base branch
-          if pnpm --filter "{server}[origin/${{ github.base_ref }}]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
+          # Check if server or its dependencies changed in this commit (vs previous commit)
+          # This ensures we only rebuild when server/shared actually changed in this push
+          if pnpm --filter "{server}[HEAD^]" list --depth=0 2>/dev/null | grep -q "@cardtable2/server"; then
             echo "server_changed=true" >> $GITHUB_OUTPUT
-            echo "Server or shared files changed"
+            echo "Server or shared files changed in this commit"
           else
             echo "server_changed=false" >> $GITHUB_OUTPUT
-            echo "No server/shared changes"
+            echo "No server/shared changes in this commit"
           fi
 
       - name: Determine if build is needed

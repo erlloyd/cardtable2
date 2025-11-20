@@ -150,7 +150,7 @@ function Table() {
     // In production: use env var or leave undefined for offline mode
     const wsUrl: string =
       (import.meta.env.VITE_WS_URL as string | undefined) ||
-      `ws://${window.location.hostname}:3001?room=${id}`;
+      `ws://${window.location.hostname}:3001`;
 
     const store = new YjsStore(id, wsUrl);
     storeRef.current = store;

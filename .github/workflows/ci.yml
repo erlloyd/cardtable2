@@ -239,19 +239,25 @@ jobs:
           # Link to Railway project first
           railway link --project $RAILWAY_PROJECT_ID
 
-          # Create PR environment (clone from "staging" template environment)
-          echo "Creating/updating PR environment: pr-${{ github.event.pull_request.number }}"
-          railway environment new pr-${{ github.event.pull_request.number }} --duplicate staging || echo "Environment already exists"
+          # Check if PR environment already exists
+          PR_ENV="pr-${{ github.event.pull_request.number }}"
+          if railway environment list | grep -q "^$PR_ENV$"; then
+            echo "PR environment '$PR_ENV' already exists - will update and redeploy"
+          else
+            echo "Creating new PR environment '$PR_ENV' from staging template"
+            railway environment new $PR_ENV --duplicate staging
+          fi
 
-          # Switch to the PR environment
-          railway link --project $RAILWAY_PROJECT_ID --environment pr-${{ github.event.pull_request.number }}
+          # Link to the PR environment
+          railway link --project $RAILWAY_PROJECT_ID --environment $PR_ENV
 
-          # Update service to use PR-specific Docker image
-          echo "Updating service image to: ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}"
-          railway service update cardtable2-server-staging \
-            --image ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}
+          # Update service to use PR-specific Docker image (forces fresh pull)
+          IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/cardtable2-server:pr-${{ github.event.pull_request.number }}"
+          echo "Updating service image to: $IMAGE_TAG"
+          railway service update cardtable2-server-staging --image $IMAGE_TAG
 
-          # Trigger deployment
+          # Trigger deployment (pulls fresh image and deploys)
+          echo "Triggering deployment..."
           railway up --detach
 
           echo "✅ Railway deployment initiated for PR ${{ github.event.pull_request.number }}"

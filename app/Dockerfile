@@ -11,21 +11,19 @@ COPY shared/package.json ./shared/
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (skip postinstall scripts like husky)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy source files
 COPY shared ./shared
 COPY app ./app
 
-# Build the app
-WORKDIR /app/app
-
 # Accept server URL as build arg
 ARG VITE_WS_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 
-RUN pnpm run build
+# Build the app using PNPM workspace filter from root
+RUN pnpm --filter @cardtable2/app run build
 
 # Production stage with nginx
 FROM nginx:alpine

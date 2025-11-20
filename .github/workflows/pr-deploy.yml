@@ -194,7 +194,7 @@ jobs:
   deploy-railway-server:
     runs-on: ubuntu-latest
     needs: docker-build-server
-    if: github.event.pull_request.head.repo.full_name == github.repository && needs.docker-build-server.outputs.build_needed == 'true'
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.docker-build-server.result == 'success'
     outputs:
       server_url: ${{ steps.deploy.outputs.url }}
     environment:
@@ -217,7 +217,7 @@ jobs:
   deploy-railway-app:
     runs-on: ubuntu-latest
     needs: docker-build-app
-    if: github.event.pull_request.head.repo.full_name == github.repository && needs.docker-build-app.outputs.build_needed == 'true'
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.docker-build-app.result == 'success'
     environment:
       name: pr-${{ github.event.pull_request.number }}-app
       url: ${{ steps.deploy.outputs.url }}

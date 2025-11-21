@@ -77,6 +77,36 @@ if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
   # Service exists, trigger redeploy
   echo "✅ Service found (ID: $SERVICE_ID), triggering redeploy..."
 
+  # Ensure PORT environment variable is set
+  echo "Setting PORT=80 environment variable..."
+  PORT_MUTATION=$(cat <<EOF
+mutation {
+  variableCollectionUpdate(
+    input: {
+      environmentId: "$RAILWAY_ENVIRONMENT_ID"
+      serviceId: "$SERVICE_ID"
+      variables: {
+        PORT: "80"
+      }
+    }
+  )
+}
+EOF
+  )
+
+  PORT_RESPONSE=$(curl -s -X POST "$RAILWAY_API" \
+    -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":$(echo "$PORT_MUTATION" | jq -Rs .)}")
+
+  # Check for errors
+  if echo "$PORT_RESPONSE" | jq -e '.errors' > /dev/null 2>&1; then
+    echo "Warning: Failed to set PORT variable:"
+    echo "$PORT_RESPONSE" | jq '.errors'
+  else
+    echo "✅ PORT=80 set successfully!"
+  fi
+
   REDEPLOY_MUTATION=$(cat <<EOF
 mutation {
   serviceInstanceRedeploy(
@@ -175,6 +205,36 @@ EOF
   echo "✅ Service created successfully!"
   echo "Service ID: $SERVICE_ID"
   echo "Service Name: $SERVICE_NAME"
+
+  # Set PORT environment variable for the service
+  echo "Setting PORT=80 environment variable..."
+  PORT_MUTATION=$(cat <<EOF
+mutation {
+  variableCollectionUpdate(
+    input: {
+      environmentId: "$RAILWAY_ENVIRONMENT_ID"
+      serviceId: "$SERVICE_ID"
+      variables: {
+        PORT: "80"
+      }
+    }
+  )
+}
+EOF
+  )
+
+  PORT_RESPONSE=$(curl -s -X POST "$RAILWAY_API" \
+    -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":$(echo "$PORT_MUTATION" | jq -Rs .)}")
+
+  # Check for errors
+  if echo "$PORT_RESPONSE" | jq -e '.errors' > /dev/null 2>&1; then
+    echo "Warning: Failed to set PORT variable:"
+    echo "$PORT_RESPONSE" | jq '.errors'
+  else
+    echo "✅ PORT=80 set successfully!"
+  fi
 
   # Create public domain for the new service
   echo "Creating public domain for service..."

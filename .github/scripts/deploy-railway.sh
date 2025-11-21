@@ -81,13 +81,13 @@ if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
   echo "Setting PORT=80 environment variable..."
   PORT_MUTATION=$(cat <<EOF
 mutation {
-  variableCollectionUpdate(
+  variableUpsert(
     input: {
+      projectId: "$RAILWAY_PROJECT_ID"
       environmentId: "$RAILWAY_ENVIRONMENT_ID"
       serviceId: "$SERVICE_ID"
-      variables: {
-        PORT: "80"
-      }
+      name: "PORT"
+      value: "80"
     }
   )
 }
@@ -210,13 +210,13 @@ EOF
   echo "Setting PORT=80 environment variable..."
   PORT_MUTATION=$(cat <<EOF
 mutation {
-  variableCollectionUpdate(
+  variableUpsert(
     input: {
+      projectId: "$RAILWAY_PROJECT_ID"
       environmentId: "$RAILWAY_ENVIRONMENT_ID"
       serviceId: "$SERVICE_ID"
-      variables: {
-        PORT: "80"
-      }
+      name: "PORT"
+      value: "80"
     }
   )
 }

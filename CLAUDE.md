@@ -175,7 +175,10 @@ See `app/src/renderer/objects/README.md` for full documentation.
   - ✅ M3-Object-Architecture: Registry-Based Behavior System (eliminates switch statements, 34 files, 68 tests passing)
   - ✅ M3-T3: Selection Ownership + Clear All (22 unit + 5 E2E tests, drag regression fixed)
   - ✅ M3-T4: Awareness - Cursors & Drag Ghosts (17 tests, PR #13 merged)
-- ⏸️ M5: Multiplayer Server (NEXT)
+- 🚧 M5: Multiplayer Server (IN PROGRESS)
+  - ✅ M5-T1: WS Server Scaffold (9 tests, Railway deployment, Docker + CI/CD)
+  - ⏸️ M5-T2: Persistence Adapter (NEXT - LevelDB integration)
+  - ⏸️ M5-T3: TTL Sweeper
 - ⏸️ M3.5: Additional Functionality (flip, rotate, stack, unstack)
 - ⏸️ M4: Set Loader & Assets
 - ⏸️ M6: Frontend Multiplayer
@@ -263,6 +266,39 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
 - App and server deploy independently based on changes detected by PNPM
 
 ## Recent Changes
+
+### M5-T1 - WS Server Scaffold + Railway Deployment (Completed 2025-11-21)
+Complete multiplayer server infrastructure with automated deployment:
+- **Server Implementation**: Express + y-websocket server with WebSocket upgrade handling
+  - Health check endpoint (`GET /health`)
+  - Room-based synchronization via query params (`?room=<roomId>`)
+  - Uses `@y/websocket-server` for server-side Yjs coordination
+  - Port configuration via `PORT` env var (default 3001)
+- **Testing**: 9 comprehensive API tests
+  - Health endpoint verification (2 tests)
+  - WebSocket connection handling (2 tests)
+  - Y.js synchronization between clients (2 tests)
+  - Room isolation verification (3 tests)
+  - Tests use `y-websocket` client library to verify server behavior
+- **Docker Infrastructure**: Multi-stage production-ready Dockerfile
+  - Builder stage: TypeScript compilation with PNPM workspaces
+  - Production stage: Node 24 slim with tini for signal handling
+  - Optimized for Railway deployment
+- **Railway Deployment**: Full CI/CD automation via GitHub Actions
+  - Production: `cardtable2-server-production.up.railway.app`
+  - PR Previews: `cardtable2-server-pr-{number}-prs.up.railway.app`
+  - Docker images pushed to GHCR (GitHub Container Registry)
+  - Automated service creation/redeployment via Railway GraphQL API
+  - Environment-specific configurations (production + PR environments)
+  - App deployment includes server URL injection (`VITE_WS_URL`)
+- **CI/CD Workflows**:
+  - Selective deployment based on PNPM change detection
+  - Docker build caching for faster deployments
+  - 3-minute deployment timeout with status polling
+  - Health check verification
+- **Next Steps**: M5-T2 Persistence Adapter (LevelDB integration for document persistence)
+- Files: `server/src/index.ts`, `server/src/index.test.ts`, `server/Dockerfile`, `.github/workflows/deploy.yml`, `.github/workflows/pr-deploy.yml`, `.github/scripts/deploy-railway.sh`
+- Branch: `feature/m5-t1-tests`
 
 ### Milestone Reordering (2025-11-17)
 Reorganized project roadmap to prioritize multiplayer implementation:

@@ -30,7 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate route tree types
-        run: pnpm --filter @cardtable2/app exec vite build --mode development
+        run: pnpm --filter @cardtable2/app run generate-routes
 
       - name: Run linting
         run: pnpm run lint

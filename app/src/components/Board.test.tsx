@@ -209,6 +209,7 @@ describe('Board', () => {
         tableId="happy-clever-elephant"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -224,6 +225,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -250,6 +252,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -275,6 +278,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -299,6 +303,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -316,6 +321,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -336,6 +342,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -350,6 +357,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -380,6 +388,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -401,6 +410,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -452,6 +462,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -499,6 +510,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -546,6 +558,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -570,6 +583,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -623,6 +637,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -647,6 +662,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -693,6 +709,78 @@ describe('Board', () => {
           expect(msg.event?.metaKey).toBe(true);
         }
       });
+    }
+  });
+
+  it('sends resize message when container size changes', async () => {
+    render(
+      <Board
+        tableId="test-table"
+        store={mockStore as YjsStore}
+        connectionStatus="offline"
+        showDebugUI={true}
+      />,
+    );
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+      postMessageSpy.mockClear(); // Clear previous calls
+
+      // Get the container element
+      const container = screen.getByTestId('canvas-container');
+
+      // Simulate a resize by triggering the ResizeObserver callback
+      // We need to manually trigger it since jsdom doesn't automatically fire ResizeObserver
+      interface MockResizeObserverConstructor {
+        lastCallback?: ResizeObserverCallback;
+      }
+      const resizeObserverCallback = (
+        global.ResizeObserver as unknown as MockResizeObserverConstructor
+      ).lastCallback;
+      if (resizeObserverCallback) {
+        resizeObserverCallback([
+          {
+            target: container,
+            contentRect: { width: 1024, height: 768 },
+          } as ResizeObserverEntry,
+        ]);
+
+        // Check that resize message was sent
+        await waitFor(() => {
+          const resizeCalls = postMessageSpy.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === 'object' &&
+              'type' in call[0] &&
+              call[0].type === 'resize',
+          );
+          expect(resizeCalls.length).toBeGreaterThan(0);
+
+          // Verify the resize message has correct structure
+          if (resizeCalls[0] && resizeCalls[0][0]) {
+            const msg = resizeCalls[0][0] as {
+              type: string;
+              width: number;
+              height: number;
+              dpr: number;
+            };
+            expect(msg.type).toBe('resize');
+            expect(msg.width).toBeGreaterThan(0);
+            expect(msg.height).toBeGreaterThan(0);
+            expect(msg.dpr).toBeGreaterThan(0);
+          }
+        });
+      }
     }
   });
 });

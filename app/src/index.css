@@ -44,6 +44,38 @@ h1 {
   margin: 0;
 }
 
+/* M3.5.1-T0: Full-screen board layout */
+.board-fullscreen {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* M3.5.1-T0: Debug board layout (development) */
+.board-debug {
+  /* Keep original layout for debug mode */
+}
+
+.table {
+  /* Full-screen mode for production table route */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-table {
+  /* Debug layout with controls visible */
+  padding: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

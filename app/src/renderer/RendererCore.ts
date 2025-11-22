@@ -271,6 +271,9 @@ export abstract class RendererCore {
                 height / 2 + offsetY,
               );
             }
+
+            // Force a render to update the display
+            this.app.renderer.render(this.app.stage);
           }
           break;
         }

@@ -81,6 +81,7 @@ export type InteractionMode = 'pan' | 'select';
 export type MainToRendererMessage =
   | { type: 'ping'; data: string }
   | { type: 'echo'; data: string }
+  | { type: 'flush' } // For E2E tests: wait for renderer to process all pending updates
   | {
       type: 'init';
       canvas: OffscreenCanvas | HTMLCanvasElement;
@@ -126,6 +127,7 @@ export type RendererToMainMessage =
   | { type: 'echo-response'; data: string }
   | { type: 'ready' }
   | { type: 'initialized' }
+  | { type: 'flushed' } // Response to flush: all pending updates processed
   | { type: 'error'; error: string; context?: string }
   | { type: 'warning'; message: string }
   | { type: 'animation-complete' }

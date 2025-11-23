@@ -24,9 +24,10 @@ import { test, expect } from '@playwright/test';
  * renderer state inspection hooks in future milestones (M9: Performance & QA).
  */
 test.describe('Hover Feedback (M2-T4)', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to a test table
-    await page.goto('/table/test-hover-table');
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `hov-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
 
     // Wait for canvas to be initialized
     await expect(page.getByTestId('worker-status')).toContainText(
@@ -233,7 +234,7 @@ test.describe('Hover Feedback (M2-T4)', () => {
     });
 
     // Test worker mode
-    await page.goto('/table/test-hover-worker?renderMode=worker');
+    await page.goto('/dev/table/test-hover-worker?renderMode=worker');
     await expect(page.getByTestId('worker-status')).toContainText(
       'Initialized',
       { timeout: 5000 },
@@ -254,7 +255,7 @@ test.describe('Hover Feedback (M2-T4)', () => {
     await page.waitForTimeout(300);
 
     // Test main-thread mode
-    await page.goto('/table/test-hover-main?renderMode=main-thread');
+    await page.goto('/dev/table/test-hover-main?renderMode=main-thread');
     await expect(page.getByTestId('worker-status')).toContainText(
       'Initialized',
       { timeout: 5000 },

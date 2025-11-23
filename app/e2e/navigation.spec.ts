@@ -24,9 +24,10 @@ test.describe('Navigation', () => {
 
     // Verify we're on the Table page by checking for the Board component
     await expect(page.locator('[data-testid="board"]')).toBeVisible();
-    await expect(page.locator('[data-testid="board"]')).toContainText(
-      `Board: ${tableId}`,
-    );
+
+    // The regular board is fullscreen and doesn't show the table ID text
+    // Just verify the board canvas is visible
+    await expect(page.locator('[data-testid="board-canvas"]')).toBeVisible();
   });
 
   test('should lazy load Board component', async ({ page }) => {
@@ -41,7 +42,10 @@ test.describe('Navigation', () => {
     // Verify Board is rendered
     const board = page.locator('[data-testid="board"]');
     await expect(board).toBeVisible();
-    await expect(board).toContainText('Board:');
+
+    // The regular board is fullscreen and doesn't show the table ID text
+    // Just verify the board canvas is visible
+    await expect(page.locator('[data-testid="board-canvas"]')).toBeVisible();
   });
 
   test('should show Board after lazy loading', async ({ page }) => {
@@ -57,11 +61,12 @@ test.describe('Navigation', () => {
 });
 
 test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
-  test('should initialize worker and show ready status', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should initialize worker and show ready status', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -72,11 +77,10 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     await expect(page.getByText('Worker is ready')).toBeVisible();
   });
 
-  test('should initialize canvas and render', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should initialize canvas and render', async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for canvas element to appear
@@ -91,11 +95,10 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     await expect(page.getByText('Canvas initialized')).toBeVisible();
   });
 
-  test('should send ping and receive pong', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should send ping and receive pong', async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -113,11 +116,12 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     });
   });
 
-  test('should send echo and receive echo response', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should send echo and receive echo response', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -133,11 +137,12 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     await expect(page.getByText(/Echo:/)).toBeVisible({ timeout: 5000 });
   });
 
-  test('should disable buttons until worker is ready', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should disable buttons until worker is ready', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Initially buttons should be disabled

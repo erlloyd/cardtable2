@@ -9,11 +9,12 @@ interface TestStore {
 }
 
 test.describe('State Persistence (M3-T1)', () => {
-  test('should initialize YjsStore and show ready status', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should initialize YjsStore and show ready status', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for YjsStore to be ready (look for "Store: ✓ Ready" text)
@@ -25,11 +26,13 @@ test.describe('State Persistence (M3-T1)', () => {
     await expect(page.getByText(/Objects: 0/)).toBeVisible();
   });
 
-  test('should persist objects across page reload', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+  test('should persist objects across page reload', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    // Use testInfo.testId so we can reload the same table
+    const tableId = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for YjsStore to be ready
@@ -128,16 +131,11 @@ test.describe('State Persistence (M3-T1)', () => {
 
   test('should handle multiple tables with separate IndexedDB databases', async ({
     page,
-  }) => {
-    // Navigate to first table
-    await page.goto('/');
-    await page.click('text=Open Table');
+  }, testInfo) => {
+    // Navigate to first table with unique ID to avoid conflicts when running in parallel
+    const tableId1 = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}-1`;
+    await page.goto(`/dev/table/${tableId1}`);
     await page.waitForSelector('[data-testid="board"]');
-
-    // Get first table ID
-    const url1 = page.url();
-    const tableId1Match = url1.match(/\/table\/([a-z]+-[a-z]+-[a-z]+)/);
-    const tableId1 = tableId1Match![1];
 
     // Wait for store ready
     await expect(page.getByText(/Store:.*✓ Ready/)).toBeVisible({
@@ -167,18 +165,10 @@ test.describe('State Persistence (M3-T1)', () => {
     await page.waitForTimeout(500);
     await expect(page.getByText(/Objects: 1/)).toBeVisible();
 
-    // Navigate to home (cleanup old store)
-    await page.goto('/');
-
-    // Open a new table
-    await page.click('text=Open Table');
+    // Navigate to second table with unique ID
+    const tableId2 = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}-2`;
+    await page.goto(`/dev/table/${tableId2}`);
     await page.waitForSelector('[data-testid="board"]');
-
-    // Get second table ID (should be different)
-    const url2 = page.url();
-    const tableId2Match = url2.match(/\/table\/([a-z]+-[a-z]+-[a-z]+)/);
-    const tableId2 = tableId2Match![1];
-    expect(tableId2).not.toBe(tableId1);
 
     // Wait for second store ready
     await expect(page.getByText(/Store:.*✓ Ready/)).toBeVisible({
@@ -189,7 +179,7 @@ test.describe('State Persistence (M3-T1)', () => {
     await expect(page.getByText(/Objects: 0/)).toBeVisible();
 
     // Navigate back to first table
-    await page.goto(`/table/${tableId1}`);
+    await page.goto(`/dev/table/${tableId1}`);
     await page.waitForSelector('[data-testid="board"]');
     await expect(page.getByText(/Store:.*✓ Ready/)).toBeVisible({
       timeout: 5000,

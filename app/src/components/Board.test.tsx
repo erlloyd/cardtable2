@@ -209,6 +209,7 @@ describe('Board', () => {
         tableId="happy-clever-elephant"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -224,6 +225,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -250,6 +252,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -275,6 +278,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -299,6 +303,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -316,6 +321,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -336,6 +342,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -350,6 +357,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -380,6 +388,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -401,6 +410,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -452,6 +462,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -499,6 +510,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -546,6 +558,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -570,6 +583,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -623,6 +637,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -647,6 +662,7 @@ describe('Board', () => {
         tableId="test-table"
         store={mockStore as YjsStore}
         connectionStatus="offline"
+        showDebugUI={true}
       />,
     );
 
@@ -694,5 +710,148 @@ describe('Board', () => {
         }
       });
     }
+  });
+
+  it('sends resize message when container size changes', async () => {
+    render(
+      <Board
+        tableId="test-table"
+        store={mockStore as YjsStore}
+        connectionStatus="offline"
+        showDebugUI={true}
+      />,
+    );
+
+    // Wait for canvas to be initialized
+    await waitFor(() => {
+      expect(screen.getByTestId('worker-status')).toHaveTextContent(
+        'Initialized',
+      );
+    });
+
+    const mockWorker = (
+      window.Worker as unknown as { mock?: { instances: MockWorker[] } }
+    ).mock?.instances[0];
+    if (mockWorker) {
+      const postMessageSpy = vi.spyOn(mockWorker, 'postMessage');
+      postMessageSpy.mockClear(); // Clear previous calls
+
+      // Get the container element
+      const container = screen.getByTestId('canvas-container');
+
+      // Simulate a resize by triggering the ResizeObserver callback
+      // We need to manually trigger it since jsdom doesn't automatically fire ResizeObserver
+      interface MockResizeObserverConstructor {
+        lastCallback?: ResizeObserverCallback;
+      }
+      const resizeObserverCallback = (
+        global.ResizeObserver as unknown as MockResizeObserverConstructor
+      ).lastCallback;
+      if (resizeObserverCallback) {
+        // Create a proper DOMRectReadOnly mock
+        const contentRect: DOMRectReadOnly = {
+          width: 1024,
+          height: 768,
+          x: 0,
+          y: 0,
+          top: 0,
+          right: 1024,
+          bottom: 768,
+          left: 0,
+          toJSON: () => ({}),
+        };
+
+        resizeObserverCallback(
+          [
+            {
+              target: container,
+              contentRect,
+              borderBoxSize: [],
+              contentBoxSize: [],
+              devicePixelContentBoxSize: [],
+            } as ResizeObserverEntry,
+          ],
+          {} as ResizeObserver,
+        );
+
+        // Check that resize message was sent
+        await waitFor(() => {
+          const resizeCalls = postMessageSpy.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === 'object' &&
+              'type' in call[0] &&
+              call[0].type === 'resize',
+          );
+          expect(resizeCalls.length).toBeGreaterThan(0);
+
+          // Verify the resize message has correct structure
+          if (resizeCalls[0] && resizeCalls[0][0]) {
+            const msg = resizeCalls[0][0] as {
+              type: string;
+              width: number;
+              height: number;
+              dpr: number;
+            };
+            expect(msg.type).toBe('resize');
+            expect(msg.width).toBeGreaterThan(0);
+            expect(msg.height).toBeGreaterThan(0);
+            expect(msg.dpr).toBeGreaterThan(0);
+          }
+        });
+      }
+    }
+  });
+
+  // Test for M3.5.1-T0: Regression test for main-thread mode resize bug
+  // See: app/src/renderer/RendererCore.ts lines 265-271
+  //
+  // BUG: In main-thread mode, when the canvas resizes, PixiJS renderer.resize()
+  // sets canvas.style to explicit pixel dimensions (e.g., "800px"), which breaks
+  // the responsive 100% layout. This causes dimension mismatches that break:
+  // 1. Zoom calculations (camera scale)
+  // 2. Coordinate conversions (screen → world)
+  // 3. Cursor positioning during pointer events
+  //
+  // FIX: After renderer.resize(), we reset canvas.style to '100%' to maintain
+  // responsive layout while letting PixiJS control the canvas buffer dimensions.
+  //
+  // This test verifies the fix remains in place by checking that RendererCore
+  // includes the style reset logic after resize operations.
+  it('RendererCore resets canvas.style to 100% after resize in main-thread mode', async () => {
+    // Read the RendererCore source code to verify the fix is present
+    const rendererCorePath = '../renderer/RendererCore.ts';
+    const fs = await import('fs');
+    const path = await import('path');
+    const filePath = path.resolve(__dirname, rendererCorePath);
+    const source = fs.readFileSync(filePath, 'utf-8');
+
+    // Verify the fix exists in the resize handler
+    // The fix should appear after app.renderer.resize() is called
+    const hasResizeHandler = source.includes("case 'resize':");
+    const hasRendererResize = source.includes(
+      'this.app.renderer.resize(width, height)',
+    );
+    const hasStyleCheck = source.includes("'style' in this.app.canvas");
+    const hasWidthReset = source.includes(
+      "this.app.canvas.style.width = '100%'",
+    );
+    const hasHeightReset = source.includes(
+      "this.app.canvas.style.height = '100%'",
+    );
+
+    // All checks must pass to prevent regression
+    expect(hasResizeHandler).toBe(true);
+    expect(hasRendererResize).toBe(true);
+    expect(hasStyleCheck).toBe(true);
+    expect(hasWidthReset).toBe(true);
+    expect(hasHeightReset).toBe(true);
+
+    // Additionally verify the style resets come AFTER renderer.resize()
+    const resizeIndex = source.indexOf(
+      'this.app.renderer.resize(width, height)',
+    );
+    const styleCheckIndex = source.indexOf("'style' in this.app.canvas");
+    expect(styleCheckIndex).toBeGreaterThan(resizeIndex);
   });
 });

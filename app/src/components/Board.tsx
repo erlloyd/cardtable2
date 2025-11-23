@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
@@ -19,13 +19,19 @@ import {
 } from '../store/YjsActions';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 
-interface BoardProps {
+export interface BoardProps {
   tableId: string;
   store: YjsStore;
   connectionStatus: string;
+  showDebugUI?: boolean; // M3.5.1-T0: Control debug UI visibility
 }
 
-function Board({ tableId, store, connectionStatus }: BoardProps) {
+function Board({
+  tableId,
+  store,
+  connectionStatus,
+  showDebugUI = false,
+}: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasTransferredRef = useRef(false);
@@ -228,6 +234,15 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
         case 'awareness-update-rate': {
           // M5-T1: Update awareness Hz display
           setAwarenessHz(message.hz);
+          break;
+        }
+
+        case 'flushed': {
+          // E2E Test API: Renderer has processed all pending messages
+          // Resolve all pending flush callbacks
+          const callbacks = flushCallbacksRef.current;
+          flushCallbacksRef.current = [];
+          callbacks.forEach((cb) => cb());
           break;
         }
       }
@@ -466,6 +481,38 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
     rendererRef.current.sendMessage(message);
   }, [interactionMode, isCanvasInitialized]);
 
+  // Handle canvas resize (M3.5.1-T0)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container || !rendererRef.current || !isCanvasInitialized)
+      return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const dpr = window.devicePixelRatio || 1;
+        const width = entry.contentRect.width * dpr;
+        const height = entry.contentRect.height * dpr;
+
+        // Send resize message to renderer
+        // PixiJS will handle updating canvas dimensions via app.renderer.resize()
+        const message: MainToRendererMessage = {
+          type: 'resize',
+          width,
+          height,
+          dpr,
+        };
+        rendererRef.current!.sendMessage(message);
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [isCanvasInitialized, renderMode]);
+
   // Send ping message to renderer
   const handlePing = () => {
     if (!rendererRef.current) return;
@@ -498,6 +545,40 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
     rendererRef.current.sendMessage(message);
     setMessages((prev) => [...prev, 'Starting animation...']);
   };
+
+  // Ref to store pending flush promises
+  const flushCallbacksRef = useRef<Array<() => void>>([]);
+
+  // Test API for E2E: Wait for renderer to process all pending messages
+  const waitForRenderer = useCallback((): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      if (!rendererRef.current || !isCanvasInitialized) {
+        resolve();
+        return;
+      }
+
+      // Register callback for 'flushed' response
+      flushCallbacksRef.current.push(resolve);
+
+      // Send flush message
+      const message: MainToRendererMessage = {
+        type: 'flush',
+      };
+      rendererRef.current.sendMessage(message);
+    });
+  }, [isCanvasInitialized]);
+
+  // Expose test API in dev mode only
+  useEffect(() => {
+    if (import.meta.env.DEV && showDebugUI) {
+      window.__TEST_BOARD__ = {
+        waitForRenderer,
+      };
+      return () => {
+        delete window.__TEST_BOARD__;
+      };
+    }
+  }, [showDebugUI, isCanvasInitialized, waitForRenderer]);
 
   // Helper to serialize pointer events (M2-T3)
   const serializePointerEvent = (
@@ -606,37 +687,18 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
   };
 
   return (
-    <div className="board" data-testid="board">
-      <div
-        style={{
-          fontSize: '14px',
-          fontWeight: 'bold',
-          padding: '4px 0',
-          marginBottom: '4px',
-        }}
-      >
-        Board: {tableId}
-      </div>
-
-      <div
-        className="worker-status"
-        data-testid="worker-status"
-        style={{ fontSize: '12px', marginBottom: '8px' }}
-      >
-        Mode: {renderMode} | Worker:{' '}
-        {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
-        {isCanvasInitialized ? 'Initialized' : 'Not initialized'} | WS:{' '}
-        {connectionStatus} | Awareness: {awarenessHz} Hz
-      </div>
-
+    <div
+      className={showDebugUI ? 'board-debug' : 'board-fullscreen'}
+      data-testid="board"
+    >
       <div
         ref={containerRef}
         style={{
-          width: '800px',
-          height: '600px',
-          border: '1px solid #ccc',
+          width: showDebugUI ? '800px' : '100%',
+          height: showDebugUI ? '600px' : '100%',
+          border: showDebugUI ? '1px solid #ccc' : 'none',
           position: 'relative',
-          overflow: 'hidden', // Prevent scrollbars on container
+          overflow: 'hidden',
         }}
         data-testid="canvas-container"
       >
@@ -646,7 +708,7 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
             width: '100%',
             height: '100%',
             display: 'block',
-            touchAction: 'none', // Prevent default touch behaviors
+            touchAction: 'none',
           }}
           data-testid="board-canvas"
           onPointerDown={handlePointerDown}
@@ -657,106 +719,133 @@ function Board({ tableId, store, connectionStatus }: BoardProps) {
         />
       </div>
 
-      {/* Interaction mode toggle */}
-      <div style={{ marginTop: '12px', marginBottom: '8px' }}>
-        <button
-          onClick={() =>
-            setInteractionMode(interactionMode === 'pan' ? 'select' : 'pan')
-          }
-          data-testid="interaction-mode-toggle"
-          style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            backgroundColor:
-              interactionMode === 'select' ? '#3b82f6' : '#10b981',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-          }}
-        >
-          {interactionMode === 'pan' ? '🖐️ Pan Mode' : '⬚ Select Mode'}
-        </button>
-        <span
-          style={{
-            marginLeft: '12px',
-            fontSize: '12px',
-            color: '#6b7280',
-          }}
-        >
-          (Hold Cmd/Ctrl to invert)
-        </span>
-      </div>
+      {/* Debug UI - only shown when showDebugUI is true */}
+      {showDebugUI && (
+        <>
+          <div
+            style={{
+              fontSize: '14px',
+              fontWeight: 'bold',
+              padding: '4px 0',
+              marginBottom: '4px',
+            }}
+          >
+            Board: {tableId}
+          </div>
 
-      {/* Mobile multi-select toggle */}
-      <div style={{ marginBottom: '8px' }}>
-        <button
-          onClick={() => setIsMultiSelectMode(!isMultiSelectMode)}
-          data-testid="multi-select-toggle"
-          style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            backgroundColor: isMultiSelectMode ? '#ef4444' : '#6b7280',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-          }}
-        >
-          {isMultiSelectMode ? '✓ Multi-Select ON' : 'Multi-Select OFF'}
-        </button>
-        <span
-          style={{
-            marginLeft: '12px',
-            fontSize: '12px',
-            color: '#6b7280',
-          }}
-        >
-          (Mobile: Tap to toggle selection)
-        </span>
-      </div>
+          <div
+            className="worker-status"
+            data-testid="worker-status"
+            style={{ fontSize: '12px', marginBottom: '8px' }}
+          >
+            Mode: {renderMode} | Worker:{' '}
+            {isWorkerReady ? 'Ready' : 'Initializing...'} | Canvas:{' '}
+            {isCanvasInitialized ? 'Initialized' : 'Not initialized'} | WS:{' '}
+            {connectionStatus} | Awareness: {awarenessHz} Hz
+          </div>
 
-      <div className="controls">
-        <button
-          onClick={handlePing}
-          disabled={!isWorkerReady}
-          data-testid="ping-button"
-        >
-          Send Ping
-        </button>
-        <button
-          onClick={handleEcho}
-          disabled={!isWorkerReady}
-          data-testid="echo-button"
-        >
-          Send Echo
-        </button>
-        <button
-          onClick={handleAnimation}
-          disabled={!isCanvasInitialized}
-          data-testid="animation-button"
-          style={{
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            fontWeight: 'bold',
-          }}
-        >
-          Test Animation (3s)
-        </button>
-      </div>
+          {/* Interaction mode toggle */}
+          <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+            <button
+              onClick={() =>
+                setInteractionMode(interactionMode === 'pan' ? 'select' : 'pan')
+              }
+              data-testid="interaction-mode-toggle"
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                backgroundColor:
+                  interactionMode === 'select' ? '#3b82f6' : '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              {interactionMode === 'pan' ? '🖐️ Pan Mode' : '⬚ Select Mode'}
+            </button>
+            <span
+              style={{
+                marginLeft: '12px',
+                fontSize: '12px',
+                color: '#6b7280',
+              }}
+            >
+              (Hold Cmd/Ctrl to invert)
+            </span>
+          </div>
 
-      <div className="messages" data-testid="messages">
-        <h3>Messages:</h3>
-        <ul>
-          {messages.map((msg, index) => (
-            <li key={index} data-testid={`message-${index}`}>
-              {msg}
-            </li>
-          ))}
-        </ul>
-      </div>
+          {/* Mobile multi-select toggle */}
+          <div style={{ marginBottom: '8px' }}>
+            <button
+              onClick={() => setIsMultiSelectMode(!isMultiSelectMode)}
+              data-testid="multi-select-toggle"
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                backgroundColor: isMultiSelectMode ? '#ef4444' : '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              {isMultiSelectMode ? '✓ Multi-Select ON' : 'Multi-Select OFF'}
+            </button>
+            <span
+              style={{
+                marginLeft: '12px',
+                fontSize: '12px',
+                color: '#6b7280',
+              }}
+            >
+              (Mobile: Tap to toggle selection)
+            </span>
+          </div>
+
+          <div className="controls">
+            <button
+              onClick={handlePing}
+              disabled={!isWorkerReady}
+              data-testid="ping-button"
+            >
+              Send Ping
+            </button>
+            <button
+              onClick={handleEcho}
+              disabled={!isWorkerReady}
+              data-testid="echo-button"
+            >
+              Send Echo
+            </button>
+            <button
+              onClick={handleAnimation}
+              disabled={!isCanvasInitialized}
+              data-testid="animation-button"
+              style={{
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                fontWeight: 'bold',
+              }}
+            >
+              Test Animation (3s)
+            </button>
+          </div>
+
+          <div className="messages" data-testid="messages">
+            <h3>Messages:</h3>
+            <ul>
+              {messages.map((msg, index) => (
+                <li key={index} data-testid={`message-${index}`}>
+                  {msg}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   );
 }

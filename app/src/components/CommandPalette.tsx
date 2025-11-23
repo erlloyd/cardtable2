@@ -29,6 +29,8 @@ export function CommandPalette({
   recentActionIds,
   onActionExecuted,
 }: CommandPaletteProps) {
+  console.log('[CommandPalette] Component rendering, isOpen:', isOpen);
+
   const [query, setQuery] = useState('');
   const actionRegistry = ActionRegistry.getInstance();
   const keyboardManager = new KeyboardManager(actionRegistry);
@@ -107,7 +109,7 @@ export function CommandPalette({
 
   return (
     <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="command-palette-dialog" onClose={onClose}>
         {/* Backdrop */}
         <TransitionChild
           as={Fragment}
@@ -118,12 +120,12 @@ export function CommandPalette({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/50" />
+          <div className="command-palette-backdrop" />
         </TransitionChild>
 
         {/* Dialog panel */}
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-start justify-center p-4 pt-32">
+        <div className="command-palette-container">
+          <div className="command-palette-wrapper">
             <TransitionChild
               as={Fragment}
               enter="ease-out duration-200"
@@ -133,12 +135,13 @@ export function CommandPalette({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <DialogPanel className="w-full max-w-2xl">
+              <DialogPanel className="command-palette-panel">
                 <Combobox value={null} onChange={handleSelect}>
-                  <div className="relative overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5">
+                  <div className="command-palette-combobox">
                     {/* Search input */}
                     <ComboboxInput
-                      className="w-full border-0 bg-transparent px-4 py-4 text-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
+                      autoFocus
+                      className="command-palette-input"
                       placeholder="Search actions..."
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
@@ -146,21 +149,18 @@ export function CommandPalette({
                     />
 
                     {/* Results */}
-                    <ComboboxOptions
-                      static
-                      className="max-h-96 scroll-py-2 overflow-y-auto border-t border-gray-100"
-                    >
+                    <ComboboxOptions static className="command-palette-options">
                       {/* Empty state */}
                       {filteredActions.length === 0 && (
-                        <div className="px-4 py-8 text-center text-sm text-gray-500">
+                        <div className="command-palette-empty">
                           No actions found
                         </div>
                       )}
 
                       {/* Recent actions section (only when no query) */}
                       {!query && recentActions.length > 0 && (
-                        <div className="px-2 py-2">
-                          <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <div className="command-palette-section">
+                          <div className="command-palette-section-title">
                             Recent
                           </div>
                           {recentActions.map((action) => {
@@ -171,47 +171,42 @@ export function CommandPalette({
                               <ComboboxOption
                                 key={action.id}
                                 value={action}
-                                className={({ focus }) =>
-                                  `flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 ${
-                                    focus
-                                      ? 'bg-indigo-600 text-white'
-                                      : 'text-gray-900'
-                                  } ${!isAvailable ? 'opacity-50' : ''}`
-                                }
+                                className="command-palette-option"
                               >
                                 {({ focus }) => (
-                                  <>
-                                    <span className="text-xl">
+                                  <div
+                                    className={`command-palette-option-content ${
+                                      focus ? 'focus' : ''
+                                    } ${!isAvailable ? 'disabled' : ''}`}
+                                  >
+                                    <span className="command-palette-icon">
                                       {action.icon}
                                     </span>
-                                    <span className="flex-1 truncate text-sm font-medium">
+                                    <span className="command-palette-label">
                                       {action.label}
                                     </span>
                                     {action.shortcut && (
-                                      <span
-                                        className={`text-xs ${
-                                          focus
-                                            ? 'text-indigo-200'
-                                            : 'text-gray-400'
-                                        }`}
-                                      >
+                                      <span className="command-palette-shortcut">
                                         {getShortcutDisplay(action.shortcut)}
                                       </span>
                                     )}
-                                  </>
+                                  </div>
                                 )}
                               </ComboboxOption>
                             );
                           })}
-                          <div className="my-2 border-t border-gray-200" />
+                          <div className="command-palette-divider" />
                         </div>
                       )}
 
                       {/* Actions grouped by category */}
                       {Array.from(actionsByCategory.entries()).map(
                         ([category, actions]) => (
-                          <div key={category} className="px-2 py-2">
-                            <div className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          <div
+                            key={category}
+                            className="command-palette-section"
+                          >
+                            <div className="command-palette-section-title">
                               {category}
                             </div>
                             {actions.map((action) => {
@@ -222,47 +217,33 @@ export function CommandPalette({
                                 <ComboboxOption
                                   key={action.id}
                                   value={action}
-                                  className={({ focus }) =>
-                                    `flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 ${
-                                      focus
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'text-gray-900'
-                                    } ${!isAvailable ? 'opacity-50' : ''}`
-                                  }
+                                  className="command-palette-option"
                                 >
                                   {({ focus }) => (
-                                    <>
-                                      <span className="text-xl">
+                                    <div
+                                      className={`command-palette-option-content ${
+                                        focus ? 'focus' : ''
+                                      } ${!isAvailable ? 'disabled' : ''}`}
+                                    >
+                                      <span className="command-palette-icon">
                                         {action.icon}
                                       </span>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium truncate">
+                                      <div className="command-palette-details">
+                                        <div className="command-palette-label">
                                           {action.label}
                                         </div>
                                         {action.description && (
-                                          <div
-                                            className={`text-xs truncate ${
-                                              focus
-                                                ? 'text-indigo-200'
-                                                : 'text-gray-500'
-                                            }`}
-                                          >
+                                          <div className="command-palette-description">
                                             {action.description}
                                           </div>
                                         )}
                                       </div>
                                       {action.shortcut && (
-                                        <span
-                                          className={`text-xs ${
-                                            focus
-                                              ? 'text-indigo-200'
-                                              : 'text-gray-400'
-                                          }`}
-                                        >
+                                        <span className="command-palette-shortcut">
                                           {getShortcutDisplay(action.shortcut)}
                                         </span>
                                       )}
-                                    </>
+                                    </div>
                                   )}
                                 </ComboboxOption>
                               );

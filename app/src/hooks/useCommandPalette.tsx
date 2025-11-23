@@ -28,9 +28,20 @@ export function useCommandPalette() {
     }
   }, []);
 
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
+  const open = useCallback(() => {
+    console.log('[CommandPalette] Opening...');
+    setIsOpen(true);
+  }, []);
+  const close = useCallback(() => {
+    console.log('[CommandPalette] Closing...');
+    setIsOpen(false);
+  }, []);
+  const toggle = useCallback(() => {
+    setIsOpen((prev) => {
+      console.log('[CommandPalette] Toggling from', prev, 'to', !prev);
+      return !prev;
+    });
+  }, []);
 
   /**
    * Record that an action was executed
@@ -60,14 +71,28 @@ export function useCommandPalette() {
       const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
       const commandKey = isMac ? event.metaKey : event.ctrlKey;
 
+      console.log('[CommandPalette] Key pressed:', {
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        isMac,
+        commandKey,
+        shouldTrigger: commandKey && event.key === 'k',
+      });
+
       if (commandKey && event.key === 'k') {
+        console.log('[CommandPalette] Opening palette!');
         event.preventDefault();
         toggle();
       }
     };
 
+    console.log('[CommandPalette] Attaching keydown listener');
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      console.log('[CommandPalette] Removing keydown listener');
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [toggle]);
 
   return {

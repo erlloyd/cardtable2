@@ -76,6 +76,196 @@ h1 {
   margin: 0 auto;
 }
 
+/* Command Palette Button */
+.command-palette-button {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 40;
+  padding: 0.5rem 1rem;
+  background-color: rgba(79, 70, 229, 0.9);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  transition: all 150ms ease;
+}
+
+.command-palette-button:hover {
+  background-color: rgba(79, 70, 229, 1);
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.command-palette-button:active {
+  transform: translateY(0);
+}
+
+/* Command Palette Styles (M3.5.1-T3) */
+.command-palette-dialog {
+  position: relative;
+  z-index: 50;
+}
+
+.command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.command-palette-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.command-palette-wrapper {
+  display: flex;
+  min-height: 100%;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  padding-top: 8rem;
+}
+
+.command-palette-panel {
+  width: 100%;
+  max-width: 42rem;
+}
+
+.command-palette-combobox {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background-color: white;
+  box-shadow:
+    0 20px 25px -5px rgb(0 0 0 / 0.1),
+    0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+.command-palette-input {
+  width: 100%;
+  border: 0;
+  background-color: transparent;
+  padding: 1rem;
+  font-size: 1.125rem;
+  color: #111827;
+  outline: none;
+}
+
+.command-palette-input::placeholder {
+  color: #9ca3af;
+}
+
+.command-palette-options {
+  max-height: 24rem;
+  overflow-y: auto;
+  border-top: 1px solid #f3f4f6;
+  padding: 0.5rem 0;
+  overscroll-behavior: contain;
+}
+
+.command-palette-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.command-palette-section {
+  padding: 0.5rem;
+}
+
+.command-palette-section-title {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.command-palette-option {
+  margin: 0;
+}
+
+.command-palette-option-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  color: #111827;
+}
+
+.command-palette-option-content.focus {
+  background-color: #4f46e5;
+  color: white;
+}
+
+.command-palette-option-content.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.command-palette-icon {
+  font-size: 1.25rem;
+}
+
+.command-palette-label {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-palette-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-palette-details .command-palette-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-palette-description {
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #6b7280;
+}
+
+.command-palette-option-content.focus .command-palette-description {
+  color: #c7d2fe;
+}
+
+.command-palette-shortcut {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.command-palette-option-content.focus .command-palette-shortcut {
+  color: #c7d2fe;
+}
+
+.command-palette-divider {
+  margin: 0.5rem 0;
+  border-top: 1px solid #e5e7eb;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

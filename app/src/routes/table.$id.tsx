@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTableStore } from '../hooks/useTableStore';
+import type { TableObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
 import { useCommandPalette } from '../hooks/useCommandPalette';
@@ -29,32 +31,32 @@ function Table() {
   useEffect(() => {
     const registry = ActionRegistry.getInstance();
 
-    // Test action: Say Hello
+    // Global action: Say Hello (only when nothing selected)
     registry.register({
       id: 'test-hello',
       label: 'Say Hello',
       icon: '👋',
       shortcut: 'H',
-      category: CARD_ACTIONS,
-      description: 'Display a hello message in the console',
-      isAvailable: () => true,
+      category: 'Global Actions',
+      description: 'Display a hello message (only when nothing selected)',
+      isAvailable: (ctx) => ctx.selection.count === 0,
       execute: () => {
         console.log('Hello from Command Palette!');
         alert('Hello from Command Palette!');
       },
     });
 
-    // Test action: Clear All
+    // Global action: Clear All (only when nothing selected)
     registry.register({
       id: 'test-clear',
       label: 'Clear All Objects',
       icon: '🗑️',
       shortcut: 'Shift+C',
-      category: CARD_ACTIONS,
+      category: 'Global Actions',
       description: 'Remove all objects from the table',
       isAvailable: (ctx) => {
-        // Only available if there are objects
-        return ctx.store.getAllObjects().size > 0;
+        // Only available when nothing selected AND there are objects
+        return ctx.selection.count === 0 && ctx.store.getAllObjects().size > 0;
       },
       execute: (ctx) => {
         ctx.store.clearAllObjects();
@@ -62,7 +64,7 @@ function Table() {
       },
     });
 
-    // Additional test actions for scrolling/search
+    // Object action: Flip Cards (only for stacks)
     registry.register({
       id: 'flip-cards',
       label: 'Flip Selected Cards',
@@ -70,10 +72,11 @@ function Table() {
       shortcut: 'F',
       category: CARD_ACTIONS,
       description: 'Flip all selected cards face up or face down',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
       execute: () => console.log('Flip cards'),
     });
 
+    // Object action: Rotate (works on any object)
     registry.register({
       id: 'rotate-clockwise',
       label: 'Rotate Clockwise',
@@ -81,7 +84,7 @@ function Table() {
       shortcut: 'R',
       category: CARD_ACTIONS,
       description: 'Rotate selected objects 90 degrees clockwise',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0,
       execute: () => console.log('Rotate clockwise'),
     });
 
@@ -92,17 +95,18 @@ function Table() {
       shortcut: 'Shift+R',
       category: CARD_ACTIONS,
       description: 'Rotate selected objects 90 degrees counter-clockwise',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0,
       execute: () => console.log('Rotate counter-clockwise'),
     });
 
+    // Object action: Stack operations (only for stacks)
     registry.register({
       id: 'shuffle-deck',
       label: 'Shuffle Deck',
       icon: '🎲',
       category: CARD_ACTIONS,
       description: 'Shuffle all cards in the selected deck',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
       execute: () => console.log('Shuffle deck'),
     });
 
@@ -113,7 +117,7 @@ function Table() {
       shortcut: 'D',
       category: CARD_ACTIONS,
       description: 'Draw a card from the deck',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
       execute: () => console.log('Draw card'),
     });
 
@@ -123,7 +127,7 @@ function Table() {
       icon: '📤',
       category: CARD_ACTIONS,
       description: 'Deal cards to all players',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
       execute: () => console.log('Deal cards'),
     });
 
@@ -133,7 +137,7 @@ function Table() {
       icon: '📚',
       category: CARD_ACTIONS,
       description: 'Stack selected cards together',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 1 && ctx.selection.hasStacks,
       execute: () => console.log('Stack cards'),
     });
 
@@ -143,7 +147,8 @@ function Table() {
       icon: '📖',
       category: CARD_ACTIONS,
       description: 'Unstack the selected stack',
-      isAvailable: () => true,
+      isAvailable: (ctx) =>
+        ctx.selection.count === 1 && ctx.selection.hasStacks,
       execute: () => console.log('Unstack cards'),
     });
 
@@ -153,7 +158,8 @@ function Table() {
       icon: '👀',
       category: CARD_ACTIONS,
       description: 'Look at the top card without revealing to others',
-      isAvailable: () => true,
+      isAvailable: (ctx) =>
+        ctx.selection.count === 1 && ctx.selection.hasStacks,
       execute: () => console.log('Peek at card'),
     });
 
@@ -163,10 +169,11 @@ function Table() {
       icon: '💡',
       category: CARD_ACTIONS,
       description: 'Reveal the selected card to all players',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
       execute: () => console.log('Reveal card'),
     });
 
+    // Object action: Lock/Unlock (works on any object)
     registry.register({
       id: 'lock-object',
       label: 'Lock Object',
@@ -174,7 +181,8 @@ function Table() {
       shortcut: 'L',
       category: CARD_ACTIONS,
       description: 'Lock the selected object to prevent modifications',
-      isAvailable: () => true,
+      isAvailable: (ctx) =>
+        ctx.selection.count > 0 && ctx.selection.allUnlocked,
       execute: () => console.log('Lock object'),
     });
 
@@ -185,10 +193,11 @@ function Table() {
       shortcut: 'Shift+L',
       category: CARD_ACTIONS,
       description: 'Unlock the selected object',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.allLocked,
       execute: () => console.log('Unlock object'),
     });
 
+    // Object action: Duplicate/Delete (works on any object)
     registry.register({
       id: 'duplicate-object',
       label: 'Duplicate Object',
@@ -196,7 +205,7 @@ function Table() {
       shortcut: 'Cmd+D',
       category: CARD_ACTIONS,
       description: 'Create a copy of the selected object',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0,
       execute: () => console.log('Duplicate object'),
     });
 
@@ -207,31 +216,81 @@ function Table() {
       shortcut: 'Delete',
       category: CARD_ACTIONS,
       description: 'Delete the selected object',
-      isAvailable: () => true,
+      isAvailable: (ctx) => ctx.selection.count > 0,
       execute: () => console.log('Delete object'),
     });
   }, []);
 
-  // Create action context
+  // Track selection state for action context
+  const [selectionState, setSelectionState] = useState<{
+    ids: string[];
+    objects: TableObject[];
+  }>({ ids: [], objects: [] });
+
+  // Subscribe to store changes to update selection state
+  useEffect(() => {
+    if (!store) return;
+
+    const updateSelection = () => {
+      const allObjects = store.getAllObjects();
+      const actorId = store.getActorId();
+
+      // Find all objects selected by this actor
+      const selectedIds: string[] = [];
+      const selectedObjects: TableObject[] = [];
+
+      for (const [id, obj] of allObjects.entries()) {
+        if (obj._selectedBy === actorId) {
+          selectedIds.push(id);
+          selectedObjects.push(obj);
+        }
+      }
+
+      setSelectionState({ ids: selectedIds, objects: selectedObjects });
+    };
+
+    // Initial selection state
+    updateSelection();
+
+    // Subscribe to changes
+    const unsubscribe = store.onObjectsChange(() => {
+      updateSelection();
+    });
+
+    return unsubscribe;
+  }, [store]);
+
+  // Create action context with live selection info
   const actionContext: ActionContext | null = useMemo(() => {
     if (!store) return null;
 
-    return {
+    const { ids, objects } = selectionState;
+    const kinds = new Set(objects.map((obj) => obj._kind));
+
+    const context = {
       store,
       selection: {
-        ids: [],
-        objects: [],
-        count: 0,
-        hasStacks: false,
-        hasTokens: false,
-        hasMixed: false,
-        allLocked: false,
-        allUnlocked: true,
-        canAct: true,
+        ids,
+        objects,
+        count: ids.length,
+        hasStacks: kinds.has(ObjectKind.Stack),
+        hasTokens: kinds.has(ObjectKind.Token),
+        hasMixed: kinds.size > 1,
+        allLocked: objects.every((obj) => obj._meta?.locked === true),
+        allUnlocked: objects.every((obj) => obj._meta?.locked !== true),
+        canAct: true, // All selected by this actor
       },
       actorId: store.getActorId(),
     };
-  }, [store]);
+
+    console.log('[Table] Action context updated:', {
+      selectionCount: context.selection.count,
+      hasStacks: context.selection.hasStacks,
+      hasTokens: context.selection.hasTokens,
+    });
+
+    return context;
+  }, [store, selectionState]);
 
   return (
     <div className="table">

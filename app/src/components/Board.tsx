@@ -210,6 +210,16 @@ function Board({
           console.log(
             `[Board] pendingOperations-- → ${pendingOperationsRef.current} (was ${prevCountSel}, objects-selected)`,
           );
+
+          // M3.5.1-T4: Trigger selection settled callbacks
+          if (selectionSettledCallbacksRef.current.length > 0) {
+            console.log(
+              `[Board] Triggering ${selectionSettledCallbacksRef.current.length} selection settled callback(s)`,
+            );
+            const callbacks = selectionSettledCallbacksRef.current;
+            selectionSettledCallbacksRef.current = [];
+            callbacks.forEach((cb) => cb());
+          }
           break;
         }
 
@@ -226,6 +236,16 @@ function Board({
             0,
             pendingOperationsRef.current - 1,
           );
+
+          // M3.5.1-T4: Trigger selection settled callbacks (for context menu timing)
+          if (selectionSettledCallbacksRef.current.length > 0) {
+            console.log(
+              `[Board] Triggering ${selectionSettledCallbacksRef.current.length} selection settled callback(s) after unselect`,
+            );
+            const callbacks = selectionSettledCallbacksRef.current;
+            selectionSettledCallbacksRef.current = [];
+            callbacks.forEach((cb) => cb());
+          }
           break;
         }
 
@@ -582,6 +602,9 @@ function Board({
   // Decremented when renderer sends back objects-moved/objects-selected/objects-unselected
   const pendingOperationsRef = useRef<number>(0);
 
+  // M3.5.1-T4: Ref to track pending selection operations for context menu
+  const selectionSettledCallbacksRef = useRef<Array<() => void>>([]);
+
   // Test API for E2E: Wait for renderer to process all pending messages
   const waitForRenderer = useCallback((): Promise<void> => {
     return new Promise<void>((resolve) => {
@@ -605,6 +628,26 @@ function Board({
       rendererRef.current.sendMessage(message);
     });
   }, [isCanvasInitialized]);
+
+  // M3.5.1-T4: Wait for selection to settle after synthetic pointer events
+  const waitForSelectionSettled = useCallback((): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      // If there are no pending operations, resolve immediately
+      if (pendingOperationsRef.current === 0) {
+        console.log(
+          '[Board] waitForSelectionSettled: No pending operations, resolving immediately',
+        );
+        resolve();
+        return;
+      }
+
+      // Register callback to be triggered when next selection completes
+      console.log(
+        '[Board] waitForSelectionSettled: Registering callback for pending selection',
+      );
+      selectionSettledCallbacksRef.current.push(resolve);
+    });
+  }, []);
 
   // Expose test API in dev mode only
   useEffect(() => {
@@ -739,22 +782,18 @@ function Board({
   const handleCanvasContextMenu = (event: React.MouseEvent) => {
     event.preventDefault(); // Prevent browser context menu
 
-    if (!rendererRef.current || !isCanvasInitialized) {
-      if (onContextMenu) {
-        onContextMenu(event.clientX, event.clientY);
-      }
+    if (!rendererRef.current || !isCanvasInitialized || !onContextMenu) {
       return;
     }
 
-    // Simulate a pointer-down event to trigger selection via the renderer
-    // The renderer will do hit-testing and send back objects-selected message
-    // This reuses all the existing selection logic including z-order handling
+    // Simulate a pointer-down/up to trigger selection logic
+    // This ensures right-clicking an object selects it before showing the context menu
     const syntheticPointerEvent: PointerEventData = {
-      pointerId: 999, // Special ID for context menu
+      pointerId: 999,
       pointerType: 'mouse',
       clientX: event.clientX,
       clientY: event.clientY,
-      button: 0, // Simulate left-click for selection
+      button: 0, // Left button (for selection logic)
       buttons: 1,
       isPrimary: true,
       metaKey: event.metaKey,
@@ -762,7 +801,7 @@ function Board({
       shiftKey: event.shiftKey,
     };
 
-    // Convert to canvas-relative coordinates (accounting for DPR)
+    // Convert to canvas-relative coordinates
     const canvas = canvasRef.current;
     if (canvas) {
       const rect = canvas.getBoundingClientRect();
@@ -771,22 +810,37 @@ function Board({
       syntheticPointerEvent.clientY = (event.clientY - rect.top) * dpr;
     }
 
-    // Send pointer-down to trigger selection
+    // Track pending operation
+    pendingOperationsRef.current++;
+    console.log(
+      `[Board] Context menu: pendingOperations++ → ${pendingOperationsRef.current} (synthetic pointer-down/up)`,
+    );
+
+    // Send synthetic pointer-down
     rendererRef.current.sendMessage({
       type: 'pointer-down',
       event: syntheticPointerEvent,
     });
 
-    // Send pointer-up immediately to complete the click
+    // Send synthetic pointer-up immediately
     rendererRef.current.sendMessage({
       type: 'pointer-up',
       event: syntheticPointerEvent,
     });
 
-    // Open context menu at cursor position
-    if (onContextMenu) {
+    // Wait for selection to settle, then open context menu
+    void (async () => {
+      await waitForSelectionSettled();
+      const selectionCount = store.getAllObjects
+        ? Array.from(store.getAllObjects().values()).filter(
+            (obj) => obj._selectedBy === store.getActorId(),
+          ).length
+        : 0;
+      console.log(
+        `[Board] Selection settled, opening context menu (selection count: ${selectionCount})`,
+      );
       onContextMenu(event.clientX, event.clientY);
-    }
+    })();
   };
 
   return (

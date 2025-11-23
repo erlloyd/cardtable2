@@ -1369,8 +1369,14 @@ export abstract class RendererCore {
           // Single click: select only this card (unless already selected)
           if (!this.selectedObjectIds.has(hitResult.id)) {
             this.selectObjects([hitResult.id], true);
+          } else {
+            // M3.5.1-T4: Already selected, send empty message to signal click processed
+            // (for context menu timing - ensures waitForSelectionSettled resolves)
+            this.postResponse({
+              type: 'objects-selected',
+              ids: [],
+            });
           }
-          // If already selected, don't change selection (allows multi-drag)
         }
 
         // Request render to show selection changes
@@ -1383,6 +1389,13 @@ export abstract class RendererCore {
 
           // Request render to show deselection
           this.app!.renderer.render(this.app!.stage);
+        } else {
+          // M3.5.1-T4: Even if nothing was selected, send an empty unselect message
+          // to signal that the click event has been processed (for context menu timing)
+          this.postResponse({
+            type: 'objects-unselected',
+            ids: [],
+          });
         }
       }
 

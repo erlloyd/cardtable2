@@ -25,6 +25,15 @@ export function ContextMenu({
   // Get available actions
   const actions = context ? actionRegistry.getAvailableActions(context) : [];
 
+  // Debug logging
+  if (context) {
+    console.log('[ContextMenu] Available actions:', {
+      totalActions: actions.length,
+      selectionCount: context.selection.count,
+      actionIds: actions.map((a) => a.id),
+    });
+  }
+
   // Group actions by category
   const actionsByCategory = new Map<string, Action[]>();
   for (const action of actions) {

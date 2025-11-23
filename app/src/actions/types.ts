@@ -31,6 +31,7 @@ export interface ActionContext {
   store: YjsStore;
   selection: SelectionInfo;
   actorId: string;
+  clickedObjectId?: string; // ID of object under cursor when context menu opened (if any)
 }
 
 /**

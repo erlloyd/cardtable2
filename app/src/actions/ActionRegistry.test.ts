@@ -13,11 +13,9 @@ describe('ActionRegistry', () => {
     registry.clear(); // Clear between tests
 
     // Mock YjsStore for testing
-    const getAllObjects = vi.fn<[], Map<string, unknown>>();
-    getAllObjects.mockReturnValue(new Map());
+    const getAllObjects = vi.fn(() => new Map<string, unknown>());
 
-    const getObject = vi.fn<[string], unknown>();
-    getObject.mockReturnValue(undefined);
+    const getObject = vi.fn((_id: string) => undefined);
 
     const mockStore = {
       getAllObjects,

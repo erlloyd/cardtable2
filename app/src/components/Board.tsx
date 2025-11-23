@@ -485,14 +485,8 @@ function Board({
         const width = entry.contentRect.width * dpr;
         const height = entry.contentRect.height * dpr;
 
-        // Only update canvas dimensions in main-thread mode
-        // In worker mode, the OffscreenCanvas handles its own dimensions
-        if (renderMode === RenderMode.MainThread) {
-          canvas.width = width;
-          canvas.height = height;
-        }
-
         // Send resize message to renderer
+        // PixiJS will handle updating canvas dimensions via app.renderer.resize()
         const message: MainToRendererMessage = {
           type: 'resize',
           width,
@@ -500,7 +494,6 @@ function Board({
           dpr,
         };
         rendererRef.current!.sendMessage(message);
-        console.log(`[Board] Resized canvas: ${width}x${height} (dpr: ${dpr})`);
       }
     });
 

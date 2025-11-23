@@ -262,6 +262,14 @@ export abstract class RendererCore {
             this.app.renderer.resize(width, height);
             this.app.renderer.resolution = dpr;
 
+            // IMPORTANT: In main-thread mode, PixiJS may set canvas.style to explicit pixel dimensions
+            // which breaks our responsive layout. Reset to 100% to fill container.
+            // Note: OffscreenCanvas doesn't have a 'style' property, so this only runs in main-thread mode
+            if ('style' in this.app.canvas) {
+              this.app.canvas.style.width = '100%';
+              this.app.canvas.style.height = '100%';
+            }
+
             // Update world container position to keep it centered, preserving pan offset
             if (this.worldContainer) {
               const offsetX = this.worldContainer.position.x - oldWidth / 2;

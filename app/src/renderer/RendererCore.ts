@@ -305,10 +305,9 @@ export abstract class RendererCore {
         }
 
         case 'flush': {
-          // E2E Test API: Wait multiple frames to ensure all rendering is complete
-          // Multiple rAF ensures scene updates, spatial index, and browser compositing
-          // CI with high worker count may need more time than local
-          const framesToWait = 3;
+          // E2E Test API: Wait for all pending operations to complete
+          // Track: scene updates, spatial index updates, and rendering
+          const framesToWait = 2;
           let framesWaited = 0;
 
           const waitFrame = () => {

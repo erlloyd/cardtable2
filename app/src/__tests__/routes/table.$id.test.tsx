@@ -33,6 +33,9 @@ vi.mock('../../store/YjsStore', () => ({
     getConnectionStatus() {
       return 'offline';
     }
+    getActorId() {
+      return 'test-actor-id';
+    }
     destroy() {}
   },
 }));

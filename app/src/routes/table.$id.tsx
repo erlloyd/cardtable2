@@ -245,6 +245,16 @@ function Table() {
         )}
       </Suspense>
 
+      {/* Command Palette Button */}
+      <button
+        type="button"
+        className="command-palette-button"
+        onClick={commandPalette.open}
+        aria-label="Open command palette"
+      >
+        Commands
+      </button>
+
       {/* Command Palette */}
       <CommandPalette
         isOpen={commandPalette.isOpen}

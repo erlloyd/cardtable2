@@ -76,6 +76,38 @@ h1 {
   margin: 0 auto;
 }
 
+/* Command Palette Button */
+.command-palette-button {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 40;
+  padding: 0.5rem 1rem;
+  background-color: rgba(79, 70, 229, 0.9);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  transition: all 150ms ease;
+}
+
+.command-palette-button:hover {
+  background-color: rgba(79, 70, 229, 1);
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.command-palette-button:active {
+  transform: translateY(0);
+}
+
 /* Command Palette Styles (M3.5.1-T3) */
 .command-palette-dialog {
   position: relative;

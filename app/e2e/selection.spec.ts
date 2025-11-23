@@ -37,9 +37,10 @@ interface TableObject {
  */
 
 test.describe('Selection Ownership E2E', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to table page
-    await page.goto('/dev/table/selection-test');
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `sel-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
 
     // Wait for store to be ready
     await expect(page.locator('text=Store: ✓ Ready')).toBeVisible({
@@ -56,8 +57,13 @@ test.describe('Selection Ownership E2E', () => {
     const canvas = page.getByTestId('board-canvas');
     await expect(canvas).toBeVisible({ timeout: 5000 });
 
-    // Give canvas time to render
-    await page.waitForTimeout(200);
+    // Wait for __TEST_BOARD__ to be available
+    await page.waitForFunction(
+      () => {
+        return (globalThis as any).__TEST_BOARD__ !== undefined;
+      },
+      { timeout: 5000 },
+    );
   });
 
   test('shows selection border when clicking an object', async ({ page }) => {
@@ -76,8 +82,10 @@ test.describe('Selection Ownership E2E', () => {
 
     // CRITICAL: Wait for objects to be rendered on the canvas
     // Store updates happen immediately, but rendering is async
-    // Wait for console log confirming renderer has added objects
-    await page.waitForTimeout(1000); // Increased from 500ms
+    // Use waitForRenderer() to ensure renderer has processed all messages
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Get an object's screen position from the store
     const clickPos = await page.evaluate(() => {
@@ -112,8 +120,10 @@ test.describe('Selection Ownership E2E', () => {
     const canvas = page.locator('canvas');
     await canvas.click({ position: { x: clickPos.x, y: clickPos.y } });
 
-    // Wait for selection to complete
-    await page.waitForTimeout(200);
+    // Wait for selection round-trip to complete
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Verify object is selected in store
     const selectedCount = await page.evaluate(() => {
@@ -133,7 +143,9 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Get an object's screen position and select it
     const clickPos = await page.evaluate(() => {
@@ -163,7 +175,9 @@ test.describe('Selection Ownership E2E', () => {
     // Select the object
     const canvas = page.locator('canvas');
     await canvas.click({ position: { x: clickPos.x, y: clickPos.y } });
-    await page.waitForTimeout(200);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Verify selection exists
     const selectedBefore = await page.evaluate(() => {
@@ -178,7 +192,9 @@ test.describe('Selection Ownership E2E', () => {
 
     // Click "Clear Selections" button
     await page.click('button:has-text("Clear Selections")');
-    await page.waitForTimeout(200);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Verify selections cleared
     const selectedAfter = await page.evaluate(() => {
@@ -196,7 +212,9 @@ test.describe('Selection Ownership E2E', () => {
     // Setup: Create objects and select some
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Get an object's screen position and select it
     const clickPos = await page.evaluate(() => {
@@ -226,7 +244,9 @@ test.describe('Selection Ownership E2E', () => {
     // Select the object
     const canvas = page.locator('canvas');
     await canvas.click({ position: { x: clickPos.x, y: clickPos.y } });
-    await page.waitForTimeout(200);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Verify object has _selectedBy
     const beforeRefresh = await page.evaluate(() => {
@@ -277,7 +297,9 @@ test.describe('Selection Ownership E2E', () => {
       .textContent();
 
     // Wait for IndexedDB to persist (persistence is async)
-    await page.waitForTimeout(1000);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Refresh
     await page.reload();
@@ -305,7 +327,9 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Get two different objects' screen positions
     const positions = await page.evaluate(() => {
@@ -334,19 +358,27 @@ test.describe('Selection Ownership E2E', () => {
 
     // Select object 1
     await canvas.click({ position: positions[0] });
-    await page.waitForTimeout(100);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Select object 2
     await canvas.click({ position: positions[1] });
-    await page.waitForTimeout(100);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Clear all
     await page.click('button:has-text("Clear Selections")');
-    await page.waitForTimeout(100);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Select again
     await canvas.click({ position: positions[0] });
-    await page.waitForTimeout(100);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Verify we can still select after clearing
     const selectedCount = await page.evaluate(() => {
@@ -371,7 +403,9 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Get an object's ID, initial position, and canvas-relative screen position
     const objectData = await page.evaluate(() => {

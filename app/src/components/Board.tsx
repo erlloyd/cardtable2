@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type {
   MainToRendererMessage,
   RendererToMainMessage,
@@ -234,6 +234,15 @@ function Board({
         case 'awareness-update-rate': {
           // M5-T1: Update awareness Hz display
           setAwarenessHz(message.hz);
+          break;
+        }
+
+        case 'flushed': {
+          // E2E Test API: Renderer has processed all pending messages
+          // Resolve all pending flush callbacks
+          const callbacks = flushCallbacksRef.current;
+          flushCallbacksRef.current = [];
+          callbacks.forEach((cb) => cb());
           break;
         }
       }
@@ -536,6 +545,40 @@ function Board({
     rendererRef.current.sendMessage(message);
     setMessages((prev) => [...prev, 'Starting animation...']);
   };
+
+  // Ref to store pending flush promises
+  const flushCallbacksRef = useRef<Array<() => void>>([]);
+
+  // Test API for E2E: Wait for renderer to process all pending messages
+  const waitForRenderer = useCallback((): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      if (!rendererRef.current || !isCanvasInitialized) {
+        resolve();
+        return;
+      }
+
+      // Register callback for 'flushed' response
+      flushCallbacksRef.current.push(resolve);
+
+      // Send flush message
+      const message: MainToRendererMessage = {
+        type: 'flush',
+      };
+      rendererRef.current.sendMessage(message);
+    });
+  }, [isCanvasInitialized]);
+
+  // Expose test API in dev mode only
+  useEffect(() => {
+    if (import.meta.env.DEV && showDebugUI) {
+      window.__TEST_BOARD__ = {
+        waitForRenderer,
+      };
+      return () => {
+        delete window.__TEST_BOARD__;
+      };
+    }
+  }, [showDebugUI, isCanvasInitialized, waitForRenderer]);
 
   // Helper to serialize pointer events (M2-T3)
   const serializePointerEvent = (

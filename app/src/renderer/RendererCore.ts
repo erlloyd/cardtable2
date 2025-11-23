@@ -304,6 +304,19 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'flush': {
+          // E2E Test API: Wait for 2 frames to ensure all rendering is complete
+          // Double rAF ensures both scene updates and hit-testing spatial index are ready
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              this.postResponse({
+                type: 'flushed',
+              });
+            });
+          });
+          break;
+        }
+
         case 'set-interaction-mode': {
           this.interactionMode = message.mode;
           console.log(

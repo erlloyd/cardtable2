@@ -868,6 +868,7 @@ function Board({
             touchAction: 'none',
           }}
           data-testid="board-canvas"
+          data-canvas-initialized={isCanvasInitialized ? 'true' : 'false'}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

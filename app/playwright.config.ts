@@ -4,8 +4,13 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // No retries needed - tests are now 100% reliable with waitForRenderer()
+  retries: 0,
+  // Playwright workers are I/O-bound (browser automation), not CPU-bound
+  // Can run more workers than CPUs for better parallelization
+  // CI: 8 workers on GitHub Actions (2 core runner)
+  // Local: Unlimited (auto-detect based on available cores)
+  workers: process.env.CI ? 8 : undefined,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:3000',

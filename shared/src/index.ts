@@ -81,7 +81,7 @@ export type InteractionMode = 'pan' | 'select';
 export type MainToRendererMessage =
   | { type: 'ping'; data: string }
   | { type: 'echo'; data: string }
-  | { type: 'flush' } // For E2E tests: wait for renderer to process all pending updates
+  | { type: 'flush'; pendingOperations?: number } // For E2E tests: wait for renderer to process all pending updates
   | {
       type: 'init';
       canvas: OffscreenCanvas | HTMLCanvasElement;

@@ -173,6 +173,15 @@ function Board({
           console.log(`[Board] ${message.updates.length} object(s) moved`);
           // Update store with new positions (M3-T2.5 bi-directional sync)
           moveObjects(storeRef.current, message.updates);
+          // Decrement pending operations counter (E2E Test API)
+          const prevCount = pendingOperationsRef.current;
+          pendingOperationsRef.current = Math.max(
+            0,
+            pendingOperationsRef.current - 1,
+          );
+          console.log(
+            `[Board] pendingOperations-- → ${pendingOperationsRef.current} (was ${prevCount}, objects-moved)`,
+          );
           break;
         }
 
@@ -190,6 +199,15 @@ function Board({
               result.failed,
             );
           }
+          // Decrement pending operations counter (E2E Test API)
+          const prevCountSel = pendingOperationsRef.current;
+          pendingOperationsRef.current = Math.max(
+            0,
+            pendingOperationsRef.current - 1,
+          );
+          console.log(
+            `[Board] pendingOperations-- → ${pendingOperationsRef.current} (was ${prevCountSel}, objects-selected)`,
+          );
           break;
         }
 
@@ -200,6 +218,11 @@ function Board({
             storeRef.current,
             message.ids,
             storeRef.current.getActorId(),
+          );
+          // Decrement pending operations counter (E2E Test API)
+          pendingOperationsRef.current = Math.max(
+            0,
+            pendingOperationsRef.current - 1,
           );
           break;
         }
@@ -240,6 +263,9 @@ function Board({
         case 'flushed': {
           // E2E Test API: Renderer has processed all pending messages
           // Resolve all pending flush callbacks
+          console.log(
+            `[Board] Received 'flushed' message, pending ops now: ${pendingOperationsRef.current}`,
+          );
           const callbacks = flushCallbacksRef.current;
           flushCallbacksRef.current = [];
           callbacks.forEach((cb) => cb());
@@ -549,6 +575,11 @@ function Board({
   // Ref to store pending flush promises
   const flushCallbacksRef = useRef<Array<() => void>>([]);
 
+  // Ref to track pending renderer operations (E2E Test API)
+  // Incremented when forwarding pointer events to renderer
+  // Decremented when renderer sends back objects-moved/objects-selected/objects-unselected
+  const pendingOperationsRef = useRef<number>(0);
+
   // Test API for E2E: Wait for renderer to process all pending messages
   const waitForRenderer = useCallback((): Promise<void> => {
     return new Promise<void>((resolve) => {
@@ -560,9 +591,14 @@ function Board({
       // Register callback for 'flushed' response
       flushCallbacksRef.current.push(resolve);
 
-      // Send flush message
+      // Send flush message with current pending operations count
+      const pendingCount = pendingOperationsRef.current;
+      console.log(
+        `[Board] waitForRenderer() called with ${pendingCount} pending operations`,
+      );
       const message: MainToRendererMessage = {
         type: 'flush',
+        pendingOperations: pendingCount,
       };
       rendererRef.current.sendMessage(message);
     });
@@ -628,6 +664,12 @@ function Board({
   // Handle pointer down (M2-T3)
   const handlePointerDown = (event: React.PointerEvent) => {
     if (!rendererRef.current || !isCanvasInitialized) return;
+
+    // Track pending operation (E2E Test API)
+    pendingOperationsRef.current++;
+    console.log(
+      `[Board] pendingOperations++ → ${pendingOperationsRef.current} (pointer-down)`,
+    );
 
     const message: MainToRendererMessage = {
       type: 'pointer-down',

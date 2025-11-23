@@ -16,6 +16,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { dumpDebugState } from './test-helpers';
 
 // Define minimal interfaces for type safety in page.evaluate()
 interface TestStore {
@@ -125,6 +126,9 @@ test.describe('Selection Ownership E2E', () => {
       await (globalThis as any).__TEST_BOARD__.waitForRenderer();
     });
 
+    // DEBUG: Dump state before assertion
+    await dumpDebugState(page, 'BEFORE_SELECTION_ASSERTION');
+
     // Verify object is selected in store
     const selectedCount = await page.evaluate(() => {
       const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
@@ -134,6 +138,7 @@ test.describe('Selection Ownership E2E', () => {
       ).length;
     });
 
+    console.log(`[DEBUG] Selected count: ${selectedCount}`);
     expect(selectedCount).toBeGreaterThan(0);
   });
 
@@ -522,8 +527,12 @@ test.describe('Selection Ownership E2E', () => {
       buttons: 0,
     });
 
-    // Wait for drag and selection to complete (worker message processing time)
-    await page.waitForTimeout(300);
+    // Wait for drag and selection to complete using waitForRenderer
+    console.log('[E2E] Calling waitForRenderer after drag...');
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+    console.log('[E2E] waitForRenderer completed');
 
     // Verify object is now selected AND has moved
     const afterDrag = await page.evaluate((id: string) => {

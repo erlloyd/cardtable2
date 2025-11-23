@@ -18,12 +18,36 @@ import type { Action, ActionContext } from './types';
  * });
  * ```
  */
+type ChangeListener = () => void;
+
 export class ActionRegistry {
   private static instance: ActionRegistry;
   private actions: Map<string, Action> = new Map();
+  private listeners: Set<ChangeListener> = new Set();
 
   private constructor() {
     // Singleton pattern
+  }
+
+  /**
+   * Subscribe to registry changes
+   * @param listener Callback function to call when actions are registered/unregistered
+   * @returns Unsubscribe function
+   */
+  public subscribe(listener: ChangeListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Notify all listeners of a change
+   */
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 
   /**
@@ -47,6 +71,7 @@ export class ActionRegistry {
       );
     }
     this.actions.set(action.id, action);
+    this.notifyListeners();
   }
 
   /**
@@ -55,6 +80,7 @@ export class ActionRegistry {
    */
   public unregister(actionId: string): void {
     this.actions.delete(actionId);
+    this.notifyListeners();
   }
 
   /**
@@ -134,6 +160,7 @@ export class ActionRegistry {
    */
   public clear(): void {
     this.actions.clear();
+    this.notifyListeners();
   }
 
   /**

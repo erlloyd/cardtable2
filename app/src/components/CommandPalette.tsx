@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo } from 'react';
+import { Fragment, useState, useMemo, useEffect } from 'react';
 import {
   Combobox,
   ComboboxInput,
@@ -32,16 +32,28 @@ export function CommandPalette({
   console.log('[CommandPalette] Component rendering, isOpen:', isOpen);
 
   const [query, setQuery] = useState('');
+  const [allActions, setAllActions] = useState<Action[]>([]);
   const actionRegistry = ActionRegistry.getInstance();
   const keyboardManager = new KeyboardManager(actionRegistry);
 
-  // Get all actions (re-query when palette opens to pick up newly registered actions)
-  const allActions = useMemo(() => {
+  // Subscribe to registry changes and update actions
+  useEffect(() => {
+    // Initialize actions
     const actions = actionRegistry.getAllActions();
-    console.log('[CommandPalette] allActions:', actions.length);
-    return actions;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Need isOpen to refresh when palette opens
-  }, [actionRegistry, isOpen]);
+    console.log('[CommandPalette] Initial allActions:', actions.length);
+    setAllActions(actions);
+
+    // Subscribe to future changes
+    const unsubscribe = actionRegistry.subscribe(() => {
+      const updatedActions = actionRegistry.getAllActions();
+      console.log(
+        '[CommandPalette] Updated allActions:',
+        updatedActions.length,
+      );
+      setAllActions(updatedActions);
+    });
+    return unsubscribe;
+  }, [actionRegistry]);
 
   // Get recent actions (resolved from IDs)
   const recentActions = useMemo(() => {
@@ -81,13 +93,13 @@ export function CommandPalette({
     return groups;
   }, [filteredActions]);
 
-  // Check which actions are available in current context (re-check when palette opens)
+  // Check which actions are available in current context
+  // Recalculate when palette opens or context changes
   const availableActionIds = useMemo(() => {
-    if (!context) return new Set<string>();
+    if (!context || !isOpen) return new Set<string>();
 
     const available = actionRegistry.getAvailableActions(context);
     return new Set(available.map((a) => a.id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Need isOpen to refresh availability when palette opens
   }, [context, actionRegistry, isOpen]);
 
   const handleSelect = (wrappedAction: { action: Action } | null) => {

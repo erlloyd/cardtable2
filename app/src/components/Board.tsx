@@ -24,6 +24,7 @@ export interface BoardProps {
   store: YjsStore;
   connectionStatus: string;
   showDebugUI?: boolean; // M3.5.1-T0: Control debug UI visibility
+  onContextMenu?: (x: number, y: number) => void; // M3.5.1-T4: Context menu integration
 }
 
 function Board({
@@ -31,6 +32,7 @@ function Board({
   store,
   connectionStatus,
   showDebugUI = false,
+  onContextMenu,
 }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -665,6 +667,11 @@ function Board({
   const handlePointerDown = (event: React.PointerEvent) => {
     if (!rendererRef.current || !isCanvasInitialized) return;
 
+    // Ignore right-click (button 2) - context menu handles this (M3.5.1-T4)
+    if (event.button === 2) {
+      return;
+    }
+
     // Track pending operation (E2E Test API)
     pendingOperationsRef.current++;
     console.log(
@@ -728,6 +735,60 @@ function Board({
     rendererRef.current.sendMessage(message);
   };
 
+  // Handle context menu (M3.5.1-T4)
+  const handleCanvasContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault(); // Prevent browser context menu
+
+    if (!rendererRef.current || !isCanvasInitialized) {
+      if (onContextMenu) {
+        onContextMenu(event.clientX, event.clientY);
+      }
+      return;
+    }
+
+    // Simulate a pointer-down event to trigger selection via the renderer
+    // The renderer will do hit-testing and send back objects-selected message
+    // This reuses all the existing selection logic including z-order handling
+    const syntheticPointerEvent: PointerEventData = {
+      pointerId: 999, // Special ID for context menu
+      pointerType: 'mouse',
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: 0, // Simulate left-click for selection
+      buttons: 1,
+      isPrimary: true,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+    };
+
+    // Convert to canvas-relative coordinates (accounting for DPR)
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      syntheticPointerEvent.clientX = (event.clientX - rect.left) * dpr;
+      syntheticPointerEvent.clientY = (event.clientY - rect.top) * dpr;
+    }
+
+    // Send pointer-down to trigger selection
+    rendererRef.current.sendMessage({
+      type: 'pointer-down',
+      event: syntheticPointerEvent,
+    });
+
+    // Send pointer-up immediately to complete the click
+    rendererRef.current.sendMessage({
+      type: 'pointer-up',
+      event: syntheticPointerEvent,
+    });
+
+    // Open context menu at cursor position
+    if (onContextMenu) {
+      onContextMenu(event.clientX, event.clientY);
+    }
+  };
+
   return (
     <div
       className={showDebugUI ? 'board-debug' : 'board-fullscreen'}
@@ -758,6 +819,7 @@ function Board({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
           onPointerLeave={handlePointerLeave}
+          onContextMenu={handleCanvasContextMenu}
         />
       </div>
 

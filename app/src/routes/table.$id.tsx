@@ -2,7 +2,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useTableStore } from '../hooks/useTableStore';
 import { CommandPalette } from '../components/CommandPalette';
+import { ContextMenu } from '../components/ContextMenu';
 import { useCommandPalette } from '../hooks/useCommandPalette';
+import { useContextMenu } from '../hooks/useContextMenu';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { CARD_ACTIONS } from '../actions/types';
 import type { ActionContext } from '../actions/types';
@@ -21,6 +23,7 @@ function Table() {
     logPrefix: 'Table',
   });
   const commandPalette = useCommandPalette();
+  const contextMenu = useContextMenu();
 
   // Register some test actions
   useEffect(() => {
@@ -239,6 +242,7 @@ function Table() {
             store={store}
             connectionStatus={connectionStatus}
             showDebugUI={false}
+            onContextMenu={contextMenu.open}
           />
         ) : (
           <div>Initializing table state...</div>
@@ -262,6 +266,14 @@ function Table() {
         context={actionContext}
         recentActionIds={commandPalette.recentActions}
         onActionExecuted={commandPalette.recordAction}
+      />
+
+      {/* Context Menu */}
+      <ContextMenu
+        isOpen={contextMenu.isOpen}
+        position={contextMenu.position}
+        onClose={contextMenu.close}
+        context={actionContext}
       />
     </div>
   );

@@ -25,8 +25,8 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Hover Feedback (M2-T4)', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to a test table
-    await page.goto('/table/test-hover-table');
+    // Navigate to a test table (dev mode to show debug UI)
+    await page.goto('/dev/table/test-hover-table');
 
     // Wait for canvas to be initialized
     await expect(page.getByTestId('worker-status')).toContainText(
@@ -233,7 +233,7 @@ test.describe('Hover Feedback (M2-T4)', () => {
     });
 
     // Test worker mode
-    await page.goto('/table/test-hover-worker?renderMode=worker');
+    await page.goto('/dev/table/test-hover-worker?renderMode=worker');
     await expect(page.getByTestId('worker-status')).toContainText(
       'Initialized',
       { timeout: 5000 },
@@ -254,7 +254,7 @@ test.describe('Hover Feedback (M2-T4)', () => {
     await page.waitForTimeout(300);
 
     // Test main-thread mode
-    await page.goto('/table/test-hover-main?renderMode=main-thread');
+    await page.goto('/dev/table/test-hover-main?renderMode=main-thread');
     await expect(page.getByTestId('worker-status')).toContainText(
       'Initialized',
       { timeout: 5000 },

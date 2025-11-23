@@ -24,9 +24,10 @@ test.describe('Navigation', () => {
 
     // Verify we're on the Table page by checking for the Board component
     await expect(page.locator('[data-testid="board"]')).toBeVisible();
-    await expect(page.locator('[data-testid="board"]')).toContainText(
-      `Board: ${tableId}`,
-    );
+
+    // The regular board is fullscreen and doesn't show the table ID text
+    // Just verify the board canvas is visible
+    await expect(page.locator('[data-testid="board-canvas"]')).toBeVisible();
   });
 
   test('should lazy load Board component', async ({ page }) => {
@@ -41,7 +42,10 @@ test.describe('Navigation', () => {
     // Verify Board is rendered
     const board = page.locator('[data-testid="board"]');
     await expect(board).toBeVisible();
-    await expect(board).toContainText('Board:');
+
+    // The regular board is fullscreen and doesn't show the table ID text
+    // Just verify the board canvas is visible
+    await expect(page.locator('[data-testid="board-canvas"]')).toBeVisible();
   });
 
   test('should show Board after lazy loading', async ({ page }) => {
@@ -58,10 +62,8 @@ test.describe('Navigation', () => {
 
 test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
   test('should initialize worker and show ready status', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+    // Navigate directly to dev mode table to access debug UI
+    await page.goto('/dev/table/test-worker-comm');
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -73,10 +75,8 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
   });
 
   test('should initialize canvas and render', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+    // Navigate directly to dev mode table to access debug UI
+    await page.goto('/dev/table/test-worker-comm-canvas');
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for canvas element to appear
@@ -92,10 +92,8 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
   });
 
   test('should send ping and receive pong', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+    // Navigate directly to dev mode table to access debug UI
+    await page.goto('/dev/table/test-worker-comm-ping');
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -114,10 +112,8 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
   });
 
   test('should send echo and receive echo response', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+    // Navigate directly to dev mode table to access debug UI
+    await page.goto('/dev/table/test-worker-comm-echo');
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -134,10 +130,8 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
   });
 
   test('should disable buttons until worker is ready', async ({ page }) => {
-    await page.goto('/');
-
-    // Navigate to table
-    await page.click('text=Open Table');
+    // Navigate directly to dev mode table to access debug UI
+    await page.goto('/dev/table/test-worker-comm-buttons');
     await page.waitForSelector('[data-testid="board"]');
 
     // Initially buttons should be disabled

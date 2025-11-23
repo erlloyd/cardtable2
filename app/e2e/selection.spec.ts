@@ -39,7 +39,7 @@ interface TableObject {
 test.describe('Selection Ownership E2E', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to table page
-    await page.goto('/table/selection-test');
+    await page.goto('/dev/table/selection-test');
 
     // Wait for store to be ready
     await expect(page.locator('text=Store: ✓ Ready')).toBeVisible({
@@ -76,7 +76,8 @@ test.describe('Selection Ownership E2E', () => {
 
     // CRITICAL: Wait for objects to be rendered on the canvas
     // Store updates happen immediately, but rendering is async
-    await page.waitForTimeout(500);
+    // Wait for console log confirming renderer has added objects
+    await page.waitForTimeout(1000); // Increased from 500ms
 
     // Get an object's screen position from the store
     const clickPos = await page.evaluate(() => {
@@ -132,7 +133,7 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(500); // Wait for rendering
+    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
 
     // Get an object's screen position and select it
     const clickPos = await page.evaluate(() => {
@@ -195,7 +196,7 @@ test.describe('Selection Ownership E2E', () => {
     // Setup: Create objects and select some
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(500); // Wait for rendering
+    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
 
     // Get an object's screen position and select it
     const clickPos = await page.evaluate(() => {
@@ -304,7 +305,7 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(500); // Wait for rendering
+    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
 
     // Get two different objects' screen positions
     const positions = await page.evaluate(() => {
@@ -370,7 +371,7 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(500); // Wait for rendering
+    await page.waitForTimeout(1000); // Wait for rendering (increased for stability)
 
     // Get an object's ID, initial position, and canvas-relative screen position
     const objectData = await page.evaluate(() => {

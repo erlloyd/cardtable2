@@ -27,8 +27,8 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Camera Pan and Zoom (M2-T3)', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to a test table
-    await page.goto('/table/test-camera-table');
+    // Navigate to a test table (dev mode to show debug UI)
+    await page.goto('/dev/table/test-camera-table');
 
     // Wait for canvas to be initialized
     await expect(page.getByTestId('worker-status')).toContainText(
@@ -359,7 +359,7 @@ test.describe('Camera Pan and Zoom (M2-T3)', () => {
 
   test('works in both worker and main-thread modes', async ({ page }) => {
     // Test worker mode (default)
-    await page.goto('/table/test-camera-worker?renderMode=worker');
+    await page.goto('/dev/table/test-camera-worker?renderMode=worker');
     await expect(page.getByTestId('worker-status')).toContainText(
       'Initialized',
     );
@@ -378,7 +378,7 @@ test.describe('Camera Pan and Zoom (M2-T3)', () => {
     await page.waitForTimeout(100);
 
     // Test main-thread mode
-    await page.goto('/table/test-camera-main?renderMode=main-thread');
+    await page.goto('/dev/table/test-camera-main?renderMode=main-thread');
     await expect(page.getByTestId('worker-status')).toContainText(
       'Initialized',
     );

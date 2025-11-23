@@ -35,11 +35,13 @@ export function CommandPalette({
   const actionRegistry = ActionRegistry.getInstance();
   const keyboardManager = new KeyboardManager(actionRegistry);
 
-  // Get all actions
-  const allActions = useMemo(
-    () => actionRegistry.getAllActions(),
-    [actionRegistry],
-  );
+  // Get all actions (re-query when palette opens to pick up newly registered actions)
+  const allActions = useMemo(() => {
+    const actions = actionRegistry.getAllActions();
+    console.log('[CommandPalette] allActions:', actions.length);
+    return actions;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Need isOpen to refresh when palette opens
+  }, [actionRegistry, isOpen]);
 
   // Get recent actions (resolved from IDs)
   const recentActions = useMemo(() => {
@@ -70,19 +72,27 @@ export function CommandPalette({
       groups.set(category, [...existing, action]);
     }
 
+    console.log('[CommandPalette] actionsByCategory:', {
+      size: groups.size,
+      categories: Array.from(groups.keys()),
+      totalActions: Array.from(groups.values()).flat().length,
+    });
+
     return groups;
   }, [filteredActions]);
 
-  // Check which actions are available in current context
+  // Check which actions are available in current context (re-check when palette opens)
   const availableActionIds = useMemo(() => {
     if (!context) return new Set<string>();
 
     const available = actionRegistry.getAvailableActions(context);
     return new Set(available.map((a) => a.id));
-  }, [context, actionRegistry]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Need isOpen to refresh availability when palette opens
+  }, [context, actionRegistry, isOpen]);
 
-  const handleSelect = (action: Action | null) => {
-    if (!action || !context) return;
+  const handleSelect = (wrappedAction: { action: Action } | null) => {
+    if (!wrappedAction || !context) return;
+    const action = wrappedAction.action;
 
     // Check if action is available
     if (!availableActionIds.has(action.id)) {
@@ -106,6 +116,15 @@ export function CommandPalette({
     if (!shortcut) return '';
     return keyboardManager.getShortcutDisplay(shortcut);
   };
+
+  console.log('[CommandPalette] Rendering with:', {
+    isOpen,
+    query,
+    allActionsCount: allActions.length,
+    recentActionsCount: recentActions.length,
+    categoriesCount: actionsByCategory.size,
+    availableActionsCount: availableActionIds.size,
+  });
 
   return (
     <Transition show={isOpen} as={Fragment}>
@@ -135,7 +154,10 @@ export function CommandPalette({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <DialogPanel className="command-palette-panel">
+              <DialogPanel
+                className="command-palette-panel"
+                onWheel={(e) => e.stopPropagation()}
+              >
                 <Combobox value={null} onChange={handleSelect}>
                   <div className="command-palette-combobox">
                     {/* Search input */}
@@ -169,8 +191,8 @@ export function CommandPalette({
                             );
                             return (
                               <ComboboxOption
-                                key={action.id}
-                                value={action}
+                                key={`recent-${action.id}`}
+                                value={{ action }}
                                 className="command-palette-option"
                               >
                                 {({ focus }) => (
@@ -215,8 +237,8 @@ export function CommandPalette({
                               );
                               return (
                                 <ComboboxOption
-                                  key={action.id}
-                                  value={action}
+                                  key={`category-${category}-${action.id}`}
+                                  value={{ action }}
                                   className="command-palette-option"
                                 >
                                   {({ focus }) => (

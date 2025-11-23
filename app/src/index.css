@@ -91,7 +91,7 @@ h1 {
 .command-palette-container {
   position: fixed;
   inset: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .command-palette-wrapper {
@@ -137,6 +137,7 @@ h1 {
   overflow-y: auto;
   border-top: 1px solid #f3f4f6;
   padding: 0.5rem 0;
+  overscroll-behavior: contain;
 }
 
 .command-palette-empty {

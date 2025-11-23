@@ -8,9 +8,9 @@ export default defineConfig({
   retries: 0,
   // Playwright workers are I/O-bound (browser automation), not CPU-bound
   // Can run more workers than CPUs for better parallelization
-  // CI: 8 workers on GitHub Actions (2 core runner)
+  // CI: 2 workers on GitHub Actions (2 core runner) - conservative for stability
   // Local: Unlimited (auto-detect based on available cores)
-  workers: process.env.CI ? 8 : undefined,
+  workers: process.env.CI ? 2 : undefined,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:3000',

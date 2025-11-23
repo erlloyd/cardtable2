@@ -24,9 +24,10 @@ import { test, expect } from '@playwright/test';
  * renderer state inspection hooks in future milestones (M9: Performance & QA).
  */
 test.describe('Hover Feedback (M2-T4)', () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to a test table (dev mode to show debug UI)
-    await page.goto('/dev/table/test-hover-table');
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `hov-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
 
     // Wait for canvas to be initialized
     await expect(page.getByTestId('worker-status')).toContainText(

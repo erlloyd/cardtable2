@@ -61,9 +61,12 @@ test.describe('Navigation', () => {
 });
 
 test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
-  test('should initialize worker and show ready status', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    await page.goto('/dev/table/test-worker-comm');
+  test('should initialize worker and show ready status', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -74,9 +77,10 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     await expect(page.getByText('Worker is ready')).toBeVisible();
   });
 
-  test('should initialize canvas and render', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    await page.goto('/dev/table/test-worker-comm-canvas');
+  test('should initialize canvas and render', async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for canvas element to appear
@@ -91,9 +95,10 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     await expect(page.getByText('Canvas initialized')).toBeVisible();
   });
 
-  test('should send ping and receive pong', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    await page.goto('/dev/table/test-worker-comm-ping');
+  test('should send ping and receive pong', async ({ page }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -111,9 +116,12 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     });
   });
 
-  test('should send echo and receive echo response', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    await page.goto('/dev/table/test-worker-comm-echo');
+  test('should send echo and receive echo response', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for worker to be ready
@@ -129,9 +137,12 @@ test.describe('Worker Communication (M2-T1 & M2-T2)', () => {
     await expect(page.getByText(/Echo:/)).toBeVisible({ timeout: 5000 });
   });
 
-  test('should disable buttons until worker is ready', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    await page.goto('/dev/table/test-worker-comm-buttons');
+  test('should disable buttons until worker is ready', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `nav-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Initially buttons should be disabled

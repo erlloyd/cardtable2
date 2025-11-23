@@ -9,9 +9,12 @@ interface TestStore {
 }
 
 test.describe('State Persistence (M3-T1)', () => {
-  test('should initialize YjsStore and show ready status', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    await page.goto('/dev/table/test-persistence-init');
+  test('should initialize YjsStore and show ready status', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    const tableId = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
     // Wait for YjsStore to be ready (look for "Store: ✓ Ready" text)
@@ -23,10 +26,12 @@ test.describe('State Persistence (M3-T1)', () => {
     await expect(page.getByText(/Objects: 0/)).toBeVisible();
   });
 
-  test('should persist objects across page reload', async ({ page }) => {
-    // Navigate directly to dev mode table to access debug UI
-    // Use a specific table ID so we can reload the same table
-    const tableId = 'test-persistence-reload';
+  test('should persist objects across page reload', async ({
+    page,
+  }, testInfo) => {
+    // Navigate to table page with unique ID to avoid conflicts when running in parallel
+    // Use testInfo.testId so we can reload the same table
+    const tableId = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
     await page.goto(`/dev/table/${tableId}`);
     await page.waitForSelector('[data-testid="board"]');
 
@@ -126,9 +131,9 @@ test.describe('State Persistence (M3-T1)', () => {
 
   test('should handle multiple tables with separate IndexedDB databases', async ({
     page,
-  }) => {
-    // Navigate to first table (dev mode for debug UI)
-    const tableId1 = 'test-persistence-table-1';
+  }, testInfo) => {
+    // Navigate to first table with unique ID to avoid conflicts when running in parallel
+    const tableId1 = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}-1`;
     await page.goto(`/dev/table/${tableId1}`);
     await page.waitForSelector('[data-testid="board"]');
 
@@ -160,8 +165,8 @@ test.describe('State Persistence (M3-T1)', () => {
     await page.waitForTimeout(500);
     await expect(page.getByText(/Objects: 1/)).toBeVisible();
 
-    // Navigate to second table (dev mode for debug UI)
-    const tableId2 = 'test-persistence-table-2';
+    // Navigate to second table with unique ID
+    const tableId2 = `per-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}-2`;
     await page.goto(`/dev/table/${tableId2}`);
     await page.waitForSelector('[data-testid="board"]');
 

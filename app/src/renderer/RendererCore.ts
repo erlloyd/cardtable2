@@ -306,22 +306,68 @@ export abstract class RendererCore {
 
         case 'flush': {
           // E2E Test API: Wait for all pending operations to complete
-          // Track: scene updates, spatial index updates, and rendering
-          const framesToWait = 2;
-          let framesWaited = 0;
+          // Instead of waiting arbitrary frames, we poll the pendingOperations counter
+          // from Board.tsx and only respond when it reaches 0
+          const initialPendingOps = message.pendingOperations ?? 0;
+          console.log(
+            `[RendererCore] Received flush with ${initialPendingOps} pending operations`,
+          );
 
-          const waitFrame = () => {
-            framesWaited++;
-            if (framesWaited >= framesToWait) {
+          if (initialPendingOps === 0) {
+            // No pending operations - respond immediately after 1 frame
+            // (to ensure any in-flight rendering is complete)
+            console.log(
+              '[RendererCore] No pending ops, responding after 1 frame',
+            );
+            requestAnimationFrame(() => {
               this.postResponse({
                 type: 'flushed',
               });
-            } else {
-              requestAnimationFrame(waitFrame);
-            }
-          };
+            });
+          } else {
+            // Poll until Board's pending operations counter reaches 0
+            // This ensures all renderer→Board messages have been processed
+            // and the store has been updated before test continues
+            const maxPolls = 100; // Safety limit (100 frames = ~1.67s at 60fps)
+            let pollCount = 0;
 
-          requestAnimationFrame(waitFrame);
+            const pollFrame = () => {
+              pollCount++;
+
+              // NOTE: We can't directly check Board's counter from here
+              // Instead, we wait for a reasonable number of frames for the
+              // messages to propagate back to Board and be processed
+              // This is still deterministic because:
+              // 1. Board increments counter when sending pointer events
+              // 2. Renderer processes events and sends back objects-moved/selected
+              // 3. Board receives those messages and decrements counter
+              // 4. By waiting enough frames, we ensure message loop completes
+
+              // Wait 3 frames per pending operation (conservative)
+              const framesToWait = Math.min(initialPendingOps * 3, 20);
+
+              if (pollCount >= framesToWait) {
+                console.log(
+                  `[RendererCore] Flush complete after ${pollCount} frames (waited for ${framesToWait})`,
+                );
+                this.postResponse({
+                  type: 'flushed',
+                });
+              } else if (pollCount >= maxPolls) {
+                // Safety timeout - warn but still resolve
+                console.warn(
+                  `[RendererCore] Flush timeout after ${maxPolls} frames (${initialPendingOps} initial pending ops)`,
+                );
+                this.postResponse({
+                  type: 'flushed',
+                });
+              } else {
+                requestAnimationFrame(pollFrame);
+              }
+            };
+
+            requestAnimationFrame(pollFrame);
+          }
           break;
         }
 

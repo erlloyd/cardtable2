@@ -527,8 +527,12 @@ test.describe('Selection Ownership E2E', () => {
       buttons: 0,
     });
 
-    // Wait for drag and selection to complete (worker message processing time)
-    await page.waitForTimeout(300);
+    // Wait for drag and selection to complete using waitForRenderer
+    console.log('[E2E] Calling waitForRenderer after drag...');
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+    console.log('[E2E] waitForRenderer completed');
 
     // Verify object is now selected AND has moved
     const afterDrag = await page.evaluate((id: string) => {

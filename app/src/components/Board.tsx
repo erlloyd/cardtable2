@@ -24,6 +24,7 @@ export interface BoardProps {
   store: YjsStore;
   connectionStatus: string;
   showDebugUI?: boolean; // M3.5.1-T0: Control debug UI visibility
+  onContextMenu?: (x: number, y: number) => void; // M3.5.1-T4: Context menu integration
 }
 
 function Board({
@@ -31,6 +32,7 @@ function Board({
   store,
   connectionStatus,
   showDebugUI = false,
+  onContextMenu,
 }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -208,6 +210,16 @@ function Board({
           console.log(
             `[Board] pendingOperations-- → ${pendingOperationsRef.current} (was ${prevCountSel}, objects-selected)`,
           );
+
+          // M3.5.1-T4: Trigger selection settled callbacks
+          if (selectionSettledCallbacksRef.current.length > 0) {
+            console.log(
+              `[Board] Triggering ${selectionSettledCallbacksRef.current.length} selection settled callback(s)`,
+            );
+            const callbacks = selectionSettledCallbacksRef.current;
+            selectionSettledCallbacksRef.current = [];
+            callbacks.forEach((cb) => cb());
+          }
           break;
         }
 
@@ -224,6 +236,16 @@ function Board({
             0,
             pendingOperationsRef.current - 1,
           );
+
+          // M3.5.1-T4: Trigger selection settled callbacks (for context menu timing)
+          if (selectionSettledCallbacksRef.current.length > 0) {
+            console.log(
+              `[Board] Triggering ${selectionSettledCallbacksRef.current.length} selection settled callback(s) after unselect`,
+            );
+            const callbacks = selectionSettledCallbacksRef.current;
+            selectionSettledCallbacksRef.current = [];
+            callbacks.forEach((cb) => cb());
+          }
           break;
         }
 
@@ -580,6 +602,9 @@ function Board({
   // Decremented when renderer sends back objects-moved/objects-selected/objects-unselected
   const pendingOperationsRef = useRef<number>(0);
 
+  // M3.5.1-T4: Ref to track pending selection operations for context menu
+  const selectionSettledCallbacksRef = useRef<Array<() => void>>([]);
+
   // Test API for E2E: Wait for renderer to process all pending messages
   const waitForRenderer = useCallback((): Promise<void> => {
     return new Promise<void>((resolve) => {
@@ -604,17 +629,43 @@ function Board({
     });
   }, [isCanvasInitialized]);
 
+  // M3.5.1-T4: Wait for selection to settle after synthetic pointer events
+  const waitForSelectionSettled = useCallback((): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      // If there are no pending operations, resolve immediately
+      if (pendingOperationsRef.current === 0) {
+        console.log(
+          '[Board] waitForSelectionSettled: No pending operations, resolving immediately',
+        );
+        resolve();
+        return;
+      }
+
+      // Register callback to be triggered when next selection completes
+      console.log(
+        '[Board] waitForSelectionSettled: Registering callback for pending selection',
+      );
+      selectionSettledCallbacksRef.current.push(resolve);
+    });
+  }, []);
+
   // Expose test API in dev mode only
   useEffect(() => {
     if (import.meta.env.DEV && showDebugUI) {
       window.__TEST_BOARD__ = {
         waitForRenderer,
+        waitForSelectionSettled,
       };
       return () => {
         delete window.__TEST_BOARD__;
       };
     }
-  }, [showDebugUI, isCanvasInitialized, waitForRenderer]);
+  }, [
+    showDebugUI,
+    isCanvasInitialized,
+    waitForRenderer,
+    waitForSelectionSettled,
+  ]);
 
   // Helper to serialize pointer events (M2-T3)
   const serializePointerEvent = (
@@ -664,6 +715,11 @@ function Board({
   // Handle pointer down (M2-T3)
   const handlePointerDown = (event: React.PointerEvent) => {
     if (!rendererRef.current || !isCanvasInitialized) return;
+
+    // Ignore right-click (button 2) - context menu handles this (M3.5.1-T4)
+    if (event.button === 2) {
+      return;
+    }
 
     // Track pending operation (E2E Test API)
     pendingOperationsRef.current++;
@@ -728,6 +784,74 @@ function Board({
     rendererRef.current.sendMessage(message);
   };
 
+  // Handle context menu (M3.5.1-T4)
+  const handleCanvasContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault(); // Prevent browser context menu
+
+    if (!rendererRef.current || !isCanvasInitialized || !onContextMenu) {
+      return;
+    }
+
+    // Synthetic pointer ID used for context menu selection events
+    const CONTEXT_MENU_POINTER_ID = 999;
+
+    // Simulate a pointer-down/up to trigger selection logic
+    // This ensures right-clicking an object selects it before showing the context menu
+    const syntheticPointerEvent: PointerEventData = {
+      pointerId: CONTEXT_MENU_POINTER_ID,
+      pointerType: 'mouse',
+      clientX: event.clientX,
+      clientY: event.clientY,
+      button: 0, // Left button (for selection logic)
+      buttons: 1,
+      isPrimary: true,
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+    };
+
+    // Convert to canvas-relative coordinates
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      syntheticPointerEvent.clientX = (event.clientX - rect.left) * dpr;
+      syntheticPointerEvent.clientY = (event.clientY - rect.top) * dpr;
+    }
+
+    // Track pending operation
+    pendingOperationsRef.current++;
+    console.log(
+      `[Board] Context menu: pendingOperations++ → ${pendingOperationsRef.current} (synthetic pointer-down/up)`,
+    );
+
+    // Send synthetic pointer-down
+    rendererRef.current.sendMessage({
+      type: 'pointer-down',
+      event: syntheticPointerEvent,
+    });
+
+    // Send synthetic pointer-up immediately
+    rendererRef.current.sendMessage({
+      type: 'pointer-up',
+      event: syntheticPointerEvent,
+    });
+
+    // Wait for selection to settle, then open context menu
+    void (async () => {
+      await waitForSelectionSettled();
+      const selectionCount = store.getAllObjects
+        ? Array.from(store.getAllObjects().values()).filter(
+            (obj) => obj._selectedBy === store.getActorId(),
+          ).length
+        : 0;
+      console.log(
+        `[Board] Selection settled, opening context menu (selection count: ${selectionCount})`,
+      );
+      onContextMenu(event.clientX, event.clientY);
+    })();
+  };
+
   return (
     <div
       className={showDebugUI ? 'board-debug' : 'board-fullscreen'}
@@ -753,11 +877,13 @@ function Board({
             touchAction: 'none',
           }}
           data-testid="board-canvas"
+          data-canvas-initialized={isCanvasInitialized ? 'true' : 'false'}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
           onPointerLeave={handlePointerLeave}
+          onContextMenu={handleCanvasContextMenu}
         />
       </div>
 

@@ -23,6 +23,11 @@ interface TestStore {
   getAllObjects: () => Map<string, TableObject>;
 }
 
+interface TestBoard {
+  waitForRenderer: () => Promise<void>;
+  waitForSelectionSettled: () => Promise<void>;
+}
+
 interface TableObject {
   _pos: { x: number; y: number; r: number };
   _selectedBy: string | null;
@@ -796,7 +801,11 @@ test.describe('Selection Ownership E2E', () => {
       buttons: 0,
     });
 
-    await page.waitForTimeout(100);
+    // Wait for first object's selection to complete and render before starting CMD-drag
+    await page.evaluate(async () => {
+      const __TEST_BOARD__ = (globalThis as any).__TEST_BOARD__ as TestBoard;
+      await __TEST_BOARD__.waitForRenderer();
+    });
 
     // Now CMD-drag the second object
     const click2X = canvasBBox.x + objectsData.obj2.screenPos.x;

@@ -786,10 +786,13 @@ function Board({
       return;
     }
 
+    // Synthetic pointer ID used for context menu selection events
+    const CONTEXT_MENU_POINTER_ID = 999;
+
     // Simulate a pointer-down/up to trigger selection logic
     // This ensures right-clicking an object selects it before showing the context menu
     const syntheticPointerEvent: PointerEventData = {
-      pointerId: 999,
+      pointerId: CONTEXT_MENU_POINTER_ID,
       pointerType: 'mouse',
       clientX: event.clientX,
       clientY: event.clientY,

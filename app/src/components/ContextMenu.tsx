@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { KeyboardManager } from '../actions/KeyboardManager';
@@ -18,7 +18,10 @@ export function ContextMenu({
   context,
 }: ContextMenuProps) {
   const actionRegistry = ActionRegistry.getInstance();
-  const keyboardManager = new KeyboardManager(actionRegistry);
+  const keyboardManager = useMemo(
+    () => new KeyboardManager(actionRegistry),
+    [actionRegistry],
+  );
   const menuRef = useRef<HTMLDivElement>(null);
   const [adjustedPosition, setAdjustedPosition] = useState(position);
 
@@ -42,6 +45,9 @@ export function ContextMenu({
     actionsByCategory.set(category, [...existing, action]);
   }
 
+  // Margin in pixels from viewport edge
+  const VIEWPORT_MARGIN = 8;
+
   // Adjust position to stay within viewport
   useEffect(() => {
     if (!isOpen || !menuRef.current) {
@@ -58,17 +64,17 @@ export function ContextMenu({
 
     // Check if menu would clip off right edge
     if (x + menuRect.width > viewportWidth) {
-      x = viewportWidth - menuRect.width - 8; // 8px margin
+      x = viewportWidth - menuRect.width - VIEWPORT_MARGIN;
     }
 
     // Check if menu would clip off bottom
     if (y + menuRect.height > viewportHeight) {
-      y = viewportHeight - menuRect.height - 8; // 8px margin
+      y = viewportHeight - menuRect.height - VIEWPORT_MARGIN;
     }
 
     // Ensure menu doesn't go off left or top edge
-    x = Math.max(8, x);
-    y = Math.max(8, y);
+    x = Math.max(VIEWPORT_MARGIN, x);
+    y = Math.max(VIEWPORT_MARGIN, y);
 
     setAdjustedPosition({ x, y });
   }, [isOpen, position]);

@@ -801,10 +801,10 @@ test.describe('Selection Ownership E2E', () => {
       buttons: 0,
     });
 
-    // Wait for first object's selection to complete before starting CMD-drag
+    // Wait for first object's selection to complete and render before starting CMD-drag
     await page.evaluate(async () => {
       const __TEST_BOARD__ = (globalThis as any).__TEST_BOARD__ as TestBoard;
-      await __TEST_BOARD__.waitForSelectionSettled();
+      await __TEST_BOARD__.waitForRenderer();
     });
 
     // Now CMD-drag the second object

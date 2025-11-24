@@ -654,12 +654,18 @@ function Board({
     if (import.meta.env.DEV && showDebugUI) {
       window.__TEST_BOARD__ = {
         waitForRenderer,
+        waitForSelectionSettled,
       };
       return () => {
         delete window.__TEST_BOARD__;
       };
     }
-  }, [showDebugUI, isCanvasInitialized, waitForRenderer]);
+  }, [
+    showDebugUI,
+    isCanvasInitialized,
+    waitForRenderer,
+    waitForSelectionSettled,
+  ]);
 
   // Helper to serialize pointer events (M2-T3)
   const serializePointerEvent = (

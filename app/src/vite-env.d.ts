@@ -8,6 +8,7 @@ declare global {
     __TEST_STORE__?: YjsStore;
     __TEST_BOARD__?: {
       waitForRenderer: () => Promise<void>;
+      waitForSelectionSettled: () => Promise<void>;
     };
   }
 }

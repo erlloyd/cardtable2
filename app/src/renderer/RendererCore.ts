@@ -48,6 +48,10 @@ export abstract class RendererCore {
   private actorId: string = ''; // Set during init
   private selectedObjectIds: Set<string> = new Set();
 
+  // E2E Test API: Track pending operations that need to complete full round-trip
+  // (Renderer → Board → Store → Renderer → syncSelectionCache)
+  private pendingOperations: number = 0;
+
   // Object dragging state (M2-T5)
   private draggedObjectId: string | null = null;
   private dragStartWorldX = 0;
@@ -305,15 +309,13 @@ export abstract class RendererCore {
         }
 
         case 'flush': {
-          // E2E Test API: Wait for all pending operations to complete
-          // Instead of waiting arbitrary frames, we poll the pendingOperations counter
-          // from Board.tsx and only respond when it reaches 0
-          const initialPendingOps = message.pendingOperations ?? 0;
+          // E2E Test API: Wait for renderer's pending operations to complete
+          // This tracks the full round-trip: pointer-down → Board → Store → Renderer → syncSelectionCache
           console.log(
-            `[RendererCore] Received flush with ${initialPendingOps} pending operations`,
+            `[RendererCore] Received flush, current pendingOperations: ${this.pendingOperations}`,
           );
 
-          if (initialPendingOps === 0) {
+          if (this.pendingOperations === 0) {
             // No pending operations - respond immediately after 1 frame
             // (to ensure any in-flight rendering is complete)
             console.log(
@@ -325,30 +327,21 @@ export abstract class RendererCore {
               });
             });
           } else {
-            // Poll until Board's pending operations counter reaches 0
-            // This ensures all renderer→Board messages have been processed
-            // and the store has been updated before test continues
+            // Poll until renderer's pending operations counter reaches 0
+            // This ensures the full round-trip has completed:
+            // 1. Renderer processes pointer-down (counter++)
+            // 2. Renderer sends objects-selected/moved/unselected to Board
+            // 3. Board updates store, Yjs observer sends objects-updated back
+            // 4. Renderer receives objects-updated and calls syncSelectionCache (counter--)
             const maxPolls = 100; // Safety limit (100 frames = ~1.67s at 60fps)
             let pollCount = 0;
 
             const pollFrame = () => {
               pollCount++;
 
-              // NOTE: We can't directly check Board's counter from here
-              // Instead, we wait for a reasonable number of frames for the
-              // messages to propagate back to Board and be processed
-              // This is still deterministic because:
-              // 1. Board increments counter when sending pointer events
-              // 2. Renderer processes events and sends back objects-moved/selected
-              // 3. Board receives those messages and decrements counter
-              // 4. By waiting enough frames, we ensure message loop completes
-
-              // Wait 3 frames per pending operation (conservative)
-              const framesToWait = Math.min(initialPendingOps * 3, 20);
-
-              if (pollCount >= framesToWait) {
+              if (this.pendingOperations === 0) {
                 console.log(
-                  `[RendererCore] Flush complete after ${pollCount} frames (waited for ${framesToWait})`,
+                  `[RendererCore] Flush complete after ${pollCount} frames`,
                 );
                 this.postResponse({
                   type: 'flushed',
@@ -356,7 +349,7 @@ export abstract class RendererCore {
               } else if (pollCount >= maxPolls) {
                 // Safety timeout - warn but still resolve
                 console.warn(
-                  `[RendererCore] Flush timeout after ${maxPolls} frames (${initialPendingOps} initial pending ops)`,
+                  `[RendererCore] Flush timeout after ${maxPolls} frames (${this.pendingOperations} ops still pending)`,
                 );
                 this.postResponse({
                   type: 'flushed',
@@ -511,6 +504,10 @@ export abstract class RendererCore {
       // Sync selection cache only for messages that affect object state (M3-T3)
       // Most messages (init, resize, pointer events) don't modify objects, so no sync needed
       if (this.shouldSyncSelectionCache(message.type)) {
+        console.log(
+          '[RendererCore] [E2E-DEBUG] Message type triggers sync:',
+          message.type,
+        );
         this.syncSelectionCache();
       }
     } catch (error) {
@@ -606,6 +603,13 @@ export abstract class RendererCore {
         (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
         this.initialPinchScale;
     } else if (event.isPrimary) {
+      // E2E Test API: Increment pending operations counter
+      // This will be decremented after the full round-trip completes (syncSelectionCache)
+      this.pendingOperations++;
+      console.log(
+        `[RendererCore] pendingOperations++ → ${this.pendingOperations} (pointer-down)`,
+      );
+
       // Store pointer down event for selection logic on pointer up
       this.pointerDownEvent = event;
 
@@ -751,14 +755,41 @@ export abstract class RendererCore {
               this.pointerDownEvent &&
               (this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey);
 
+            // [E2E DEBUG] Log critical state at drag start
+            console.log(
+              '[RendererCore] [E2E-DEBUG] Drag start decision point:',
+              {
+                draggedObjectId: this.draggedObjectId,
+                isDraggedObjectSelected,
+                isMultiSelectModifier,
+                selectedObjectIds: Array.from(this.selectedObjectIds),
+                selectedCount: this.selectedObjectIds.size,
+                pointerDownEvent: this.pointerDownEvent
+                  ? {
+                      metaKey: this.pointerDownEvent.metaKey,
+                      ctrlKey: this.pointerDownEvent.ctrlKey,
+                    }
+                  : null,
+              },
+            );
+
             if (isDraggedObjectSelected) {
               // Dragging a selected object - drag all selected objects
+              console.log(
+                '[RendererCore] [E2E-DEBUG] Branch: Dragging already-selected object',
+              );
               for (const id of this.selectedObjectIds) {
                 objectsToDrag.add(id);
               }
             } else {
               // Dragging an unselected object
+              console.log(
+                '[RendererCore] [E2E-DEBUG] Branch: Dragging unselected object',
+              );
               if (isMultiSelectModifier) {
+                console.log(
+                  '[RendererCore] [E2E-DEBUG] Sub-branch: WITH modifier (CMD/Ctrl)',
+                );
                 // With modifier: add to selection and drag all
                 this.selectObjects([this.draggedObjectId], false);
                 // Drag all currently selected objects PLUS the new one
@@ -766,9 +797,20 @@ export abstract class RendererCore {
                 // We need to manually add both the existing selections and the new one
                 for (const id of this.selectedObjectIds) {
                   objectsToDrag.add(id);
+                  console.log(
+                    '[RendererCore] [E2E-DEBUG] Added from selectedObjectIds:',
+                    id,
+                  );
                 }
                 objectsToDrag.add(this.draggedObjectId);
+                console.log(
+                  '[RendererCore] [E2E-DEBUG] Added draggedObjectId:',
+                  this.draggedObjectId,
+                );
               } else {
+                console.log(
+                  '[RendererCore] [E2E-DEBUG] Sub-branch: WITHOUT modifier',
+                );
                 // Without modifier: select only this and drag just this one
                 this.selectObjects([this.draggedObjectId], true);
                 // Only drag the newly selected object
@@ -776,6 +818,11 @@ export abstract class RendererCore {
                 objectsToDrag.add(this.draggedObjectId);
               }
             }
+
+            console.log(
+              '[RendererCore] [E2E-DEBUG] Final objectsToDrag:',
+              Array.from(objectsToDrag),
+            );
 
             // Save initial positions of all objects to drag
             this.draggedObjectsStartPositions.clear();
@@ -1748,6 +1795,23 @@ export abstract class RendererCore {
       }
     });
 
+    // [E2E DEBUG] Log selection cache sync
+    const added = Array.from(this.selectedObjectIds).filter(
+      (id) => !previouslySelected.has(id),
+    );
+    const removed = Array.from(previouslySelected).filter(
+      (id) => !this.selectedObjectIds.has(id),
+    );
+    if (added.length > 0 || removed.length > 0) {
+      console.log('[RendererCore] [E2E-DEBUG] syncSelectionCache():', {
+        previousCount: previouslySelected.size,
+        newCount: this.selectedObjectIds.size,
+        added,
+        removed,
+        currentSelection: Array.from(this.selectedObjectIds),
+      });
+    }
+
     // Redraw visuals for objects whose selection state changed
     const allIds = new Set([...previouslySelected, ...this.selectedObjectIds]);
 
@@ -1760,6 +1824,16 @@ export abstract class RendererCore {
         this.redrawCardVisual(id, false, false, isSelected);
       }
     });
+
+    // E2E Test API: Decrement pending operations counter
+    // Only decrement if there was actually a change (added or removed)
+    // This matches the increment in handlePointerDown
+    if (added.length > 0 || removed.length > 0) {
+      this.pendingOperations = Math.max(0, this.pendingOperations - 1);
+      console.log(
+        `[RendererCore] pendingOperations-- → ${this.pendingOperations} (after syncSelectionCache)`,
+      );
+    }
   }
 
   /**

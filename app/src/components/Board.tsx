@@ -173,43 +173,37 @@ function Board({
 
         case 'objects-moved': {
           console.log(`[Board] ${message.updates.length} object(s) moved`);
+          console.log(
+            '[Board] [E2E-DEBUG] Received objects-moved from renderer, calling moveObjects(store)',
+          );
           // Update store with new positions (M3-T2.5 bi-directional sync)
           moveObjects(storeRef.current, message.updates);
-          // Decrement pending operations counter (E2E Test API)
-          const prevCount = pendingOperationsRef.current;
-          pendingOperationsRef.current = Math.max(
-            0,
-            pendingOperationsRef.current - 1,
-          );
-          console.log(
-            `[Board] pendingOperations-- → ${pendingOperationsRef.current} (was ${prevCount}, objects-moved)`,
-          );
+          console.log('[Board] [E2E-DEBUG] moveObjects(store) completed');
           break;
         }
 
         case 'objects-selected': {
           console.log(`[Board] ${message.ids.length} object(s) selected`);
+          console.log(
+            '[Board] [E2E-DEBUG] Received objects-selected from renderer, calling selectObjects(store) with ids:',
+            message.ids,
+          );
           // Update store with selection ownership (M3-T3)
           const result = selectObjects(
             storeRef.current,
             message.ids,
             storeRef.current.getActorId(),
           );
+          console.log('[Board] [E2E-DEBUG] selectObjects(store) completed:', {
+            selected: result.selected.length,
+            failed: result.failed.length,
+          });
           if (result.failed.length > 0) {
             console.warn(
               `[Board] Failed to select ${result.failed.length} object(s):`,
               result.failed,
             );
           }
-          // Decrement pending operations counter (E2E Test API)
-          const prevCountSel = pendingOperationsRef.current;
-          pendingOperationsRef.current = Math.max(
-            0,
-            pendingOperationsRef.current - 1,
-          );
-          console.log(
-            `[Board] pendingOperations-- → ${pendingOperationsRef.current} (was ${prevCountSel}, objects-selected)`,
-          );
 
           // M3.5.1-T4: Trigger selection settled callbacks
           if (selectionSettledCallbacksRef.current.length > 0) {
@@ -225,17 +219,17 @@ function Board({
 
         case 'objects-unselected': {
           console.log(`[Board] ${message.ids.length} object(s) unselected`);
+          console.log(
+            '[Board] [E2E-DEBUG] Received objects-unselected from renderer, calling unselectObjects(store) with ids:',
+            message.ids,
+          );
           // Release selection ownership (M3-T3)
           unselectObjects(
             storeRef.current,
             message.ids,
             storeRef.current.getActorId(),
           );
-          // Decrement pending operations counter (E2E Test API)
-          pendingOperationsRef.current = Math.max(
-            0,
-            pendingOperationsRef.current - 1,
-          );
+          console.log('[Board] [E2E-DEBUG] unselectObjects(store) completed');
 
           // M3.5.1-T4: Trigger selection settled callbacks (for context menu timing)
           if (selectionSettledCallbacksRef.current.length > 0) {
@@ -285,9 +279,7 @@ function Board({
         case 'flushed': {
           // E2E Test API: Renderer has processed all pending messages
           // Resolve all pending flush callbacks
-          console.log(
-            `[Board] Received 'flushed' message, pending ops now: ${pendingOperationsRef.current}`,
-          );
+          console.log('[Board] Received "flushed" message');
           const callbacks = flushCallbacksRef.current;
           flushCallbacksRef.current = [];
           callbacks.forEach((cb) => cb());
@@ -334,6 +326,11 @@ function Board({
       if (changes.updated.length > 0) {
         console.log(
           `[Board] Forwarding ${changes.updated.length} updated object(s)`,
+        );
+        console.log(
+          '[Board] [E2E-DEBUG] Yjs observer detected updates, forwarding objects-updated to renderer with',
+          changes.updated.length,
+          'object(s)',
         );
         renderer.sendMessage({
           type: 'objects-updated',
@@ -597,11 +594,6 @@ function Board({
   // Ref to store pending flush promises
   const flushCallbacksRef = useRef<Array<() => void>>([]);
 
-  // Ref to track pending renderer operations (E2E Test API)
-  // Incremented when forwarding pointer events to renderer
-  // Decremented when renderer sends back objects-moved/objects-selected/objects-unselected
-  const pendingOperationsRef = useRef<number>(0);
-
   // M3.5.1-T4: Ref to track pending selection operations for context menu
   const selectionSettledCallbacksRef = useRef<Array<() => void>>([]);
 
@@ -616,14 +608,10 @@ function Board({
       // Register callback for 'flushed' response
       flushCallbacksRef.current.push(resolve);
 
-      // Send flush message with current pending operations count
-      const pendingCount = pendingOperationsRef.current;
-      console.log(
-        `[Board] waitForRenderer() called with ${pendingCount} pending operations`,
-      );
+      // Send flush message - renderer will poll its own pendingOperations counter
+      console.log('[Board] waitForRenderer() called');
       const message: MainToRendererMessage = {
         type: 'flush',
-        pendingOperations: pendingCount,
       };
       rendererRef.current.sendMessage(message);
     });
@@ -632,18 +620,10 @@ function Board({
   // M3.5.1-T4: Wait for selection to settle after synthetic pointer events
   const waitForSelectionSettled = useCallback((): Promise<void> => {
     return new Promise<void>((resolve) => {
-      // If there are no pending operations, resolve immediately
-      if (pendingOperationsRef.current === 0) {
-        console.log(
-          '[Board] waitForSelectionSettled: No pending operations, resolving immediately',
-        );
-        resolve();
-        return;
-      }
-
       // Register callback to be triggered when next selection completes
+      // (triggered when Board receives objects-selected from renderer)
       console.log(
-        '[Board] waitForSelectionSettled: Registering callback for pending selection',
+        '[Board] waitForSelectionSettled: Registering callback for selection',
       );
       selectionSettledCallbacksRef.current.push(resolve);
     });
@@ -720,12 +700,6 @@ function Board({
     if (event.button === 2) {
       return;
     }
-
-    // Track pending operation (E2E Test API)
-    pendingOperationsRef.current++;
-    console.log(
-      `[Board] pendingOperations++ → ${pendingOperationsRef.current} (pointer-down)`,
-    );
 
     const message: MainToRendererMessage = {
       type: 'pointer-down',
@@ -818,12 +792,6 @@ function Board({
       syntheticPointerEvent.clientX = (event.clientX - rect.left) * dpr;
       syntheticPointerEvent.clientY = (event.clientY - rect.top) * dpr;
     }
-
-    // Track pending operation
-    pendingOperationsRef.current++;
-    console.log(
-      `[Board] Context menu: pendingOperations++ → ${pendingOperationsRef.current} (synthetic pointer-down/up)`,
-    );
 
     // Send synthetic pointer-down
     rendererRef.current.sendMessage({

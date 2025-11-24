@@ -726,12 +726,16 @@ test.describe('Selection Ownership E2E', () => {
   test('CMD-dragging an unselected object with other selected objects moves all', async ({
     page,
   }) => {
+    console.log('[E2E-TEST] ========== TEST START ==========');
+
     // Reset to test scene
+    console.log('[E2E-TEST] Step 1: Reset to test scene');
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
     await page.waitForTimeout(500);
 
     // Get two objects
+    console.log('[E2E-TEST] Step 2: Get object data from store');
     const objectsData = await page.evaluate(() => {
       const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
       const canvas = document.querySelector('canvas');
@@ -766,12 +770,14 @@ test.describe('Selection Ownership E2E', () => {
     });
 
     if (!objectsData) throw new Error('No objects found');
+    console.log('[E2E-TEST] Object data:', objectsData);
 
     const canvas = page.locator('canvas');
     const canvasBBox = await canvas.boundingBox();
     if (!canvasBBox) throw new Error('Canvas not found');
 
     // Select first object (without CMD)
+    console.log('[E2E-TEST] Step 3: Click obj1 to select it (without CMD)');
     const click1X = canvasBBox.x + objectsData.obj1.screenPos.x;
     const click1Y = canvasBBox.y + objectsData.obj1.screenPos.y;
 
@@ -802,12 +808,16 @@ test.describe('Selection Ownership E2E', () => {
     });
 
     // Wait for first object's selection to complete and render before starting CMD-drag
+    console.log('[E2E-TEST] Step 4: Wait for obj1 selection to propagate');
     await page.evaluate(async () => {
       const __TEST_BOARD__ = (globalThis as any).__TEST_BOARD__ as TestBoard;
+      console.log('[E2E-TEST] Calling waitForRenderer()...');
       await __TEST_BOARD__.waitForRenderer();
+      console.log('[E2E-TEST] waitForRenderer() completed');
     });
 
     // Now CMD-drag the second object
+    console.log('[E2E-TEST] Step 5: CMD+drag obj2');
     const click2X = canvasBBox.x + objectsData.obj2.screenPos.x;
     const click2Y = canvasBBox.y + objectsData.obj2.screenPos.y;
     const dragDeltaX = 100;

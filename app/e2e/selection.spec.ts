@@ -1,10 +1,7 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * ESLint suppressions above are necessary for Playwright E2E tests.
+ * ESLint suppression above is necessary for Playwright E2E tests.
  *
  * Playwright's page.evaluate() runs code in the browser context where:
  * 1. We must access globalThis (typed as any) to reach test-only globals like __TEST_STORE__

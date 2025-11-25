@@ -25,6 +25,10 @@ export interface BoardProps {
   connectionStatus: string;
   showDebugUI?: boolean; // M3.5.1-T0: Control debug UI visibility
   onContextMenu?: (x: number, y: number) => void; // M3.5.1-T4: Context menu integration
+  interactionMode?: 'pan' | 'select'; // M3.5.1-T5: Global menu bar integration
+  onInteractionModeChange?: (mode: 'pan' | 'select') => void; // M3.5.1-T5: Global menu bar integration
+  isMultiSelectMode?: boolean; // M3.5.1-T5: Multi-select mode for touch devices
+  onMultiSelectModeChange?: (enabled: boolean) => void; // M3.5.1-T5: Multi-select mode callback
 }
 
 function Board({
@@ -33,6 +37,10 @@ function Board({
   connectionStatus,
   showDebugUI = false,
   onContextMenu,
+  interactionMode: externalInteractionMode,
+  onInteractionModeChange,
+  isMultiSelectMode: externalIsMultiSelectMode,
+  onMultiSelectModeChange,
 }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,11 +83,21 @@ function Board({
   const [isCanvasInitialized, setIsCanvasInitialized] = useState(false);
   const [isSynced, setIsSynced] = useState(false);
   const [renderMode, setRenderMode] = useState<RenderMode | null>(null);
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
-    'pan',
-  );
+  const [internalIsMultiSelectMode, setInternalIsMultiSelectMode] =
+    useState(false);
+  const [internalInteractionMode, setInternalInteractionMode] = useState<
+    'pan' | 'select'
+  >('pan');
   const [awarenessHz, setAwarenessHz] = useState<number>(0);
+
+  // M3.5.1-T5: Use external modes if provided (for GlobalMenuBar integration)
+  const interactionMode = externalInteractionMode ?? internalInteractionMode;
+  const setInteractionMode =
+    onInteractionModeChange ?? setInternalInteractionMode;
+  const isMultiSelectMode =
+    externalIsMultiSelectMode ?? internalIsMultiSelectMode;
+  const setIsMultiSelectMode =
+    onMultiSelectModeChange ?? setInternalIsMultiSelectMode;
 
   // Initialize renderer on mount
   useEffect(() => {

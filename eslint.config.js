@@ -108,6 +108,29 @@ export default tseslint.config(
     },
   },
 
+  // E2E test files (Playwright)
+  {
+    files: ['app/e2e/**/*.spec.{ts,tsx}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      // Disable unsafe rules for page.evaluate() browser context
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
   // Shared package - Type-aware linting
   {
     files: ['shared/**/*.{ts,js}'],

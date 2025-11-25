@@ -5,6 +5,7 @@ import type { TableObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
+import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { ActionRegistry } from '../actions/ActionRegistry';
@@ -26,6 +27,9 @@ function Table() {
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
+  const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
+    'pan',
+  );
 
   // Register some test actions
   useEffect(() => {
@@ -302,21 +306,20 @@ function Table() {
             connectionStatus={connectionStatus}
             showDebugUI={false}
             onContextMenu={contextMenu.open}
+            interactionMode={interactionMode}
+            onInteractionModeChange={setInteractionMode}
           />
         ) : (
           <div>Initializing table state...</div>
         )}
       </Suspense>
 
-      {/* Command Palette Button */}
-      <button
-        type="button"
-        className="command-palette-button"
-        onClick={commandPalette.open}
-        aria-label="Open command palette"
-      >
-        Commands
-      </button>
+      {/* Global Menu Bar (M3.5.1-T5) */}
+      <GlobalMenuBar
+        interactionMode={interactionMode}
+        onInteractionModeChange={setInteractionMode}
+        onCommandPaletteOpen={commandPalette.open}
+      />
 
       {/* Command Palette */}
       <CommandPalette

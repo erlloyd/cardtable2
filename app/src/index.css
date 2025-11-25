@@ -214,6 +214,13 @@ h1 {
   margin-bottom: 0.25rem;
 }
 
+.menu-section-help {
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
 /* Menu Item */
 .menu-item {
   display: flex;

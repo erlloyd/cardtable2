@@ -30,6 +30,7 @@ function Table() {
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
   // Register some test actions
   useEffect(() => {
@@ -308,6 +309,8 @@ function Table() {
             onContextMenu={contextMenu.open}
             interactionMode={interactionMode}
             onInteractionModeChange={setInteractionMode}
+            isMultiSelectMode={isMultiSelectMode}
+            onMultiSelectModeChange={setIsMultiSelectMode}
           />
         ) : (
           <div>Initializing table state...</div>
@@ -319,6 +322,8 @@ function Table() {
         interactionMode={interactionMode}
         onInteractionModeChange={setInteractionMode}
         onCommandPaletteOpen={commandPalette.open}
+        isMultiSelectMode={isMultiSelectMode}
+        onMultiSelectModeChange={setIsMultiSelectMode}
       />
 
       {/* Command Palette */}

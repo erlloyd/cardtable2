@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Menu,
   MenuButton,
@@ -6,11 +6,14 @@ import {
   MenuItem,
   Transition,
 } from '@headlessui/react';
+import { isTouchDevice } from '../utils/detectTouch';
 
 export interface GlobalMenuBarProps {
   interactionMode: 'pan' | 'select';
   onInteractionModeChange: (mode: 'pan' | 'select') => void;
   onCommandPaletteOpen: () => void;
+  isMultiSelectMode?: boolean;
+  onMultiSelectModeChange?: (enabled: boolean) => void;
 }
 
 /**
@@ -24,9 +27,12 @@ export function GlobalMenuBar({
   interactionMode,
   onInteractionModeChange,
   onCommandPaletteOpen,
+  isMultiSelectMode = false,
+  onMultiSelectModeChange,
 }: GlobalMenuBarProps) {
   const spaceKeyDownRef = useRef(false);
   const previousModeRef = useRef<'pan' | 'select'>(interactionMode);
+  const [isTouch] = useState(isTouchDevice());
 
   // Keyboard shortcuts: V key and Space hold
   useEffect(() => {
@@ -142,6 +148,35 @@ export function GlobalMenuBar({
                     )}
                   </MenuItem>
                 </div>
+
+                {/* Multi-Select Mode Section (Touch devices only) */}
+                {isTouch && onMultiSelectModeChange && (
+                  <div className="menu-section">
+                    <div className="menu-section-label">Multi-Select Mode</div>
+                    <MenuItem>
+                      {({ focus }) => (
+                        <button
+                          type="button"
+                          className={`menu-item ${focus ? 'focused' : ''} ${isMultiSelectMode ? 'active' : ''}`}
+                          onClick={() =>
+                            onMultiSelectModeChange(!isMultiSelectMode)
+                          }
+                        >
+                          <span className="menu-item-icon">
+                            {isMultiSelectMode ? '✓' : '○'}
+                          </span>
+                          <span className="menu-item-label">
+                            {isMultiSelectMode ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </button>
+                      )}
+                    </MenuItem>
+                    <div className="menu-section-help">
+                      When enabled, touch selections add to current selection
+                      instead of replacing it
+                    </div>
+                  </div>
+                )}
 
                 {/* Future: More settings sections can be added here */}
               </MenuItems>

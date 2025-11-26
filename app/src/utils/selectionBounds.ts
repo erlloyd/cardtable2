@@ -125,10 +125,10 @@ export function getHandleDimensions(isTouch: boolean) {
  * and viewport constraints.
  *
  * @param selectionBounds - Bounds of selected objects in world coordinates
- * @param viewportWidth - Width of the viewport in pixels
- * @param viewportHeight - Height of the viewport in pixels
- * @param cameraX - Camera x position in world coordinates
- * @param cameraY - Camera y position in world coordinates
+ * @param viewportWidth - Width of the viewport in CSS pixels
+ * @param viewportHeight - Height of the viewport in CSS pixels
+ * @param cameraX - Not used (kept for backward compatibility)
+ * @param cameraY - Not used (kept for backward compatibility)
  * @param cameraScale - Camera zoom scale
  * @param handleWidth - Width of the handle in pixels
  * @param handleHeight - Height of the handle in pixels
@@ -149,17 +149,21 @@ export function calculateHandlePosition(
   expandedHeight: number,
   margin = 8,
 ): HandlePosition {
-  // Convert selection bounds from world to screen coordinates
-  const screenX =
-    (selectionBounds.x - cameraX) * cameraScale + viewportWidth / 2;
-  const screenY =
-    (selectionBounds.y - cameraY) * cameraScale + viewportHeight / 2;
-  const screenWidth = selectionBounds.width * cameraScale;
-  const screenHeight = selectionBounds.height * cameraScale;
+  // Convert selection bounds from world to DOM coordinates
+  // Formula matches PixiJS toGlobal() output divided by devicePixelRatio:
+  // domX = (worldX * scale + canvasWidth / 2) / dpr
+  // Since canvasWidth = viewportWidth * dpr, this simplifies to:
+  // domX = worldX * scale / dpr + viewportWidth / 2
+  // We assume dpr = 2 for now (TODO: pass dpr as parameter)
+  const dpr = 2;
+  const screenX = selectionBounds.x * cameraScale / dpr + viewportWidth / 2;
+  const screenY = selectionBounds.y * cameraScale / dpr + viewportHeight / 2;
+  const screenWidth = selectionBounds.width * cameraScale / dpr;
+  const screenHeight = selectionBounds.height * cameraScale / dpr;
 
-  // Default position: top-right of selection
-  let x = screenX + screenWidth + margin;
-  let y = screenY - margin;
+  // Default position: center of selection
+  let x = screenX + screenWidth / 2;
+  let y = screenY + screenHeight / 2;
 
   // Check if we need to flip to left side
   const needsLeftFlip = x + expandedWidth > viewportWidth - margin;

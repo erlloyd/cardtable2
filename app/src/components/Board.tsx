@@ -18,6 +18,7 @@ import {
   unselectObjects,
 } from '../store/YjsActions';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
+import { DebugOverlay } from './DebugOverlay';
 
 export interface BoardProps {
   tableId: string;
@@ -89,6 +90,13 @@ function Board({
     'pan' | 'select'
   >('pan');
   const [awarenessHz, setAwarenessHz] = useState<number>(0);
+  const [debugCoords, setDebugCoords] = useState<Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> | null>(null);
 
   // M3.5.1-T5: Use external modes if provided (for GlobalMenuBar integration)
   const interactionMode = externalInteractionMode ?? internalInteractionMode;
@@ -206,6 +214,10 @@ function Board({
             '[Board] [E2E-DEBUG] Received objects-selected from renderer, calling selectObjects(store) with ids:',
             message.ids,
           );
+
+          // Store screen coordinates for debug overlay (M3.5.1-T6)
+          setDebugCoords(message.screenCoords.length > 0 ? message.screenCoords : null);
+
           // Update store with selection ownership (M3-T3)
           const result = selectObjects(
             storeRef.current,
@@ -1000,6 +1012,9 @@ function Board({
           </div>
         </>
       )}
+
+      {/* M3.5.1-T6: Debug overlay for coordinate validation */}
+      <DebugOverlay screenCoords={debugCoords} />
     </div>
   );
 }

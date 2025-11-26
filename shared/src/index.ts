@@ -138,6 +138,13 @@ export type RendererToMainMessage =
   | {
       type: 'objects-selected';
       ids: string[];
+      screenCoords: Array<{
+        id: string;
+        x: number; // DOM coordinates (center of object)
+        y: number; // DOM coordinates (center of object)
+        width: number; // Object width in DOM pixels
+        height: number; // Object height in DOM pixels
+      }>;
     }
   | {
       type: 'objects-unselected';

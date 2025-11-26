@@ -8,9 +8,14 @@ import type {
   InteractionMode,
   AwarenessState,
 } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
 import { getBehaviors, getEventHandlers, type EventHandlers } from './objects';
+import { STACK_WIDTH, STACK_HEIGHT } from './objects/stack/constants';
+import { getTokenSize } from './objects/token/utils';
+import { getMatSize } from './objects/mat/utils';
+import { getCounterSize } from './objects/counter/utils';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -67,6 +72,7 @@ export abstract class RendererCore {
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
+  private devicePixelRatio = 1.0; // Set during init
 
   // Pointer tracking for gesture recognition
   private pointers: Map<
@@ -138,6 +144,9 @@ export abstract class RendererCore {
 
           // Store actor ID for deriving selection state (M3-T3)
           this.actorId = actorId;
+
+          // Store devicePixelRatio for coordinate conversions
+          this.devicePixelRatio = dpr;
 
           console.log('[RendererCore] Initializing PixiJS...');
           console.log('[RendererCore] Canvas type:', canvas.constructor.name);
@@ -660,6 +669,11 @@ export abstract class RendererCore {
    */
   private handlePointerMove(event: PointerEventData): void {
     if (!this.worldContainer || !this.app) return;
+
+    // Log cursor position: DOM coordinates vs canvas coordinates
+    const worldPos = this.worldContainer.toLocal({ x: event.clientX, y: event.clientY });
+    const canvasPos = this.worldContainer.toGlobal(worldPos);
+    console.log(`[ActionHandle-Debug] DOM: (${event.clientX}, ${event.clientY}) → Canvas: (${canvasPos.x.toFixed(1)}, ${canvasPos.y.toFixed(1)})`);
 
     const pointerInfo = this.pointers.get(event.pointerId);
 
@@ -1422,6 +1436,7 @@ export abstract class RendererCore {
             this.postResponse({
               type: 'objects-selected',
               ids: [],
+              screenCoords: [],
             });
           }
         }
@@ -1851,6 +1866,82 @@ export abstract class RendererCore {
    * @param clearPrevious - Whether to clear previous selections first
    */
   private selectObjects(ids: string[], clearPrevious = false): void {
+    // Calculate screen coordinates for all selected objects using PixiJS toScreen()
+    const screenCoords: Array<{
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> = [];
+
+    if (this.worldContainer && ids.length > 0) {
+      for (const id of ids) {
+        const visual = this.objectVisuals.get(id);
+        const obj = this.sceneManager.getObject(id);
+
+        if (visual && obj) {
+          // Use PixiJS toGlobal() to convert visual's position to canvas coordinates
+          // visual.position is in parent (worldContainer) coordinate space
+          // toGlobal converts to stage (canvas) coordinate space
+          const canvasPos = visual.toGlobal({ x: 0, y: 0 });
+
+          // Convert to DOM coordinates (divide by devicePixelRatio)
+          const domX = canvasPos.x / this.devicePixelRatio;
+          const domY = canvasPos.y / this.devicePixelRatio;
+
+          // Calculate dimensions based on object type
+          // Dimensions need to account for both camera scale and devicePixelRatio
+          let width = 0;
+          let height = 0;
+
+          if (obj._kind === ObjectKind.Stack) {
+            // Stack dimensions in world space: use actual constants
+            width = (STACK_WIDTH * this.cameraScale) / this.devicePixelRatio;
+            height = (STACK_HEIGHT * this.cameraScale) / this.devicePixelRatio;
+          } else if (
+            obj._kind === ObjectKind.Zone &&
+            obj._meta?.width &&
+            obj._meta?.height
+          ) {
+            // Zone dimensions from metadata
+            width =
+              ((obj._meta.width as number) * this.cameraScale) /
+              this.devicePixelRatio;
+            height =
+              ((obj._meta.height as number) * this.cameraScale) /
+              this.devicePixelRatio;
+          } else if (obj._kind === ObjectKind.Token) {
+            // Token dimensions (circular with radius from helper)
+            const radius =
+              (getTokenSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Mat) {
+            // Mat dimensions (circular with radius from helper)
+            const radius =
+              (getMatSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Counter) {
+            // Counter dimensions (circular with radius from helper)
+            const radius =
+              (getCounterSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          }
+
+          screenCoords.push({
+            id,
+            x: domX,
+            y: domY,
+            width,
+            height,
+          });
+        }
+      }
+    }
+
     // If clearPrevious, send unselect message for currently selected objects
     if (clearPrevious && this.selectedObjectIds.size > 0) {
       const prevSelected = Array.from(this.selectedObjectIds);
@@ -1860,11 +1951,12 @@ export abstract class RendererCore {
       });
     }
 
-    // Send selection message (store will update, then sync back to us)
+    // Send selection message with screen coordinates
     if (ids.length > 0) {
       this.postResponse({
         type: 'objects-selected',
         ids,
+        screenCoords,
       });
     }
   }

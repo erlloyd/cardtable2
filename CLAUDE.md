@@ -352,7 +352,7 @@ Polish improvements to store-renderer integration:
 - **Refactored Shape Rendering**: Created `createBaseShapeGraphic()` as single source of truth for all object shapes
 - **Fixed Hover Bug**: Objects now preserve their correct shapes during hover/selection (previously converted all to rectangles)
 - **Fixed Hit-Testing**: Updated `SceneManager.getBoundingBox()` to calculate accurate bounding boxes per object type
-  - Stacks: 100x140 card dimensions
+  - Stacks: Dimensions from `STACK_WIDTH` and `STACK_HEIGHT` constants (see `app/src/renderer/objects/stack/constants.ts`)
   - Tokens/Mats/Counters: Circular with radius from metadata
   - Zones: Width/height from metadata
 - **Enhanced Test Scene**: Reset button now spawns variety (5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters) in organized layout

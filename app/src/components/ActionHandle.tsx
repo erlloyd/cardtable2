@@ -51,22 +51,6 @@ export function ActionHandle({
   const [isTouch] = useState(isTouchDevice());
   const dimensions = getHandleDimensions(isTouch);
 
-  // Calculate position based on selection bounds
-  const selectionBounds = calculateSelectionBounds(selectedObjects);
-  const position = calculateHandlePosition(
-    selectionBounds,
-    viewportWidth,
-    viewportHeight,
-    cameraX,
-    cameraY,
-    cameraScale,
-    dimensions.handleWidth,
-    dimensions.handleHeight,
-    200, // expandedWidth estimate
-    dimensions.expandedHeight,
-    8, // margin
-  );
-
   // Show/hide handle based on selection
   useEffect(() => {
     if (selectedObjects.length === 0 || isDragging) {
@@ -108,6 +92,22 @@ export function ActionHandle({
   if (!isVisible || selectedObjects.length === 0 || isDragging) {
     return null;
   }
+
+  // Calculate position based on selection bounds (only when visible)
+  const selectionBounds = calculateSelectionBounds(selectedObjects);
+  const position = calculateHandlePosition(
+    selectionBounds,
+    viewportWidth,
+    viewportHeight,
+    cameraX,
+    cameraY,
+    cameraScale,
+    dimensions.handleWidth,
+    dimensions.handleHeight,
+    200, // expandedWidth estimate
+    dimensions.expandedHeight,
+    8, // margin
+  );
 
   // Consistent icon component for all selections
   const IconComponent = Sparkles;
@@ -182,7 +182,7 @@ export function ActionHandle({
         height: isExpanded
           ? dimensions.expandedHeight
           : dimensions.handleHeight,
-        transform: position.flipToLeft ? 'translateX(-100%)' : 'none',
+        transform: 'translate(-50%, -50%)',
       }}
     >
       {!isExpanded ? (

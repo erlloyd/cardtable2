@@ -6,6 +6,7 @@ import { ObjectKind } from '@cardtable2/shared';
 import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
+import { ActionHandle } from '../components/ActionHandle';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { ActionRegistry } from '../actions/ActionRegistry';
@@ -341,6 +342,19 @@ function Table() {
         position={contextMenu.position}
         onClose={contextMenu.close}
         context={actionContext}
+      />
+
+      {/* Action Handle */}
+      <ActionHandle
+        selectedObjects={selectionState.objects}
+        actionContext={actionContext}
+        isDragging={false}
+        onActionExecuted={commandPalette.recordAction}
+        viewportWidth={window.innerWidth}
+        viewportHeight={window.innerHeight}
+        cameraX={0}
+        cameraY={0}
+        cameraScale={1}
       />
     </div>
   );

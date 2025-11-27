@@ -2000,6 +2000,10 @@ export abstract class RendererCore {
    * Called when Board component requests coordinates after camera operations.
    */
   private handleRequestScreenCoords(ids: string[]): void {
+    console.log(
+      '[Overlay-Debug] handleRequestScreenCoords called with ids:',
+      ids,
+    );
     const screenCoords: Array<{
       id: string;
       x: number;
@@ -2068,6 +2072,10 @@ export abstract class RendererCore {
     }
 
     // Send screen coordinates response
+    console.log(
+      '[Overlay-Debug] Sending screen-coords response:',
+      screenCoords,
+    );
     this.postResponse({
       type: 'screen-coords',
       screenCoords,

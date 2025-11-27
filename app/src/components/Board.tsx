@@ -19,6 +19,7 @@ import {
 } from '../store/YjsActions';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { DebugOverlay } from './DebugOverlay';
+import { getSelectedObjectIds } from '../store/YjsSelectors';
 
 export interface BoardProps {
   tableId: string;
@@ -98,6 +99,7 @@ function Board({
     height: number;
   }> | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false); // M3.5.1-T6: Hide overlay during pan/zoom
+  const [isWaitingForCoords, setIsWaitingForCoords] = useState(false); // M3.5.1-T6: Waiting for fresh coordinates after camera op
 
   // M3.5.1-T5: Use external modes if provided (for GlobalMenuBar integration)
   const interactionMode = externalInteractionMode ?? internalInteractionMode;
@@ -217,7 +219,9 @@ function Board({
           );
 
           // Store screen coordinates for debug overlay (M3.5.1-T6)
-          setDebugCoords(message.screenCoords.length > 0 ? message.screenCoords : null);
+          setDebugCoords(
+            message.screenCoords.length > 0 ? message.screenCoords : null,
+          );
 
           // Update store with selection ownership (M3-T3)
           const result = selectObjects(
@@ -318,13 +322,20 @@ function Board({
         }
 
         case 'pan-ended': {
-          // M3.5.1-T6: Pan ended - show overlay with updated coordinates
+          // M3.5.1-T6: Pan ended - request fresh coordinates before showing overlay
           setIsCameraActive(false);
-          // If overlay was showing before pan, request fresh screen coordinates
-          if (debugCoords && debugCoords.length > 0) {
+          // Get currently selected objects from store (source of truth)
+          const selectedIds = getSelectedObjectIds(storeRef.current);
+          // If there are selected objects, request fresh screen coordinates
+          if (selectedIds.length > 0) {
+            console.log(
+              '[Overlay-Debug] pan-ended, requesting coords for:',
+              selectedIds,
+            );
+            setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
             rendererRef.current?.sendMessage({
               type: 'request-screen-coords',
-              ids: debugCoords.map((c) => c.id),
+              ids: selectedIds,
             });
           }
           break;
@@ -337,13 +348,20 @@ function Board({
         }
 
         case 'zoom-ended': {
-          // M3.5.1-T6: Zoom ended - show overlay with updated coordinates
+          // M3.5.1-T6: Zoom ended - request fresh coordinates before showing overlay
           setIsCameraActive(false);
-          // If overlay was showing before zoom, request fresh screen coordinates
-          if (debugCoords && debugCoords.length > 0) {
+          // Get currently selected objects from store (source of truth)
+          const selectedIds = getSelectedObjectIds(storeRef.current);
+          // If there are selected objects, request fresh screen coordinates
+          if (selectedIds.length > 0) {
+            console.log(
+              '[Overlay-Debug] zoom-ended, requesting coords for:',
+              selectedIds,
+            );
+            setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
             rendererRef.current?.sendMessage({
               type: 'request-screen-coords',
-              ids: debugCoords.map((c) => c.id),
+              ids: selectedIds,
             });
           }
           break;
@@ -356,21 +374,35 @@ function Board({
         }
 
         case 'object-drag-ended': {
-          // M3.5.1-T6: Object drag ended - show overlay with updated coordinates
+          // M3.5.1-T6: Object drag ended - request fresh coordinates before showing overlay
           setIsCameraActive(false);
-          // If overlay was showing before drag, request fresh screen coordinates
-          if (debugCoords && debugCoords.length > 0) {
+          // Get currently selected objects from store (source of truth)
+          const selectedIds = getSelectedObjectIds(storeRef.current);
+          // If there are selected objects, request fresh screen coordinates
+          if (selectedIds.length > 0) {
+            console.log(
+              '[Overlay-Debug] object-drag-ended, requesting coords for:',
+              selectedIds,
+            );
+            setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
             rendererRef.current?.sendMessage({
               type: 'request-screen-coords',
-              ids: debugCoords.map((c) => c.id),
+              ids: selectedIds,
             });
           }
           break;
         }
 
         case 'screen-coords': {
-          // M3.5.1-T6: Update overlay coordinates
-          setDebugCoords(message.screenCoords.length > 0 ? message.screenCoords : null);
+          // M3.5.1-T6: Update overlay coordinates (fresh coordinates received)
+          console.log(
+            '[Overlay-Debug] Received screen-coords:',
+            message.screenCoords,
+          );
+          setDebugCoords(
+            message.screenCoords.length > 0 ? message.screenCoords : null,
+          );
+          setIsWaitingForCoords(false); // Fresh coords received, can show overlay now
           break;
         }
 
@@ -1081,10 +1113,11 @@ function Board({
         </>
       )}
 
-      {/* M3.5.1-T6: Debug overlay for coordinate validation (hide during camera operations) */}
-      {!isCameraActive && debugCoords && debugCoords.length > 0 && (
-        <DebugOverlay screenCoords={debugCoords} />
-      )}
+      {/* M3.5.1-T6: Debug overlay for coordinate validation (hide during camera operations and while waiting for fresh coords) */}
+      {!isCameraActive &&
+        !isWaitingForCoords &&
+        debugCoords &&
+        debugCoords.length > 0 && <DebugOverlay screenCoords={debugCoords} />}
     </div>
   );
 }

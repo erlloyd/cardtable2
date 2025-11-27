@@ -18,8 +18,9 @@ import {
   unselectObjects,
 } from '../store/YjsActions';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
-import { DebugOverlay } from './DebugOverlay';
 import { getSelectedObjectIds } from '../store/YjsSelectors';
+import { ActionHandle } from './ActionHandle';
+import type { ActionContext } from '../actions/types';
 
 export interface BoardProps {
   tableId: string;
@@ -31,6 +32,8 @@ export interface BoardProps {
   onInteractionModeChange?: (mode: 'pan' | 'select') => void; // M3.5.1-T5: Global menu bar integration
   isMultiSelectMode?: boolean; // M3.5.1-T5: Multi-select mode for touch devices
   onMultiSelectModeChange?: (enabled: boolean) => void; // M3.5.1-T5: Multi-select mode callback
+  actionContext?: ActionContext | null; // M3.5.1-T6: Action context for ActionHandle (optional for tests)
+  onActionExecuted?: (actionId: string) => void; // M3.5.1-T6: Callback when action executed
 }
 
 function Board({
@@ -43,6 +46,8 @@ function Board({
   onInteractionModeChange,
   isMultiSelectMode: externalIsMultiSelectMode,
   onMultiSelectModeChange,
+  actionContext,
+  onActionExecuted,
 }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -328,10 +333,6 @@ function Board({
           const selectedIds = getSelectedObjectIds(storeRef.current);
           // If there are selected objects, request fresh screen coordinates
           if (selectedIds.length > 0) {
-            console.log(
-              '[Overlay-Debug] pan-ended, requesting coords for:',
-              selectedIds,
-            );
             setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
             rendererRef.current?.sendMessage({
               type: 'request-screen-coords',
@@ -354,10 +355,6 @@ function Board({
           const selectedIds = getSelectedObjectIds(storeRef.current);
           // If there are selected objects, request fresh screen coordinates
           if (selectedIds.length > 0) {
-            console.log(
-              '[Overlay-Debug] zoom-ended, requesting coords for:',
-              selectedIds,
-            );
             setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
             rendererRef.current?.sendMessage({
               type: 'request-screen-coords',
@@ -380,10 +377,6 @@ function Board({
           const selectedIds = getSelectedObjectIds(storeRef.current);
           // If there are selected objects, request fresh screen coordinates
           if (selectedIds.length > 0) {
-            console.log(
-              '[Overlay-Debug] object-drag-ended, requesting coords for:',
-              selectedIds,
-            );
             setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
             rendererRef.current?.sendMessage({
               type: 'request-screen-coords',
@@ -395,10 +388,6 @@ function Board({
 
         case 'screen-coords': {
           // M3.5.1-T6: Update overlay coordinates (fresh coordinates received)
-          console.log(
-            '[Overlay-Debug] Received screen-coords:',
-            message.screenCoords,
-          );
           setDebugCoords(
             message.screenCoords.length > 0 ? message.screenCoords : null,
           );
@@ -1113,11 +1102,19 @@ function Board({
         </>
       )}
 
-      {/* M3.5.1-T6: Debug overlay for coordinate validation (hide during camera operations and while waiting for fresh coords) */}
+      {/* M3.5.1-T6: Action Handle (positioned above debug overlay center) */}
       {!isCameraActive &&
         !isWaitingForCoords &&
         debugCoords &&
-        debugCoords.length > 0 && <DebugOverlay screenCoords={debugCoords} />}
+        debugCoords.length > 0 &&
+        actionContext && (
+          <ActionHandle
+            key={debugCoords.map((c) => c.id).join(',')}
+            screenCoords={debugCoords}
+            actionContext={actionContext}
+            onActionExecuted={onActionExecuted}
+          />
+        )}
     </div>
   );
 }

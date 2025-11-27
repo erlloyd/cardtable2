@@ -1,24 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import type { TableObject } from '@cardtable2/shared';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
-import {
-  getHandleDimensions,
-  calculateSelectionBounds,
-  calculateHandlePosition,
-} from '../utils/selectionBounds';
+import { getHandleDimensions } from '../utils/selectionBounds';
 import { isTouchDevice } from '../utils/detectTouch';
 import { Sparkles } from 'lucide-react';
 
 export interface ActionHandleProps {
-  selectedObjects: TableObject[];
+  screenCoords: Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>; // M3.5.1-T6: Screen coordinates from renderer
   actionContext: ActionContext | null;
-  isDragging: boolean; // Hide handle during drag
   onActionExecuted?: (actionId: string) => void;
-  // Viewport and camera info for positioning
-  viewportWidth: number;
-  viewportHeight: number;
-  cameraScale: number;
 }
 
 /**
@@ -27,36 +23,20 @@ export interface ActionHandleProps {
  *
  * - Collapsed by default: small handle with context-aware icon
  * - Expands on click/hover/E key: shows action buttons
- * - Smart positioning: avoids viewport edges
+ * - Positioned above the center of the first selected object
  * - Touch-aware: larger hit targets on touch devices
- * - Follows selection with smooth animation
+ * - Hides during camera operations (managed by parent)
  */
 export function ActionHandle({
-  selectedObjects,
+  screenCoords,
   actionContext,
-  isDragging,
   onActionExecuted,
-  viewportWidth,
-  viewportHeight,
-  cameraScale,
 }: ActionHandleProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
   const hoverTimeoutRef = useRef<number | null>(null);
   const leaveTimeoutRef = useRef<number | null>(null);
   const [isTouch] = useState(isTouchDevice());
   const dimensions = getHandleDimensions(isTouch);
-
-  // Show/hide handle based on selection
-  useEffect(() => {
-    if (selectedObjects.length === 0 || isDragging) {
-      setIsVisible(false);
-      setIsExpanded(false);
-      return;
-    }
-
-    setIsVisible(true);
-  }, [selectedObjects, isDragging]);
 
   // Keyboard shortcuts: E to toggle, Escape to collapse
   useEffect(() => {
@@ -70,10 +50,8 @@ export function ActionHandle({
       }
 
       if (event.key === 'e' || event.key === 'E') {
-        if (selectedObjects.length > 0 && !isDragging) {
-          event.preventDefault();
-          setIsExpanded((prev) => !prev);
-        }
+        event.preventDefault();
+        setIsExpanded((prev) => !prev);
       } else if (event.key === 'Escape' && isExpanded) {
         event.preventDefault();
         setIsExpanded(false);
@@ -82,26 +60,53 @@ export function ActionHandle({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedObjects, isDragging, isExpanded]);
+  }, [isExpanded]);
 
-  // Hide when no selection or dragging
-  if (!isVisible || selectedObjects.length === 0 || isDragging) {
-    return null;
+  // Calculate smart positioning: try top, right, left, bottom, or center
+  // Use first object's screen coordinates from renderer
+  const firstCoord = screenCoords[0];
+  const margin = isTouch ? 30 : 25; // Extra space for touch devices
+
+  // Estimate handle dimensions
+  const handleWidth = isExpanded ? 250 : dimensions.handleWidth;
+  const handleHeight = isExpanded
+    ? dimensions.expandedHeight
+    : dimensions.handleHeight;
+
+  // Try positioning above (preferred)
+  let handleX = firstCoord.x;
+  let handleY = firstCoord.y - firstCoord.height / 2 - margin;
+
+  // Check if top position is clipped
+  const topClipped = handleY - handleHeight / 2 < 0;
+
+  if (topClipped) {
+    // Try right
+    const rightX = firstCoord.x + firstCoord.width / 2 + margin;
+    const rightY = firstCoord.y;
+    if (rightX + handleWidth / 2 <= window.innerWidth) {
+      handleX = rightX;
+      handleY = rightY;
+    } else {
+      // Try left
+      const leftX = firstCoord.x - firstCoord.width / 2 - margin;
+      if (leftX - handleWidth / 2 >= 0) {
+        handleX = leftX;
+        handleY = firstCoord.y;
+      } else {
+        // Try bottom
+        const bottomY = firstCoord.y + firstCoord.height / 2 + margin;
+        if (bottomY + handleHeight / 2 <= window.innerHeight) {
+          handleX = firstCoord.x;
+          handleY = bottomY;
+        } else {
+          // All edges clipped - center on object
+          handleX = firstCoord.x;
+          handleY = firstCoord.y;
+        }
+      }
+    }
   }
-
-  // Calculate position based on selection bounds (only when visible)
-  const selectionBounds = calculateSelectionBounds(selectedObjects);
-  const position = calculateHandlePosition(
-    selectionBounds,
-    viewportWidth,
-    viewportHeight,
-    cameraScale,
-    dimensions.handleWidth,
-    dimensions.handleHeight,
-    200, // expandedWidth estimate
-    dimensions.expandedHeight,
-    8, // margin
-  );
 
   // Consistent icon component for all selections
   const IconComponent = Sparkles;
@@ -163,15 +168,15 @@ export function ActionHandle({
 
   return (
     <div
-      className={`action-handle ${isExpanded ? 'expanded' : 'collapsed'} ${isTouch ? 'touch' : 'desktop'} ${position.flipToLeft ? 'flip-left' : ''} ${position.flipToBottom ? 'flip-bottom' : ''}`}
+      className={`action-handle ${isExpanded ? 'expanded' : 'collapsed'} ${isTouch ? 'touch' : 'desktop'}`}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       data-testid="action-handle"
       style={{
         position: 'fixed',
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        left: `${handleX}px`,
+        top: `${handleY}px`,
         width: isExpanded ? 'auto' : dimensions.handleWidth,
         height: isExpanded
           ? dimensions.expandedHeight

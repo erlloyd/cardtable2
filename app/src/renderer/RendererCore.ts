@@ -16,6 +16,7 @@ import { STACK_WIDTH, STACK_HEIGHT } from './objects/stack/constants';
 import { getTokenSize } from './objects/token/utils';
 import { getMatSize } from './objects/mat/utils';
 import { getCounterSize } from './objects/counter/utils';
+import { debounce } from '../utils/debounce';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -123,6 +124,11 @@ export abstract class RendererCore {
   private awarenessUpdateTimestamps: number[] = []; // Rolling window of update timestamps (last 1 second)
   private lastReportedAwarenessHz: number = 0; // Last reported Hz (to avoid spamming updates)
   private lastAwarenessHzReportTime: number = 0; // When we last sent an Hz update
+
+  // Zoom end debounce (M3.5.1-T6)
+  private debouncedZoomEnd = debounce(() => {
+    this.postResponse({ type: 'zoom-ended' });
+  }, 200);
 
   /**
    * Send a response message back to the main thread.
@@ -500,6 +506,12 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'request-screen-coords': {
+          // M3.5.1-T6: Calculate and send screen coordinates on demand
+          this.handleRequestScreenCoords(message.ids);
+          break;
+        }
+
         default: {
           // Unknown message type
           this.postResponse({
@@ -590,6 +602,9 @@ export abstract class RendererCore {
       this.draggedObjectId = null;
       this.isPinching = true;
 
+      // M3.5.1-T6: Notify Board that zoom started (pinch)
+      this.postResponse({ type: 'zoom-started' });
+
       // Calculate initial pinch distance and LOCK the midpoint
       const pointerArray = Array.from(this.pointers.values());
       this.initialPinchDistance = this.getPointerDistance(
@@ -670,11 +685,6 @@ export abstract class RendererCore {
   private handlePointerMove(event: PointerEventData): void {
     if (!this.worldContainer || !this.app) return;
 
-    // Log cursor position: DOM coordinates vs canvas coordinates
-    const worldPos = this.worldContainer.toLocal({ x: event.clientX, y: event.clientY });
-    const canvasPos = this.worldContainer.toGlobal(worldPos);
-    console.log(`[ActionHandle-Debug] DOM: (${event.clientX}, ${event.clientY}) → Canvas: (${canvasPos.x.toFixed(1)}, ${canvasPos.y.toFixed(1)})`);
-
     const pointerInfo = this.pointers.get(event.pointerId);
 
     // Only handle gestures if pointer is being tracked (after pointer-down)
@@ -752,6 +762,9 @@ export abstract class RendererCore {
           } else if (this.draggedObjectId) {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
+
+            // M3.5.1-T6: Notify Board that object drag started
+            this.postResponse({ type: 'object-drag-started' });
 
             // Generate unique gesture ID for drag awareness (M5-T1)
             this.currentDragGestureId = `drag-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -891,6 +904,9 @@ export abstract class RendererCore {
           } else {
             // No object - start camera pan
             this.isDragging = true;
+
+            // M3.5.1-T6: Notify Board that pan started
+            this.postResponse({ type: 'pan-started' });
           }
         }
 
@@ -1511,6 +1527,9 @@ export abstract class RendererCore {
           });
         }
 
+        // M3.5.1-T6: Notify Board that object drag ended
+        this.postResponse({ type: 'object-drag-ended' });
+
         // Clear drag state
         this.isObjectDragging = false;
         this.draggedObjectId = null;
@@ -1527,7 +1546,13 @@ export abstract class RendererCore {
       }
 
       // Clear camera drag
+      const wasPanning = this.isDragging;
       this.isDragging = false;
+
+      // M3.5.1-T6: Notify Board that pan ended
+      if (wasPanning) {
+        this.postResponse({ type: 'pan-ended' });
+      }
     }
   }
 
@@ -1547,6 +1572,9 @@ export abstract class RendererCore {
     if (this.isPinching && this.pointers.size < 2) {
       this.isPinching = false;
       console.log('[RendererCore] Pinch gesture ended');
+
+      // M3.5.1-T6: Notify Board that zoom ended
+      this.postResponse({ type: 'zoom-ended' });
 
       // Clear rectangle selection state to prevent ghost selections
       this.rectangleSelectStartX = 0;
@@ -1659,6 +1687,9 @@ export abstract class RendererCore {
   private handleWheel(event: WheelEventData): void {
     if (!this.worldContainer || !this.app) return;
 
+    // M3.5.1-T6: Notify Board that zoom started
+    this.postResponse({ type: 'zoom-started' });
+
     // Mouse position is already canvas-relative (converted in Board.tsx)
     const mouseX = event.clientX;
     const mouseY = event.clientY;
@@ -1680,6 +1711,9 @@ export abstract class RendererCore {
 
     // Request render
     this.app.renderer.render(this.app.stage);
+
+    // M3.5.1-T6: Debounce zoom-ended message (150ms after last wheel event)
+    this.debouncedZoomEnd();
   }
 
   /**
@@ -1959,6 +1993,85 @@ export abstract class RendererCore {
         screenCoords,
       });
     }
+  }
+
+  /**
+   * Calculate and send screen coordinates for requested objects (M3.5.1-T6).
+   * Called when Board component requests coordinates after camera operations.
+   */
+  private handleRequestScreenCoords(ids: string[]): void {
+    const screenCoords: Array<{
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> = [];
+
+    if (this.worldContainer && ids.length > 0) {
+      for (const id of ids) {
+        const visual = this.objectVisuals.get(id);
+        const obj = this.sceneManager.getObject(id);
+
+        if (visual && obj) {
+          // Use PixiJS toGlobal() to convert visual's position to canvas coordinates
+          const canvasPos = visual.toGlobal({ x: 0, y: 0 });
+
+          // Convert to DOM coordinates (divide by devicePixelRatio)
+          const domX = canvasPos.x / this.devicePixelRatio;
+          const domY = canvasPos.y / this.devicePixelRatio;
+
+          // Calculate dimensions based on object type
+          let width = 0;
+          let height = 0;
+
+          if (obj._kind === ObjectKind.Stack) {
+            width = (STACK_WIDTH * this.cameraScale) / this.devicePixelRatio;
+            height = (STACK_HEIGHT * this.cameraScale) / this.devicePixelRatio;
+          } else if (
+            obj._kind === ObjectKind.Zone &&
+            obj._meta?.width &&
+            obj._meta?.height
+          ) {
+            width =
+              ((obj._meta.width as number) * this.cameraScale) /
+              this.devicePixelRatio;
+            height =
+              ((obj._meta.height as number) * this.cameraScale) /
+              this.devicePixelRatio;
+          } else if (obj._kind === ObjectKind.Token) {
+            const radius =
+              (getTokenSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Mat) {
+            const radius =
+              (getMatSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Counter) {
+            const radius =
+              (getCounterSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          }
+
+          screenCoords.push({
+            id,
+            x: domX,
+            y: domY,
+            width,
+            height,
+          });
+        }
+      }
+    }
+
+    // Send screen coordinates response
+    this.postResponse({
+      type: 'screen-coords',
+      screenCoords,
+    });
   }
 
   /**

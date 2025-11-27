@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ActionHandle } from './ActionHandle';
-import type { TableObject } from '@cardtable2/shared';
+import type { TableObject, StackObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
@@ -42,11 +42,15 @@ describe('ActionHandle', () => {
     // Create test object
     testStack = {
       _kind: ObjectKind.Stack,
-      _id: 'stack1',
       _pos: { x: 100, y: 200, r: 0 },
       _sortKey: 'a0',
       _selectedBy: 'actor1',
-    };
+      _containerId: null,
+      _locked: false,
+      _meta: {},
+      _cards: ['card1'],
+      _faceUp: true,
+    } as StackObject;
 
     // Create mock action context
     mockActionContext = {
@@ -164,10 +168,12 @@ describe('ActionHandle', () => {
     it('should show token icon for single token', () => {
       const token: TableObject = {
         _kind: ObjectKind.Token,
-        _id: 'token1',
-        _pos: { x: 100, y: 200 },
+        _pos: { x: 100, y: 200, r: 0 },
         _sortKey: 'a0',
         _selectedBy: 'actor1',
+        _containerId: null,
+        _locked: false,
+        _meta: {},
       };
 
       render(
@@ -187,10 +193,12 @@ describe('ActionHandle', () => {
     it('should show zone icon for single zone', () => {
       const zone: TableObject = {
         _kind: ObjectKind.Zone,
-        _id: 'zone1',
-        _pos: { x: 100, y: 200 },
+        _pos: { x: 100, y: 200, r: 0 },
         _sortKey: 'a0',
         _selectedBy: 'actor1',
+        _containerId: null,
+        _locked: false,
+        _meta: {},
       };
 
       render(
@@ -208,12 +216,16 @@ describe('ActionHandle', () => {
     });
 
     it('should show count for multiple objects', () => {
-      const stack2: TableObject = {
+      const stack2: StackObject = {
         _kind: ObjectKind.Stack,
-        _id: 'stack2',
-        _pos: { x: 200, y: 300 },
+        _pos: { x: 200, y: 300, r: 0 },
         _sortKey: 'a1',
         _selectedBy: 'actor1',
+        _containerId: null,
+        _locked: false,
+        _meta: {},
+        _cards: ['card2'],
+        _faceUp: true,
       };
 
       render(

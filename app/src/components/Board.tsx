@@ -97,6 +97,7 @@ function Board({
     width: number;
     height: number;
   }> | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false); // M3.5.1-T6: Hide overlay during pan/zoom
 
   // M3.5.1-T5: Use external modes if provided (for GlobalMenuBar integration)
   const interactionMode = externalInteractionMode ?? internalInteractionMode;
@@ -253,6 +254,10 @@ function Board({
             '[Board] [E2E-DEBUG] Received objects-unselected from renderer, calling unselectObjects(store) with ids:',
             message.ids,
           );
+
+          // M3.5.1-T6: Clear debug overlay coordinates
+          setDebugCoords(null);
+
           // Release selection ownership (M3-T3)
           unselectObjects(
             storeRef.current,
@@ -303,6 +308,69 @@ function Board({
         case 'awareness-update-rate': {
           // M5-T1: Update awareness Hz display
           setAwarenessHz(message.hz);
+          break;
+        }
+
+        case 'pan-started': {
+          // M3.5.1-T6: Hide overlay during pan
+          setIsCameraActive(true);
+          break;
+        }
+
+        case 'pan-ended': {
+          // M3.5.1-T6: Pan ended - show overlay with updated coordinates
+          setIsCameraActive(false);
+          // If overlay was showing before pan, request fresh screen coordinates
+          if (debugCoords && debugCoords.length > 0) {
+            rendererRef.current?.sendMessage({
+              type: 'request-screen-coords',
+              ids: debugCoords.map((c) => c.id),
+            });
+          }
+          break;
+        }
+
+        case 'zoom-started': {
+          // M3.5.1-T6: Hide overlay during zoom
+          setIsCameraActive(true);
+          break;
+        }
+
+        case 'zoom-ended': {
+          // M3.5.1-T6: Zoom ended - show overlay with updated coordinates
+          setIsCameraActive(false);
+          // If overlay was showing before zoom, request fresh screen coordinates
+          if (debugCoords && debugCoords.length > 0) {
+            rendererRef.current?.sendMessage({
+              type: 'request-screen-coords',
+              ids: debugCoords.map((c) => c.id),
+            });
+          }
+          break;
+        }
+
+        case 'object-drag-started': {
+          // M3.5.1-T6: Hide overlay during object drag
+          setIsCameraActive(true);
+          break;
+        }
+
+        case 'object-drag-ended': {
+          // M3.5.1-T6: Object drag ended - show overlay with updated coordinates
+          setIsCameraActive(false);
+          // If overlay was showing before drag, request fresh screen coordinates
+          if (debugCoords && debugCoords.length > 0) {
+            rendererRef.current?.sendMessage({
+              type: 'request-screen-coords',
+              ids: debugCoords.map((c) => c.id),
+            });
+          }
+          break;
+        }
+
+        case 'screen-coords': {
+          // M3.5.1-T6: Update overlay coordinates
+          setDebugCoords(message.screenCoords.length > 0 ? message.screenCoords : null);
           break;
         }
 
@@ -1013,8 +1081,10 @@ function Board({
         </>
       )}
 
-      {/* M3.5.1-T6: Debug overlay for coordinate validation */}
-      <DebugOverlay screenCoords={debugCoords} />
+      {/* M3.5.1-T6: Debug overlay for coordinate validation (hide during camera operations) */}
+      {!isCameraActive && debugCoords && debugCoords.length > 0 && (
+        <DebugOverlay screenCoords={debugCoords} />
+      )}
     </div>
   );
 }

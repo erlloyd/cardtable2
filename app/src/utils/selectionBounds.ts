@@ -140,8 +140,6 @@ export function calculateHandlePosition(
   selectionBounds: Bounds,
   viewportWidth: number,
   viewportHeight: number,
-  cameraX: number,
-  cameraY: number,
   cameraScale: number,
   handleWidth: number,
   handleHeight: number,

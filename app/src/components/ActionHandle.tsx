@@ -18,8 +18,6 @@ export interface ActionHandleProps {
   // Viewport and camera info for positioning
   viewportWidth: number;
   viewportHeight: number;
-  cameraX: number;
-  cameraY: number;
   cameraScale: number;
 }
 
@@ -40,8 +38,6 @@ export function ActionHandle({
   onActionExecuted,
   viewportWidth,
   viewportHeight,
-  cameraX,
-  cameraY,
   cameraScale,
 }: ActionHandleProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -99,8 +95,6 @@ export function ActionHandle({
     selectionBounds,
     viewportWidth,
     viewportHeight,
-    cameraX,
-    cameraY,
     cameraScale,
     dimensions.handleWidth,
     dimensions.handleHeight,

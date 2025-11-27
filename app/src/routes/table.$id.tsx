@@ -352,8 +352,6 @@ function Table() {
         onActionExecuted={commandPalette.recordAction}
         viewportWidth={window.innerWidth}
         viewportHeight={window.innerHeight}
-        cameraX={0}
-        cameraY={0}
         cameraScale={1}
       />
     </div>

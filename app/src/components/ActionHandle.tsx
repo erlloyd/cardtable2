@@ -216,7 +216,7 @@ export function ActionHandle({
               className="action-button more-button"
               onClick={(e) => {
                 e.stopPropagation();
-                // TODO: Open more menu
+                // TODO(M3.5.1-T7): Implement dropdown menu for additional actions
                 console.log('More menu', moreActions);
               }}
               title="More actions"

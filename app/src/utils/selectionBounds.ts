@@ -124,11 +124,13 @@ export function getHandleDimensions(isTouch: boolean) {
  * Calculate optimal position for action handle based on selection bounds
  * and viewport constraints.
  *
+ * @deprecated Use screenCoords from renderer instead (M3.5.1-T6)
+ * ActionHandle now receives accurate screen coordinates directly from PixiJS via message passing.
+ * This function is kept for backward compatibility only.
+ *
  * @param selectionBounds - Bounds of selected objects in world coordinates
  * @param viewportWidth - Width of the viewport in CSS pixels
  * @param viewportHeight - Height of the viewport in CSS pixels
- * @param cameraX - Not used (kept for backward compatibility)
- * @param cameraY - Not used (kept for backward compatibility)
  * @param cameraScale - Camera zoom scale
  * @param handleWidth - Width of the handle in pixels
  * @param handleHeight - Height of the handle in pixels
@@ -148,16 +150,12 @@ export function calculateHandlePosition(
   margin = 8,
 ): HandlePosition {
   // Convert selection bounds from world to DOM coordinates
-  // Formula matches PixiJS toGlobal() output divided by devicePixelRatio:
-  // domX = (worldX * scale + canvasWidth / 2) / dpr
-  // Since canvasWidth = viewportWidth * dpr, this simplifies to:
-  // domX = worldX * scale / dpr + viewportWidth / 2
-  // We assume dpr = 2 for now (TODO: pass dpr as parameter)
-  const dpr = 2;
-  const screenX = selectionBounds.x * cameraScale / dpr + viewportWidth / 2;
-  const screenY = selectionBounds.y * cameraScale / dpr + viewportHeight / 2;
-  const screenWidth = selectionBounds.width * cameraScale / dpr;
-  const screenHeight = selectionBounds.height * cameraScale / dpr;
+  // Formula matches PixiJS toGlobal() output divided by devicePixelRatio
+  const dpr = window.devicePixelRatio || 2;
+  const screenX = (selectionBounds.x * cameraScale) / dpr + viewportWidth / 2;
+  const screenY = (selectionBounds.y * cameraScale) / dpr + viewportHeight / 2;
+  const screenWidth = (selectionBounds.width * cameraScale) / dpr;
+  const screenHeight = (selectionBounds.height * cameraScale) / dpr;
 
   // Default position: center of selection
   let x = screenX + screenWidth / 2;

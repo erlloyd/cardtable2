@@ -79,4 +79,3 @@ export function throttle<T extends (...args: any[]) => void>(
  * Provides smooth remote drag/cursor updates with minimal network overhead
  */
 export const AWARENESS_UPDATE_INTERVAL_MS = 33;
-

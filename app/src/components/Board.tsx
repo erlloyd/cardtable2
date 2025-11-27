@@ -207,21 +207,13 @@ function Board({
 
         case 'objects-moved': {
           console.log(`[Board] ${message.updates.length} object(s) moved`);
-          console.log(
-            '[Board] [E2E-DEBUG] Received objects-moved from renderer, calling moveObjects(store)',
-          );
           // Update store with new positions (M3-T2.5 bi-directional sync)
           moveObjects(storeRef.current, message.updates);
-          console.log('[Board] [E2E-DEBUG] moveObjects(store) completed');
           break;
         }
 
         case 'objects-selected': {
           console.log(`[Board] ${message.ids.length} object(s) selected`);
-          console.log(
-            '[Board] [E2E-DEBUG] Received objects-selected from renderer, calling selectObjects(store) with ids:',
-            message.ids,
-          );
 
           // Store screen coordinates for debug overlay (M3.5.1-T6)
           setDebugCoords(
@@ -234,10 +226,6 @@ function Board({
             message.ids,
             storeRef.current.getActorId(),
           );
-          console.log('[Board] [E2E-DEBUG] selectObjects(store) completed:', {
-            selected: result.selected.length,
-            failed: result.failed.length,
-          });
           if (result.failed.length > 0) {
             console.warn(
               `[Board] Failed to select ${result.failed.length} object(s):`,
@@ -259,10 +247,6 @@ function Board({
 
         case 'objects-unselected': {
           console.log(`[Board] ${message.ids.length} object(s) unselected`);
-          console.log(
-            '[Board] [E2E-DEBUG] Received objects-unselected from renderer, calling unselectObjects(store) with ids:',
-            message.ids,
-          );
 
           // M3.5.1-T6: Clear debug overlay coordinates
           setDebugCoords(null);
@@ -273,7 +257,6 @@ function Board({
             message.ids,
             storeRef.current.getActorId(),
           );
-          console.log('[Board] [E2E-DEBUG] unselectObjects(store) completed');
 
           // M3.5.1-T4: Trigger selection settled callbacks (for context menu timing)
           if (selectionSettledCallbacksRef.current.length > 0) {
@@ -445,11 +428,6 @@ function Board({
       if (changes.updated.length > 0) {
         console.log(
           `[Board] Forwarding ${changes.updated.length} updated object(s)`,
-        );
-        console.log(
-          '[Board] [E2E-DEBUG] Yjs observer detected updates, forwarding objects-updated to renderer with',
-          changes.updated.length,
-          'object(s)',
         );
         renderer.sendMessage({
           type: 'objects-updated',

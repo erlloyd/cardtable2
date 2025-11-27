@@ -525,10 +525,6 @@ export abstract class RendererCore {
       // Sync selection cache only for messages that affect object state (M3-T3)
       // Most messages (init, resize, pointer events) don't modify objects, so no sync needed
       if (this.shouldSyncSelectionCache(message.type)) {
-        console.log(
-          '[RendererCore] [E2E-DEBUG] Message type triggers sync:',
-          message.type,
-        );
         this.syncSelectionCache();
       }
     } catch (error) {
@@ -782,41 +778,14 @@ export abstract class RendererCore {
               this.pointerDownEvent &&
               (this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey);
 
-            // [E2E DEBUG] Log critical state at drag start
-            console.log(
-              '[RendererCore] [E2E-DEBUG] Drag start decision point:',
-              {
-                draggedObjectId: this.draggedObjectId,
-                isDraggedObjectSelected,
-                isMultiSelectModifier,
-                selectedObjectIds: Array.from(this.selectedObjectIds),
-                selectedCount: this.selectedObjectIds.size,
-                pointerDownEvent: this.pointerDownEvent
-                  ? {
-                      metaKey: this.pointerDownEvent.metaKey,
-                      ctrlKey: this.pointerDownEvent.ctrlKey,
-                    }
-                  : null,
-              },
-            );
-
             if (isDraggedObjectSelected) {
               // Dragging a selected object - drag all selected objects
-              console.log(
-                '[RendererCore] [E2E-DEBUG] Branch: Dragging already-selected object',
-              );
               for (const id of this.selectedObjectIds) {
                 objectsToDrag.add(id);
               }
             } else {
               // Dragging an unselected object
-              console.log(
-                '[RendererCore] [E2E-DEBUG] Branch: Dragging unselected object',
-              );
               if (isMultiSelectModifier) {
-                console.log(
-                  '[RendererCore] [E2E-DEBUG] Sub-branch: WITH modifier (CMD/Ctrl)',
-                );
                 // With modifier: add to selection and drag all
                 this.selectObjects([this.draggedObjectId], false);
                 // Drag all currently selected objects PLUS the new one
@@ -824,20 +793,9 @@ export abstract class RendererCore {
                 // We need to manually add both the existing selections and the new one
                 for (const id of this.selectedObjectIds) {
                   objectsToDrag.add(id);
-                  console.log(
-                    '[RendererCore] [E2E-DEBUG] Added from selectedObjectIds:',
-                    id,
-                  );
                 }
                 objectsToDrag.add(this.draggedObjectId);
-                console.log(
-                  '[RendererCore] [E2E-DEBUG] Added draggedObjectId:',
-                  this.draggedObjectId,
-                );
               } else {
-                console.log(
-                  '[RendererCore] [E2E-DEBUG] Sub-branch: WITHOUT modifier',
-                );
                 // Without modifier: select only this and drag just this one
                 this.selectObjects([this.draggedObjectId], true);
                 // Only drag the newly selected object
@@ -845,11 +803,6 @@ export abstract class RendererCore {
                 objectsToDrag.add(this.draggedObjectId);
               }
             }
-
-            console.log(
-              '[RendererCore] [E2E-DEBUG] Final objectsToDrag:',
-              Array.from(objectsToDrag),
-            );
 
             // Save initial positions of all objects to drag
             this.draggedObjectsStartPositions.clear();
@@ -1844,22 +1797,13 @@ export abstract class RendererCore {
       }
     });
 
-    // [E2E DEBUG] Log selection cache sync
+    // Determine which objects changed selection state for redrawing
     const added = Array.from(this.selectedObjectIds).filter(
       (id) => !previouslySelected.has(id),
     );
     const removed = Array.from(previouslySelected).filter(
       (id) => !this.selectedObjectIds.has(id),
     );
-    if (added.length > 0 || removed.length > 0) {
-      console.log('[RendererCore] [E2E-DEBUG] syncSelectionCache():', {
-        previousCount: previouslySelected.size,
-        newCount: this.selectedObjectIds.size,
-        added,
-        removed,
-        currentSelection: Array.from(this.selectedObjectIds),
-      });
-    }
 
     // Redraw visuals for objects whose selection state changed
     const allIds = new Set([...previouslySelected, ...this.selectedObjectIds]);

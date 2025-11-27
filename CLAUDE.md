@@ -267,6 +267,28 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
 
 ## Recent Changes
 
+### M3.5.1-T6 - ActionHandle Component with Smart Positioning (Completed 2025-11-27)
+Progressive disclosure action bar with PixiJS coordinate integration:
+- **Progressive Disclosure UI**: Collapsed by default (small icon), expands on hover/click/E key
+- **PixiJS Coordinate Integration**: Uses PixiJS `toGlobal()` for pixel-perfect DOM positioning
+  - Renderer calculates screen coordinates using `visual.toGlobal()` and `devicePixelRatio`
+  - Coordinates passed to React via `screenCoords` array in `objects-selected` message
+  - Single source of truth: PixiJS handles all camera transforms automatically
+- **Camera Operation Handling**: Hide-during-operation pattern for performance
+  - Hides overlay during pan/zoom/drag operations (no expensive 60fps DOM updates)
+  - Re-shows with fresh coordinates after operation completes
+  - Debounced zoom-ended messages (150ms) to avoid flickering
+- **Smart Positioning**: Fallback logic tries top → right → left → bottom → center
+- **Touch-Aware Design**: Larger hit targets on touch devices (44x44px vs 28x28px)
+- **Keyboard Shortcuts**: E to toggle, Escape to collapse
+- **Testing**: 529 unit tests + 6 E2E tests passing
+  - Tests cover appearance, movement, camera operations, positioning fallback
+  - All tests use proper pointer event dispatching (not `page.mouse`)
+- **Architecture**: Message-based async coordinate pattern prevents race conditions
+- **Files**: ActionHandle.tsx, DebugOverlay.tsx (for validation), debounce.ts utility
+- **Documentation**: Two detailed plan documents in `_plans/` directory
+- Branch: `feature/m3.5.1-t6-action-handle`
+
 ### M5-T1 - WS Server Scaffold + Railway Deployment (Completed 2025-11-21)
 Complete multiplayer server infrastructure with automated deployment:
 - **Server Implementation**: Express + y-websocket server with WebSocket upgrade handling

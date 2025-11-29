@@ -1,5 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import type { MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useStoreSync } from './useStoreSync';
 import { RenderMode } from '../renderer/IRendererAdapter';
@@ -37,8 +36,7 @@ describe('useStoreSync', () => {
       useStoreSync(null, mockStore as unknown as YjsStore, true),
     );
 
-    const onObjectsChangeMock = mockStore.onObjectsChange;
-    expect(onObjectsChangeMock).not.toHaveBeenCalled();
+    expect(mockStore.onObjectsChange).not.toHaveBeenCalled();
   });
 
   it('does nothing when not synced', () => {
@@ -46,8 +44,7 @@ describe('useStoreSync', () => {
       useStoreSync(mockRenderer, mockStore as unknown as YjsStore, false),
     );
 
-    const onObjectsChangeMock = mockStore.onObjectsChange;
-    expect(onObjectsChangeMock).not.toHaveBeenCalled();
+    expect(mockStore.onObjectsChange).not.toHaveBeenCalled();
   });
 
   it('subscribes to store changes when synced', () => {
@@ -55,8 +52,7 @@ describe('useStoreSync', () => {
       useStoreSync(mockRenderer, mockStore as unknown as YjsStore, true),
     );
 
-    const onObjectsChangeMock = mockStore.onObjectsChange;
-    expect(onObjectsChangeMock).toHaveBeenCalled();
+    expect(mockStore.onObjectsChange).toHaveBeenCalled();
   });
 
   it('forwards added objects to renderer', () => {

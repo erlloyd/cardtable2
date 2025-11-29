@@ -1,5 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import type { MockInstance } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useAwarenessSync } from './useAwarenessSync';
 import { RenderMode } from '../renderer/IRendererAdapter';
@@ -9,35 +8,45 @@ import type { AwarenessState } from '@cardtable2/shared';
 
 describe('useAwarenessSync', () => {
   let mockRenderer: IRendererAdapter;
-  let mockStore: Partial<YjsStore> & {
-    onAwarenessChange: Mock;
-    getDoc: Mock;
-  };
+  let mockStore: Partial<YjsStore>;
   let awarenessCallback: (states: Map<number, AwarenessState>) => void;
+  let sendMessageMock: ReturnType<typeof vi.fn>;
+  let onMessageMock: ReturnType<typeof vi.fn>;
+  let destroyMock: ReturnType<typeof vi.fn>;
+  let onAwarenessChangeMock: ReturnType<typeof vi.fn>;
+  let getDocMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockRenderer = {
-      sendMessage: vi.fn(),
-      onMessage: vi.fn(),
-      destroy: vi.fn(),
-      mode: RenderMode.Worker,
-    };
+    sendMessageMock = vi.fn();
+    onMessageMock = vi.fn();
+    destroyMock = vi.fn();
 
     awarenessCallback = vi.fn();
 
+    onAwarenessChangeMock = vi.fn(
+      (callback: (states: Map<number, AwarenessState>) => void) => {
+        awarenessCallback = callback;
+        return vi.fn(); // unsubscribe
+      },
+    );
+
+    getDocMock = vi.fn(
+      () =>
+        ({
+          clientID: 123,
+        }) as unknown as ReturnType<YjsStore['getDoc']>,
+    );
+
+    mockRenderer = {
+      sendMessage: sendMessageMock,
+      onMessage: onMessageMock,
+      destroy: destroyMock,
+      mode: RenderMode.Worker,
+    };
+
     mockStore = {
-      onAwarenessChange: vi.fn(
-        (callback: (states: Map<number, AwarenessState>) => void) => {
-          awarenessCallback = callback;
-          return vi.fn(); // unsubscribe
-        },
-      ),
-      getDoc: vi.fn(
-        () =>
-          ({
-            clientID: 123,
-          }) as unknown as ReturnType<YjsStore['getDoc']>,
-      ),
+      onAwarenessChange: onAwarenessChangeMock,
+      getDoc: getDocMock,
     };
   });
 
@@ -46,8 +55,7 @@ describe('useAwarenessSync', () => {
       useAwarenessSync(null, mockStore as unknown as YjsStore, true),
     );
 
-    const onAwarenessChangeMock = mockStore.onAwarenessChange;
-    expect(onAwarenessChangeMock).not.toHaveBeenCalled();
+    expect(mockStore.onAwarenessChange).not.toHaveBeenCalled();
   });
 
   it('does nothing when not synced', () => {
@@ -55,8 +63,7 @@ describe('useAwarenessSync', () => {
       useAwarenessSync(mockRenderer, mockStore as unknown as YjsStore, false),
     );
 
-    const onAwarenessChangeMock = mockStore.onAwarenessChange;
-    expect(onAwarenessChangeMock).not.toHaveBeenCalled();
+    expect(mockStore.onAwarenessChange).not.toHaveBeenCalled();
   });
 
   it('subscribes to awareness changes when synced', () => {
@@ -64,8 +71,7 @@ describe('useAwarenessSync', () => {
       useAwarenessSync(mockRenderer, mockStore as unknown as YjsStore, true),
     );
 
-    const onAwarenessChangeMock = mockStore.onAwarenessChange;
-    expect(onAwarenessChangeMock).toHaveBeenCalled();
+    expect(mockStore.onAwarenessChange).toHaveBeenCalled();
   });
 
   it('filters out local client awareness', () => {
@@ -80,7 +86,7 @@ describe('useAwarenessSync', () => {
 
     awarenessCallback(states);
 
-    expect(mockRenderer.sendMessage as MockInstance).toHaveBeenCalledWith({
+    expect(sendMessageMock).toHaveBeenCalledWith({
       type: 'awareness-update',
       states: [
         {
@@ -103,7 +109,7 @@ describe('useAwarenessSync', () => {
 
     awarenessCallback(states);
 
-    expect(mockRenderer.sendMessage as MockInstance).toHaveBeenCalledWith({
+    expect(sendMessageMock).toHaveBeenCalledWith({
       type: 'awareness-update',
       states: [
         {
@@ -120,7 +126,8 @@ describe('useAwarenessSync', () => {
 
   it('unsubscribes on cleanup', () => {
     const unsubscribeMock = vi.fn();
-    mockStore.onAwarenessChange = vi.fn(() => unsubscribeMock);
+    onAwarenessChangeMock = vi.fn(() => unsubscribeMock);
+    mockStore.onAwarenessChange = onAwarenessChangeMock;
 
     const { unmount } = renderHook(() =>
       useAwarenessSync(mockRenderer, mockStore as unknown as YjsStore, true),

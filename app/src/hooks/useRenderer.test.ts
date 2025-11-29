@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { MockInstance } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useRenderer } from './useRenderer';
 import { RenderMode } from '../renderer/IRendererAdapter';

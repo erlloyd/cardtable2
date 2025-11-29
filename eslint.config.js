@@ -100,6 +100,9 @@ export default tseslint.config(
     rules: {
       ...react.configs.recommended.rules,
       ...react.configs['jsx-runtime'].rules,
+      // Disable unbound-method for test files - mock functions don't have 'this' context
+      // See: https://typescript-eslint.io/rules/unbound-method/
+      '@typescript-eslint/unbound-method': 'off',
     },
     settings: {
       react: {
@@ -174,6 +177,26 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       // Allow .toString() on Buffer and other objects in server code
       '@typescript-eslint/no-base-to-string': 'off',
+    },
+  },
+
+  // Server test files
+  {
+    files: ['server/**/*.test.{ts,js}'],
+    extends: [...tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+      globals: {
+        ...globals.node,
+        ...globals.es2021,
+      },
+    },
+    rules: {
+      // Disable unbound-method for test files - mock functions don't have 'this' context
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
 

@@ -1465,47 +1465,17 @@ export abstract class RendererCore {
    * Called automatically after any message that updates object state.
    */
   private syncSelectionCache(): void {
-    const previouslySelected = new Set(this.selectedObjectIds);
-    this.selectedObjectIds.clear();
-
-    // Rebuild cache from ALL objects in scene
-    const allObjects = this.sceneManager.getAllObjects();
-    allObjects.forEach((obj, id) => {
-      if (obj._selectedBy === this.actorId) {
-        this.selectedObjectIds.add(id);
-      }
-    });
-
-    // Determine which objects changed selection state for redrawing
-    const added = Array.from(this.selectedObjectIds).filter(
-      (id) => !previouslySelected.has(id),
-    );
-    const removed = Array.from(previouslySelected).filter(
-      (id) => !this.selectedObjectIds.has(id),
-    );
+    // Sync selection state from store (SelectionManager tracks changes and decrements pendingOperations)
+    const { added, removed } = this.selection.syncFromStore(this.sceneManager);
 
     // Redraw visuals for objects whose selection state changed
-    const allIds = new Set([...previouslySelected, ...this.selectedObjectIds]);
+    const allIds = new Set([...added, ...removed]);
 
     allIds.forEach((id) => {
-      const wasSelected = previouslySelected.has(id);
-      const isSelected = this.selectedObjectIds.has(id);
-
-      if (wasSelected !== isSelected) {
-        // Selection state changed - redraw visual
-        this.redrawCardVisual(id, false, false, isSelected);
-      }
+      const isSelected = this.selection.isSelected(id);
+      // Redraw visual with updated selection state
+      this.redrawCardVisual(id, false, false, isSelected);
     });
-
-    // E2E Test API: Decrement pending operations counter
-    // Only decrement if there was actually a change (added or removed)
-    // This matches the increment in handlePointerDown
-    if (added.length > 0 || removed.length > 0) {
-      this.pendingOperations = Math.max(0, this.pendingOperations - 1);
-      console.log(
-        `[RendererCore] pendingOperations-- → ${this.pendingOperations} (after syncSelectionCache)`,
-      );
-    }
   }
 
   /**
@@ -1523,89 +1493,22 @@ export abstract class RendererCore {
    * @param clearPrevious - Whether to clear previous selections first
    */
   private selectObjects(ids: string[], clearPrevious = false): void {
-    // Calculate screen coordinates for all selected objects using PixiJS toScreen()
-    const screenCoords: Array<{
-      id: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }> = [];
-
-    if (this.worldContainer && ids.length > 0) {
-      for (const id of ids) {
-        const visual = this.objectVisuals.get(id);
-        const obj = this.sceneManager.getObject(id);
-
-        if (visual && obj) {
-          // Use PixiJS toGlobal() to convert visual's position to canvas coordinates
-          // visual.position is in parent (worldContainer) coordinate space
-          // toGlobal converts to stage (canvas) coordinate space
-          const canvasPos = visual.toGlobal({ x: 0, y: 0 });
-
-          // Convert to DOM coordinates (divide by devicePixelRatio)
-          const domX = canvasPos.x / this.devicePixelRatio;
-          const domY = canvasPos.y / this.devicePixelRatio;
-
-          // Calculate dimensions based on object type
-          // Dimensions need to account for both camera scale and devicePixelRatio
-          let width = 0;
-          let height = 0;
-
-          if (obj._kind === ObjectKind.Stack) {
-            // Stack dimensions in world space: use actual constants
-            width = (STACK_WIDTH * this.cameraScale) / this.devicePixelRatio;
-            height = (STACK_HEIGHT * this.cameraScale) / this.devicePixelRatio;
-          } else if (
-            obj._kind === ObjectKind.Zone &&
-            obj._meta?.width &&
-            obj._meta?.height
-          ) {
-            // Zone dimensions from metadata
-            width =
-              ((obj._meta.width as number) * this.cameraScale) /
-              this.devicePixelRatio;
-            height =
-              ((obj._meta.height as number) * this.cameraScale) /
-              this.devicePixelRatio;
-          } else if (obj._kind === ObjectKind.Token) {
-            // Token dimensions (circular with radius from helper)
-            const radius =
-              (getTokenSize(obj) * this.cameraScale) / this.devicePixelRatio;
-            width = radius * 2;
-            height = radius * 2;
-          } else if (obj._kind === ObjectKind.Mat) {
-            // Mat dimensions (circular with radius from helper)
-            const radius =
-              (getMatSize(obj) * this.cameraScale) / this.devicePixelRatio;
-            width = radius * 2;
-            height = radius * 2;
-          } else if (obj._kind === ObjectKind.Counter) {
-            // Counter dimensions (circular with radius from helper)
-            const radius =
-              (getCounterSize(obj) * this.cameraScale) / this.devicePixelRatio;
-            width = radius * 2;
-            height = radius * 2;
-          }
-
-          screenCoords.push({
-            id,
-            x: domX,
-            y: domY,
-            width,
-            height,
-          });
-        }
-      }
-    }
+    // Calculate screen coordinates using VisualManager
+    const screenCoords = this.visual.calculateScreenCoords(
+      ids,
+      this.sceneManager,
+      this.coordConverter.getDevicePixelRatio(),
+    );
 
     // If clearPrevious, send unselect message for currently selected objects
-    if (clearPrevious && this.selectedObjectIds.size > 0) {
-      const prevSelected = Array.from(this.selectedObjectIds);
-      this.postResponse({
-        type: 'objects-unselected',
-        ids: prevSelected,
-      });
+    if (clearPrevious) {
+      const prevSelected = this.selection.getSelectedIds();
+      if (prevSelected.length > 0) {
+        this.postResponse({
+          type: 'objects-unselected',
+          ids: prevSelected,
+        });
+      }
     }
 
     // Send selection message with screen coordinates

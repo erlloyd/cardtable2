@@ -818,40 +818,30 @@ describe('Board', () => {
   //
   // This test verifies the fix remains in place by checking that RendererCore
   // includes the style reset logic after resize operations.
-  it('RendererCore resets canvas.style to 100% after resize in main-thread mode', async () => {
-    // Read the RendererCore source code to verify the fix is present
-    const rendererCorePath = '../renderer/RendererCore.ts';
+  it('RendererOrchestrator resets canvas.style to 100% after init in main-thread mode', async () => {
+    // Read the RendererOrchestrator source code to verify the fix is present
+    const rendererOrchestratorPath = '../renderer/RendererOrchestrator.ts';
     const fs = await import('fs');
     const path = await import('path');
-    const filePath = path.resolve(__dirname, rendererCorePath);
+    const filePath = path.resolve(__dirname, rendererOrchestratorPath);
     const source = fs.readFileSync(filePath, 'utf-8');
 
-    // Verify the fix exists in the resize handler
-    // The fix should appear after app.renderer.resize() is called
-    const hasResizeHandler = source.includes("case 'resize':");
-    const hasRendererResize = source.includes(
-      'this.app.renderer.resize(width, height)',
-    );
-    const hasStyleCheck = source.includes("'style' in this.app.canvas");
-    const hasWidthReset = source.includes(
-      "this.app.canvas.style.width = '100%'",
-    );
-    const hasHeightReset = source.includes(
-      "this.app.canvas.style.height = '100%'",
-    );
+    // Verify the fix exists in the init handler
+    // The fix should appear after PixiJS initialization
+    const hasInitMethod = source.includes('private async initialize(');
+    const hasStyleCheck = source.includes("'style' in canvas");
+    const hasWidthReset = source.includes("canvas.style.width = '100%'");
+    const hasHeightReset = source.includes("canvas.style.height = '100%'");
 
     // All checks must pass to prevent regression
-    expect(hasResizeHandler).toBe(true);
-    expect(hasRendererResize).toBe(true);
+    expect(hasInitMethod).toBe(true);
     expect(hasStyleCheck).toBe(true);
     expect(hasWidthReset).toBe(true);
     expect(hasHeightReset).toBe(true);
 
-    // Additionally verify the style resets come AFTER renderer.resize()
-    const resizeIndex = source.indexOf(
-      'this.app.renderer.resize(width, height)',
-    );
-    const styleCheckIndex = source.indexOf("'style' in this.app.canvas");
-    expect(styleCheckIndex).toBeGreaterThan(resizeIndex);
+    // Additionally verify the style resets come AFTER app.init()
+    const initIndex = source.indexOf('await this.app.init(');
+    const styleCheckIndex = source.indexOf("'style' in canvas");
+    expect(styleCheckIndex).toBeGreaterThan(initIndex);
   });
 });

@@ -105,9 +105,9 @@ export class VisualManager {
   }
 
   /**
-   * Update hover visual feedback for an object.
+   * Update visual feedback for an object (hover state and selection border).
    */
-  updateHoverFeedback(
+  updateVisualFeedback(
     objectId: string,
     isHovered: boolean,
     isSelected: boolean,

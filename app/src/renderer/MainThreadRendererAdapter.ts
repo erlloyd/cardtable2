@@ -3,20 +3,19 @@ import type {
   RendererToMainMessage,
 } from '@cardtable2/shared';
 import { RenderMode, type IRendererAdapter } from './IRendererAdapter';
-import { RendererCore } from './RendererCore';
+import { RendererOrchestrator } from './RendererOrchestrator';
 
 /**
- * Main-thread implementation of RendererCore.
+ * Main-thread implementation of RendererOrchestrator.
  *
- * This class extends RendererCore and implements postResponse using
+ * This class extends RendererOrchestrator and implements postResponse using
  * a callback function instead of postMessage.
  */
-class MainThreadRendererCore extends RendererCore {
+class MainThreadRendererOrchestrator extends RendererOrchestrator {
   private callback: ((message: RendererToMainMessage) => void) | null = null;
 
   constructor() {
-    super();
-    this.renderMode = RenderMode.MainThread;
+    super(RenderMode.MainThread);
   }
 
   setCallback(callback: (message: RendererToMainMessage) => void): void {
@@ -43,12 +42,12 @@ class MainThreadRendererCore extends RendererCore {
 export class MainThreadRendererAdapter implements IRendererAdapter {
   readonly mode = RenderMode.MainThread;
 
-  private renderer: MainThreadRendererCore;
+  private renderer: MainThreadRendererOrchestrator;
   private messageHandler: ((message: RendererToMainMessage) => void) | null =
     null;
 
   constructor() {
-    this.renderer = new MainThreadRendererCore();
+    this.renderer = new MainThreadRendererOrchestrator();
 
     // Set up callback for messages from renderer
     this.renderer.setCallback((message: RendererToMainMessage) => {

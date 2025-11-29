@@ -27,6 +27,9 @@ export class CameraManager {
   private initialPinchMidpoint = { x: 0, y: 0 }; // Locked screen point
   private initialPinchWorldPoint = { x: 0, y: 0 }; // World coords under midpoint
 
+  // Pan state
+  private isPanningState = false;
+
   constructor(coordConverter: CoordinateConverter) {
     this.coordConverter = coordConverter;
   }
@@ -71,12 +74,35 @@ export class CameraManager {
   }
 
   /**
+   * Start camera pan gesture.
+   */
+  startPan(): void {
+    this.isPanningState = true;
+  }
+
+  /**
+   * End camera pan gesture.
+   */
+  endPan(): void {
+    this.isPanningState = false;
+  }
+
+  /**
+   * Check if camera is currently being panned.
+   */
+  isPanningActive(): boolean {
+    return this.isPanningState;
+  }
+
+  /**
    * Pan the camera by a delta amount (screen space).
    * @param deltaX - X movement in screen pixels
    * @param deltaY - Y movement in screen pixels
    */
   pan(deltaX: number, deltaY: number): void {
-    if (!this.worldContainer) return;
+    if (!this.worldContainer) {
+      return;
+    }
 
     this.worldContainer.position.x += deltaX;
     this.worldContainer.position.y += deltaY;

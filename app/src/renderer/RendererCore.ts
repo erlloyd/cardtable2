@@ -370,9 +370,16 @@ export abstract class RendererCore {
         case 'pointer-leave': {
           // M3-T4: Pointer left the canvas
           // Clear hover state
-          if (this.hoveredObjectId) {
-            this.updateHoverFeedback(this.hoveredObjectId, false);
-            this.hoveredObjectId = null;
+          const hoveredId = this.hover.getHoveredObjectId();
+          if (hoveredId) {
+            const isSelected = this.selection.isSelected(hoveredId);
+            this.visual.updateHoverFeedback(
+              hoveredId,
+              false,
+              isSelected,
+              this.sceneManager,
+            );
+            this.hover.clearHover();
             if (this.app) {
               this.app.renderer.render(this.app.stage);
             }
@@ -829,90 +836,6 @@ export abstract class RendererCore {
     }
   }
 
-  /**
-   * Update hover visual feedback for an object (M2-T4).
-   * Makes the card appear to lift off the table with shadow and scale.
-   */
-  private updateHoverFeedback(objectId: string, isHovered: boolean): void {
-    const visual = this.objectVisuals.get(objectId);
-    if (!visual) return;
-
-    // Store target scale on the visual object
-    visual.targetScale = isHovered ? 1.05 : 1.0;
-
-    // Start hover animation if not already running
-    if (!this.hoverAnimationActive) {
-      this.startHoverAnimation();
-    }
-
-    // Redraw the visual with current hover state
-    const isSelected = this.selectedObjectIds.has(objectId);
-    this.redrawCardVisual(objectId, isHovered, false, isSelected);
-  }
-
-  /**
-   * Update drag visual feedback for an object (M2-T5).
-   * Makes the card appear to lift off the table with colored shadow and scale.
-   */
-  private updateDragFeedback(objectId: string, isDragging: boolean): void {
-    const visual = this.objectVisuals.get(objectId);
-    if (!visual) return;
-
-    // Store target scale on the visual object
-    visual.targetScale = isDragging ? 1.05 : 1.0;
-
-    // Start hover animation if not already running (reuses same animation system)
-    if (!this.hoverAnimationActive) {
-      this.startHoverAnimation();
-    }
-
-    // Redraw the visual with current drag state
-    const isSelected = this.selectedObjectIds.has(objectId);
-    this.redrawCardVisual(objectId, false, isDragging, isSelected);
-  }
-
-  /**
-   * Update or create selection rectangle graphic.
-   */
-  private updateSelectionRectangle(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number,
-  ): void {
-    if (!this.worldContainer) return;
-
-    // Create selection rectangle if it doesn't exist
-    if (!this.selectionRectangle) {
-      this.selectionRectangle = new Graphics();
-      this.worldContainer.addChild(this.selectionRectangle);
-    }
-
-    // Clear and redraw rectangle
-    this.selectionRectangle.clear();
-
-    // Calculate rectangle bounds
-    const minX = Math.min(startX, endX);
-    const minY = Math.min(startY, endY);
-    const width = Math.abs(endX - startX);
-    const height = Math.abs(endY - startY);
-
-    // Draw filled rectangle with border
-    this.selectionRectangle.rect(minX, minY, width, height);
-    this.selectionRectangle.fill({ color: 0x3b82f6, alpha: 0.2 }); // Blue fill
-    this.selectionRectangle.stroke({ width: 2, color: 0x3b82f6 }); // Blue border
-  }
-
-  /**
-   * Clear selection rectangle graphic.
-   */
-  private clearSelectionRectangle(): void {
-    if (this.selectionRectangle && this.worldContainer) {
-      this.worldContainer.removeChild(this.selectionRectangle);
-      this.selectionRectangle.destroy();
-      this.selectionRectangle = null;
-    }
-  }
 
   /**
    * Create base shape graphic for an object based on its kind.
@@ -1246,7 +1169,13 @@ export abstract class RendererCore {
             positionUpdates.push({ id: objectId, pos: obj._pos });
           }
           // Clear drag visual feedback
-          this.updateDragFeedback(objectId, false);
+          const isSelected = this.selection.isSelected(objectId);
+          this.visual.updateDragFeedback(
+            objectId,
+            false,
+            isSelected,
+            this.sceneManager,
+          );
         }
 
         // Send position updates to Board (which will update the store)

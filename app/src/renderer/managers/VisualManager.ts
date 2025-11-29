@@ -249,7 +249,7 @@ export class VisualManager {
    * Does NOT include text label or shadow.
    */
   private createBaseShapeGraphic(
-    objectId: string,
+    _objectId: string,
     obj: TableObject,
     isSelected: boolean,
   ): Graphics {

@@ -105,7 +105,6 @@ export class DragManager {
   startObjectDrag(
     sceneManager: SceneManager,
     selectionManager: SelectionManager,
-    worldContainer: Container,
   ): string[] {
     if (!this.dragState) return [];
 
@@ -155,11 +154,7 @@ export class DragManager {
     }
 
     // Update z-order for all dragged objects
-    this.updateDraggedObjectsZOrder(
-      sceneManager,
-      worldContainer,
-      objectsToDrag,
-    );
+    this.updateDraggedObjectsZOrder(sceneManager, objectsToDrag);
 
     return Array.from(objectsToDrag);
   }
@@ -297,7 +292,6 @@ export class DragManager {
    */
   private updateDraggedObjectsZOrder(
     sceneManager: SceneManager,
-    worldContainer: Container,
     objectsToDrag: Set<string>,
   ): void {
     // Find the current maximum sortKey (lexicographic comparison for fractional indexing)

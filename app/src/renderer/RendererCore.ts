@@ -17,6 +17,17 @@ import { getTokenSize } from './objects/token/utils';
 import { getMatSize } from './objects/mat/utils';
 import { getCounterSize } from './objects/counter/utils';
 import { debounce } from '../utils/debounce';
+import {
+  CoordinateConverter,
+  CameraManager,
+  GestureRecognizer,
+  SelectionManager,
+  DragManager,
+  HoverManager,
+  SelectionRectangleManager,
+  AwarenessManager,
+  VisualManager,
+} from './managers';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -47,87 +58,26 @@ export abstract class RendererCore {
 
   // Scene management (M2-T4)
   private sceneManager: SceneManager = new SceneManager();
-  private hoveredObjectId: string | null = null;
-  private objectVisuals: Map<string, Container & { targetScale?: number }> =
-    new Map();
-  private hoverAnimationActive = false;
 
-  // Object selection state (M3-T3)
-  // NOTE: This is a DERIVED CACHE from store's _selectedBy field, not independent state.
-  // The store is the single source of truth. This cache is for O(1) lookup performance.
-  private actorId: string = ''; // Set during init
-  private selectedObjectIds: Set<string> = new Set();
+  // Managers (Phase 2 - Hybrid Architecture Refactor)
+  private coordConverter: CoordinateConverter = new CoordinateConverter();
+  private camera: CameraManager;
+  private gestures: GestureRecognizer = new GestureRecognizer();
+  private selection: SelectionManager = new SelectionManager();
+  private drag: DragManager = new DragManager();
+  private hover: HoverManager = new HoverManager();
+  private rectangleSelect: SelectionRectangleManager =
+    new SelectionRectangleManager();
+  private awareness: AwarenessManager = new AwarenessManager();
+  private visual: VisualManager = new VisualManager();
 
-  // E2E Test API: Track pending operations that need to complete full round-trip
-  // (Renderer → Board → Store → Renderer → syncSelectionCache)
-  private pendingOperations: number = 0;
+  constructor() {
+    // Initialize CameraManager with coordinate converter dependency
+    this.camera = new CameraManager(this.coordConverter);
+  }
 
-  // Object dragging state (M2-T5)
-  private draggedObjectId: string | null = null;
-  private dragStartWorldX = 0;
-  private dragStartWorldY = 0;
-  private isObjectDragging = false;
-  // Track initial positions of all selected cards when drag starts (for multi-drag)
-  private draggedObjectsStartPositions: Map<string, { x: number; y: number }> =
-    new Map();
-  // Store pointer down event for selection logic on pointer up
-  private pointerDownEvent: PointerEventData | null = null;
-  // Gesture ID for drag awareness (M5-T1)
-  private currentDragGestureId: string | null = null;
-
-  // Camera state (M2-T3)
-  private cameraScale = 1.0;
-  private devicePixelRatio = 1.0; // Set during init
-
-  // Pointer tracking for gesture recognition
-  private pointers: Map<
-    number,
-    {
-      startX: number;
-      startY: number;
-      type: string;
-      lastX: number;
-      lastY: number;
-    }
-  > = new Map();
-  private isDragging = false;
-  private isPinching = false;
-  private initialPinchDistance = 0;
-  private initialPinchScale = 1.0;
-  private initialPinchMidpoint = { x: 0, y: 0 }; // Locked screen point for pinch zoom
-  private initialPinchWorldPoint = { x: 0, y: 0 }; // World coords under locked midpoint
-
-  // Interaction mode (pan/select toggle)
+  // Interaction mode (pan/select toggle) - still managed directly by RendererCore
   private interactionMode: InteractionMode = 'pan';
-
-  // Rectangle selection state
-  private isRectangleSelecting = false;
-  private rectangleSelectStartX = 0;
-  private rectangleSelectStartY = 0;
-  private selectionRectangle: Graphics | null = null;
-
-  // Cached blur filters for performance (M2-T5 optimization)
-  private hoverBlurFilter: BlurFilter | null = null;
-  private dragBlurFilter: BlurFilter | null = null;
-
-  // Remote awareness state (M3-T4)
-  private remoteAwareness: Map<
-    number,
-    {
-      state: AwarenessState;
-      cursor?: Container; // Visual cursor indicator
-      dragGhost?: Container; // Visual drag ghost
-      draggedObjectIds?: string[]; // Track which objects are being dragged for change detection
-      lastUpdate: number; // Timestamp for lerp
-      lerpFrom?: { x: number; y: number }; // Previous position for interpolation
-    }
-  > = new Map();
-  private awarenessContainer: Container | null = null; // Top-level container for all awareness visuals
-
-  // Awareness update rate monitoring (M5-T1)
-  private awarenessUpdateTimestamps: number[] = []; // Rolling window of update timestamps (last 1 second)
-  private lastReportedAwarenessHz: number = 0; // Last reported Hz (to avoid spamming updates)
-  private lastAwarenessHzReportTime: number = 0; // When we last sent an Hz update
 
   // Zoom end debounce (M3.5.1-T6)
   private debouncedZoomEnd = debounce(() => {
@@ -152,11 +102,10 @@ export abstract class RendererCore {
           // Initialize PixiJS
           const { canvas, width, height, dpr, actorId } = message;
 
-          // Store actor ID for deriving selection state (M3-T3)
-          this.actorId = actorId;
-
-          // Store devicePixelRatio for coordinate conversions
-          this.devicePixelRatio = dpr;
+          // Initialize managers with actor ID and devicePixelRatio
+          this.selection.setActorId(actorId);
+          this.coordConverter.setDevicePixelRatio(dpr);
+          this.coordConverter.setCameraScale(1.0);
 
           console.log('[RendererCore] Initializing PixiJS...');
           console.log('[RendererCore] Canvas type:', canvas.constructor.name);
@@ -558,26 +507,13 @@ export abstract class RendererCore {
     // Center camera on screen center initially
     this.worldContainer.position.set(width / 2, height / 2);
 
-    // Set initial scale
-    this.worldContainer.scale.set(this.cameraScale);
+    // Set initial scale (1.0 by default, managed by CameraManager)
+    this.worldContainer.scale.set(1.0);
 
-    // Create awareness container (M3-T4)
-    // This sits on top of the world container for rendering remote cursors and drag ghosts
-    this.awarenessContainer = new Container();
-    this.app.stage.addChild(this.awarenessContainer);
-    console.log('[RendererCore] ✓ Awareness container initialized');
-  }
-
-  /**
-   * Calculate distance between two pointers (for pinch gesture).
-   */
-  private getPointerDistance(
-    p1: { lastX: number; lastY: number },
-    p2: { lastX: number; lastY: number },
-  ): number {
-    const dx = p2.lastX - p1.lastX;
-    const dy = p2.lastY - p1.lastY;
-    return Math.sqrt(dx * dx + dy * dy);
+    // Initialize managers with app and containers
+    this.camera.initialize(this.app, this.worldContainer);
+    this.visual.initialize(this.app, this.renderMode);
+    this.awareness.initialize(this.app.stage);
   }
 
   /**
@@ -587,63 +523,35 @@ export abstract class RendererCore {
     if (!this.worldContainer) return;
 
     // Track pointer start position for gesture recognition
-    this.pointers.set(event.pointerId, {
-      startX: event.clientX,
-      startY: event.clientY,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      type: event.pointerType,
-    });
+    this.gestures.addPointer(event);
 
     // Check if we have 2 touch pointers (pinch gesture)
-    if (this.pointers.size === 2 && event.pointerType === 'touch') {
-      this.isDragging = false;
-      this.isObjectDragging = false;
-      this.draggedObjectId = null;
-      this.isPinching = true;
+    if (this.gestures.isPinchGesture(event)) {
+      // Cancel any ongoing drag operations
+      this.drag.cancelObjectDrag();
+      this.rectangleSelect.clear();
 
       // M3.5.1-T6: Notify Board that zoom started (pinch)
       this.postResponse({ type: 'zoom-started' });
 
-      // Calculate initial pinch distance and LOCK the midpoint
-      const pointerArray = Array.from(this.pointers.values());
-      this.initialPinchDistance = this.getPointerDistance(
-        pointerArray[0],
-        pointerArray[1],
-      );
-      this.initialPinchScale = this.cameraScale;
-
-      // Calculate and lock the midpoint (this should NOT change during the pinch)
-      this.initialPinchMidpoint.x =
-        (pointerArray[0].lastX + pointerArray[1].lastX) / 2;
-      this.initialPinchMidpoint.y =
-        (pointerArray[0].lastY + pointerArray[1].lastY) / 2;
-
-      // Convert midpoint to world coordinates ONCE at start of pinch
-      this.initialPinchWorldPoint.x =
-        (this.initialPinchMidpoint.x - this.worldContainer.position.x) /
-        this.initialPinchScale;
-      this.initialPinchWorldPoint.y =
-        (this.initialPinchMidpoint.y - this.worldContainer.position.y) /
-        this.initialPinchScale;
+      // Start pinch zoom (delegates all pinch state to CameraManager)
+      this.camera.startPinch(this.gestures, this.worldContainer);
     } else if (event.isPrimary) {
       // E2E Test API: Increment pending operations counter
       // This will be decremented after the full round-trip completes (syncSelectionCache)
-      this.pendingOperations++;
-      console.log(
-        `[RendererCore] pendingOperations++ → ${this.pendingOperations} (pointer-down)`,
-      );
+      this.selection.incrementPendingOperations();
 
       // Store pointer down event for selection logic on pointer up
-      this.pointerDownEvent = event;
+      this.drag.setPointerDownEvent(event);
 
       // Always do hit-testing first to determine if we're over a card
-      const worldX =
-        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+      const worldPos = this.coordConverter.screenToWorld(
+        event.clientX,
+        event.clientY,
+        this.worldContainer,
+      );
 
-      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+      const hitResult = this.sceneManager.hitTest(worldPos.x, worldPos.y);
 
       // Determine if we're in rectangle-select mode based on interaction mode + modifiers
       const modifierPressed = event.metaKey || event.ctrlKey;
@@ -653,28 +561,17 @@ export abstract class RendererCore {
 
       if (hitResult) {
         // Clicking on a card - always prepare for object drag (regardless of mode)
-        this.draggedObjectId = hitResult.id;
-        this.dragStartWorldX = worldX;
-        this.dragStartWorldY = worldY;
-        this.isObjectDragging = false; // Will become true once we exceed slop threshold
-        this.isDragging = false;
-        this.isRectangleSelecting = false;
+        this.drag.prepareObjectDrag(hitResult.id, worldPos.x, worldPos.y);
+        this.rectangleSelect.clear();
       } else if (shouldRectangleSelect) {
         // Clicking on empty space in rectangle select mode - prepare for rectangle selection
-        this.rectangleSelectStartX = worldX;
-        this.rectangleSelectStartY = worldY;
-        this.isRectangleSelecting = false; // Will become true once we exceed slop threshold
-        this.draggedObjectId = null;
-        this.isDragging = false;
-        this.isObjectDragging = false;
+        // Note: Not starting yet - will start once we exceed slop threshold in handlePointerMove
+        this.rectangleSelect.clear(); // Reset any previous state
+        this.drag.cancelObjectDrag();
       } else {
         // Clicking on empty space in pan mode - prepare for camera pan
-        this.draggedObjectId = null;
-        this.isDragging = false; // Will become true once we exceed slop threshold
-        this.isObjectDragging = false;
-        this.isRectangleSelecting = false;
-        this.rectangleSelectStartX = 0;
-        this.rectangleSelectStartY = 0;
+        this.drag.cancelObjectDrag();
+        this.rectangleSelect.clear();
       }
     }
   }

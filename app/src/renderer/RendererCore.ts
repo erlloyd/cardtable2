@@ -8,9 +8,15 @@ import type {
   InteractionMode,
   AwarenessState,
 } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
 import { getBehaviors, getEventHandlers, type EventHandlers } from './objects';
+import { STACK_WIDTH, STACK_HEIGHT } from './objects/stack/constants';
+import { getTokenSize } from './objects/token/utils';
+import { getMatSize } from './objects/mat/utils';
+import { getCounterSize } from './objects/counter/utils';
+import { debounce } from '../utils/debounce';
 
 /**
  * Core rendering logic shared between worker and main-thread modes.
@@ -25,6 +31,10 @@ const DRAG_SLOP = {
   pen: 6,
   mouse: 3,
 } as const;
+
+// Zoom debounce delay for overlay coordinate updates (M3.5.1-T6)
+// Delays re-showing ActionHandle until zoom operations settle
+const ZOOM_DEBOUNCE_DELAY_MS = 200;
 
 export abstract class RendererCore {
   protected app: Application | null = null;
@@ -67,6 +77,7 @@ export abstract class RendererCore {
 
   // Camera state (M2-T3)
   private cameraScale = 1.0;
+  private devicePixelRatio = 1.0; // Set during init
 
   // Pointer tracking for gesture recognition
   private pointers: Map<
@@ -118,6 +129,11 @@ export abstract class RendererCore {
   private lastReportedAwarenessHz: number = 0; // Last reported Hz (to avoid spamming updates)
   private lastAwarenessHzReportTime: number = 0; // When we last sent an Hz update
 
+  // Zoom end debounce (M3.5.1-T6)
+  private debouncedZoomEnd = debounce(() => {
+    this.postResponse({ type: 'zoom-ended' });
+  }, ZOOM_DEBOUNCE_DELAY_MS);
+
   /**
    * Send a response message back to the main thread.
    * Worker mode: uses self.postMessage
@@ -138,6 +154,9 @@ export abstract class RendererCore {
 
           // Store actor ID for deriving selection state (M3-T3)
           this.actorId = actorId;
+
+          // Store devicePixelRatio for coordinate conversions
+          this.devicePixelRatio = dpr;
 
           console.log('[RendererCore] Initializing PixiJS...');
           console.log('[RendererCore] Canvas type:', canvas.constructor.name);
@@ -491,6 +510,12 @@ export abstract class RendererCore {
           break;
         }
 
+        case 'request-screen-coords': {
+          // M3.5.1-T6: Calculate and send screen coordinates on demand
+          this.handleRequestScreenCoords(message.ids);
+          break;
+        }
+
         default: {
           // Unknown message type
           this.postResponse({
@@ -504,10 +529,6 @@ export abstract class RendererCore {
       // Sync selection cache only for messages that affect object state (M3-T3)
       // Most messages (init, resize, pointer events) don't modify objects, so no sync needed
       if (this.shouldSyncSelectionCache(message.type)) {
-        console.log(
-          '[RendererCore] [E2E-DEBUG] Message type triggers sync:',
-          message.type,
-        );
         this.syncSelectionCache();
       }
     } catch (error) {
@@ -580,6 +601,9 @@ export abstract class RendererCore {
       this.isObjectDragging = false;
       this.draggedObjectId = null;
       this.isPinching = true;
+
+      // M3.5.1-T6: Notify Board that zoom started (pinch)
+      this.postResponse({ type: 'zoom-started' });
 
       // Calculate initial pinch distance and LOCK the midpoint
       const pointerArray = Array.from(this.pointers.values());
@@ -739,6 +763,9 @@ export abstract class RendererCore {
             // We're tracking an object - start object drag
             this.isObjectDragging = true;
 
+            // M3.5.1-T6: Notify Board that object drag started
+            this.postResponse({ type: 'object-drag-started' });
+
             // Generate unique gesture ID for drag awareness (M5-T1)
             this.currentDragGestureId = `drag-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
@@ -755,41 +782,14 @@ export abstract class RendererCore {
               this.pointerDownEvent &&
               (this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey);
 
-            // [E2E DEBUG] Log critical state at drag start
-            console.log(
-              '[RendererCore] [E2E-DEBUG] Drag start decision point:',
-              {
-                draggedObjectId: this.draggedObjectId,
-                isDraggedObjectSelected,
-                isMultiSelectModifier,
-                selectedObjectIds: Array.from(this.selectedObjectIds),
-                selectedCount: this.selectedObjectIds.size,
-                pointerDownEvent: this.pointerDownEvent
-                  ? {
-                      metaKey: this.pointerDownEvent.metaKey,
-                      ctrlKey: this.pointerDownEvent.ctrlKey,
-                    }
-                  : null,
-              },
-            );
-
             if (isDraggedObjectSelected) {
               // Dragging a selected object - drag all selected objects
-              console.log(
-                '[RendererCore] [E2E-DEBUG] Branch: Dragging already-selected object',
-              );
               for (const id of this.selectedObjectIds) {
                 objectsToDrag.add(id);
               }
             } else {
               // Dragging an unselected object
-              console.log(
-                '[RendererCore] [E2E-DEBUG] Branch: Dragging unselected object',
-              );
               if (isMultiSelectModifier) {
-                console.log(
-                  '[RendererCore] [E2E-DEBUG] Sub-branch: WITH modifier (CMD/Ctrl)',
-                );
                 // With modifier: add to selection and drag all
                 this.selectObjects([this.draggedObjectId], false);
                 // Drag all currently selected objects PLUS the new one
@@ -797,20 +797,9 @@ export abstract class RendererCore {
                 // We need to manually add both the existing selections and the new one
                 for (const id of this.selectedObjectIds) {
                   objectsToDrag.add(id);
-                  console.log(
-                    '[RendererCore] [E2E-DEBUG] Added from selectedObjectIds:',
-                    id,
-                  );
                 }
                 objectsToDrag.add(this.draggedObjectId);
-                console.log(
-                  '[RendererCore] [E2E-DEBUG] Added draggedObjectId:',
-                  this.draggedObjectId,
-                );
               } else {
-                console.log(
-                  '[RendererCore] [E2E-DEBUG] Sub-branch: WITHOUT modifier',
-                );
                 // Without modifier: select only this and drag just this one
                 this.selectObjects([this.draggedObjectId], true);
                 // Only drag the newly selected object
@@ -818,11 +807,6 @@ export abstract class RendererCore {
                 objectsToDrag.add(this.draggedObjectId);
               }
             }
-
-            console.log(
-              '[RendererCore] [E2E-DEBUG] Final objectsToDrag:',
-              Array.from(objectsToDrag),
-            );
 
             // Save initial positions of all objects to drag
             this.draggedObjectsStartPositions.clear();
@@ -877,6 +861,9 @@ export abstract class RendererCore {
           } else {
             // No object - start camera pan
             this.isDragging = true;
+
+            // M3.5.1-T6: Notify Board that pan started
+            this.postResponse({ type: 'pan-started' });
           }
         }
 
@@ -1422,6 +1409,7 @@ export abstract class RendererCore {
             this.postResponse({
               type: 'objects-selected',
               ids: [],
+              screenCoords: [],
             });
           }
         }
@@ -1496,6 +1484,9 @@ export abstract class RendererCore {
           });
         }
 
+        // M3.5.1-T6: Notify Board that object drag ended
+        this.postResponse({ type: 'object-drag-ended' });
+
         // Clear drag state
         this.isObjectDragging = false;
         this.draggedObjectId = null;
@@ -1512,7 +1503,13 @@ export abstract class RendererCore {
       }
 
       // Clear camera drag
+      const wasPanning = this.isDragging;
       this.isDragging = false;
+
+      // M3.5.1-T6: Notify Board that pan ended
+      if (wasPanning) {
+        this.postResponse({ type: 'pan-ended' });
+      }
     }
   }
 
@@ -1532,6 +1529,9 @@ export abstract class RendererCore {
     if (this.isPinching && this.pointers.size < 2) {
       this.isPinching = false;
       console.log('[RendererCore] Pinch gesture ended');
+
+      // M3.5.1-T6: Notify Board that zoom ended
+      this.postResponse({ type: 'zoom-ended' });
 
       // Clear rectangle selection state to prevent ghost selections
       this.rectangleSelectStartX = 0;
@@ -1644,6 +1644,9 @@ export abstract class RendererCore {
   private handleWheel(event: WheelEventData): void {
     if (!this.worldContainer || !this.app) return;
 
+    // M3.5.1-T6: Notify Board that zoom started
+    this.postResponse({ type: 'zoom-started' });
+
     // Mouse position is already canvas-relative (converted in Board.tsx)
     const mouseX = event.clientX;
     const mouseY = event.clientY;
@@ -1665,6 +1668,9 @@ export abstract class RendererCore {
 
     // Request render
     this.app.renderer.render(this.app.stage);
+
+    // M3.5.1-T6: Debounce zoom-ended message (150ms after last wheel event)
+    this.debouncedZoomEnd();
   }
 
   /**
@@ -1795,22 +1801,13 @@ export abstract class RendererCore {
       }
     });
 
-    // [E2E DEBUG] Log selection cache sync
+    // Determine which objects changed selection state for redrawing
     const added = Array.from(this.selectedObjectIds).filter(
       (id) => !previouslySelected.has(id),
     );
     const removed = Array.from(previouslySelected).filter(
       (id) => !this.selectedObjectIds.has(id),
     );
-    if (added.length > 0 || removed.length > 0) {
-      console.log('[RendererCore] [E2E-DEBUG] syncSelectionCache():', {
-        previousCount: previouslySelected.size,
-        newCount: this.selectedObjectIds.size,
-        added,
-        removed,
-        currentSelection: Array.from(this.selectedObjectIds),
-      });
-    }
 
     // Redraw visuals for objects whose selection state changed
     const allIds = new Set([...previouslySelected, ...this.selectedObjectIds]);
@@ -1851,6 +1848,82 @@ export abstract class RendererCore {
    * @param clearPrevious - Whether to clear previous selections first
    */
   private selectObjects(ids: string[], clearPrevious = false): void {
+    // Calculate screen coordinates for all selected objects using PixiJS toScreen()
+    const screenCoords: Array<{
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> = [];
+
+    if (this.worldContainer && ids.length > 0) {
+      for (const id of ids) {
+        const visual = this.objectVisuals.get(id);
+        const obj = this.sceneManager.getObject(id);
+
+        if (visual && obj) {
+          // Use PixiJS toGlobal() to convert visual's position to canvas coordinates
+          // visual.position is in parent (worldContainer) coordinate space
+          // toGlobal converts to stage (canvas) coordinate space
+          const canvasPos = visual.toGlobal({ x: 0, y: 0 });
+
+          // Convert to DOM coordinates (divide by devicePixelRatio)
+          const domX = canvasPos.x / this.devicePixelRatio;
+          const domY = canvasPos.y / this.devicePixelRatio;
+
+          // Calculate dimensions based on object type
+          // Dimensions need to account for both camera scale and devicePixelRatio
+          let width = 0;
+          let height = 0;
+
+          if (obj._kind === ObjectKind.Stack) {
+            // Stack dimensions in world space: use actual constants
+            width = (STACK_WIDTH * this.cameraScale) / this.devicePixelRatio;
+            height = (STACK_HEIGHT * this.cameraScale) / this.devicePixelRatio;
+          } else if (
+            obj._kind === ObjectKind.Zone &&
+            obj._meta?.width &&
+            obj._meta?.height
+          ) {
+            // Zone dimensions from metadata
+            width =
+              ((obj._meta.width as number) * this.cameraScale) /
+              this.devicePixelRatio;
+            height =
+              ((obj._meta.height as number) * this.cameraScale) /
+              this.devicePixelRatio;
+          } else if (obj._kind === ObjectKind.Token) {
+            // Token dimensions (circular with radius from helper)
+            const radius =
+              (getTokenSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Mat) {
+            // Mat dimensions (circular with radius from helper)
+            const radius =
+              (getMatSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Counter) {
+            // Counter dimensions (circular with radius from helper)
+            const radius =
+              (getCounterSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          }
+
+          screenCoords.push({
+            id,
+            x: domX,
+            y: domY,
+            width,
+            height,
+          });
+        }
+      }
+    }
+
     // If clearPrevious, send unselect message for currently selected objects
     if (clearPrevious && this.selectedObjectIds.size > 0) {
       const prevSelected = Array.from(this.selectedObjectIds);
@@ -1860,13 +1933,93 @@ export abstract class RendererCore {
       });
     }
 
-    // Send selection message (store will update, then sync back to us)
+    // Send selection message with screen coordinates
     if (ids.length > 0) {
       this.postResponse({
         type: 'objects-selected',
         ids,
+        screenCoords,
       });
     }
+  }
+
+  /**
+   * Calculate and send screen coordinates for requested objects (M3.5.1-T6).
+   * Called when Board component requests coordinates after camera operations.
+   */
+  private handleRequestScreenCoords(ids: string[]): void {
+    const screenCoords: Array<{
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> = [];
+
+    if (this.worldContainer && ids.length > 0) {
+      for (const id of ids) {
+        const visual = this.objectVisuals.get(id);
+        const obj = this.sceneManager.getObject(id);
+
+        if (visual && obj) {
+          // Use PixiJS toGlobal() to convert visual's position to canvas coordinates
+          const canvasPos = visual.toGlobal({ x: 0, y: 0 });
+
+          // Convert to DOM coordinates (divide by devicePixelRatio)
+          const domX = canvasPos.x / this.devicePixelRatio;
+          const domY = canvasPos.y / this.devicePixelRatio;
+
+          // Calculate dimensions based on object type
+          let width = 0;
+          let height = 0;
+
+          if (obj._kind === ObjectKind.Stack) {
+            width = (STACK_WIDTH * this.cameraScale) / this.devicePixelRatio;
+            height = (STACK_HEIGHT * this.cameraScale) / this.devicePixelRatio;
+          } else if (
+            obj._kind === ObjectKind.Zone &&
+            obj._meta?.width &&
+            obj._meta?.height
+          ) {
+            width =
+              ((obj._meta.width as number) * this.cameraScale) /
+              this.devicePixelRatio;
+            height =
+              ((obj._meta.height as number) * this.cameraScale) /
+              this.devicePixelRatio;
+          } else if (obj._kind === ObjectKind.Token) {
+            const radius =
+              (getTokenSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Mat) {
+            const radius =
+              (getMatSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          } else if (obj._kind === ObjectKind.Counter) {
+            const radius =
+              (getCounterSize(obj) * this.cameraScale) / this.devicePixelRatio;
+            width = radius * 2;
+            height = radius * 2;
+          }
+
+          screenCoords.push({
+            id,
+            x: domX,
+            y: domY,
+            width,
+            height,
+          });
+        }
+      }
+    }
+
+    // Send screen coordinates response
+    this.postResponse({
+      type: 'screen-coords',
+      screenCoords,
+    });
   }
 
   /**

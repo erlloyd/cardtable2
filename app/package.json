@@ -23,6 +23,7 @@
     "@cardtable2/shared": "workspace:*",
     "@headlessui/react": "^2.2.9",
     "@tanstack/react-router": "^1.136.1",
+    "lucide-react": "^0.554.0",
     "pixi.js": "^8.14.1",
     "rbush": "^4.0.1",
     "react": "^19.2.0",

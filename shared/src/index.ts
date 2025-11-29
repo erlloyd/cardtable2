@@ -119,7 +119,8 @@ export type MainToRendererMessage =
         clientId: number;
         state: AwarenessState;
       }>;
-    };
+    }
+  | { type: 'request-screen-coords'; ids: string[] }; // M3.5.1-T6: Request screen coordinates for objects
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =
@@ -138,6 +139,13 @@ export type RendererToMainMessage =
   | {
       type: 'objects-selected';
       ids: string[];
+      screenCoords: Array<{
+        id: string;
+        x: number; // DOM coordinates (center of object)
+        y: number; // DOM coordinates (center of object)
+        width: number; // Object width in DOM pixels
+        height: number; // Object height in DOM pixels
+      }>;
     }
   | {
       type: 'objects-unselected';
@@ -159,7 +167,23 @@ export type RendererToMainMessage =
   | {
       type: 'awareness-update-rate'; // M5-T1: Awareness update frequency monitoring
       hz: number; // Updates per second
-    };
+    }
+  | {
+      type: 'screen-coords'; // M3.5.1-T6: Response to request-screen-coords
+      screenCoords: Array<{
+        id: string;
+        x: number; // DOM coordinates (center of object)
+        y: number; // DOM coordinates (center of object)
+        width: number; // Object width in DOM pixels
+        height: number; // Object height in DOM pixels
+      }>;
+    }
+  | { type: 'pan-started' } // M3.5.1-T6: Camera pan started
+  | { type: 'pan-ended' } // M3.5.1-T6: Camera pan ended
+  | { type: 'zoom-started' } // M3.5.1-T6: Zoom started (wheel or pinch)
+  | { type: 'zoom-ended' } // M3.5.1-T6: Zoom ended
+  | { type: 'object-drag-started' } // M3.5.1-T6: Object drag started
+  | { type: 'object-drag-ended' }; // M3.5.1-T6: Object drag ended
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

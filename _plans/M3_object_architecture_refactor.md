@@ -915,7 +915,7 @@ This refactoring is **purely architectural** - establishing patterns for future 
 
 **SceneManager.ts Implementation Notes:**
 - `BBox` interface exported for use in behavior implementations
-- Accurate bounding boxes per object type (cards: 100x140, circles: radius-based, zones: width/height)
+- Accurate bounding boxes per object type (cards: use STACK_WIDTH/STACK_HEIGHT constants from code, circles: radius-based, zones: width/height)
 
 ### CI/CD Infrastructure Improvements
 

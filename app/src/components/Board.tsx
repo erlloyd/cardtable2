@@ -18,6 +18,9 @@ import {
   unselectObjects,
 } from '../store/YjsActions';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
+import { getSelectedObjectIds } from '../store/YjsSelectors';
+import { ActionHandle } from './ActionHandle';
+import type { ActionContext } from '../actions/types';
 
 export interface BoardProps {
   tableId: string;
@@ -29,6 +32,8 @@ export interface BoardProps {
   onInteractionModeChange?: (mode: 'pan' | 'select') => void; // M3.5.1-T5: Global menu bar integration
   isMultiSelectMode?: boolean; // M3.5.1-T5: Multi-select mode for touch devices
   onMultiSelectModeChange?: (enabled: boolean) => void; // M3.5.1-T5: Multi-select mode callback
+  actionContext?: ActionContext | null; // M3.5.1-T6: Action context for ActionHandle (optional for tests)
+  onActionExecuted?: (actionId: string) => void; // M3.5.1-T6: Callback when action executed
 }
 
 function Board({
@@ -41,6 +46,8 @@ function Board({
   onInteractionModeChange,
   isMultiSelectMode: externalIsMultiSelectMode,
   onMultiSelectModeChange,
+  actionContext,
+  onActionExecuted,
 }: BoardProps) {
   const rendererRef = useRef<IRendererAdapter | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +96,15 @@ function Board({
     'pan' | 'select'
   >('pan');
   const [awarenessHz, setAwarenessHz] = useState<number>(0);
+  const [debugCoords, setDebugCoords] = useState<Array<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false); // M3.5.1-T6: Hide overlay during pan/zoom
+  const [isWaitingForCoords, setIsWaitingForCoords] = useState(false); // M3.5.1-T6: Waiting for fresh coordinates after camera op
 
   // M3.5.1-T5: Use external modes if provided (for GlobalMenuBar integration)
   const interactionMode = externalInteractionMode ?? internalInteractionMode;
@@ -191,31 +207,25 @@ function Board({
 
         case 'objects-moved': {
           console.log(`[Board] ${message.updates.length} object(s) moved`);
-          console.log(
-            '[Board] [E2E-DEBUG] Received objects-moved from renderer, calling moveObjects(store)',
-          );
           // Update store with new positions (M3-T2.5 bi-directional sync)
           moveObjects(storeRef.current, message.updates);
-          console.log('[Board] [E2E-DEBUG] moveObjects(store) completed');
           break;
         }
 
         case 'objects-selected': {
           console.log(`[Board] ${message.ids.length} object(s) selected`);
-          console.log(
-            '[Board] [E2E-DEBUG] Received objects-selected from renderer, calling selectObjects(store) with ids:',
-            message.ids,
+
+          // Store screen coordinates for debug overlay (M3.5.1-T6)
+          setDebugCoords(
+            message.screenCoords.length > 0 ? message.screenCoords : null,
           );
+
           // Update store with selection ownership (M3-T3)
           const result = selectObjects(
             storeRef.current,
             message.ids,
             storeRef.current.getActorId(),
           );
-          console.log('[Board] [E2E-DEBUG] selectObjects(store) completed:', {
-            selected: result.selected.length,
-            failed: result.failed.length,
-          });
           if (result.failed.length > 0) {
             console.warn(
               `[Board] Failed to select ${result.failed.length} object(s):`,
@@ -237,17 +247,16 @@ function Board({
 
         case 'objects-unselected': {
           console.log(`[Board] ${message.ids.length} object(s) unselected`);
-          console.log(
-            '[Board] [E2E-DEBUG] Received objects-unselected from renderer, calling unselectObjects(store) with ids:',
-            message.ids,
-          );
+
+          // M3.5.1-T6: Clear debug overlay coordinates
+          setDebugCoords(null);
+
           // Release selection ownership (M3-T3)
           unselectObjects(
             storeRef.current,
             message.ids,
             storeRef.current.getActorId(),
           );
-          console.log('[Board] [E2E-DEBUG] unselectObjects(store) completed');
 
           // M3.5.1-T4: Trigger selection settled callbacks (for context menu timing)
           if (selectionSettledCallbacksRef.current.length > 0) {
@@ -291,6 +300,81 @@ function Board({
         case 'awareness-update-rate': {
           // M5-T1: Update awareness Hz display
           setAwarenessHz(message.hz);
+          break;
+        }
+
+        case 'pan-started': {
+          // M3.5.1-T6: Hide overlay during pan
+          setIsCameraActive(true);
+          break;
+        }
+
+        case 'pan-ended': {
+          // M3.5.1-T6: Pan ended - request fresh coordinates before showing overlay
+          setIsCameraActive(false);
+          // Get currently selected objects from store (source of truth)
+          const selectedIds = getSelectedObjectIds(storeRef.current);
+          // If there are selected objects, request fresh screen coordinates
+          if (selectedIds.length > 0) {
+            setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
+            rendererRef.current?.sendMessage({
+              type: 'request-screen-coords',
+              ids: selectedIds,
+            });
+          }
+          break;
+        }
+
+        case 'zoom-started': {
+          // M3.5.1-T6: Hide overlay during zoom
+          setIsCameraActive(true);
+          break;
+        }
+
+        case 'zoom-ended': {
+          // M3.5.1-T6: Zoom ended - request fresh coordinates before showing overlay
+          setIsCameraActive(false);
+          // Get currently selected objects from store (source of truth)
+          const selectedIds = getSelectedObjectIds(storeRef.current);
+          // If there are selected objects, request fresh screen coordinates
+          if (selectedIds.length > 0) {
+            setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
+            rendererRef.current?.sendMessage({
+              type: 'request-screen-coords',
+              ids: selectedIds,
+            });
+          }
+          break;
+        }
+
+        case 'object-drag-started': {
+          // M3.5.1-T6: Hide overlay during object drag
+          setIsCameraActive(true);
+          break;
+        }
+
+        case 'object-drag-ended': {
+          // M3.5.1-T6: Object drag ended - request fresh coordinates before showing overlay
+          setIsCameraActive(false);
+          // Get currently selected objects from store (source of truth)
+          const selectedIds = getSelectedObjectIds(storeRef.current);
+          // If there are selected objects, request fresh screen coordinates
+          if (selectedIds.length > 0) {
+            setIsWaitingForCoords(true); // Don't show overlay until fresh coords arrive
+            rendererRef.current?.sendMessage({
+              type: 'request-screen-coords',
+              ids: selectedIds,
+            });
+          }
+          break;
+        }
+
+        case 'screen-coords': {
+          // M3.5.1-T6: Update overlay coordinates (fresh coordinates received)
+          setDebugCoords(
+            message.screenCoords.length > 0 ? message.screenCoords : null,
+          );
+          setIsWaitingForCoords(false); // Fresh coords received, can show overlay now
           break;
         }
 
@@ -344,11 +428,6 @@ function Board({
       if (changes.updated.length > 0) {
         console.log(
           `[Board] Forwarding ${changes.updated.length} updated object(s)`,
-        );
-        console.log(
-          '[Board] [E2E-DEBUG] Yjs observer detected updates, forwarding objects-updated to renderer with',
-          changes.updated.length,
-          'object(s)',
         );
         renderer.sendMessage({
           type: 'objects-updated',
@@ -1000,6 +1079,20 @@ function Board({
           </div>
         </>
       )}
+
+      {/* M3.5.1-T6: Action Handle (positioned above debug overlay center) */}
+      {!isCameraActive &&
+        !isWaitingForCoords &&
+        debugCoords &&
+        debugCoords.length > 0 &&
+        actionContext && (
+          <ActionHandle
+            key={debugCoords.map((c) => c.id).join(',')}
+            screenCoords={debugCoords}
+            actionContext={actionContext}
+            onActionExecuted={onActionExecuted}
+          />
+        )}
     </div>
   );
 }

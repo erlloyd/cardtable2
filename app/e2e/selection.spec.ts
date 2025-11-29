@@ -484,7 +484,9 @@ test.describe('Selection Ownership E2E', () => {
       button: 0,
       buttons: 1,
     });
-    await page.waitForTimeout(50);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
 
     // Dispatch pointermove events (simulate drag with multiple steps)
     const steps = 5;
@@ -508,7 +510,9 @@ test.describe('Selection Ownership E2E', () => {
         button: 0,
         buttons: 1,
       });
-      await page.waitForTimeout(16); // ~60fps
+      await page.evaluate(async () => {
+        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+      });
     }
 
     // Dispatch pointerup event at final position
@@ -582,7 +586,9 @@ test.describe('Selection Ownership E2E', () => {
     // Reset to test scene
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(500);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    }); // REPLACED waitForTimeout(500);
 
     // Get first object data
     const objectData = await page.evaluate(() => {
@@ -640,7 +646,9 @@ test.describe('Selection Ownership E2E', () => {
       buttons: 0,
     });
 
-    await page.waitForTimeout(100); // Wait for selection
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    }); // REPLACED waitForTimeout(100); // Wait for selection
 
     // Verify it's selected
     const isSelected = await page.evaluate((id: string) => {
@@ -685,7 +693,9 @@ test.describe('Selection Ownership E2E', () => {
         button: 0,
         buttons: 1,
       });
-      await page.waitForTimeout(16);
+      await page.evaluate(async () => {
+        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+      }); // REPLACED waitForTimeout(16);
     }
 
     await canvas.dispatchEvent('pointerup', {
@@ -701,7 +711,9 @@ test.describe('Selection Ownership E2E', () => {
       buttons: 0,
     });
 
-    await page.waitForTimeout(300);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    }); // REPLACED waitForTimeout(300);
 
     // Verify still selected and moved
     const afterDrag = await page.evaluate((id: string) => {
@@ -729,7 +741,9 @@ test.describe('Selection Ownership E2E', () => {
     console.log('[E2E-TEST] Step 1: Reset to test scene');
     await page.click('button:has-text("Reset to Test Scene")');
     await expect(page.locator('text=Objects: 15')).toBeVisible();
-    await page.waitForTimeout(500);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    }); // REPLACED waitForTimeout(500);
 
     // Get two objects
     console.log('[E2E-TEST] Step 2: Get object data from store');
@@ -852,7 +866,9 @@ test.describe('Selection Ownership E2E', () => {
         buttons: 1,
         metaKey: true,
       });
-      await page.waitForTimeout(16);
+      await page.evaluate(async () => {
+        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+      }); // REPLACED waitForTimeout(16);
     }
 
     await canvas.dispatchEvent('pointerup', {
@@ -869,7 +885,9 @@ test.describe('Selection Ownership E2E', () => {
       metaKey: true,
     });
 
-    await page.waitForTimeout(300);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    }); // REPLACED waitForTimeout(300);
 
     // Verify both objects moved
     const afterDrag = await page.evaluate((data: typeof objectsData) => {

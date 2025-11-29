@@ -1,9 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { lazy, Suspense, useCallback, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { YjsStore } from '../store/YjsStore';
 import { createObject, clearAllSelections } from '../store/YjsActions';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, type TableObject } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
+import { buildActionContext } from '../actions/buildActionContext';
+import type { ActionContext } from '../actions/types';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -176,6 +186,51 @@ function DevTable() {
     );
   };
 
+  // Track selection state for action context (same pattern as table route)
+  const [selectionState, setSelectionState] = useState<{
+    ids: string[];
+    objects: TableObject[];
+  }>({ ids: [], objects: [] });
+
+  // Subscribe to store changes to update selection state
+  useEffect(() => {
+    if (!store) return;
+
+    const updateSelection = () => {
+      const allObjects = store.getAllObjects();
+      const actorId = store.getActorId();
+
+      // Find all objects selected by this actor
+      const selectedIds: string[] = [];
+      const selectedObjects: TableObject[] = [];
+
+      for (const [id, obj] of allObjects.entries()) {
+        if (obj._selectedBy === actorId) {
+          selectedIds.push(id);
+          selectedObjects.push(obj);
+        }
+      }
+
+      setSelectionState({ ids: selectedIds, objects: selectedObjects });
+    };
+
+    // Initial selection state
+    updateSelection();
+
+    // Subscribe to changes
+    const unsubscribe = store.onObjectsChange(() => {
+      updateSelection();
+    });
+
+    return unsubscribe;
+  }, [store]);
+
+  // Create action context with live selection info (same pattern as table route)
+  const actionContext: ActionContext | null = useMemo(() => {
+    const { ids, objects } = selectionState;
+    return buildActionContext(store, ids, objects);
+  }, [store, selectionState]);
+
   return (
     <div className="dev-table">
       {/* Store status display and test controls */}
@@ -265,6 +320,7 @@ function DevTable() {
             store={store}
             connectionStatus={connectionStatus}
             showDebugUI={true}
+            actionContext={actionContext}
           />
         ) : (
           <div>Initializing table state...</div>

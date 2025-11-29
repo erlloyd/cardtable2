@@ -582,42 +582,18 @@ export abstract class RendererCore {
   private handlePointerMove(event: PointerEventData): void {
     if (!this.worldContainer || !this.app) return;
 
-    const pointerInfo = this.pointers.get(event.pointerId);
+    const pointerInfo = this.gestures.getPointer(event.pointerId);
 
     // Only handle gestures if pointer is being tracked (after pointer-down)
     if (pointerInfo) {
-      // Store last position for delta calculation
-      const lastX = pointerInfo.lastX;
-      const lastY = pointerInfo.lastY;
-
-      // Update pointer position
-      pointerInfo.lastX = event.clientX;
-      pointerInfo.lastY = event.clientY;
+      // Update pointer position in gesture recognizer
+      this.gestures.updatePointer(event);
 
       // Handle pinch zoom (2 fingers)
-      if (this.isPinching && this.pointers.size === 2) {
-        const pointerArray = Array.from(this.pointers.values());
-        const currentDistance = this.getPointerDistance(
-          pointerArray[0],
-          pointerArray[1],
-        );
-
-        // Calculate scale change
-        const scaleChange = currentDistance / this.initialPinchDistance;
-        this.cameraScale = this.initialPinchScale * scaleChange;
-
-        // Apply zoom (no clamping - unlimited zoom)
-        this.worldContainer.scale.set(this.cameraScale);
-
-        // Adjust position so the LOCKED world point stays under the LOCKED screen midpoint
-        // Formula: screenPos = cameraPos + worldPos * scale
-        // Therefore: cameraPos = screenPos - worldPos * scale
-        this.worldContainer.position.x =
-          this.initialPinchMidpoint.x -
-          this.initialPinchWorldPoint.x * this.cameraScale;
-        this.worldContainer.position.y =
-          this.initialPinchMidpoint.y -
-          this.initialPinchWorldPoint.y * this.cameraScale;
+      if (this.camera.updatePinch(this.gestures, this.worldContainer)) {
+        // Update coordinate converter with new scale
+        this.coordConverter.setCameraScale(this.worldContainer.scale.x);
+        this.visual.setCameraScale(this.worldContainer.scale.x);
 
         // Request render
         this.app.renderer.render(this.app.stage);
@@ -625,219 +601,114 @@ export abstract class RendererCore {
       }
 
       // Handle single-pointer pan/drag (M2-T3 + M2-T5 object dragging)
-      if (this.pointers.size === 1) {
-        // Calculate movement delta from start
-        const dx = event.clientX - pointerInfo.startX;
-        const dy = event.clientY - pointerInfo.startY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
+      if (this.gestures.getPointerCount() === 1) {
         // Check if movement exceeds drag slop threshold
-        const pointerType = event.pointerType;
-        const slopThreshold =
-          pointerType === 'mouse' ||
-          pointerType === 'pen' ||
-          pointerType === 'touch'
-            ? DRAG_SLOP[pointerType]
-            : DRAG_SLOP.mouse;
-
-        // Start dragging once we exceed the slop threshold
         if (
-          !this.isDragging &&
-          !this.isObjectDragging &&
-          !this.isRectangleSelecting &&
-          distance > slopThreshold &&
+          this.gestures.exceedsDragSlop(event, pointerInfo) &&
+          !this.drag.isDragging() &&
+          !this.rectangleSelect.isSelecting() &&
           event.isPrimary
         ) {
-          // Check if we should start rectangle selection
-          if (
-            this.rectangleSelectStartX !== 0 ||
-            this.rectangleSelectStartY !== 0
-          ) {
-            // Start rectangle selection
-            this.isRectangleSelecting = true;
-            console.log('[RendererCore] Starting rectangle selection');
-          } else if (this.draggedObjectId) {
-            // We're tracking an object - start object drag
-            this.isObjectDragging = true;
+          // Determine what to start based on what was prepared in handlePointerDown
+          const draggedId = this.drag.getDraggedObjectId();
 
+          if (draggedId) {
             // M3.5.1-T6: Notify Board that object drag started
             this.postResponse({ type: 'object-drag-started' });
 
-            // Generate unique gesture ID for drag awareness (M5-T1)
-            this.currentDragGestureId = `drag-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-
-            // Determine which objects to drag
-            // If the dragged object is already selected, drag all selected objects (multi-drag)
-            // If not selected:
-            //   - With modifier: add to selection and drag all
-            //   - Without modifier: select only this one and drag it
-            const objectsToDrag = new Set<string>();
-            const isDraggedObjectSelected = this.selectedObjectIds.has(
-              this.draggedObjectId,
+            // Start object drag (determines which objects to drag, handles selection, updates z-order)
+            const draggedIds = this.drag.startObjectDrag(
+              this.sceneManager,
+              this.selection,
             );
+
+            // Handle selection updates if needed (async)
+            const isDraggedObjectSelected = this.selection.isSelected(draggedId);
+            const pointerDownEvent = this.drag.getPointerDownEvent();
             const isMultiSelectModifier =
-              this.pointerDownEvent &&
-              (this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey);
+              pointerDownEvent &&
+              (pointerDownEvent.metaKey || pointerDownEvent.ctrlKey);
 
-            if (isDraggedObjectSelected) {
-              // Dragging a selected object - drag all selected objects
-              for (const id of this.selectedObjectIds) {
-                objectsToDrag.add(id);
-              }
-            } else {
-              // Dragging an unselected object
+            if (!isDraggedObjectSelected) {
+              // Dragging an unselected object - update selection
               if (isMultiSelectModifier) {
-                // With modifier: add to selection and drag all
-                this.selectObjects([this.draggedObjectId], false);
-                // Drag all currently selected objects PLUS the new one
-                // Note: selectObjects() is async, so selectedObjectIds won't be updated yet
-                // We need to manually add both the existing selections and the new one
-                for (const id of this.selectedObjectIds) {
-                  objectsToDrag.add(id);
-                }
-                objectsToDrag.add(this.draggedObjectId);
+                this.selectObjects([draggedId], false); // Add to selection
               } else {
-                // Without modifier: select only this and drag just this one
-                this.selectObjects([this.draggedObjectId], true);
-                // Only drag the newly selected object
-                // (don't use selectedObjectIds as it hasn't been updated yet from the async message)
-                objectsToDrag.add(this.draggedObjectId);
-              }
-            }
-
-            // Save initial positions of all objects to drag
-            this.draggedObjectsStartPositions.clear();
-            for (const objectId of objectsToDrag) {
-              const obj = this.sceneManager.getObject(objectId);
-              if (obj) {
-                this.draggedObjectsStartPositions.set(objectId, {
-                  x: obj._pos.x,
-                  y: obj._pos.y,
-                });
+                this.selectObjects([draggedId], true); // Replace selection
               }
             }
 
             // Apply drag visual feedback to all dragged objects
-            // Also update _sortKey to ensure hit-testing respects the new z-order
+            for (const objectId of draggedIds) {
+              const isSelected = this.selection.isSelected(objectId);
+              this.visual.updateDragFeedback(
+                objectId,
+                true,
+                isSelected,
+                this.sceneManager,
+              );
 
-            // Find the current maximum sortKey (lexicographic comparison for fractional indexing)
-            let maxSortKey = '0';
-            for (const [, obj] of this.sceneManager.getAllObjects()) {
-              if (obj._sortKey > maxSortKey) {
-                maxSortKey = obj._sortKey;
-              }
-            }
-
-            // Generate new sortKeys for dragged cards using fractional indexing
-            // Increment the prefix to ensure new keys are lexicographically greater
-            const [prefix] = maxSortKey.split('|');
-            const newPrefix = String(Number(prefix) + 1);
-
-            let sortKeyCounter = 0;
-            for (const objectId of objectsToDrag) {
-              this.updateDragFeedback(objectId, true);
-
-              // Move all dragged objects to top of z-order (both visual and logical)
-              const visual = this.objectVisuals.get(objectId);
-              const obj = this.sceneManager.getObject(objectId);
-              if (visual && obj && this.worldContainer) {
-                // Update visual z-order
+              // Update visual z-order
+              const visual = this.visual.getVisual(objectId);
+              if (visual && this.worldContainer) {
                 this.worldContainer.setChildIndex(
                   visual,
                   this.worldContainer.children.length - 1,
                 );
-
-                // Update logical z-order (_sortKey) using fractional indexing format
-                // TODO: Current implementation only supports up to 26 cards in a single drag operation
-                // (a-z = 97-122). For production, implement proper fractional indexing library
-                // that supports unlimited suffix generation (e.g., 'aa', 'ab', ... 'ba', 'bb').
-                // See: https://github.com/rocicorp/fractional-indexing or similar
-                obj._sortKey = `${newPrefix}|${String.fromCharCode(97 + sortKeyCounter++)}`;
               }
             }
           } else {
-            // No object - start camera pan
-            this.isDragging = true;
+            // Check if we should start rectangle selection or camera pan
+            // Rectangle selection is prepared when clicking empty space in select mode
+            const worldPos = this.coordConverter.screenToWorld(
+              pointerInfo.startX,
+              pointerInfo.startY,
+              this.worldContainer,
+            );
 
-            // M3.5.1-T6: Notify Board that pan started
-            this.postResponse({ type: 'pan-started' });
+            // If we're in a mode that supports rectangle selection, start it
+            const shouldStartRectangle =
+              this.interactionMode === 'select' ||
+              (pointerInfo && 'metaKey' in event && (event.metaKey || event.ctrlKey));
+
+            if (shouldStartRectangle) {
+              this.rectangleSelect.start(worldPos.x, worldPos.y);
+              console.log('[RendererCore] Starting rectangle selection');
+            } else {
+              // No object and not rectangle selecting - start camera pan
+              // M3.5.1-T6: Notify Board that pan started
+              this.postResponse({ type: 'pan-started' });
+            }
           }
         }
 
         // If dragging an object, update positions of all dragged objects
-        if (this.isObjectDragging && this.draggedObjectId && event.isPrimary) {
+        if (this.drag.isDragging() && event.isPrimary) {
           // Calculate current world position
-          const worldX =
-            (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-          const worldY =
-            (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+          const worldPos = this.coordConverter.screenToWorld(
+            event.clientX,
+            event.clientY,
+            this.worldContainer,
+          );
 
-          // Calculate drag delta from the primary dragged object's start position
-          const deltaX = worldX - this.dragStartWorldX;
-          const deltaY = worldY - this.dragStartWorldY;
-
-          // Update all dragged objects' positions based on delta
-          // Use draggedObjectsStartPositions instead of selectedObjectIds to avoid race condition:
-          // When dragging an unselected object, selectObjects() is async so selectedObjectIds
-          // won't be updated yet. draggedObjectsStartPositions has the definitive list.
-          for (const objectId of this.draggedObjectsStartPositions.keys()) {
-            const startPos = this.draggedObjectsStartPositions.get(objectId);
-            const obj = this.sceneManager.getObject(objectId);
-
-            if (startPos && obj) {
-              // Update object position in memory (relative to start position)
-              obj._pos.x = startPos.x + deltaX;
-              obj._pos.y = startPos.y + deltaY;
-
-              // Update visual position immediately for smooth rendering
-              const visual = this.objectVisuals.get(objectId);
-              if (visual) {
-                visual.x = obj._pos.x;
-                visual.y = obj._pos.y;
-              }
-            }
-          }
+          // Update drag positions (handles all dragged objects)
+          this.drag.updateDragPositions(
+            worldPos.x,
+            worldPos.y,
+            this.sceneManager,
+            this.visual.getAllVisuals(),
+          );
 
           // Send drag state update for awareness (M5-T1)
-          if (this.currentDragGestureId && this.draggedObjectId) {
-            const primaryObj = this.sceneManager.getObject(
-              this.draggedObjectId,
-            );
-            if (primaryObj) {
-              // Calculate relative offsets for secondary objects (if dragging multiple)
-              const secondaryOffsets: Record<
-                string,
-                { dx: number; dy: number; dr: number }
-              > = {};
-              let hasSecondary = false;
-
-              for (const [id] of this.draggedObjectsStartPositions) {
-                if (id !== this.draggedObjectId) {
-                  // This is a secondary object
-                  const secondaryObj = this.sceneManager.getObject(id);
-                  if (secondaryObj) {
-                    secondaryOffsets[id] = {
-                      dx: secondaryObj._pos.x - primaryObj._pos.x,
-                      dy: secondaryObj._pos.y - primaryObj._pos.y,
-                      dr: secondaryObj._pos.r - primaryObj._pos.r,
-                    };
-                    hasSecondary = true;
-                  }
-                }
-              }
-
-              this.postResponse({
-                type: 'drag-state-update',
-                gid: this.currentDragGestureId,
-                primaryId: this.draggedObjectId,
-                pos: {
-                  x: primaryObj._pos.x,
-                  y: primaryObj._pos.y,
-                  r: primaryObj._pos.r,
-                },
-                secondaryOffsets: hasSecondary ? secondaryOffsets : undefined,
-              });
-            }
+          const dragStateUpdate = this.drag.getDragStateUpdate(this.sceneManager);
+          if (dragStateUpdate) {
+            this.postResponse({
+              type: 'drag-state-update',
+              gid: dragStateUpdate.gid,
+              primaryId: dragStateUpdate.primaryId,
+              pos: dragStateUpdate.pos,
+              secondaryOffsets: dragStateUpdate.secondaryOffsets,
+            });
           }
 
           // Request render
@@ -846,33 +717,24 @@ export abstract class RendererCore {
           this.app.renderer.render(this.app.stage);
         }
         // If dragging camera, manually pan the camera
-        else if (this.isDragging && event.isPrimary) {
-          // Calculate delta from last position
-          const deltaX = event.clientX - lastX;
-          const deltaY = event.clientY - lastY;
-
-          // Move world container (camera pans by moving the world)
-          this.worldContainer.position.x += deltaX;
-          this.worldContainer.position.y += deltaY;
-
-          // Request render
-          this.app.renderer.render(this.app.stage);
+        else if (event.isPrimary && !this.drag.isDragging() && !this.rectangleSelect.isSelecting()) {
+          // Use camera manager to pan
+          if (this.camera.pan(pointerInfo.lastX, pointerInfo.lastY, event.clientX, event.clientY, this.worldContainer)) {
+            // Request render
+            this.app.renderer.render(this.app.stage);
+          }
         }
-        // If rectangle selecting, draw the selection rectangle
-        else if (this.isRectangleSelecting && event.isPrimary) {
+        // If rectangle selecting, update the selection rectangle
+        else if (this.rectangleSelect.isSelecting() && event.isPrimary) {
           // Calculate current world position
-          const worldX =
-            (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-          const worldY =
-            (event.clientY - this.worldContainer.position.y) / this.cameraScale;
-
-          // Update or create selection rectangle
-          this.updateSelectionRectangle(
-            this.rectangleSelectStartX,
-            this.rectangleSelectStartY,
-            worldX,
-            worldY,
+          const worldPos = this.coordConverter.screenToWorld(
+            event.clientX,
+            event.clientY,
+            this.worldContainer,
           );
+
+          // Update selection rectangle
+          this.rectangleSelect.update(worldPos.x, worldPos.y, this.worldContainer);
 
           // Request render
           this.app.renderer.render(this.app.stage);
@@ -884,33 +746,48 @@ export abstract class RendererCore {
     // Only for mouse and pen pointers - touch doesn't have hover
     // Also skip if we're actively dragging, pinching, dragging an object, or rectangle selecting
     if (
-      (event.pointerType === 'mouse' || event.pointerType === 'pen') &&
-      !this.isDragging &&
-      !this.isPinching &&
-      !this.isObjectDragging &&
-      !this.isRectangleSelecting
+      this.hover.shouldProcessHover(
+        event.pointerType,
+        this.drag.isDragging(),
+        this.camera.isPinching(),
+        this.rectangleSelect.isSelecting(),
+      )
     ) {
       // Convert screen coordinates to world coordinates
-      const worldX =
-        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+      const worldPos = this.coordConverter.screenToWorld(
+        event.clientX,
+        event.clientY,
+        this.worldContainer,
+      );
 
       // Perform hit-test
-      const hitResult = this.sceneManager.hitTest(worldX, worldY);
+      const hitResult = this.sceneManager.hitTest(worldPos.x, worldPos.y);
       const newHoveredId = hitResult ? hitResult.id : null;
 
       // Update hover state if changed
-      if (newHoveredId !== this.hoveredObjectId) {
+      if (this.hover.updateHoveredObject(newHoveredId)) {
         // Clear previous hover
-        if (this.hoveredObjectId) {
-          this.updateHoverFeedback(this.hoveredObjectId, false);
+        const prevId = this.hover.getPreviousHoveredId();
+        if (prevId) {
+          const isSelected = this.selection.isSelected(prevId);
+          this.visual.updateHoverFeedback(
+            prevId,
+            false,
+            isSelected,
+            this.sceneManager,
+          );
         }
 
         // Set new hover
-        this.hoveredObjectId = newHoveredId;
-        if (this.hoveredObjectId) {
-          this.updateHoverFeedback(this.hoveredObjectId, true);
+        const currentId = this.hover.getHoveredObjectId();
+        if (currentId) {
+          const isSelected = this.selection.isSelected(currentId);
+          this.visual.updateHoverFeedback(
+            currentId,
+            true,
+            isSelected,
+            this.sceneManager,
+          );
         }
 
         // Request render to show hover feedback
@@ -919,12 +796,17 @@ export abstract class RendererCore {
     } else {
       // Clear hover when not applicable (touch, dragging, or pinching)
       // But don't clear if we're dragging the hovered object (M2-T5)
-      if (
-        this.hoveredObjectId &&
-        this.hoveredObjectId !== this.draggedObjectId
-      ) {
-        this.updateHoverFeedback(this.hoveredObjectId, false);
-        this.hoveredObjectId = null;
+      const hoveredId = this.hover.getHoveredObjectId();
+      const draggedId = this.drag.getDraggedObjectId();
+      if (hoveredId && hoveredId !== draggedId) {
+        const isSelected = this.selection.isSelected(hoveredId);
+        this.visual.updateHoverFeedback(
+          hoveredId,
+          false,
+          isSelected,
+          this.sceneManager,
+        );
+        this.hover.clearHover();
         this.app.renderer.render(this.app.stage);
       }
     }
@@ -932,16 +814,17 @@ export abstract class RendererCore {
     // Send cursor position in world coordinates (M3-T4)
     // Skip cursor updates during object drag (drag-state-update already sent)
     // This avoids double awareness updates (cursor + drag = 60Hz instead of 30Hz)
-    if (!this.isObjectDragging) {
-      const worldX =
-        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
+    if (!this.drag.isDragging()) {
+      const worldPos = this.coordConverter.screenToWorld(
+        event.clientX,
+        event.clientY,
+        this.worldContainer,
+      );
 
       this.postResponse({
         type: 'cursor-position',
-        x: worldX,
-        y: worldY,
+        x: worldPos.x,
+        y: worldPos.y,
       });
     }
   }
@@ -1417,76 +1300,57 @@ export abstract class RendererCore {
     if (!this.worldContainer) return;
 
     // Store rectangle selecting state before we potentially reset it
-    const wasRectangleSelecting = this.isRectangleSelecting;
+    const wasRectangleSelecting = this.rectangleSelect.isSelecting();
 
     // Clear pointer tracking
-    this.pointers.delete(event.pointerId);
+    this.gestures.removePointer(event.pointerId);
 
     // If we were pinching and now have less than 2 pointers, end pinch
-    if (this.isPinching && this.pointers.size < 2) {
-      this.isPinching = false;
+    if (this.camera.isPinching() && this.gestures.getPointerCount() < 2) {
+      this.camera.endPinch();
       console.log('[RendererCore] Pinch gesture ended');
 
-      // M3.5.1-T6: Notify Board that zoom ended
-      this.postResponse({ type: 'zoom-ended' });
+      // M3.5.1-T6: Notify Board that zoom ended (debounced)
+      this.debouncedZoomEnd();
 
       // Clear rectangle selection state to prevent ghost selections
-      this.rectangleSelectStartX = 0;
-      this.rectangleSelectStartY = 0;
-      this.isRectangleSelecting = false;
+      this.rectangleSelect.clear();
 
       // Transition to pan mode: reset remaining pointer's start position
       // so user doesn't need to exceed drag slop again
-      if (this.pointers.size === 1) {
-        const remainingPointer = Array.from(this.pointers.values())[0];
-        remainingPointer.startX = remainingPointer.lastX;
-        remainingPointer.startY = remainingPointer.lastY;
-        // Allow immediate dragging without slop threshold
-        this.isDragging = true;
+      if (this.gestures.getPointerCount() === 1) {
+        this.gestures.resetRemainingPointer();
       }
     }
 
     // Handle rectangle selection completion
-    if (this.isRectangleSelecting && event.isPrimary) {
+    if (this.rectangleSelect.isSelecting() && event.isPrimary) {
       // Calculate current world position
-      const worldX =
-        (event.clientX - this.worldContainer.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer.position.y) / this.cameraScale;
-
-      // Calculate rectangle bounds
-      const minX = Math.min(this.rectangleSelectStartX, worldX);
-      const minY = Math.min(this.rectangleSelectStartY, worldY);
-      const maxX = Math.max(this.rectangleSelectStartX, worldX);
-      const maxY = Math.max(this.rectangleSelectStartY, worldY);
-
-      // Hit-test all objects within rectangle
-      const objectsInRect = this.sceneManager.hitTestRect({
-        minX,
-        minY,
-        maxX,
-        maxY,
-      });
-
-      // Determine if multi-select (keep existing selections)
-      const isMultiSelectModifier =
-        this.pointerDownEvent?.metaKey || this.pointerDownEvent?.ctrlKey;
-
-      // Select objects in rectangle
-      const idsToSelect = objectsInRect.map(({ id }) => id);
-      this.selectObjects(idsToSelect, !isMultiSelectModifier);
-
-      console.log(
-        `[RendererCore] Rectangle selected ${objectsInRect.length} cards`,
+      const worldPos = this.coordConverter.screenToWorld(
+        event.clientX,
+        event.clientY,
+        this.worldContainer,
       );
 
-      // Clear selection rectangle
-      this.clearSelectionRectangle();
+      // Complete rectangle selection and get selected object IDs
+      const selectedIds = this.rectangleSelect.complete(
+        worldPos.x,
+        worldPos.y,
+        this.sceneManager,
+        this.worldContainer,
+      );
 
-      // Reset rectangle selection state
-      this.isRectangleSelecting = false;
-      this.rectangleSelectStartX = 0;
-      this.rectangleSelectStartY = 0;
+      // Determine if multi-select (keep existing selections)
+      const pointerDownEvent = this.drag.getPointerDownEvent();
+      const isMultiSelectModifier =
+        pointerDownEvent?.metaKey || pointerDownEvent?.ctrlKey;
+
+      // Select objects in rectangle
+      this.selectObjects(selectedIds, !isMultiSelectModifier);
+
+      console.log(
+        `[RendererCore] Rectangle selected ${selectedIds.length} objects`,
+      );
 
       // Request render
       this.app!.renderer.render(this.app!.stage);
@@ -1506,24 +1370,20 @@ export abstract class RendererCore {
     if (!this.worldContainer) return;
 
     // Store rectangle selecting state before we potentially reset it
-    const wasRectangleSelecting = this.isRectangleSelecting;
+    const wasRectangleSelecting = this.rectangleSelect.isSelecting();
 
     // Clear pointer tracking
-    this.pointers.delete(event.pointerId);
+    this.gestures.removePointer(event.pointerId);
 
     // If we were pinching and now have less than 2 pointers, end pinch
-    if (this.isPinching && this.pointers.size < 2) {
-      this.isPinching = false;
+    if (this.camera.isPinching() && this.gestures.getPointerCount() < 2) {
+      this.camera.endPinch();
       console.log('[RendererCore] Pinch gesture cancelled');
 
       // Transition to pan mode: reset remaining pointer's start position
       // so user doesn't need to exceed drag slop again
-      if (this.pointers.size === 1) {
-        const remainingPointer = Array.from(this.pointers.values())[0];
-        remainingPointer.startX = remainingPointer.lastX;
-        remainingPointer.startY = remainingPointer.lastY;
-        // Allow immediate dragging without slop threshold
-        this.isDragging = true;
+      if (this.gestures.getPointerCount() === 1) {
+        this.gestures.resetRemainingPointer();
       }
     }
 
@@ -1544,24 +1404,13 @@ export abstract class RendererCore {
     // M3.5.1-T6: Notify Board that zoom started
     this.postResponse({ type: 'zoom-started' });
 
-    // Mouse position is already canvas-relative (converted in Board.tsx)
-    const mouseX = event.clientX;
-    const mouseY = event.clientY;
+    // Use camera manager to perform zoom
+    this.camera.zoom(event, this.worldContainer);
 
-    // Convert mouse position to world coordinates before scaling
-    const worldX = (mouseX - this.worldContainer.position.x) / this.cameraScale;
-    const worldY = (mouseY - this.worldContainer.position.y) / this.cameraScale;
-
-    // Calculate zoom factor from wheel delta
-    const zoomFactor = event.deltaY > 0 ? 0.95 : 1.05;
-
-    // Apply new scale (no clamping - unlimited zoom)
-    this.cameraScale = this.cameraScale * zoomFactor;
-    this.worldContainer.scale.set(this.cameraScale);
-
-    // Adjust position so the world point under cursor stays under cursor
-    this.worldContainer.position.x = mouseX - worldX * this.cameraScale;
-    this.worldContainer.position.y = mouseY - worldY * this.cameraScale;
+    // Update coordinate converter and visual manager with new scale
+    const newScale = this.worldContainer.scale.x;
+    this.coordConverter.setCameraScale(newScale);
+    this.visual.setCameraScale(newScale);
 
     // Request render
     this.app.renderer.render(this.app.stage);

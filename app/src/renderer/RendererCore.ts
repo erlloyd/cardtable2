@@ -36,12 +36,6 @@ import {
  * regardless of where it runs. The ONLY difference between modes is how
  * postResponse() is implemented (postMessage vs callback).
  */
-// Drag slop thresholds by pointer type (M2-T3)
-const DRAG_SLOP = {
-  touch: 12,
-  pen: 6,
-  mouse: 3,
-} as const;
 
 // Zoom debounce delay for overlay coordinate updates (M3.5.1-T6)
 // Delays re-showing ActionHandle until zoom operations settle
@@ -280,10 +274,10 @@ export abstract class RendererCore {
           // E2E Test API: Wait for renderer's pending operations to complete
           // This tracks the full round-trip: pointer-down → Board → Store → Renderer → syncSelectionCache
           console.log(
-            `[RendererCore] Received flush, current pendingOperations: ${this.pendingOperations}`,
+            `[RendererCore] Received flush, current pendingOperations: ${this.selection.getPendingOperations()}`,
           );
 
-          if (this.pendingOperations === 0) {
+          if (this.selection.getPendingOperations() === 0) {
             // No pending operations - respond immediately after 1 frame
             // (to ensure any in-flight rendering is complete)
             console.log(
@@ -307,7 +301,7 @@ export abstract class RendererCore {
             const pollFrame = () => {
               pollCount++;
 
-              if (this.pendingOperations === 0) {
+              if (this.selection.getPendingOperations() === 0) {
                 console.log(
                   `[RendererCore] Flush complete after ${pollCount} frames`,
                 );
@@ -317,7 +311,7 @@ export abstract class RendererCore {
               } else if (pollCount >= maxPolls) {
                 // Safety timeout - warn but still resolve
                 console.warn(
-                  `[RendererCore] Flush timeout after ${maxPolls} frames (${this.pendingOperations} ops still pending)`,
+                  `[RendererCore] Flush timeout after ${maxPolls} frames (${this.selection.getPendingOperations()} ops still pending)`,
                 );
                 this.postResponse({
                   type: 'flushed',
@@ -379,7 +373,7 @@ export abstract class RendererCore {
               isSelected,
               this.sceneManager,
             );
-            this.hover.clearHover();
+            this.hover.clearHover(hoveredId);
             if (this.app) {
               this.app.renderer.render(this.app.stage);
             }
@@ -536,13 +530,14 @@ export abstract class RendererCore {
     if (this.gestures.isPinchGesture(event)) {
       // Cancel any ongoing drag operations
       this.drag.cancelObjectDrag();
-      this.rectangleSelect.clear();
+      this.rectangleSelect.clear(this.worldContainer);
 
       // M3.5.1-T6: Notify Board that zoom started (pinch)
       this.postResponse({ type: 'zoom-started' });
 
       // Start pinch zoom (delegates all pinch state to CameraManager)
-      this.camera.startPinch(this.gestures, this.worldContainer);
+      const pointers = Array.from(this.gestures.getAllPointers().values());
+      this.camera.startPinch(pointers);
     } else if (event.isPrimary) {
       // E2E Test API: Increment pending operations counter
       // This will be decremented after the full round-trip completes (syncSelectionCache)
@@ -569,16 +564,16 @@ export abstract class RendererCore {
       if (hitResult) {
         // Clicking on a card - always prepare for object drag (regardless of mode)
         this.drag.prepareObjectDrag(hitResult.id, worldPos.x, worldPos.y);
-        this.rectangleSelect.clear();
+        this.rectangleSelect.clear(this.worldContainer);
       } else if (shouldRectangleSelect) {
         // Clicking on empty space in rectangle select mode - prepare for rectangle selection
         // Note: Not starting yet - will start once we exceed slop threshold in handlePointerMove
-        this.rectangleSelect.clear(); // Reset any previous state
+        this.rectangleSelect.clear(this.worldContainer); // Reset any previous state
         this.drag.cancelObjectDrag();
       } else {
         // Clicking on empty space in pan mode - prepare for camera pan
         this.drag.cancelObjectDrag();
-        this.rectangleSelect.clear();
+        this.rectangleSelect.clear(this.worldContainer);
       }
     }
   }
@@ -597,7 +592,22 @@ export abstract class RendererCore {
       this.gestures.updatePointer(event);
 
       // Handle pinch zoom (2 fingers)
-      if (this.camera.updatePinch(this.gestures, this.worldContainer)) {
+      if (this.camera.isPinchingActive()) {
+        const pointers = Array.from(this.gestures.getAllPointers().values());
+        if (pointers.length === 2) {
+          // Calculate distances
+          const initialDistance = Math.hypot(
+            pointers[1].startX - pointers[0].startX,
+            pointers[1].startY - pointers[0].startY,
+          );
+          const currentDistance = Math.hypot(
+            pointers[1].lastX - pointers[0].lastX,
+            pointers[1].lastY - pointers[0].lastY,
+          );
+          this.camera.updatePinch(initialDistance, currentDistance);
+        }
+
+        // Check if we're currently pinching to update scales
         // Update coordinate converter with new scale
         this.coordConverter.setCameraScale(this.worldContainer.scale.x);
         this.visual.setCameraScale(this.worldContainer.scale.x);
@@ -611,7 +621,7 @@ export abstract class RendererCore {
       if (this.gestures.getPointerCount() === 1) {
         // Check if movement exceeds drag slop threshold
         if (
-          this.gestures.exceedsDragSlop(event, pointerInfo) &&
+          this.gestures.exceedsDragSlop(event.pointerId) &&
           !this.drag.isDragging() &&
           !this.rectangleSelect.isSelecting() &&
           event.isPrimary
@@ -667,19 +677,13 @@ export abstract class RendererCore {
           } else {
             // Check if we should start rectangle selection or camera pan
             // Rectangle selection is prepared when clicking empty space in select mode
-            const worldPos = this.coordConverter.screenToWorld(
-              pointerInfo.startX,
-              pointerInfo.startY,
-              this.worldContainer,
-            );
-
             // If we're in a mode that supports rectangle selection, start it
             const shouldStartRectangle =
               this.interactionMode === 'select' ||
               (pointerInfo && 'metaKey' in event && (event.metaKey || event.ctrlKey));
 
             if (shouldStartRectangle) {
-              this.rectangleSelect.start(worldPos.x, worldPos.y);
+              this.rectangleSelect.startRectangleSelect();
               console.log('[RendererCore] Starting rectangle selection');
             } else {
               // No object and not rectangle selecting - start camera pan
@@ -726,10 +730,11 @@ export abstract class RendererCore {
         // If dragging camera, manually pan the camera
         else if (event.isPrimary && !this.drag.isDragging() && !this.rectangleSelect.isSelecting()) {
           // Use camera manager to pan
-          if (this.camera.pan(pointerInfo.lastX, pointerInfo.lastY, event.clientX, event.clientY, this.worldContainer)) {
-            // Request render
-            this.app.renderer.render(this.app.stage);
-          }
+          const deltaX = event.clientX - pointerInfo.lastX;
+          const deltaY = event.clientY - pointerInfo.lastY;
+          this.camera.pan(deltaX, deltaY);
+          // Request render
+          this.app.renderer.render(this.app.stage);
         }
         // If rectangle selecting, update the selection rectangle
         else if (this.rectangleSelect.isSelecting() && event.isPrimary) {
@@ -741,7 +746,16 @@ export abstract class RendererCore {
           );
 
           // Update selection rectangle
-          this.rectangleSelect.update(worldPos.x, worldPos.y, this.worldContainer);
+          const startPos = this.rectangleSelect.getStartPosition();
+          if (startPos && this.worldContainer) {
+            this.rectangleSelect.updateRectangle(
+              startPos.x,
+              startPos.y,
+              worldPos.x,
+              worldPos.y,
+              this.worldContainer,
+            );
+          }
 
           // Request render
           this.app.renderer.render(this.app.stage);
@@ -756,8 +770,9 @@ export abstract class RendererCore {
       this.hover.shouldProcessHover(
         event.pointerType,
         this.drag.isDragging(),
-        this.camera.isPinching(),
+        this.camera.isPinchingActive(),
         this.rectangleSelect.isSelecting(),
+        false, // isPanning - we'll check this separately
       )
     ) {
       // Convert screen coordinates to world coordinates
@@ -772,9 +787,9 @@ export abstract class RendererCore {
       const newHoveredId = hitResult ? hitResult.id : null;
 
       // Update hover state if changed
-      if (this.hover.updateHoveredObject(newHoveredId)) {
+      const prevId = this.hover.getHoveredObjectId();
+      if (this.hover.setHoveredObject(newHoveredId)) {
         // Clear previous hover
-        const prevId = this.hover.getPreviousHoveredId();
         if (prevId) {
           const isSelected = this.selection.isSelected(prevId);
           this.visual.updateHoverFeedback(
@@ -813,7 +828,7 @@ export abstract class RendererCore {
           isSelected,
           this.sceneManager,
         );
-        this.hover.clearHover();
+        this.hover.clearHover(hoveredId);
         this.app.renderer.render(this.app.stage);
       }
     }
@@ -849,9 +864,9 @@ export abstract class RendererCore {
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(obj, {
       isSelected,
-      isHovered: this.hoveredObjectId === objectId,
-      isDragging: this.draggedObjectId === objectId,
-      cameraScale: this.cameraScale,
+      isHovered: this.hover.getHoveredObjectId() === objectId,
+      isDragging: this.drag.getDraggedObjectId() === objectId,
+      cameraScale: this.coordConverter.getCameraScale(),
     });
   }
 
@@ -929,7 +944,7 @@ export abstract class RendererCore {
     isDragging: boolean,
     isSelected: boolean,
   ): void {
-    const visual = this.objectVisuals.get(objectId);
+    const visual = this.visual.getVisual(objectId);
     if (!visual) return;
 
     const obj = this.sceneManager.getObject(objectId);
@@ -974,31 +989,14 @@ export abstract class RendererCore {
       // TODO: BUG - If hovering a card while zooming, the shadow doesn't update until hover changes.
       // This causes the shadow size to be wrong at the new zoom level until you move the mouse.
       // Fix: Listen to zoom changes and redraw hovered card, or update filter strength directly.
-      const currentStrength = 16 * this.cameraScale;
+      const currentStrength = 16 * this.coordConverter.getCameraScale();
 
-      if (isDragging) {
-        // Use/create drag blur filter
-        if (!this.dragBlurFilter) {
-          this.dragBlurFilter = new BlurFilter({
-            strength: currentStrength,
-            quality: 4, // Lower quality for drag (performance)
-          });
-        } else {
-          this.dragBlurFilter.strength = currentStrength;
-        }
-        shadowGraphic.filters = [this.dragBlurFilter];
-      } else {
-        // Use/create hover blur filter
-        if (!this.hoverBlurFilter) {
-          this.hoverBlurFilter = new BlurFilter({
-            strength: currentStrength,
-            quality: 8, // Medium quality for hover (balance)
-          });
-        } else {
-          this.hoverBlurFilter.strength = currentStrength;
-        }
-        shadowGraphic.filters = [this.hoverBlurFilter];
-      }
+      // Apply blur filter directly (no caching for now - filters managed by VisualManager)
+      const blurFilter = new BlurFilter({
+        strength: currentStrength,
+        quality: isDragging ? 4 : 8, // Lower quality for drag (performance)
+      });
+      shadowGraphic.filters = [blurFilter];
 
       visual.addChild(shadowGraphic);
     }
@@ -1013,25 +1011,25 @@ export abstract class RendererCore {
 
   /**
    * Start smooth hover animation using ticker (M2-T4).
+   * NOTE: This method is currently unused but kept for reference.
+   * Hover animations are now handled by VisualManager.
    */
+  // @ts-expect-error TS6133 - Intentionally unused infrastructure for reference
   private startHoverAnimation(): void {
-    if (!this.app || this.hoverAnimationActive) {
+    if (!this.app) {
       return;
     }
 
-    this.hoverAnimationActive = true;
-
     const hoverTicker = () => {
       if (!this.app || !this.worldContainer) {
-        this.hoverAnimationActive = false;
         return;
       }
 
       let hasActiveAnimation = false;
 
       // Animate all visuals towards their target scale
-      for (const [, visual] of this.objectVisuals) {
-        const targetScale = visual.targetScale ?? 1.0;
+      for (const [, visual] of this.visual.getAllVisuals()) {
+        const targetScale = (visual as any).targetScale ?? 1.0;
         const currentScale = visual.scale.x;
 
         // Lerp towards target (smooth easing)
@@ -1055,7 +1053,6 @@ export abstract class RendererCore {
       } else {
         // Stop ticker when all animations complete
         this.app.ticker.remove(hoverTicker);
-        this.hoverAnimationActive = false;
       }
     };
 
@@ -1076,35 +1073,41 @@ export abstract class RendererCore {
     wasRectangleSelecting: boolean,
   ): void {
     // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
+    const pointerDownEvent = this.drag.getPointerDownEvent();
+    // Check if we were panning by seeing if we have any active gestures
+    const wasPanning = this.gestures.getPointerCount() > 0 && !this.drag.isDragging() && !wasRectangleSelecting;
     if (
       event.isPrimary &&
-      !this.isObjectDragging &&
-      !this.isDragging &&
+      !this.drag.isDragging() &&
+      !wasPanning &&
       !wasRectangleSelecting &&
-      this.pointerDownEvent
+      pointerDownEvent
     ) {
-      const worldX =
-        (event.clientX - this.worldContainer!.position.x) / this.cameraScale;
-      const worldY =
-        (event.clientY - this.worldContainer!.position.y) / this.cameraScale;
+      const worldPos = this.coordConverter.screenToWorld(
+        event.clientX,
+        event.clientY,
+        this.worldContainer!,
+      );
+      const worldX = worldPos.x;
+      const worldY = worldPos.y;
 
       const hitResult = this.sceneManager.hitTest(worldX, worldY);
 
       if (hitResult) {
         // Clicked on an object - handle selection logic
         const isMultiSelectModifier =
-          this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey;
+          pointerDownEvent.metaKey || pointerDownEvent.ctrlKey;
 
         if (isMultiSelectModifier) {
           // Cmd/Ctrl+click: toggle selection
-          if (this.selectedObjectIds.has(hitResult.id)) {
+          if (this.selection.isSelected(hitResult.id)) {
             this.unselectObjects([hitResult.id]);
           } else {
             this.selectObjects([hitResult.id], false);
           }
         } else {
           // Single click: select only this card (unless already selected)
-          if (!this.selectedObjectIds.has(hitResult.id)) {
+          if (!this.selection.isSelected(hitResult.id)) {
             this.selectObjects([hitResult.id], true);
           } else {
             // M3.5.1-T4: Already selected, send empty message to signal click processed
@@ -1121,9 +1124,9 @@ export abstract class RendererCore {
         this.app!.renderer.render(this.app!.stage);
       } else {
         // Clicked on empty space - deselect all
-        if (this.selectedObjectIds.size > 0) {
-          const toUnselect = Array.from(this.selectedObjectIds);
-          this.unselectObjects(toUnselect);
+        const selectedIds = this.selection.getSelectedIds();
+        if (selectedIds.length > 0) {
+          this.unselectObjects(selectedIds);
 
           // Request render to show deselection
           this.app!.renderer.render(this.app!.stage);
@@ -1138,7 +1141,7 @@ export abstract class RendererCore {
       }
 
       // Clear stored pointer down event
-      this.pointerDownEvent = null;
+      this.drag.clearPointerDownEvent();
     }
   }
 
@@ -1150,7 +1153,7 @@ export abstract class RendererCore {
     // End dragging
     if (event.isPrimary) {
       // Clear object drag state (M2-T5)
-      if (this.isObjectDragging && this.draggedObjectId) {
+      if (this.drag.isDragging()) {
         // Collect position updates for all dragged objects (M3-T2.5 bi-directional sync)
         const positionUpdates: Array<{
           id: string;
@@ -1159,9 +1162,9 @@ export abstract class RendererCore {
 
         // Update SceneManager spatial index for all dragged cards now that drag is complete
         // (deferred from pointer move for performance)
-        // IMPORTANT: Use draggedObjectsStartPositions instead of selectedObjectIds to avoid race condition
-        // when dragging unselected objects (selection update is async)
-        for (const objectId of this.draggedObjectsStartPositions.keys()) {
+        // IMPORTANT: Use draggedObjectIds from DragManager to get all dragged objects
+        const draggedIds = this.drag.getDraggedObjectIds();
+        for (const objectId of draggedIds) {
           const obj = this.sceneManager.getObject(objectId);
           if (obj) {
             this.sceneManager.updateObject(objectId, obj);
@@ -1187,7 +1190,8 @@ export abstract class RendererCore {
         }
 
         // Send drag state clear for awareness (M5-T1)
-        if (this.currentDragGestureId) {
+        const dragGestureId = this.drag.getDragGestureId();
+        if (dragGestureId) {
           this.postResponse({
             type: 'drag-state-clear',
           });
@@ -1196,27 +1200,21 @@ export abstract class RendererCore {
         // M3.5.1-T6: Notify Board that object drag ended
         this.postResponse({ type: 'object-drag-ended' });
 
-        // Clear drag state
-        this.isObjectDragging = false;
-        this.draggedObjectId = null;
-        this.draggedObjectsStartPositions.clear();
-        this.currentDragGestureId = null;
+        // Clear drag state using manager
+        this.drag.endObjectDrag(this.sceneManager);
       }
 
       // Clear rectangle selection state if needed
-      if (this.isRectangleSelecting) {
-        this.clearSelectionRectangle();
-        this.isRectangleSelecting = false;
-        this.rectangleSelectStartX = 0;
-        this.rectangleSelectStartY = 0;
+      if (this.rectangleSelect.isSelecting() && this.worldContainer) {
+        this.rectangleSelect.clearRectangle(this.worldContainer);
+        this.rectangleSelect.endRectangleSelect();
       }
 
-      // Clear camera drag
-      const wasPanning = this.isDragging;
-      this.isDragging = false;
-
-      // M3.5.1-T6: Notify Board that pan ended
-      if (wasPanning) {
+      // Clear camera pan (no explicit state to clear, pan is handled by pointer tracking)
+      // M3.5.1-T6: Notify Board that pan ended only if we were actually panning
+      // Check if we had pointer movement that wasn't object drag or rectangle select
+      if (this.gestures.getPointerCount() === 0 && !this.drag.isDragging() && !this.rectangleSelect.isSelecting()) {
+        // This was likely a pan - notify Board
         this.postResponse({ type: 'pan-ended' });
       }
     }
@@ -1235,7 +1233,7 @@ export abstract class RendererCore {
     this.gestures.removePointer(event.pointerId);
 
     // If we were pinching and now have less than 2 pointers, end pinch
-    if (this.camera.isPinching() && this.gestures.getPointerCount() < 2) {
+    if (this.camera.isPinchingActive() && this.gestures.getPointerCount() < 2) {
       this.camera.endPinch();
       console.log('[RendererCore] Pinch gesture ended');
 
@@ -1243,17 +1241,21 @@ export abstract class RendererCore {
       this.debouncedZoomEnd();
 
       // Clear rectangle selection state to prevent ghost selections
-      this.rectangleSelect.clear();
+      this.rectangleSelect.clear(this.worldContainer);
 
       // Transition to pan mode: reset remaining pointer's start position
       // so user doesn't need to exceed drag slop again
       if (this.gestures.getPointerCount() === 1) {
-        this.gestures.resetRemainingPointer();
+        const remainingPointers = Array.from(this.gestures.getAllPointers().entries());
+        if (remainingPointers.length > 0) {
+          const [pointerId] = remainingPointers[0];
+          this.gestures.resetPointerStart(pointerId);
+        }
       }
     }
 
     // Handle rectangle selection completion
-    if (this.rectangleSelect.isSelecting() && event.isPrimary) {
+    if (this.rectangleSelect.isSelecting() && event.isPrimary && this.worldContainer) {
       // Calculate current world position
       const worldPos = this.coordConverter.screenToWorld(
         event.clientX,
@@ -1261,13 +1263,28 @@ export abstract class RendererCore {
         this.worldContainer,
       );
 
-      // Complete rectangle selection and get selected object IDs
-      const selectedIds = this.rectangleSelect.complete(
-        worldPos.x,
-        worldPos.y,
-        this.sceneManager,
-        this.worldContainer,
-      );
+      // Update rectangle to final position
+      const startPos = this.rectangleSelect.getStartPosition();
+      if (startPos) {
+        this.rectangleSelect.updateRectangle(
+          startPos.x,
+          startPos.y,
+          worldPos.x,
+          worldPos.y,
+          this.worldContainer,
+        );
+      }
+
+      // Get selection bounds and hit-test for objects
+      const bounds = this.rectangleSelect.getRectangleBounds(worldPos.x, worldPos.y);
+      const hitTestResult = this.sceneManager.hitTestRect(bounds);
+
+      // Extract IDs from hit test results
+      const selectedIds = hitTestResult.map((result) => result.id);
+
+      // Complete rectangle selection
+      this.rectangleSelect.clearRectangle(this.worldContainer);
+      this.rectangleSelect.endRectangleSelect();
 
       // Determine if multi-select (keep existing selections)
       const pointerDownEvent = this.drag.getPointerDownEvent();
@@ -1305,14 +1322,18 @@ export abstract class RendererCore {
     this.gestures.removePointer(event.pointerId);
 
     // If we were pinching and now have less than 2 pointers, end pinch
-    if (this.camera.isPinching() && this.gestures.getPointerCount() < 2) {
+    if (this.camera.isPinchingActive() && this.gestures.getPointerCount() < 2) {
       this.camera.endPinch();
       console.log('[RendererCore] Pinch gesture cancelled');
 
       // Transition to pan mode: reset remaining pointer's start position
       // so user doesn't need to exceed drag slop again
       if (this.gestures.getPointerCount() === 1) {
-        this.gestures.resetRemainingPointer();
+        const remainingPointers = Array.from(this.gestures.getAllPointers().entries());
+        if (remainingPointers.length > 0) {
+          const [pointerId] = remainingPointers[0];
+          this.gestures.resetPointerStart(pointerId);
+        }
       }
     }
 
@@ -1334,7 +1355,7 @@ export abstract class RendererCore {
     this.postResponse({ type: 'zoom-started' });
 
     // Use camera manager to perform zoom
-    this.camera.zoom(event, this.worldContainer);
+    this.camera.zoom(event);
 
     // Update coordinate converter and visual manager with new scale
     const newScale = this.worldContainer.scale.x;
@@ -1356,7 +1377,7 @@ export abstract class RendererCore {
     if (!this.worldContainer) return;
 
     // Skip if visual already exists
-    if (this.objectVisuals.has(id)) {
+    if (this.visual.getVisual(id) !== undefined) {
       console.warn(`[RendererCore] Visual for object ${id} already exists`);
       return;
     }
@@ -1373,7 +1394,7 @@ export abstract class RendererCore {
     visual.rotation = (obj._pos.r * Math.PI) / 180; // Convert degrees to radians
 
     // Store visual reference
-    this.objectVisuals.set(id, visual);
+    this.visual.addVisual(id, visual);
 
     // Add to world container
     this.worldContainer.addChild(visual);
@@ -1384,7 +1405,7 @@ export abstract class RendererCore {
    * Updates position, rotation, and potentially re-renders if kind/meta changed.
    */
   private updateObjectVisual(id: string, obj: TableObject): void {
-    const visual = this.objectVisuals.get(id);
+    const visual = this.visual.getVisual(id);
     if (!visual || !this.worldContainer) {
       console.warn(`[RendererCore] Visual for object ${id} not found`);
       return;
@@ -1405,29 +1426,28 @@ export abstract class RendererCore {
    * Remove an object visual (M3-T2.5 Phase 5-6).
    */
   private removeObjectVisual(id: string): void {
-    const visual = this.objectVisuals.get(id);
+    const visual = this.visual.getVisual(id);
     if (visual && this.worldContainer) {
       this.worldContainer.removeChild(visual);
       visual.destroy();
     }
 
-    this.objectVisuals.delete(id);
+    this.visual.removeVisual(id);
     this.sceneManager.removeObject(id);
 
-    // Clear selection if this object was selected
-    if (this.selectedObjectIds.has(id)) {
-      this.selectedObjectIds.delete(id);
+    // Clear selection if this object was selected (handled by SelectionManager)
+    if (this.selection.isSelected(id)) {
+      // Selection will be synced from store
     }
 
     // Clear hover if this object was hovered
-    if (this.hoveredObjectId === id) {
-      this.hoveredObjectId = null;
+    if (this.hover.getHoveredObjectId() === id) {
+      this.hover.clearAll();
     }
 
     // Clear drag if this object was being dragged
-    if (this.draggedObjectId === id) {
-      this.draggedObjectId = null;
-      this.isObjectDragging = false;
+    if (this.drag.getDraggedObjectId() === id) {
+      this.drag.cancelObjectDrag();
     }
   }
 
@@ -1535,8 +1555,11 @@ export abstract class RendererCore {
     }> = [];
 
     if (this.worldContainer && ids.length > 0) {
+      const dpr = this.coordConverter.getDevicePixelRatio();
+      const cameraScale = this.coordConverter.getCameraScale();
+
       for (const id of ids) {
-        const visual = this.objectVisuals.get(id);
+        const visual = this.visual.getVisual(id);
         const obj = this.sceneManager.getObject(id);
 
         if (visual && obj) {
@@ -1544,40 +1567,40 @@ export abstract class RendererCore {
           const canvasPos = visual.toGlobal({ x: 0, y: 0 });
 
           // Convert to DOM coordinates (divide by devicePixelRatio)
-          const domX = canvasPos.x / this.devicePixelRatio;
-          const domY = canvasPos.y / this.devicePixelRatio;
+          const domX = canvasPos.x / dpr;
+          const domY = canvasPos.y / dpr;
 
           // Calculate dimensions based on object type
           let width = 0;
           let height = 0;
 
           if (obj._kind === ObjectKind.Stack) {
-            width = (STACK_WIDTH * this.cameraScale) / this.devicePixelRatio;
-            height = (STACK_HEIGHT * this.cameraScale) / this.devicePixelRatio;
+            width = (STACK_WIDTH * cameraScale) / dpr;
+            height = (STACK_HEIGHT * cameraScale) / dpr;
           } else if (
             obj._kind === ObjectKind.Zone &&
             obj._meta?.width &&
             obj._meta?.height
           ) {
             width =
-              ((obj._meta.width as number) * this.cameraScale) /
-              this.devicePixelRatio;
+              ((obj._meta.width as number) * cameraScale) /
+              dpr;
             height =
-              ((obj._meta.height as number) * this.cameraScale) /
-              this.devicePixelRatio;
+              ((obj._meta.height as number) * cameraScale) /
+              dpr;
           } else if (obj._kind === ObjectKind.Token) {
             const radius =
-              (getTokenSize(obj) * this.cameraScale) / this.devicePixelRatio;
+              (getTokenSize(obj) * cameraScale) / dpr;
             width = radius * 2;
             height = radius * 2;
           } else if (obj._kind === ObjectKind.Mat) {
             const radius =
-              (getMatSize(obj) * this.cameraScale) / this.devicePixelRatio;
+              (getMatSize(obj) * cameraScale) / dpr;
             width = radius * 2;
             height = radius * 2;
           } else if (obj._kind === ObjectKind.Counter) {
             const radius =
-              (getCounterSize(obj) * this.cameraScale) / this.devicePixelRatio;
+              (getCounterSize(obj) * cameraScale) / dpr;
             width = radius * 2;
             height = radius * 2;
           }
@@ -1624,18 +1647,17 @@ export abstract class RendererCore {
     if (!this.worldContainer) return;
 
     // Remove all visuals from world container and destroy them
-    for (const [, visual] of this.objectVisuals) {
+    for (const [, visual] of this.visual.getAllVisuals()) {
       this.worldContainer.removeChild(visual);
       visual.destroy();
     }
 
     // Clear data structures
-    this.objectVisuals.clear();
+    this.visual.clear(this.worldContainer);
     this.sceneManager.clear();
-    this.selectedObjectIds.clear();
-    this.hoveredObjectId = null;
-    this.draggedObjectId = null;
-    this.isObjectDragging = false;
+    this.selection.clearAll();
+    this.hover.clearAll();
+    this.drag.clear();
   }
 
   /**
@@ -1667,10 +1689,12 @@ export abstract class RendererCore {
       this.app.destroy();
       this.app = null;
     }
-    this.pointers.clear();
+    this.gestures.clear();
     this.sceneManager.clear();
-    this.objectVisuals.clear();
-    this.hoveredObjectId = null;
+    if (this.worldContainer) {
+      this.visual.clear(this.worldContainer);
+    }
+    this.hover.clearAll();
   }
 
   /**

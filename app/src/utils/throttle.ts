@@ -6,6 +6,14 @@
  */
 
 /**
+ * Type for throttled functions with cancel method
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic function signature requires any for proper type inference
+export type ThrottledFunction<T extends (...args: any[]) => void> = T & {
+  cancel: () => void;
+};
+
+/**
  * Throttle a function to be called at most once per interval
  *
  * @param fn - Function to throttle
@@ -27,7 +35,7 @@
 export function throttle<T extends (...args: any[]) => void>(
   fn: T,
   intervalMs: number,
-): T & { cancel: () => void } {
+): ThrottledFunction<T> {
   let lastCallTime = 0;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let pendingArgs: Parameters<T> | null = null;

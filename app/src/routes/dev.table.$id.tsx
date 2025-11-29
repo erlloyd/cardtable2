@@ -12,6 +12,7 @@ import { YjsStore } from '../store/YjsStore';
 import { createObject, clearAllSelections } from '../store/YjsActions';
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
+import { buildActionContext } from '../actions/buildActionContext';
 import type { ActionContext } from '../actions/types';
 
 // Lazy load the Board component
@@ -226,26 +227,8 @@ function DevTable() {
 
   // Create action context with live selection info (same pattern as table route)
   const actionContext: ActionContext | null = useMemo(() => {
-    if (!store) return null;
-
     const { ids, objects } = selectionState;
-    const kinds = new Set(objects.map((obj) => obj._kind));
-
-    return {
-      store,
-      selection: {
-        ids,
-        objects,
-        count: ids.length,
-        hasStacks: kinds.has(ObjectKind.Stack),
-        hasTokens: kinds.has(ObjectKind.Token),
-        hasMixed: kinds.size > 1,
-        allLocked: objects.every((obj) => obj._meta?.locked === true),
-        allUnlocked: objects.every((obj) => obj._meta?.locked !== true),
-        canAct: true,
-      },
-      actorId: store.getActorId(),
-    };
+    return buildActionContext(store, ids, objects);
   }, [store, selectionState]);
 
   return (

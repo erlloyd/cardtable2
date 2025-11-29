@@ -2,13 +2,13 @@ import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTableStore } from '../hooks/useTableStore';
 import type { TableObject } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
 import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { ActionRegistry } from '../actions/ActionRegistry';
+import { buildActionContext } from '../actions/buildActionContext';
 import { CARD_ACTIONS } from '../actions/types';
 import type { ActionContext } from '../actions/types';
 
@@ -267,32 +267,16 @@ function Table() {
 
   // Create action context with live selection info
   const actionContext: ActionContext | null = useMemo(() => {
-    if (!store) return null;
-
     const { ids, objects } = selectionState;
-    const kinds = new Set(objects.map((obj) => obj._kind));
+    const context = buildActionContext(store, ids, objects);
 
-    const context = {
-      store,
-      selection: {
-        ids,
-        objects,
-        count: ids.length,
-        hasStacks: kinds.has(ObjectKind.Stack),
-        hasTokens: kinds.has(ObjectKind.Token),
-        hasMixed: kinds.size > 1,
-        allLocked: objects.every((obj) => obj._meta?.locked === true),
-        allUnlocked: objects.every((obj) => obj._meta?.locked !== true),
-        canAct: true, // All selected by this actor
-      },
-      actorId: store.getActorId(),
-    };
-
-    console.log('[Table] Action context updated:', {
-      selectionCount: context.selection.count,
-      hasStacks: context.selection.hasStacks,
-      hasTokens: context.selection.hasTokens,
-    });
+    if (context) {
+      console.log('[Table] Action context updated:', {
+        selectionCount: context.selection.count,
+        hasStacks: context.selection.hasStacks,
+        hasTokens: context.selection.hasTokens,
+      });
+    }
 
     return context;
   }, [store, selectionState]);

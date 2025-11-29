@@ -151,7 +151,7 @@ export function calculateHandlePosition(
 ): HandlePosition {
   // Convert selection bounds from world to DOM coordinates
   // Formula matches PixiJS toGlobal() output divided by devicePixelRatio
-  const dpr = window.devicePixelRatio || 2;
+  const dpr = window.devicePixelRatio || 1;
   const screenX = (selectionBounds.x * cameraScale) / dpr + viewportWidth / 2;
   const screenY = (selectionBounds.y * cameraScale) / dpr + viewportHeight / 2;
   const screenWidth = (selectionBounds.width * cameraScale) / dpr;

@@ -32,6 +32,10 @@ const DRAG_SLOP = {
   mouse: 3,
 } as const;
 
+// Zoom debounce delay for overlay coordinate updates (M3.5.1-T6)
+// Delays re-showing ActionHandle until zoom operations settle
+const ZOOM_DEBOUNCE_DELAY_MS = 200;
+
 export abstract class RendererCore {
   protected app: Application | null = null;
   protected worldContainer: Container | null = null;
@@ -128,7 +132,7 @@ export abstract class RendererCore {
   // Zoom end debounce (M3.5.1-T6)
   private debouncedZoomEnd = debounce(() => {
     this.postResponse({ type: 'zoom-ended' });
-  }, 200);
+  }, ZOOM_DEBOUNCE_DELAY_MS);
 
   /**
    * Send a response message back to the main thread.

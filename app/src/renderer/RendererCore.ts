@@ -1029,7 +1029,8 @@ export abstract class RendererCore {
 
       // Animate all visuals towards their target scale
       for (const [, visual] of this.visual.getAllVisuals()) {
-        const targetScale = (visual as any).targetScale ?? 1.0;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+        const targetScale = ((visual as any).targetScale as number | undefined) ?? 1.0;
         const currentScale = visual.scale.x;
 
         // Lerp towards target (smooth easing)

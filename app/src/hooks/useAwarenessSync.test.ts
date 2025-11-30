@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useAwarenessSync } from './useAwarenessSync';
 import { RenderMode } from '../renderer/IRendererAdapter';
@@ -10,11 +10,11 @@ describe('useAwarenessSync', () => {
   let mockRenderer: IRendererAdapter;
   let mockStore: Partial<YjsStore>;
   let awarenessCallback: (states: Map<number, AwarenessState>) => void;
-  let sendMessageMock: ReturnType<typeof vi.fn>;
-  let onMessageMock: ReturnType<typeof vi.fn>;
-  let destroyMock: ReturnType<typeof vi.fn>;
-  let onAwarenessChangeMock: ReturnType<typeof vi.fn>;
-  let getDocMock: ReturnType<typeof vi.fn>;
+  let sendMessageMock: Mock;
+  let onMessageMock: Mock;
+  let destroyMock: Mock;
+  let onAwarenessChangeMock: Mock;
+  let getDocMock: Mock;
 
   beforeEach(() => {
     sendMessageMock = vi.fn();

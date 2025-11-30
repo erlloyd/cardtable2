@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useStoreSync } from './useStoreSync';
 import { RenderMode } from '../renderer/IRendererAdapter';
@@ -73,7 +81,9 @@ describe('useStoreSync', () => {
 
     changeCallback(changes);
 
-    expect(mockRenderer.sendMessage as MockInstance).toHaveBeenCalledWith({
+    expect(
+      mockRenderer.sendMessage as unknown as MockInstance,
+    ).toHaveBeenCalledWith({
       type: 'objects-added',
       objects: changes.added,
     });
@@ -97,7 +107,9 @@ describe('useStoreSync', () => {
 
     changeCallback(changes);
 
-    expect(mockRenderer.sendMessage as MockInstance).toHaveBeenCalledWith({
+    expect(
+      mockRenderer.sendMessage as unknown as MockInstance,
+    ).toHaveBeenCalledWith({
       type: 'objects-updated',
       objects: changes.updated,
     });
@@ -116,7 +128,9 @@ describe('useStoreSync', () => {
 
     changeCallback(changes);
 
-    expect(mockRenderer.sendMessage as MockInstance).toHaveBeenCalledWith({
+    expect(
+      mockRenderer.sendMessage as unknown as MockInstance,
+    ).toHaveBeenCalledWith({
       type: 'objects-removed',
       ids: changes.removed,
     });

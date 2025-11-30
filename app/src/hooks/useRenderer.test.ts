@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useRenderer } from './useRenderer';
 import { RenderMode } from '../renderer/IRendererAdapter';
@@ -90,7 +98,7 @@ describe('useRenderer', () => {
 
     unmount();
 
-    expect(renderer!.destroy as MockInstance).toHaveBeenCalled();
+    expect(renderer!.destroy as unknown as MockInstance).toHaveBeenCalled();
   });
 
   it('handles double initialization (strict mode)', () => {

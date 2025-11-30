@@ -3,7 +3,7 @@ import type {
   MainToRendererMessage,
   RendererToMainMessage,
 } from '@cardtable2/shared';
-import { RendererCore } from './renderer/RendererCore';
+import { RendererOrchestrator } from './renderer/RendererOrchestrator';
 import { RenderMode } from './renderer/IRendererAdapter';
 
 console.log('[Worker] Starting worker initialization...');
@@ -27,12 +27,11 @@ try {
 
 /**
  * Worker-based renderer implementation.
- * Extends RendererCore and implements postResponse using self.postMessage.
+ * Extends RendererOrchestrator and implements postResponse using self.postMessage.
  */
-class WorkerRendererCore extends RendererCore {
+class WorkerRendererOrchestrator extends RendererOrchestrator {
   constructor() {
-    super();
-    this.renderMode = RenderMode.Worker;
+    super(RenderMode.Worker);
   }
 
   protected postResponse(message: RendererToMainMessage): void {
@@ -41,7 +40,7 @@ class WorkerRendererCore extends RendererCore {
 }
 
 // Create renderer instance
-const renderer = new WorkerRendererCore();
+const renderer = new WorkerRendererOrchestrator();
 
 // Listen for messages from main thread
 self.addEventListener(

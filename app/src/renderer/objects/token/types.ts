@@ -14,4 +14,5 @@ export function isTokenObject(obj: TableObject): obj is TokenObject {
 /** Full Token object type with required fields */
 export interface TokenObject extends TableObject {
   _kind: ObjectKind.Token;
+  _faceUp: boolean; // Whether token is face-up or face-down
 }

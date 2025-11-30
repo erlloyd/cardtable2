@@ -49,4 +49,12 @@ export const StackBehaviors: ObjectBehaviors = {
       borderRadius: STACK_BORDER_RADIUS,
     };
   },
+
+  capabilities: {
+    canFlip: true,
+    canRotate: true,
+    canStack: true,
+    canUnstack: true,
+    canLock: true,
+  },
 };

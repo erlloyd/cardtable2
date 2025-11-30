@@ -44,4 +44,12 @@ export const TokenBehaviors: ObjectBehaviors = {
       borderRadius: 0,
     };
   },
+
+  capabilities: {
+    canFlip: true,
+    canRotate: true,
+    canStack: false,
+    canUnstack: false,
+    canLock: true,
+  },
 };

@@ -194,13 +194,18 @@ export function handlePointerMove(
           }
         } else {
           // Check if we should start rectangle selection or camera pan
-          // Rectangle selection is prepared when clicking empty space in select mode
-          // If we're in a mode that supports rectangle selection, start it
+          // Rectangle selection logic (matches handlePointerDown):
+          // - select mode + NO modifier → rectangle select
+          // - pan mode + modifier → rectangle select
+          // - select mode + modifier → pan (Cmd/Ctrl overrides to pan)
+          // - pan mode + NO modifier → pan
+          const pointerDownEvent = context.drag.getPointerDownEvent();
+          const modifierPressed =
+            pointerDownEvent &&
+            (pointerDownEvent.metaKey || pointerDownEvent.ctrlKey);
           const shouldStartRectangle =
-            context.interactionMode === 'select' ||
-            (pointerInfo &&
-              'metaKey' in event &&
-              (event.metaKey || event.ctrlKey));
+            (context.interactionMode === 'select' && !modifierPressed) ||
+            (context.interactionMode === 'pan' && modifierPressed);
 
           if (shouldStartRectangle) {
             context.rectangleSelect.startRectangleSelect();

@@ -15,17 +15,19 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 ### Technology Stack
 - **Node.js**: v24 (LTS Krypton)
 - **React**: 19.2.0
-- **React Router**: 7.9.5
+- **TanStack Router**: 1.136.1
 - **Vite**: 7.2.2
 - **Vitest**: 4.0.8
 - **Playwright**: 1.56.1
 - **Headless UI**: 2.2.9
+- **PixiJS**: 8.14.1
 - **Express**: 5.1.0
-- **Yjs**: 13.6.27
+- **Yjs (app)**: 13.6.27
+- **Yjs (server)**: 13.6.20
 - **y-websocket**: 3.0.0
-- **TypeScript**: 5.9.2
-- **ESLint**: 9.36.0
-- **Prettier**: 3.6.2
+- **TypeScript**: 5.7.2
+- **ESLint**: 9.15.0
+- **Prettier**: 3.4.1
 
 ## Project Structure
 
@@ -45,11 +47,15 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 │   ├── vite.config.ts
 │   └── playwright.config.ts
 ├── server/             # Backend (Node + y-websocket)
-│   └── src/
-│       └── index.ts    # Express + WebSocket server
+│   ├── src/
+│   │   └── index.ts    # Express + WebSocket server
+│   └── Dockerfile      # Production container image
 └── .github/
     └── workflows/
-        └── ci.yml      # GitHub Actions CI/CD
+        ├── ci.yml           # CI/CD checks (lint, test, typecheck)
+        ├── deploy.yml       # Production deployment (GitHub Pages + Railway)
+        ├── pr-deploy.yml    # PR preview deployments
+        └── cleanup-pr.yml   # PR environment cleanup
 ```
 
 ## Development Commands
@@ -136,20 +142,46 @@ See `app/src/renderer/objects/README.md` for full documentation.
 - Contains common types used by both app and server
 - Located at `@cardtable2/shared`
 
-### CI/CD
-- Feature branch workflow: all development on feature branches
-- Main branch protected: only merge via tested feature branches
-- Selective deployment: only deploys changed packages on main
-- Uses PNPM filtering to detect changes
-- Changes to shared trigger both app and server deployments
-- App deploys to GitHub Pages at beta.card-table.app
+### CI/CD & Deployment
+- **Feature branch workflow**: All development on feature branches
+- **Main branch protected**: Only merge via tested feature branches
+- **Selective deployment**: Only deploys changed packages on main
+- **PNPM filtering**: Detects which packages have changed
+- **Changes to shared**: Triggers both app and server deployments
 
-### Future Hosting Plans
-- **Railway (https://railway.app/)** planned for production hosting
+#### GitHub Actions Workflows
+1. **ci.yml** - Continuous Integration checks on all PRs:
+   - Linting (ESLint)
+   - Type checking (TypeScript)
+   - Format checking (Prettier)
+   - Unit tests (Vitest)
+   - E2E tests (Playwright)
+   - Build verification
+
+2. **deploy.yml** - Production deployment (main branch only):
+   - **App**: Deploys to GitHub Pages at `beta.card-table.app`
+   - **Server**: Builds Docker image and deploys to Railway at `cardtable2-server-production.up.railway.app`
+   - **Image registry**: Pushes to GitHub Container Registry (GHCR)
+   - **Selective deployment**: Only builds/deploys changed components
+
+3. **pr-deploy.yml** - PR preview environments:
+   - Creates Railway preview services per PR
+   - Builds Docker images for both app and server
+   - Provides unique URLs for testing (e.g., `cardtable2-pr-123.up.railway.app`)
+   - Only builds on first PR build or when package changes
+
+4. **cleanup-pr.yml** - Resource cleanup:
+   - Automatically removes Railway services when PR is closed
+   - Keeps infrastructure costs manageable
+
+#### Production Hosting
+- **Railway (https://railway.app/)** - Current production platform:
   - WebSocket support for y-websocket backend
   - Automatic PR preview deployments for both app and server
   - Single platform for full-stack deployment
+  - Container-based deployment using Docker
   - Cost-effective usage-based pricing
+  - Environment variables managed via Railway CLI and GitHub Actions
 
 ## Performance Targets
 - 60 fps on mobile/desktop
@@ -266,10 +298,12 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
     3. Wait for explicit approval before proceeding
   - If you add a suppression comment without asking first, you have failed
 
-### Deployment
-- App deploys to GitHub Pages (beta.card-table.app) on merge to main
-- Server deployment placeholder (future: container hosting)
-- App and server deploy independently based on changes detected by PNPM
+### Container Deployment
+- **Docker support**: Multi-stage Dockerfiles for production builds
+- **Base image**: Node.js 24-slim for minimal footprint
+- **Process manager**: Tini for proper signal handling and zombie reaping
+- **Registry**: Images pushed to GitHub Container Registry (ghcr.io)
+- **Production runtime**: Railway container platform
 
 ## Planning & Documentation
 

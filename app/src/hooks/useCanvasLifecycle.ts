@@ -2,10 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import { RenderMode } from '../renderer/IRendererAdapter';
 import type { YjsStore } from '../store/YjsStore';
-import type {
-  MainToRendererMessage,
-  WheelEventData,
-} from '@cardtable2/shared';
+import type { MainToRendererMessage, WheelEventData } from '@cardtable2/shared';
 
 /**
  * Hook for managing canvas lifecycle
@@ -78,13 +75,7 @@ export function useCanvasLifecycle(
   // Canvas initialization
   useEffect(() => {
     // Wait for renderer to be ready
-    if (
-      !isReady ||
-      !canvasRef.current ||
-      !renderer ||
-      !renderMode ||
-      !store
-    ) {
+    if (!isReady || !canvasRef.current || !renderer || !renderMode || !store) {
       return;
     }
 

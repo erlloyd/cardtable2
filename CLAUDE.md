@@ -177,6 +177,36 @@ For detailed information about project progress, completed work, and upcoming mi
 - E2E tests use Playwright
 - All tests must pass before merge to main
 
+### Pre-Push Checklist
+
+Before pushing to remote, the following checks MUST pass (enforced by Git hooks and CI):
+
+**Git Hooks:**
+- **pre-commit**: `npx lint-staged` (auto-formats staged files)
+- **pre-push**:
+  - `pnpm run typecheck` (TypeScript type checking)
+  - `pnpm run format:check` (Prettier formatting verification)
+
+**CI Checks** (run on pull requests):
+1. **Lint**: `pnpm run lint` (ESLint)
+2. **Type Check**: `pnpm run typecheck` (TypeScript)
+3. **Format Check**: `pnpm run format:check` (Prettier)
+4. **Unit Tests**: `pnpm run test` (Vitest)
+5. **E2E Tests**: `cd app && pnpm run test:e2e` (Playwright)
+6. **Build**: `pnpm --filter @cardtable2/app build` + `pnpm --filter @cardtable2/server build`
+
+**Quick validation before pushing:**
+```bash
+pnpm run validate  # Runs: lint + typecheck + test + build
+```
+
+**Fix common issues:**
+```bash
+pnpm run format      # Auto-fix formatting issues
+pnpm run lint        # Check for lint errors
+pnpm run typecheck   # Check for type errors
+```
+
 #### E2E Testing Best Practices
 
 **Testing Pointer Events on Canvas:**

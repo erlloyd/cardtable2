@@ -3,7 +3,11 @@ import type { RendererToMainMessage } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
 import type { ThrottledFunction } from '../../utils/throttle';
-import { moveObjects, selectObjects, unselectObjects } from '../../store/YjsActions';
+import {
+  moveObjects,
+  selectObjects,
+  unselectObjects,
+} from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
 
 export interface BoardHandlerContext {
@@ -41,7 +45,10 @@ export interface BoardHandlerContext {
         gid: string,
         primaryId: string,
         pos: { x: number; y: number; r: number },
-        secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
+        secondaryOffsets?: Record<
+          string,
+          { dx: number; dy: number; dr: number }
+        >,
       ) => void
     >
   >;
@@ -76,10 +83,12 @@ export class BoardMessageBus {
 
       // Send initial sync of all objects from store
       const allObjects = ctx.store.getAllObjects();
-      const objectsArray = Array.from(allObjects.entries()).map(([id, obj]) => ({
-        id,
-        obj,
-      }));
+      const objectsArray = Array.from(allObjects.entries()).map(
+        ([id, obj]) => ({
+          id,
+          obj,
+        }),
+      );
 
       console.log(
         `[BoardMessageBus] Syncing ${objectsArray.length} objects to renderer`,
@@ -101,9 +110,7 @@ export class BoardMessageBus {
       console.log(`[BoardMessageBus] ${msg.ids.length} object(s) selected`);
 
       // Store screen coordinates
-      ctx.setDebugCoords(
-        msg.screenCoords.length > 0 ? msg.screenCoords : null,
-      );
+      ctx.setDebugCoords(msg.screenCoords.length > 0 ? msg.screenCoords : null);
 
       // Update store with selection ownership
       const result = selectObjects(ctx.store, msg.ids, ctx.store.getActorId());
@@ -189,9 +196,7 @@ export class BoardMessageBus {
     });
 
     this.registry.register('screen-coords', (msg, ctx) => {
-      ctx.setDebugCoords(
-        msg.screenCoords.length > 0 ? msg.screenCoords : null,
-      );
+      ctx.setDebugCoords(msg.screenCoords.length > 0 ? msg.screenCoords : null);
       ctx.setIsWaitingForCoords(false);
     });
 

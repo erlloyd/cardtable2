@@ -55,13 +55,6 @@ export class MainThreadRendererAdapter implements IRendererAdapter {
         this.messageHandler(message);
       }
     });
-
-    // Send ready message immediately (no worker initialization delay)
-    setTimeout(() => {
-      if (this.messageHandler) {
-        this.messageHandler({ type: 'ready' });
-      }
-    }, 0);
   }
 
   sendMessage(message: MainToRendererMessage): void {
@@ -83,6 +76,12 @@ export class MainThreadRendererAdapter implements IRendererAdapter {
 
   onMessage(handler: (message: RendererToMainMessage) => void): void {
     this.messageHandler = handler;
+
+    // Send ready message immediately now that the handler is set
+    // Use setTimeout to avoid issues if handler expects async behavior
+    setTimeout(() => {
+      handler({ type: 'ready' });
+    }, 0);
   }
 
   destroy(): void {

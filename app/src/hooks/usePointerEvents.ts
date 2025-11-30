@@ -1,7 +1,10 @@
 import { useCallback } from 'react';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import type { YjsStore } from '../store/YjsStore';
-import type { PointerEventData, MainToRendererMessage } from '@cardtable2/shared';
+import type {
+  PointerEventData,
+  MainToRendererMessage,
+} from '@cardtable2/shared';
 import type { ThrottledFunction } from '../utils/throttle';
 
 export interface PointerEventHandlers {
@@ -74,11 +77,13 @@ export function usePointerEvents(
         button: event.button,
         buttons: event.buttons,
         isPrimary: event.isPrimary,
-        // Apply multi-select mode for touch events when mode is enabled
-        metaKey:
-          event.metaKey || (isMultiSelectMode && event.pointerType === 'touch'),
+        metaKey: event.metaKey,
         ctrlKey: event.ctrlKey,
         shiftKey: event.shiftKey,
+        // Multi-select mode for touch events
+        // This flag indicates selection toggling behavior without triggering rectangle selection
+        multiSelectModeActive:
+          isMultiSelectMode && event.pointerType === 'touch',
       };
     },
     [canvasRef, isMultiSelectMode],

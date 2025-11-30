@@ -65,6 +65,10 @@ export interface PointerEventData {
   metaKey: boolean; // Cmd on Mac, Windows key on Windows
   ctrlKey: boolean; // Ctrl key
   shiftKey: boolean; // Shift key (for future range select)
+  // Multi-select mode flag (for touch devices)
+  // When true, touch events behave like Cmd/Ctrl is held for selection toggling
+  // but should NOT trigger rectangle selection on empty space
+  multiSelectModeActive?: boolean;
 }
 
 // Wheel event data (M2-T3)

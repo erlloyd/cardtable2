@@ -56,6 +56,7 @@ export function handlePointerDown(
     const hitResult = context.sceneManager.hitTest(worldPos.x, worldPos.y);
 
     // Determine if we're in rectangle-select mode based on interaction mode + modifiers
+    // Note: multiSelectModeActive should NOT trigger rectangle selection
     const modifierPressed = event.metaKey || event.ctrlKey;
     const shouldRectangleSelect =
       (context.interactionMode === 'select' && !modifierPressed) ||
@@ -456,7 +457,9 @@ export function handlePointerUp(
     // Determine if multi-select (keep existing selections)
     const pointerDownEvent = context.drag.getPointerDownEvent();
     const isMultiSelectModifier =
-      pointerDownEvent?.metaKey || pointerDownEvent?.ctrlKey;
+      pointerDownEvent?.metaKey ||
+      pointerDownEvent?.ctrlKey ||
+      pointerDownEvent?.multiSelectModeActive;
 
     // Select objects in rectangle
     selectObjects(context, selectedIds, !isMultiSelectModifier);
@@ -587,10 +590,12 @@ function handleSelectionOnPointerEnd(
     if (hitResult) {
       // Clicked on an object - handle selection logic
       const isMultiSelectModifier =
-        pointerDownEvent.metaKey || pointerDownEvent.ctrlKey;
+        pointerDownEvent.metaKey ||
+        pointerDownEvent.ctrlKey ||
+        pointerDownEvent.multiSelectModeActive;
 
       if (isMultiSelectModifier) {
-        // Cmd/Ctrl+click: toggle selection
+        // Cmd/Ctrl+click or multi-select mode: toggle selection
         if (context.selection.isSelected(hitResult.id)) {
           unselectObjects(context, [hitResult.id]);
         } else {

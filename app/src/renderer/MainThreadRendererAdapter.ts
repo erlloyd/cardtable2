@@ -45,6 +45,7 @@ export class MainThreadRendererAdapter implements IRendererAdapter {
   private renderer: MainThreadRendererOrchestrator;
   private messageHandler: ((message: RendererToMainMessage) => void) | null =
     null;
+  private readySent = false;
 
   constructor() {
     this.renderer = new MainThreadRendererOrchestrator();
@@ -77,11 +78,14 @@ export class MainThreadRendererAdapter implements IRendererAdapter {
   onMessage(handler: (message: RendererToMainMessage) => void): void {
     this.messageHandler = handler;
 
-    // Send ready message immediately now that the handler is set
+    // Send ready message only once (first time handler is set)
     // Use setTimeout to avoid issues if handler expects async behavior
-    setTimeout(() => {
-      handler({ type: 'ready' });
-    }, 0);
+    if (!this.readySent) {
+      this.readySent = true;
+      setTimeout(() => {
+        handler({ type: 'ready' });
+      }, 0);
+    }
   }
 
   destroy(): void {

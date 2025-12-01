@@ -9,6 +9,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { getBehaviors } from '../objects';
+import { Easing } from '../managers';
 
 /**
  * Handle sync-objects message
@@ -181,11 +182,32 @@ function updateObjectVisual(
   // Check if this object is being dragged (primary or secondary in multi-drag)
   const isDragging = context.drag.getDraggedObjectIds().includes(id);
 
-  // Update visual position and rotation (unless dragging - will be preserved during redraw)
+  // Update visual position and rotation
+  // Position is preserved during drag to avoid flashing, but rotation should always update
+  // to allow exhaust/flip during drag
   if (!isDragging) {
     visual.x = obj._pos.x;
     visual.y = obj._pos.y;
-    visual.rotation = (obj._pos.r * Math.PI) / 180;
+  }
+
+  // Animate rotation changes for smooth exhaust/ready
+  const currentRotation = visual.rotation; // Current rotation in radians
+  const targetRotation = (obj._pos.r * Math.PI) / 180; // Target rotation in radians
+  const rotationDiff = Math.abs(targetRotation - currentRotation);
+
+  // Only animate if rotation changed significantly (more than 0.01 radians ~ 0.57 degrees)
+  if (rotationDiff > 0.01) {
+    context.animation.animate({
+      visualId: id,
+      type: 'rotation',
+      from: currentRotation,
+      to: targetRotation,
+      duration: 200, // 200ms for snappy card-game feel
+      easing: Easing.easeOut, // Smooth deceleration
+    });
+  } else {
+    // Small or no change - set directly
+    visual.rotation = targetRotation;
   }
 
   // Redraw visual to reflect updated object properties (e.g., _faceUp, _meta)

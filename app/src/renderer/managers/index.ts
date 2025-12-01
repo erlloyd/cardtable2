@@ -6,6 +6,7 @@
  * of concerns and maintainability.
  *
  * Manager responsibilities:
+ * - AnimationManager: Generic property animations with easing
  * - AwarenessManager: Remote cursor and drag ghost rendering
  * - CameraManager: Zoom and pan operations
  * - CoordinateConverter: Screen/world/canvas coordinate transformations
@@ -17,6 +18,7 @@
  * - VisualManager: Visual effects, shadows, highlights, animations
  */
 
+export { AnimationManager, Easing } from './AnimationManager';
 export { AwarenessManager } from './AwarenessManager';
 export { CameraManager } from './CameraManager';
 export { CoordinateConverter } from './CoordinateConverter';

@@ -14,6 +14,7 @@ import type {
 import type { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
 import {
+  AnimationManager,
   CoordinateConverter,
   CameraManager,
   GestureRecognizer,
@@ -49,6 +50,7 @@ export abstract class RendererOrchestrator {
   private sceneManager: SceneManager = new SceneManager();
 
   // Managers
+  private animation: AnimationManager = new AnimationManager();
   private coordConverter: CoordinateConverter = new CoordinateConverter();
   private camera: CameraManager;
   private gestures: GestureRecognizer = new GestureRecognizer();
@@ -279,6 +281,7 @@ export abstract class RendererOrchestrator {
     this.camera.initialize(this.app, this.worldContainer);
     this.visual.initialize(this.app, this.renderMode);
     this.awareness.initialize(this.app.stage);
+    this.animation.initialize(this.app, this.visual.getAllVisuals());
   }
 
   /**
@@ -298,6 +301,7 @@ export abstract class RendererOrchestrator {
       renderMode: this.renderMode,
 
       // Managers
+      animation: this.animation,
       coordConverter: this.coordConverter,
       camera: this.camera,
       gestures: this.gestures,

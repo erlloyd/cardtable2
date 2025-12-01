@@ -5,6 +5,7 @@ import type {
 } from '@cardtable2/shared';
 import type { RenderMode } from './IRendererAdapter';
 import type {
+  AnimationManager,
   CoordinateConverter,
   CameraManager,
   GestureRecognizer,
@@ -49,6 +50,7 @@ export interface RendererContext {
   renderMode: RenderMode;
 
   // Managers
+  animation: AnimationManager;
   coordConverter: CoordinateConverter;
   camera: CameraManager;
   gestures: GestureRecognizer;

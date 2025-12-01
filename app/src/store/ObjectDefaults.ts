@@ -52,20 +52,13 @@ export function getDefaultProperties(
  * Check if an object has all required properties for its kind.
  * Useful for validation and determining if migration is needed.
  *
- * @param obj - The object to check (as a plain object or Y.Map)
- * @param kind - The object kind
+ * @param obj - The object to check (must have _kind property)
  * @returns true if all required properties are present
  */
-export function hasRequiredProperties(
-  obj: Record<string, unknown> | Map<string, unknown>,
-  kind: ObjectKind,
+export function hasAllRequiredProperties(
+  obj: Record<string, unknown>,
 ): boolean {
+  const kind = obj._kind as ObjectKind;
   const defaults = getDefaultProperties(kind);
-  const keys = Object.keys(defaults);
-
-  if (obj instanceof Map) {
-    return keys.every((key) => obj.has(key));
-  } else {
-    return keys.every((key) => key in obj);
-  }
+  return Object.keys(defaults).every((key) => key in obj);
 }

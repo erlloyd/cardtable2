@@ -368,10 +368,13 @@ export function flipCards(store: YjsStore, ids: string[]): string[] {
       if (obj._kind === ObjectKind.Stack || obj._kind === ObjectKind.Token) {
         // Type narrowing: both Stack and Token have _faceUp
         if ('_faceUp' in obj && typeof obj._faceUp === 'boolean') {
-          store.setObject(id, {
+          // Type assertion safe here due to runtime checks above
+          const flippableObj = obj as TableObject & { _faceUp: boolean };
+          const updatedObj: TableObject = {
             ...obj,
-            _faceUp: !obj._faceUp,
-          });
+            _faceUp: !flippableObj._faceUp,
+          } as TableObject;
+          store.setObject(id, updatedObj);
           flipped.push(id);
         } else {
           console.warn(

@@ -33,8 +33,11 @@ export function runMigrations(doc: Y.Doc): void {
     `[Migrations] Checking ${objectsMap.size} objects for required properties...`,
   );
 
+  // Cast to correct type for migration functions
+  const typedObjectsMap = objectsMap as Y.Map<Y.Map<unknown>>;
+
   // Quick check: do we need to run migrations?
-  if (!needsMigration(objectsMap)) {
+  if (!needsMigration(typedObjectsMap)) {
     console.log('[Migrations] ✓ All objects up-to-date, skipping migration');
     return;
   }
@@ -43,7 +46,7 @@ export function runMigrations(doc: Y.Doc): void {
 
   // Run migration in a single transaction for atomicity
   doc.transact(() => {
-    ensureObjectDefaults(objectsMap);
+    ensureObjectDefaults(typedObjectsMap);
   }, 'migration'); // Origin = 'migration' for debugging
 
   console.log('[Migrations] ✓ Migration complete');

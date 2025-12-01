@@ -13,7 +13,14 @@ import { createObject, clearAllSelections } from '../store/YjsActions';
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
+import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
+import { CommandPalette } from '../components/CommandPalette';
+import { ContextMenu } from '../components/ContextMenu';
+import { GlobalMenuBar } from '../components/GlobalMenuBar';
+import { useCommandPalette } from '../hooks/useCommandPalette';
+import { useContextMenu } from '../hooks/useContextMenu';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -69,6 +76,18 @@ function DevTable() {
     logPrefix: 'DevTable',
     onStoreReady: handleStoreReady,
   });
+
+  const commandPalette = useCommandPalette();
+  const contextMenu = useContextMenu();
+  const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
+    'pan',
+  );
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+
+  // Register default actions (shared with table route)
+  useEffect(() => {
+    registerDefaultActions();
+  }, []);
 
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
@@ -231,6 +250,9 @@ function DevTable() {
     return buildActionContext(store, ids, objects);
   }, [store, selectionState]);
 
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts(actionContext);
+
   return (
     <div className="dev-table">
       {/* Store status display and test controls */}
@@ -320,12 +342,44 @@ function DevTable() {
             store={store}
             connectionStatus={connectionStatus}
             showDebugUI={true}
+            onContextMenu={contextMenu.open}
+            interactionMode={interactionMode}
+            onInteractionModeChange={setInteractionMode}
+            isMultiSelectMode={isMultiSelectMode}
+            onMultiSelectModeChange={setIsMultiSelectMode}
             actionContext={actionContext}
+            onActionExecuted={commandPalette.recordAction}
           />
         ) : (
           <div>Initializing table state...</div>
         )}
       </Suspense>
+
+      {/* Global Menu Bar (M3.5.1-T5) */}
+      <GlobalMenuBar
+        interactionMode={interactionMode}
+        onInteractionModeChange={setInteractionMode}
+        onCommandPaletteOpen={commandPalette.open}
+        isMultiSelectMode={isMultiSelectMode}
+        onMultiSelectModeChange={setIsMultiSelectMode}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={commandPalette.isOpen}
+        onClose={commandPalette.close}
+        context={actionContext}
+        recentActionIds={commandPalette.recentActions}
+        onActionExecuted={commandPalette.recordAction}
+      />
+
+      {/* Context Menu */}
+      <ContextMenu
+        isOpen={contextMenu.isOpen}
+        position={contextMenu.position}
+        onClose={contextMenu.close}
+        context={actionContext}
+      />
     </div>
   );
 }

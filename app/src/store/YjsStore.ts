@@ -3,9 +3,9 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { WebsocketProvider } from 'y-websocket';
 import { Awareness } from 'y-protocols/awareness';
 import type { TableObject, ActorId, AwarenessState } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
+import { runMigrations } from './migrations';
 
 /**
  * Change information from Yjs observer
@@ -134,6 +134,11 @@ export class YjsStore {
       this.persistence.on('synced', () => {
         console.log('[YjsStore] IndexedDB synced, state restored');
 
+        // Run migrations to ensure all objects have required properties
+        // This runs before the store is marked as ready, ensuring objects
+        // are in the correct state before any UI interaction
+        runMigrations(this.doc);
+
         // Clear stale selections from previous sessions (M3-T3)
         // Each page load creates a new actor ID, so old selections are orphaned.
         // For solo mode: always start with clean slate.
@@ -213,23 +218,10 @@ export class YjsStore {
         this.objects.set(id, yMap);
       }
 
-      // Update all fields
-      yMap.set('_kind', obj._kind);
-      yMap.set('_containerId', obj._containerId);
-      yMap.set('_pos', obj._pos);
-      yMap.set('_sortKey', obj._sortKey);
-      yMap.set('_locked', obj._locked);
-      yMap.set('_selectedBy', obj._selectedBy);
-      yMap.set('_meta', obj._meta);
-
-      // Stack-specific fields (type-narrowed)
-      if (
-        obj._kind === ObjectKind.Stack &&
-        '_cards' in obj &&
-        '_faceUp' in obj
-      ) {
-        yMap.set('_cards', obj._cards);
-        yMap.set('_faceUp', obj._faceUp);
+      // Update all fields dynamically - iterate over all properties
+      // This ensures we never miss a field when adding new object types or properties
+      for (const [key, value] of Object.entries(obj)) {
+        yMap.set(key, value);
       }
     });
   }

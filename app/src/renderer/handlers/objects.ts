@@ -178,12 +178,29 @@ function updateObjectVisual(
   // Update scene manager
   context.sceneManager.updateObject(id, obj);
 
-  // Update visual position and rotation
-  visual.x = obj._pos.x;
-  visual.y = obj._pos.y;
-  visual.rotation = (obj._pos.r * Math.PI) / 180;
+  // Check if this object is being dragged (primary or secondary in multi-drag)
+  const isDragging = context.drag.getDraggedObjectIds().includes(id);
 
-  // TODO: If kind or meta changed, we may need to recreate the visual
+  // Update visual position and rotation (unless dragging - will be preserved during redraw)
+  if (!isDragging) {
+    visual.x = obj._pos.x;
+    visual.y = obj._pos.y;
+    visual.rotation = (obj._pos.r * Math.PI) / 180;
+  }
+
+  // Redraw visual to reflect updated object properties (e.g., _faceUp, _meta)
+  // This ensures changes like flip appear immediately
+  // If dragging, preserve the current visual position to avoid flashing back
+  const isHovered = context.hover.getHoveredObjectId() === id;
+  const isSelected = context.selection.isSelected(id);
+  context.visual.updateVisualForObjectChange(
+    id,
+    isHovered,
+    isDragging,
+    isSelected,
+    context.sceneManager,
+    isDragging, // Preserve position during drag to avoid flashing
+  );
 }
 
 /**

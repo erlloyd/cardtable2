@@ -7,10 +7,12 @@ import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { buildActionContext } from '../actions/buildActionContext';
 import { CARD_ACTIONS } from '../actions/types';
 import type { ActionContext } from '../actions/types';
+import { flipCards } from '../store/YjsActions';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -69,16 +71,21 @@ function Table() {
       },
     });
 
-    // Object action: Flip Cards (only for stacks)
+    // Object action: Flip Cards/Tokens
     registry.register({
       id: 'flip-cards',
-      label: 'Flip Selected Cards',
+      label: 'Flip Selected Objects',
       icon: '🔄',
       shortcut: 'F',
       category: CARD_ACTIONS,
-      description: 'Flip all selected cards face up or face down',
-      isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
-      execute: () => console.log('Flip cards'),
+      description: 'Flip all selected cards and tokens face up or face down',
+      isAvailable: (ctx) =>
+        ctx.selection.count > 0 &&
+        (ctx.selection.hasStacks || ctx.selection.hasTokens),
+      execute: (ctx) => {
+        const flipped = flipCards(ctx.store, ctx.selection.ids);
+        console.log(`Flipped ${flipped.length} objects:`, flipped);
+      },
     });
 
     // Object action: Rotate (works on any object)
@@ -280,6 +287,9 @@ function Table() {
 
     return context;
   }, [store, selectionState]);
+
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts(actionContext);
 
   return (
     <div className="table">

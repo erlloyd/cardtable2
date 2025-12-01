@@ -48,6 +48,12 @@ export interface StackObject extends TableObject {
   _faceUp: boolean; // Whether stack is face-up or face-down
 }
 
+// Token-specific properties (when _kind === ObjectKind.Token)
+export interface TokenObject extends TableObject {
+  _kind: ObjectKind.Token;
+  _faceUp: boolean; // Whether token is face-up or face-down
+}
+
 // ============================================================================
 // Renderer Message Types (M2-T1, M2-T2, M2-T3, M2-T6)
 // ============================================================================

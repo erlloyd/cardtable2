@@ -5,6 +5,7 @@ import {
   type Position,
   type TableObject,
 } from '@cardtable2/shared';
+import { getDefaultProperties } from './ObjectDefaults';
 
 /**
  * Engine Actions for Yjs-based state manipulation (M3-T2)
@@ -84,7 +85,10 @@ export function createObject(
   const id = uuidv4();
   const sortKey = generateTopSortKey(store);
 
-  // Build base object
+  // Get default properties for this kind from centralized defaults
+  const defaults = getDefaultProperties(options.kind);
+
+  // Build base object with defaults
   const baseObject: TableObject = {
     _kind: options.kind,
     _containerId: options.containerId ?? null,
@@ -93,20 +97,29 @@ export function createObject(
     _locked: options.locked ?? false,
     _selectedBy: null, // New objects are not selected
     _meta: options.meta ?? {},
+    ...defaults, // Apply kind-specific defaults
   };
 
-  // Create object using YjsStore's setObject (which uses transactions internally)
+  // Override defaults with provided options (if any)
   if (options.kind === ObjectKind.Stack) {
     // Stack-specific fields
     const stackObject = {
       ...baseObject,
       _kind: ObjectKind.Stack,
-      _cards: options.cards ?? [],
-      _faceUp: options.faceUp ?? true,
+      _cards: options.cards ?? (defaults._cards as string[]),
+      _faceUp: options.faceUp ?? (defaults._faceUp as boolean),
     };
     store.setObject(id, stackObject);
+  } else if (options.kind === ObjectKind.Token) {
+    // Token-specific fields
+    const tokenObject = {
+      ...baseObject,
+      _kind: ObjectKind.Token,
+      _faceUp: options.faceUp ?? (defaults._faceUp as boolean),
+    };
+    store.setObject(id, tokenObject);
   } else {
-    // Other object types (Token, Zone, Mat, Counter)
+    // Other object types (Zone, Mat, Counter)
     store.setObject(id, baseObject);
   }
 
@@ -323,4 +336,53 @@ export function clearAllSelections(
   });
 
   return cleared;
+}
+
+/**
+ * Flip cards/tokens to toggle their face up/down state (M3.5-T1)
+ *
+ * Only affects objects that support flipping (stacks and tokens).
+ * Non-flippable objects are silently skipped.
+ *
+ * @param store - YjsStore instance
+ * @param ids - Array of object IDs to flip
+ * @returns Array of successfully flipped object IDs
+ *
+ * @example
+ * // Flip selected cards
+ * const flipped = flipCards(store, ['stack-1', 'token-1', 'zone-1']);
+ * console.log('Flipped:', flipped); // ['stack-1', 'token-1'] (zone skipped)
+ */
+export function flipCards(store: YjsStore, ids: string[]): string[] {
+  const flipped: string[] = [];
+
+  store.getDoc().transact(() => {
+    ids.forEach((id) => {
+      const obj = store.getObject(id);
+      if (!obj) {
+        console.warn(`[flipCards] Object ${id} not found`);
+        return;
+      }
+
+      // Only flip stacks and tokens (objects with _faceUp property)
+      if (obj._kind === ObjectKind.Stack || obj._kind === ObjectKind.Token) {
+        // Type narrowing: both Stack and Token have _faceUp
+        if ('_faceUp' in obj && typeof obj._faceUp === 'boolean') {
+          store.setObject(id, {
+            ...obj,
+            _faceUp: !obj._faceUp,
+          });
+          flipped.push(id);
+        } else {
+          console.warn(
+            `[flipCards] Object ${id} is a ${obj._kind} but missing _faceUp property`,
+            obj,
+          );
+        }
+      }
+      // Silently skip non-flippable objects (zones, mats, counters)
+    });
+  });
+
+  return flipped;
 }

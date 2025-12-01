@@ -22,6 +22,19 @@ export const TokenBehaviors: ObjectBehaviors = {
         : TOKEN_BORDER_COLOR_NORMAL,
     });
 
+    // Visual indicator for face-down state (cross pattern)
+    if ('_faceUp' in obj && obj._faceUp === false) {
+      graphic.circle(0, 0, radius);
+      graphic.fill({ color: 0x000000, alpha: 0.2 });
+
+      // Cross pattern (horizontal + vertical lines)
+      graphic.moveTo(-radius, 0);
+      graphic.lineTo(radius, 0);
+      graphic.moveTo(0, -radius);
+      graphic.lineTo(0, radius);
+      graphic.stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
+    }
+
     return graphic;
   },
 
@@ -43,5 +56,13 @@ export const TokenBehaviors: ObjectBehaviors = {
       shape: 'circle',
       borderRadius: 0,
     };
+  },
+
+  capabilities: {
+    canFlip: true,
+    canRotate: true,
+    canStack: false,
+    canUnstack: false,
+    canLock: true,
   },
 };

@@ -153,10 +153,34 @@ export class VisualManager {
   }
 
   /**
+   * Update object visual when object data changes (e.g., _faceUp, _meta).
+   * Forces a full re-render to reflect updated properties.
+   * @param preservePosition - If true, maintain the visual's current position after redraw (useful during drag/animation)
+   */
+  updateVisualForObjectChange(
+    objectId: string,
+    isHovered: boolean,
+    isDragging: boolean,
+    isSelected: boolean,
+    sceneManager: SceneManager,
+    preservePosition = false,
+  ): void {
+    this.redrawVisual(
+      objectId,
+      isHovered,
+      isDragging,
+      isSelected,
+      sceneManager,
+      preservePosition,
+    );
+  }
+
+  /**
    * Redraw an object's visual representation.
    * @param isHovered - Whether the object is hovered (black shadow)
    * @param isDragging - Whether the object is being dragged (blue shadow)
    * @param isSelected - Whether the object is selected (red border)
+   * @param preservePosition - If true, restore visual position after redraw (for transient states like drag)
    */
   private redrawVisual(
     objectId: string,
@@ -164,12 +188,18 @@ export class VisualManager {
     isDragging: boolean,
     isSelected: boolean,
     sceneManager: SceneManager,
+    preservePosition = false,
   ): void {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
     const obj = sceneManager.getObject(objectId);
     if (!obj) return;
+
+    // Preserve position if requested (for transient states like drag/animation)
+    const preservedX = preservePosition ? visual.x : undefined;
+    const preservedY = preservePosition ? visual.y : undefined;
+    const preservedRotation = preservePosition ? visual.rotation : undefined;
 
     // Clear existing children
     visual.removeChildren();
@@ -242,6 +272,13 @@ export class VisualManager {
 
     // Add text label showing object type
     visual.addChild(this.createKindLabel(obj._kind));
+
+    // Restore preserved position if requested (for transient states like drag/animation)
+    if (preservePosition && preservedX !== undefined) {
+      visual.x = preservedX;
+      visual.y = preservedY!;
+      visual.rotation = preservedRotation!;
+    }
   }
 
   /**

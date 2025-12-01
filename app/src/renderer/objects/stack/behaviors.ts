@@ -29,6 +29,24 @@ export const StackBehaviors: ObjectBehaviors = {
         : STACK_BORDER_COLOR_NORMAL,
     });
 
+    // Visual indicator for face-down state (diagonal lines)
+    if ('_faceUp' in obj && obj._faceUp === false) {
+      graphic.rect(
+        -STACK_WIDTH / 2,
+        -STACK_HEIGHT / 2,
+        STACK_WIDTH,
+        STACK_HEIGHT,
+      );
+      graphic.fill({ color: 0x000000, alpha: 0.2 });
+
+      // Diagonal line pattern
+      graphic.moveTo(-STACK_WIDTH / 2, -STACK_HEIGHT / 2);
+      graphic.lineTo(STACK_WIDTH / 2, STACK_HEIGHT / 2);
+      graphic.moveTo(-STACK_WIDTH / 2, STACK_HEIGHT / 2);
+      graphic.lineTo(STACK_WIDTH / 2, -STACK_HEIGHT / 2);
+      graphic.stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
+    }
+
     return graphic;
   },
 
@@ -48,5 +66,13 @@ export const StackBehaviors: ObjectBehaviors = {
       shape: 'rect',
       borderRadius: STACK_BORDER_RADIUS,
     };
+  },
+
+  capabilities: {
+    canFlip: true,
+    canRotate: true,
+    canStack: true,
+    canUnstack: true,
+    canLock: true,
   },
 };

@@ -44,4 +44,12 @@ export const MatBehaviors: ObjectBehaviors = {
       borderRadius: 0,
     };
   },
+
+  capabilities: {
+    canFlip: false,
+    canRotate: true,
+    canStack: false,
+    canUnstack: false,
+    canLock: true,
+  },
 };

@@ -204,6 +204,38 @@ For detailed information about project progress, completed work, and upcoming mi
 - Merge to main only after testing and validation
 - CI/CD deploys automatically on merge to main
 
+### Testing Workflow
+
+**CRITICAL: Always test before committing!**
+
+Before attempting to commit code, you MUST run tests to ensure they pass:
+
+```bash
+# Run unit tests for specific modules
+pnpm --filter @cardtable2/app test <pattern>   # e.g., "migrations", "ObjectDefaults"
+
+# Run all unit tests
+pnpm run test
+
+# Run E2E tests (takes longer, run after unit tests pass)
+cd app && pnpm run test:e2e
+```
+
+**Why this matters:**
+- Pre-commit hooks run linting/formatting checks that often fail if tests weren't run first
+- Type errors and lint issues are caught earlier when tests run first
+- Saves time by catching issues before the commit hook runs
+- Avoids frustrating commit failures and git stash cycles
+
+**Best Practice Workflow:**
+1. Write/modify code
+2. Run relevant unit tests: `pnpm --filter @cardtable2/app test <module>`
+3. Fix any test failures
+4. Run linting: `pnpm run lint`
+5. Run type check: `pnpm run typecheck`
+6. If all pass, attempt commit
+7. Run E2E tests before pushing: `cd app && pnpm run test:e2e`
+
 ### Testing
 - Unit tests use Vitest
 - E2E tests use Playwright

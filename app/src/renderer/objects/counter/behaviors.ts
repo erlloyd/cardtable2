@@ -44,4 +44,12 @@ export const CounterBehaviors: ObjectBehaviors = {
       borderRadius: 0,
     };
   },
+
+  capabilities: {
+    canFlip: false,
+    canRotate: false,
+    canStack: false,
+    canUnstack: false,
+    canLock: true,
+  },
 };

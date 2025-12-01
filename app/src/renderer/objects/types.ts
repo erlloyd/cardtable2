@@ -18,6 +18,15 @@ export interface ShadowConfig {
   borderRadius: number;
 }
 
+// Object capabilities (what actions are supported)
+export interface ObjectCapabilities {
+  canFlip: boolean; // Toggle face up/down state
+  canRotate: boolean; // Rotate object
+  canStack: boolean; // Merge with other stacks
+  canUnstack: boolean; // Extract cards from stack
+  canLock: boolean; // Prevent movement/editing
+}
+
 // Behavior interfaces
 export type RenderBehavior = (obj: TableObject, ctx: RenderContext) => Graphics;
 export type BoundsBehavior = (obj: TableObject) => Omit<BBox, 'id'>;
@@ -27,6 +36,7 @@ export interface ObjectBehaviors {
   render: RenderBehavior;
   getBounds: BoundsBehavior;
   getShadowConfig: ShadowBehavior;
+  capabilities: ObjectCapabilities;
 }
 
 // Event handler types

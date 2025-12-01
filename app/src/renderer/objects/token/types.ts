@@ -1,4 +1,8 @@
-import { ObjectKind, type TableObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  type TableObject,
+  type TokenObject,
+} from '@cardtable2/shared';
 
 /** Token-specific metadata interface */
 export interface TokenMeta extends Record<string, unknown> {
@@ -9,9 +13,4 @@ export interface TokenMeta extends Record<string, unknown> {
 /** Type guard for Token objects */
 export function isTokenObject(obj: TableObject): obj is TokenObject {
   return obj._kind === ObjectKind.Token;
-}
-
-/** Full Token object type with required fields */
-export interface TokenObject extends TableObject {
-  _kind: ObjectKind.Token;
 }

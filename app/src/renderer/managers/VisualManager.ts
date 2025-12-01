@@ -196,10 +196,12 @@ export class VisualManager {
     const obj = sceneManager.getObject(objectId);
     if (!obj) return;
 
-    // Preserve position if requested (for transient states like drag/animation)
+    // Preserve position and scale if requested (for transient states like drag/animation)
     const preservedX = preservePosition ? visual.x : undefined;
     const preservedY = preservePosition ? visual.y : undefined;
     const preservedRotation = preservePosition ? visual.rotation : undefined;
+    const preservedScaleX = visual.scale.x;
+    const preservedScaleY = visual.scale.y;
 
     // Clear existing children
     visual.removeChildren();
@@ -279,6 +281,9 @@ export class VisualManager {
       visual.y = preservedY!;
       visual.rotation = preservedRotation!;
     }
+
+    // Always restore scale (animations may be modifying it)
+    visual.scale.set(preservedScaleX, preservedScaleY);
   }
 
   /**

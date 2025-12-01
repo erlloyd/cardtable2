@@ -3,7 +3,13 @@ import type { Application, Container } from 'pixi.js';
 /**
  * Animation type - what property to animate
  */
-export type AnimationType = 'rotation' | 'scale' | 'position' | 'alpha';
+export type AnimationType =
+  | 'rotation'
+  | 'scale'
+  | 'scaleX'
+  | 'scaleY'
+  | 'position'
+  | 'alpha';
 
 /**
  * Animation configuration for a single object
@@ -16,6 +22,7 @@ export interface Animation {
   duration: number; // milliseconds
   easing?: (t: number) => number; // easing function (0-1 input/output)
   onComplete?: () => void;
+  stage?: string; // Optional stage identifier for multi-stage animations (e.g., "flip-compress", "flip-expand")
 }
 
 /**
@@ -49,6 +56,16 @@ const animationUpdaters: Record<AnimationType, AnimationUpdater> = {
     const to = anim.to as number;
     const scale = from + (to - from) * progress;
     visual.scale.set(scale);
+  },
+  scaleX: (visual, anim, progress) => {
+    const from = anim.from as number;
+    const to = anim.to as number;
+    visual.scale.x = from + (to - from) * progress;
+  },
+  scaleY: (visual, anim, progress) => {
+    const from = anim.from as number;
+    const to = anim.to as number;
+    visual.scale.y = from + (to - from) * progress;
   },
   position: (visual, anim, progress) => {
     const from = anim.from as { x: number; y: number };
@@ -117,10 +134,13 @@ export class AnimationManager {
       return;
     }
 
-    // Create animation key (visual + type, so multiple types can animate simultaneously)
-    const animKey = `${config.visualId}:${config.type}`;
+    // Create animation key (visual + type + optional stage)
+    // The stage ensures chained animations (like flip stage 1 → stage 2) don't collide
+    const animKey = config.stage
+      ? `${config.visualId}:${config.type}:${config.stage}`
+      : `${config.visualId}:${config.type}`;
 
-    // Add/replace animation
+    // Add animation
     this.activeAnimations.set(animKey, {
       ...config,
       startTime: performance.now(),
@@ -180,6 +200,57 @@ export class AnimationManager {
   }
 
   /**
+   * Animate a flip effect (horizontal squash and stretch)
+   *
+   * Performs a two-stage flip animation:
+   * 1. Compress horizontally (scaleX: 1 → 0)
+   * 2. Expand horizontally (scaleX: 0 → 1)
+   *
+   * The onMidpoint callback is called when the visual is fully compressed (invisible),
+   * which is the ideal time to swap the visual content (e.g., change face up/down).
+   *
+   * @param visualId - ID of the visual to flip
+   * @param onMidpoint - Callback to execute at the midpoint (when scaleX = 0)
+   * @param duration - Total duration in ms (default: 150ms for snappy flip)
+   * @param onComplete - Optional callback to execute when flip fully completes
+   */
+  animateFlip(
+    visualId: string,
+    onMidpoint: () => void,
+    duration = 150,
+    onComplete?: () => void,
+  ): void {
+    const halfDuration = duration / 2;
+
+    // Stage 1: Compress (scaleX: 1 → 0)
+    this.animate({
+      visualId,
+      type: 'scaleX',
+      from: 1,
+      to: 0,
+      duration: halfDuration,
+      easing: Easing.easeIn, // Accelerate into the flip
+      stage: 'flip-compress',
+      onComplete: () => {
+        // At midpoint: visual is fully compressed
+        onMidpoint();
+
+        // Stage 2: Expand (scaleX: 0 → 1)
+        this.animate({
+          visualId,
+          type: 'scaleX',
+          from: 0,
+          to: 1,
+          duration: halfDuration,
+          easing: Easing.easeOut, // Decelerate out of the flip
+          stage: 'flip-expand',
+          onComplete,
+        });
+      },
+    });
+  }
+
+  /**
    * Start the ticker for animation updates
    */
   private startTicker(): void {
@@ -221,22 +292,28 @@ export class AnimationManager {
         // Mark as complete if done
         if (elapsed >= anim.duration) {
           completedAnimations.push(key);
-          if (anim.onComplete) {
-            anim.onComplete();
-          }
         }
       }
 
-      // Remove completed animations
+      // Call onComplete callbacks AFTER updating all animations
+      // This ensures chained animations (stage 2) are added before we check if animations remain
+      for (const key of completedAnimations) {
+        const anim = this.activeAnimations.get(key);
+        if (anim?.onComplete) {
+          anim.onComplete();
+        }
+      }
+
+      // Remove completed animations AFTER callbacks (which may add new animations)
       for (const key of completedAnimations) {
         this.activeAnimations.delete(key);
       }
 
-      // Render if animations are still active
-      if (this.activeAnimations.size > 0) {
-        this.app.renderer.render(this.app.stage);
-      } else {
-        // Stop ticker when all animations complete
+      // Always render to show animation updates
+      this.app.renderer.render(this.app.stage);
+
+      // Stop ticker when all animations complete
+      if (this.activeAnimations.size === 0) {
         this.stopTicker();
       }
     };

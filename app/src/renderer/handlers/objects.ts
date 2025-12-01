@@ -176,6 +176,9 @@ function updateObjectVisual(
     return;
   }
 
+  // Get previous object state to detect flip changes
+  const prevObj = context.sceneManager.getObject(id);
+
   // Update scene manager
   context.sceneManager.updateObject(id, obj);
 
@@ -188,6 +191,61 @@ function updateObjectVisual(
   if (!isDragging) {
     visual.x = obj._pos.x;
     visual.y = obj._pos.y;
+  }
+
+  // Detect _faceUp changes (flip) and animate
+  const hasFaceUp = '_faceUp' in obj && typeof obj._faceUp === 'boolean';
+  const prevHasFaceUp =
+    prevObj && '_faceUp' in prevObj && typeof prevObj._faceUp === 'boolean';
+  const faceUpChanged =
+    hasFaceUp &&
+    prevHasFaceUp &&
+    (obj as { _faceUp: boolean })._faceUp !==
+      (prevObj as { _faceUp: boolean })._faceUp;
+
+  if (faceUpChanged) {
+    // Animate flip: compress → update visual → expand
+    const flipOnMidpoint = () => {
+      // At midpoint (scaleX = 0), update the visual
+      const isHovered = context.hover.getHoveredObjectId() === id;
+      const isSelected = context.selection.isSelected(id);
+      context.visual.updateVisualForObjectChange(
+        id,
+        isHovered,
+        isDragging,
+        isSelected,
+        context.sceneManager,
+        isDragging, // Preserve position during drag to avoid flashing
+      );
+    };
+
+    const flipOnComplete = () => {
+      // After flip completes, do a final redraw to ensure correct state
+      const isHovered = context.hover.getHoveredObjectId() === id;
+      const isSelected = context.selection.isSelected(id);
+      context.visual.updateVisualForObjectChange(
+        id,
+        isHovered,
+        isDragging,
+        isSelected,
+        context.sceneManager,
+        isDragging,
+      );
+    };
+
+    context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
+  } else {
+    // No flip - just update visual immediately
+    const isHovered = context.hover.getHoveredObjectId() === id;
+    const isSelected = context.selection.isSelected(id);
+    context.visual.updateVisualForObjectChange(
+      id,
+      isHovered,
+      isDragging,
+      isSelected,
+      context.sceneManager,
+      isDragging, // Preserve position during drag to avoid flashing
+    );
   }
 
   // Animate rotation changes for smooth exhaust/ready
@@ -209,20 +267,6 @@ function updateObjectVisual(
     // Small or no change - set directly
     visual.rotation = targetRotation;
   }
-
-  // Redraw visual to reflect updated object properties (e.g., _faceUp, _meta)
-  // This ensures changes like flip appear immediately
-  // If dragging, preserve the current visual position to avoid flashing back
-  const isHovered = context.hover.getHoveredObjectId() === id;
-  const isSelected = context.selection.isSelected(id);
-  context.visual.updateVisualForObjectChange(
-    id,
-    isHovered,
-    isDragging,
-    isSelected,
-    context.sceneManager,
-    isDragging, // Preserve position during drag to avoid flashing
-  );
 }
 
 /**

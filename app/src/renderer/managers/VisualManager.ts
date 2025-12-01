@@ -156,6 +156,7 @@ export class VisualManager {
    * Update object visual when object data changes (e.g., _faceUp, _meta).
    * Forces a full re-render to reflect updated properties.
    * @param preservePosition - If true, maintain the visual's current position after redraw (useful during drag/animation)
+   * @param preserveScale - If true, maintain the visual's current scale after redraw (useful during flip animations)
    */
   updateVisualForObjectChange(
     objectId: string,
@@ -164,6 +165,7 @@ export class VisualManager {
     isSelected: boolean,
     sceneManager: SceneManager,
     preservePosition = false,
+    preserveScale = false,
   ): void {
     this.redrawVisual(
       objectId,
@@ -172,6 +174,7 @@ export class VisualManager {
       isSelected,
       sceneManager,
       preservePosition,
+      preserveScale,
     );
   }
 
@@ -181,6 +184,7 @@ export class VisualManager {
    * @param isDragging - Whether the object is being dragged (blue shadow)
    * @param isSelected - Whether the object is selected (red border)
    * @param preservePosition - If true, restore visual position after redraw (for transient states like drag)
+   * @param preserveScale - If true, restore visual scale after redraw (for animations like flip)
    */
   private redrawVisual(
     objectId: string,
@@ -189,6 +193,7 @@ export class VisualManager {
     isSelected: boolean,
     sceneManager: SceneManager,
     preservePosition = false,
+    preserveScale = false,
   ): void {
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
@@ -200,8 +205,8 @@ export class VisualManager {
     const preservedX = preservePosition ? visual.x : undefined;
     const preservedY = preservePosition ? visual.y : undefined;
     const preservedRotation = preservePosition ? visual.rotation : undefined;
-    const preservedScaleX = visual.scale.x;
-    const preservedScaleY = visual.scale.y;
+    const preservedScaleX = preserveScale ? visual.scale.x : 1;
+    const preservedScaleY = preserveScale ? visual.scale.y : 1;
 
     // Clear existing children
     visual.removeChildren();
@@ -282,8 +287,10 @@ export class VisualManager {
       visual.rotation = preservedRotation!;
     }
 
-    // Always restore scale (animations may be modifying it)
-    visual.scale.set(preservedScaleX, preservedScaleY);
+    // Restore scale if requested (for animations like flip that modify scaleX/Y)
+    if (preserveScale) {
+      visual.scale.set(preservedScaleX, preservedScaleY);
+    }
   }
 
   /**

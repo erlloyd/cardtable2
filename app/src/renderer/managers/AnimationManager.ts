@@ -30,7 +30,6 @@ export interface Animation {
  */
 interface ActiveAnimation extends Animation {
   startTime: number;
-  currentTime: number;
 }
 
 /**
@@ -144,7 +143,6 @@ export class AnimationManager {
     this.activeAnimations.set(animKey, {
       ...config,
       startTime: performance.now(),
-      currentTime: 0,
     });
 
     // Start ticker if not already running
@@ -155,10 +153,19 @@ export class AnimationManager {
 
   /**
    * Cancel an animation for a specific visual and type
+   * Also cancels any staged variants (e.g., flip-compress, flip-expand)
    */
   cancel(visualId: string, type: AnimationType): void {
+    // Cancel non-staged animation
     const animKey = `${visualId}:${type}`;
     this.activeAnimations.delete(animKey);
+
+    // Also cancel any staged animations (e.g., flip-compress, flip-expand)
+    for (const key of this.activeAnimations.keys()) {
+      if (key.startsWith(`${visualId}:${type}:`)) {
+        this.activeAnimations.delete(key);
+      }
+    }
 
     // Stop ticker if no animations remain
     if (this.activeAnimations.size === 0 && this.isTickerActive) {
@@ -261,60 +268,67 @@ export class AnimationManager {
     this.isTickerActive = true;
 
     this.tickerCallback = () => {
-      if (!this.app) {
+      try {
+        if (!this.app) {
+          this.stopTicker();
+          return;
+        }
+
+        const now = performance.now();
+        const completedAnimations: string[] = [];
+
+        // Update all active animations
+        for (const [key, anim] of this.activeAnimations) {
+          const visual = this.objectVisuals.get(anim.visualId);
+          if (!visual) {
+            completedAnimations.push(key);
+            continue;
+          }
+
+          // Calculate progress (0 to 1)
+          const elapsed = now - anim.startTime;
+          let progress = Math.min(elapsed / anim.duration, 1);
+
+          // Apply easing if provided
+          if (anim.easing) {
+            progress = anim.easing(progress);
+          }
+
+          // Update the property based on type
+          this.updateVisualProperty(visual, anim, progress);
+
+          // Mark as complete if done
+          if (elapsed >= anim.duration) {
+            completedAnimations.push(key);
+          }
+        }
+
+        // Call onComplete callbacks AFTER updating all animations
+        // This ensures chained animations (stage 2) are added before we check if animations remain
+        for (const key of completedAnimations) {
+          const anim = this.activeAnimations.get(key);
+          if (anim?.onComplete) {
+            anim.onComplete();
+          }
+        }
+
+        // Remove completed animations AFTER callbacks (which may add new animations)
+        for (const key of completedAnimations) {
+          this.activeAnimations.delete(key);
+        }
+
+        // Always render to show animation updates
+        this.app.renderer.render(this.app.stage);
+
+        // Stop ticker when all animations complete
+        if (this.activeAnimations.size === 0) {
+          this.stopTicker();
+        }
+      } catch (error) {
+        console.error('[AnimationManager] Ticker error:', error);
+        // Stop ticker and clear animations to prevent infinite errors
         this.stopTicker();
-        return;
-      }
-
-      const now = performance.now();
-      const completedAnimations: string[] = [];
-
-      // Update all active animations
-      for (const [key, anim] of this.activeAnimations) {
-        const visual = this.objectVisuals.get(anim.visualId);
-        if (!visual) {
-          completedAnimations.push(key);
-          continue;
-        }
-
-        // Calculate progress (0 to 1)
-        const elapsed = now - anim.startTime;
-        let progress = Math.min(elapsed / anim.duration, 1);
-
-        // Apply easing if provided
-        if (anim.easing) {
-          progress = anim.easing(progress);
-        }
-
-        // Update the property based on type
-        this.updateVisualProperty(visual, anim, progress);
-
-        // Mark as complete if done
-        if (elapsed >= anim.duration) {
-          completedAnimations.push(key);
-        }
-      }
-
-      // Call onComplete callbacks AFTER updating all animations
-      // This ensures chained animations (stage 2) are added before we check if animations remain
-      for (const key of completedAnimations) {
-        const anim = this.activeAnimations.get(key);
-        if (anim?.onComplete) {
-          anim.onComplete();
-        }
-      }
-
-      // Remove completed animations AFTER callbacks (which may add new animations)
-      for (const key of completedAnimations) {
-        this.activeAnimations.delete(key);
-      }
-
-      // Always render to show animation updates
-      this.app.renderer.render(this.app.stage);
-
-      // Stop ticker when all animations complete
-      if (this.activeAnimations.size === 0) {
-        this.stopTicker();
+        this.activeAnimations.clear();
       }
     };
 

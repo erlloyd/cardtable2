@@ -193,6 +193,12 @@ function updateObjectVisual(
     visual.y = obj._pos.y;
   }
 
+  // Query state once for efficiency (reused in callbacks and non-flip path)
+  // Note: Callbacks capture the state at animation start, which is correct behavior
+  // (hover/selection changes during animation should not affect the animation)
+  const isHovered = context.hover.getHoveredObjectId() === id;
+  const isSelected = context.selection.isSelected(id);
+
   // Detect _faceUp changes (flip) and animate
   const hasFaceUp = '_faceUp' in obj && typeof obj._faceUp === 'boolean';
   const prevHasFaceUp =
@@ -207,8 +213,6 @@ function updateObjectVisual(
     // Animate flip: compress → update visual → expand
     const flipOnMidpoint = () => {
       // At midpoint (scaleX = 0), update the visual
-      const isHovered = context.hover.getHoveredObjectId() === id;
-      const isSelected = context.selection.isSelected(id);
       context.visual.updateVisualForObjectChange(
         id,
         isHovered,
@@ -216,13 +220,12 @@ function updateObjectVisual(
         isSelected,
         context.sceneManager,
         isDragging, // Preserve position during drag to avoid flashing
+        true, // Preserve scale during flip animation
       );
     };
 
     const flipOnComplete = () => {
       // After flip completes, do a final redraw to ensure correct state
-      const isHovered = context.hover.getHoveredObjectId() === id;
-      const isSelected = context.selection.isSelected(id);
       context.visual.updateVisualForObjectChange(
         id,
         isHovered,
@@ -230,14 +233,13 @@ function updateObjectVisual(
         isSelected,
         context.sceneManager,
         isDragging,
+        false, // No need to preserve scale after animation completes
       );
     };
 
     context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
   } else {
     // No flip - just update visual immediately
-    const isHovered = context.hover.getHoveredObjectId() === id;
-    const isSelected = context.selection.isSelected(id);
     context.visual.updateVisualForObjectChange(
       id,
       isHovered,
@@ -245,21 +247,28 @@ function updateObjectVisual(
       isSelected,
       context.sceneManager,
       isDragging, // Preserve position during drag to avoid flashing
+      false, // No scale animation, use default scale
     );
   }
 
   // Animate rotation changes for smooth exhaust/ready
   const currentRotation = visual.rotation; // Current rotation in radians
   const targetRotation = (obj._pos.r * Math.PI) / 180; // Target rotation in radians
-  const rotationDiff = Math.abs(targetRotation - currentRotation);
+
+  // Calculate shortest angular distance (handles wrapping around 0°/360°)
+  let rotationDiff = targetRotation - currentRotation;
+  // Normalize to [-π, π] range for shortest path
+  while (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
+  while (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
+  const finalRotation = currentRotation + rotationDiff;
 
   // Only animate if rotation changed significantly (more than 0.01 radians ~ 0.57 degrees)
-  if (rotationDiff > 0.01) {
+  if (Math.abs(rotationDiff) > 0.01) {
     context.animation.animate({
       visualId: id,
       type: 'rotation',
       from: currentRotation,
-      to: targetRotation,
+      to: finalRotation, // Use calculated shortest path
       duration: 200, // 200ms for snappy card-game feel
       easing: Easing.easeOut, // Smooth deceleration
     });

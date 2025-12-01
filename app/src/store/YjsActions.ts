@@ -391,6 +391,14 @@ export function flipCards(store: YjsStore, ids: string[]): string[] {
 }
 
 /**
+ * Normalize rotation to prevent floating point drift
+ * Rounds to 1 decimal place for consistency
+ */
+function normalizeRotation(r: number): number {
+  return Math.round(r * 10) / 10;
+}
+
+/**
  * Exhaust/Ready cards - toggle rotation by 90 degrees (M3.5-T2)
  *
  * Exhausts (rotates 90°) or readies (rotates back to 0°) stack objects.
@@ -407,6 +415,8 @@ export function flipCards(store: YjsStore, ids: string[]): string[] {
  * console.log('Exhausted/Readied:', exhausted); // ['stack-1', 'stack-2'] (zone skipped)
  */
 export function exhaustCards(store: YjsStore, ids: string[]): string[] {
+  const EXHAUST_ROTATION = 90;
+  const ROTATION_EPSILON = 0.1; // Tight tolerance for floating point error
   const toggled: string[] = [];
 
   store.getDoc().transact(() => {
@@ -420,8 +430,11 @@ export function exhaustCards(store: YjsStore, ids: string[]): string[] {
       // Only exhaust stacks
       if (obj._kind === ObjectKind.Stack) {
         // Toggle: if exhausted (90°), ready to 0°, otherwise exhaust to 90°
-        const isExhausted = Math.abs(obj._pos.r - 90) < 1; // Allow small floating point error
-        const newRotation = isExhausted ? 0 : 90;
+        const isExhausted =
+          Math.abs(obj._pos.r - EXHAUST_ROTATION) < ROTATION_EPSILON;
+        const newRotation = normalizeRotation(
+          isExhausted ? 0 : EXHAUST_ROTATION,
+        );
 
         const updatedObj: TableObject = {
           ...obj,

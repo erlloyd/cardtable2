@@ -6,6 +6,8 @@ import {
   selectObjects,
   unselectObjects,
   clearAllSelections,
+  exhaustCards,
+  flipCards,
 } from './YjsActions';
 import { ObjectKind } from '@cardtable2/shared';
 
@@ -923,6 +925,471 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(() => {
         clearAllSelections(store, { excludeDragging: true });
       }).toThrow('excludeDragging option is not implemented yet');
+    });
+  });
+});
+
+describe('YjsActions - exhaustCards (M3.5-T2)', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('Basic Exhaust/Ready Toggle', () => {
+    it('exhausts a card (rotates to 90°)', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+      });
+
+      const result = exhaustCards(store, [id]);
+
+      expect(result).toEqual([id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos.r).toBe(90);
+    });
+
+    it('readies an exhausted card (rotates back to 0°)', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 90 },
+      });
+
+      const result = exhaustCards(store, [id]);
+
+      expect(result).toEqual([id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos.r).toBe(0);
+    });
+
+    it('toggles multiple times correctly', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+      });
+
+      // Exhaust
+      exhaustCards(store, [id]);
+      expect(store.getObject(id)?._pos.r).toBe(90);
+
+      // Ready
+      exhaustCards(store, [id]);
+      expect(store.getObject(id)?._pos.r).toBe(0);
+
+      // Exhaust again
+      exhaustCards(store, [id]);
+      expect(store.getObject(id)?._pos.r).toBe(90);
+    });
+  });
+
+  describe('Multiple Objects', () => {
+    it('exhausts multiple stacks in one transaction', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      const result = exhaustCards(store, [id1, id2]);
+
+      expect(result).toEqual([id1, id2]);
+      expect(store.getObject(id1)?._pos.r).toBe(90);
+      expect(store.getObject(id2)?._pos.r).toBe(90);
+    });
+
+    it('handles mix of exhausted and ready stacks', () => {
+      const id1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 }, // Ready
+      });
+      const id2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 10, y: 10, r: 90 }, // Exhausted
+      });
+
+      const result = exhaustCards(store, [id1, id2]);
+
+      expect(result).toEqual([id1, id2]);
+      expect(store.getObject(id1)?._pos.r).toBe(90); // Now exhausted
+      expect(store.getObject(id2)?._pos.r).toBe(0); // Now ready
+    });
+  });
+
+  describe('Object Type Filtering', () => {
+    it('only affects stacks, skips tokens', () => {
+      const stackId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const tokenId = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+      });
+
+      const result = exhaustCards(store, [stackId, tokenId]);
+
+      expect(result).toEqual([stackId]); // Only stack affected
+      expect(store.getObject(stackId)?._pos.r).toBe(90);
+      expect(store.getObject(tokenId)?._pos.r).toBe(0); // Unchanged
+    });
+
+    it('skips zones', () => {
+      const zoneId = createObject(store, {
+        kind: ObjectKind.Zone,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const result = exhaustCards(store, [zoneId]);
+
+      expect(result).toEqual([]);
+      expect(store.getObject(zoneId)?._pos.r).toBe(0); // Unchanged
+    });
+  });
+
+  describe('Floating Point Tolerance', () => {
+    it('treats 90.05° as exhausted (within tolerance)', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 90.05 },
+      });
+
+      const result = exhaustCards(store, [id]);
+
+      expect(result).toEqual([id]);
+      expect(store.getObject(id)?._pos.r).toBe(0); // Readied
+    });
+
+    it('treats 89.95° as exhausted (within tolerance)', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 89.95 },
+      });
+
+      const result = exhaustCards(store, [id]);
+
+      expect(result).toEqual([id]);
+      expect(store.getObject(id)?._pos.r).toBe(0); // Readied
+    });
+
+    it('treats 45° as ready (not exhausted)', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 45 },
+      });
+
+      const result = exhaustCards(store, [id]);
+
+      expect(result).toEqual([id]);
+      expect(store.getObject(id)?._pos.r).toBe(90); // Exhausted
+    });
+
+    it('normalizes rotation to prevent drift', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      // Exhaust
+      exhaustCards(store, [id]);
+      const rotation1 = store.getObject(id)?._pos.r;
+      expect(rotation1).toBe(90);
+
+      // Ready
+      exhaustCards(store, [id]);
+      const rotation2 = store.getObject(id)?._pos.r;
+      expect(rotation2).toBe(0);
+
+      // Verify exact values (no drift)
+      expect(typeof rotation1).toBe('number');
+      expect(typeof rotation2).toBe('number');
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('warns when object not found', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = exhaustCards(store, ['non-existent']);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[exhaustCards] Object non-existent not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('handles empty array', () => {
+      const result = exhaustCards(store, []);
+
+      expect(result).toEqual([]);
+    });
+
+    it('handles mix of valid and invalid IDs', () => {
+      const validId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = exhaustCards(store, [validId, 'invalid']);
+
+      expect(result).toEqual([validId]);
+      expect(store.getObject(validId)?._pos.r).toBe(90);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[exhaustCards] Object invalid not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('Position Preservation', () => {
+    it('preserves x and y position when exhausting', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 123, y: 456, r: 0 },
+      });
+
+      exhaustCards(store, [id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._pos).toEqual({ x: 123, y: 456, r: 90 });
+    });
+
+    it('preserves all other object properties', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2'],
+        faceUp: false,
+        meta: { deckName: 'Player 1' },
+        locked: false,
+      });
+
+      exhaustCards(store, [id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._kind).toBe(ObjectKind.Stack);
+      expect(obj?._pos.x).toBe(100);
+      expect(obj?._pos.y).toBe(200);
+      expect(obj?._pos.r).toBe(90);
+      expect(obj?._meta).toEqual({ deckName: 'Player 1' });
+      expect(obj?._locked).toBe(false);
+
+      if (
+        obj &&
+        obj._kind === ObjectKind.Stack &&
+        '_cards' in obj &&
+        '_faceUp' in obj
+      ) {
+        expect(obj._cards).toEqual(['card-1', 'card-2']);
+        expect(obj._faceUp).toBe(false);
+      }
+    });
+  });
+});
+
+describe('YjsActions - flipCards (M3.5-T1)', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('Basic Flip Toggle', () => {
+    it('flips a stack from face up to face down', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        faceUp: true,
+      });
+
+      const result = flipCards(store, [id]);
+
+      expect(result).toEqual([id]);
+
+      const obj = store.getObject(id);
+      if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
+        expect(obj._faceUp).toBe(false);
+      }
+    });
+
+    it('flips a stack from face down to face up', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        faceUp: false,
+      });
+
+      const result = flipCards(store, [id]);
+
+      expect(result).toEqual([id]);
+
+      const obj = store.getObject(id);
+      if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
+        expect(obj._faceUp).toBe(true);
+      }
+    });
+
+    it('toggles multiple times correctly', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        faceUp: true,
+      });
+
+      // Flip to face down
+      flipCards(store, [id]);
+      let obj = store.getObject(id);
+      if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
+        expect(obj._faceUp).toBe(false);
+      }
+
+      // Flip to face up
+      flipCards(store, [id]);
+      obj = store.getObject(id);
+      if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
+        expect(obj._faceUp).toBe(true);
+      }
+    });
+  });
+
+  describe('Multiple Objects', () => {
+    it('flips multiple stacks and tokens', () => {
+      const stack1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        faceUp: true,
+      });
+      const stack2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 10, y: 10, r: 0 },
+        faceUp: false,
+      });
+      const token = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 20, y: 20, r: 0 },
+        faceUp: true,
+      });
+
+      const result = flipCards(store, [stack1, stack2, token]);
+
+      expect(result).toEqual([stack1, stack2, token]);
+
+      const obj1 = store.getObject(stack1);
+      const obj2 = store.getObject(stack2);
+      const obj3 = store.getObject(token);
+
+      if (obj1 && obj1._kind === ObjectKind.Stack && '_faceUp' in obj1) {
+        expect(obj1._faceUp).toBe(false);
+      }
+      if (obj2 && obj2._kind === ObjectKind.Stack && '_faceUp' in obj2) {
+        expect(obj2._faceUp).toBe(true);
+      }
+      if (obj3 && obj3._kind === ObjectKind.Token && '_faceUp' in obj3) {
+        expect(obj3._faceUp).toBe(false);
+      }
+    });
+  });
+
+  describe('Object Type Filtering', () => {
+    it('affects stacks and tokens, skips zones', () => {
+      const stackId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        faceUp: true,
+      });
+      const tokenId = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 10, y: 10, r: 0 },
+        faceUp: true,
+      });
+      const zoneId = createObject(store, {
+        kind: ObjectKind.Zone,
+        pos: { x: 20, y: 20, r: 0 },
+      });
+
+      const result = flipCards(store, [stackId, tokenId, zoneId]);
+
+      expect(result).toEqual([stackId, tokenId]); // Zone skipped
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('warns when object not found', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = flipCards(store, ['non-existent']);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[flipCards] Object non-existent not found',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('handles empty array', () => {
+      const result = flipCards(store, []);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('Property Preservation', () => {
+    it('preserves all other object properties when flipping', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 45 },
+        cards: ['card-1', 'card-2'],
+        faceUp: true,
+        meta: { deckName: 'Player 1' },
+      });
+
+      flipCards(store, [id]);
+
+      const obj = store.getObject(id);
+      expect(obj?._kind).toBe(ObjectKind.Stack);
+      expect(obj?._pos).toEqual({ x: 100, y: 200, r: 45 });
+      expect(obj?._meta).toEqual({ deckName: 'Player 1' });
+
+      if (
+        obj &&
+        obj._kind === ObjectKind.Stack &&
+        '_cards' in obj &&
+        '_faceUp' in obj
+      ) {
+        expect(obj._cards).toEqual(['card-1', 'card-2']);
+        expect(obj._faceUp).toBe(false);
+      }
     });
   });
 });

@@ -1,6 +1,6 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS } from './types';
-import { flipCards } from '../store/YjsActions';
+import { flipCards, exhaustCards } from '../store/YjsActions';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -26,27 +26,20 @@ export function registerDefaultActions(): void {
     },
   });
 
-  // Object action: Rotate (works on any object)
+  // Object action: Exhaust/Ready (only for stacks)
   registry.register({
-    id: 'rotate-clockwise',
-    label: 'Rotate Clockwise',
+    id: 'exhaust-cards',
+    label: 'Exhaust/Ready',
     icon: '↻',
-    shortcut: 'R',
+    shortcut: 'E',
     category: CARD_ACTIONS,
-    description: 'Rotate selected objects 90 degrees clockwise',
-    isAvailable: (ctx) => ctx.selection.count > 0,
-    execute: () => console.log('Rotate clockwise'),
-  });
-
-  registry.register({
-    id: 'rotate-counter',
-    label: 'Rotate Counter-Clockwise',
-    icon: '↺',
-    shortcut: 'Shift+R',
-    category: CARD_ACTIONS,
-    description: 'Rotate selected objects 90 degrees counter-clockwise',
-    isAvailable: (ctx) => ctx.selection.count > 0,
-    execute: () => console.log('Rotate counter-clockwise'),
+    description:
+      'Toggle exhaust state (rotate 90° to exhaust, rotate back to ready)',
+    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
+    execute: (ctx) => {
+      const exhausted = exhaustCards(ctx.store, ctx.selection.ids);
+      console.log(`Exhausted/Readied ${exhausted.length} cards:`, exhausted);
+    },
   });
 
   // Object action: Stack operations (only for stacks)

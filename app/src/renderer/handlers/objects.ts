@@ -9,6 +9,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { getBehaviors } from '../objects';
+import { Easing } from '../managers';
 
 /**
  * Handle sync-objects message
@@ -175,32 +176,106 @@ function updateObjectVisual(
     return;
   }
 
+  // Get previous object state to detect flip changes
+  const prevObj = context.sceneManager.getObject(id);
+
   // Update scene manager
   context.sceneManager.updateObject(id, obj);
 
   // Check if this object is being dragged (primary or secondary in multi-drag)
   const isDragging = context.drag.getDraggedObjectIds().includes(id);
 
-  // Update visual position and rotation (unless dragging - will be preserved during redraw)
+  // Update visual position and rotation
+  // Position is preserved during drag to avoid flashing, but rotation should always update
+  // to allow exhaust/flip during drag
   if (!isDragging) {
     visual.x = obj._pos.x;
     visual.y = obj._pos.y;
-    visual.rotation = (obj._pos.r * Math.PI) / 180;
   }
 
-  // Redraw visual to reflect updated object properties (e.g., _faceUp, _meta)
-  // This ensures changes like flip appear immediately
-  // If dragging, preserve the current visual position to avoid flashing back
+  // Query state once for efficiency (reused in callbacks and non-flip path)
+  // Note: Callbacks capture the state at animation start, which is correct behavior
+  // (hover/selection changes during animation should not affect the animation)
   const isHovered = context.hover.getHoveredObjectId() === id;
   const isSelected = context.selection.isSelected(id);
-  context.visual.updateVisualForObjectChange(
-    id,
-    isHovered,
-    isDragging,
-    isSelected,
-    context.sceneManager,
-    isDragging, // Preserve position during drag to avoid flashing
-  );
+
+  // Detect _faceUp changes (flip) and animate
+  const hasFaceUp = '_faceUp' in obj && typeof obj._faceUp === 'boolean';
+  const prevHasFaceUp =
+    prevObj && '_faceUp' in prevObj && typeof prevObj._faceUp === 'boolean';
+  const faceUpChanged =
+    hasFaceUp &&
+    prevHasFaceUp &&
+    (obj as { _faceUp: boolean })._faceUp !==
+      (prevObj as { _faceUp: boolean })._faceUp;
+
+  if (faceUpChanged) {
+    // Animate flip: compress → update visual → expand
+    const flipOnMidpoint = () => {
+      // At midpoint (scaleX = 0), update the visual
+      context.visual.updateVisualForObjectChange(
+        id,
+        isHovered,
+        isDragging,
+        isSelected,
+        context.sceneManager,
+        isDragging, // Preserve position during drag to avoid flashing
+        true, // Preserve scale during flip animation
+      );
+    };
+
+    const flipOnComplete = () => {
+      // After flip completes, do a final redraw to ensure correct state
+      context.visual.updateVisualForObjectChange(
+        id,
+        isHovered,
+        isDragging,
+        isSelected,
+        context.sceneManager,
+        isDragging,
+        false, // No need to preserve scale after animation completes
+      );
+    };
+
+    context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
+  } else {
+    // No flip - just update visual immediately
+    context.visual.updateVisualForObjectChange(
+      id,
+      isHovered,
+      isDragging,
+      isSelected,
+      context.sceneManager,
+      isDragging, // Preserve position during drag to avoid flashing
+      false, // No scale animation, use default scale
+    );
+  }
+
+  // Animate rotation changes for smooth exhaust/ready
+  const currentRotation = visual.rotation; // Current rotation in radians
+  const targetRotation = (obj._pos.r * Math.PI) / 180; // Target rotation in radians
+
+  // Calculate shortest angular distance (handles wrapping around 0°/360°)
+  let rotationDiff = targetRotation - currentRotation;
+  // Normalize to [-π, π] range for shortest path
+  while (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
+  while (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
+  const finalRotation = currentRotation + rotationDiff;
+
+  // Only animate if rotation changed significantly (more than 0.01 radians ~ 0.57 degrees)
+  if (Math.abs(rotationDiff) > 0.01) {
+    context.animation.animate({
+      visualId: id,
+      type: 'rotation',
+      from: currentRotation,
+      to: finalRotation, // Use calculated shortest path
+      duration: 200, // 200ms for snappy card-game feel
+      easing: Easing.easeOut, // Smooth deceleration
+    });
+  } else {
+    // Small or no change - set directly
+    visual.rotation = targetRotation;
+  }
 }
 
 /**

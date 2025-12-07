@@ -389,3 +389,66 @@ export function flipCards(store: YjsStore, ids: string[]): string[] {
 
   return flipped;
 }
+
+/**
+ * Normalize rotation to prevent floating point drift
+ * Rounds to 1 decimal place for consistency
+ */
+function normalizeRotation(r: number): number {
+  return Math.round(r * 10) / 10;
+}
+
+/**
+ * Exhaust/Ready cards - toggle rotation by 90 degrees (M3.5-T2)
+ *
+ * Exhausts (rotates 90°) or readies (rotates back to 0°) stack objects.
+ * This is a toggle: exhausted stacks return to 0°, non-exhausted stacks rotate to 90°.
+ * Only affects stacks - non-stack objects are silently skipped.
+ *
+ * @param store - YjsStore instance
+ * @param ids - Array of object IDs to exhaust/ready
+ * @returns Array of successfully exhausted/readied object IDs
+ *
+ * @example
+ * // Exhaust selected cards
+ * const exhausted = exhaustCards(store, ['stack-1', 'stack-2', 'zone-1']);
+ * console.log('Exhausted/Readied:', exhausted); // ['stack-1', 'stack-2'] (zone skipped)
+ */
+export function exhaustCards(store: YjsStore, ids: string[]): string[] {
+  const EXHAUST_ROTATION = 90;
+  const ROTATION_EPSILON = 0.1; // Tight tolerance for floating point error
+  const toggled: string[] = [];
+
+  store.getDoc().transact(() => {
+    ids.forEach((id) => {
+      const obj = store.getObject(id);
+      if (!obj) {
+        console.warn(`[exhaustCards] Object ${id} not found`);
+        return;
+      }
+
+      // Only exhaust stacks
+      if (obj._kind === ObjectKind.Stack) {
+        // Toggle: if exhausted (90°), ready to 0°, otherwise exhaust to 90°
+        const isExhausted =
+          Math.abs(obj._pos.r - EXHAUST_ROTATION) < ROTATION_EPSILON;
+        const newRotation = normalizeRotation(
+          isExhausted ? 0 : EXHAUST_ROTATION,
+        );
+
+        const updatedObj: TableObject = {
+          ...obj,
+          _pos: {
+            ...obj._pos,
+            r: newRotation,
+          },
+        };
+        store.setObject(id, updatedObj);
+        toggled.push(id);
+      }
+      // Silently skip non-stack objects
+    });
+  });
+
+  return toggled;
+}

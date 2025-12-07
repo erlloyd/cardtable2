@@ -22,10 +22,11 @@ export interface ActionHandleProps {
  * Progressive disclosure action bar that appears when objects are selected.
  *
  * - Collapsed by default: small handle with context-aware icon
- * - Expands on click/hover/E key: shows action buttons
+ * - Expands on click/hover: shows action buttons
  * - Positioned above the center of the first selected object
  * - Touch-aware: larger hit targets on touch devices
  * - Hides during camera operations (managed by parent)
+ * - ESC key collapses the expanded handle
  */
 export function ActionHandle({
   screenCoords,
@@ -38,7 +39,7 @@ export function ActionHandle({
   const [isTouch] = useState(isTouchDevice());
   const dimensions = getHandleDimensions(isTouch);
 
-  // Keyboard shortcuts: E to toggle, Escape to collapse
+  // Keyboard shortcuts: Escape to collapse
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore if typing in an input
@@ -49,10 +50,7 @@ export function ActionHandle({
         return;
       }
 
-      if (event.key === 'e' || event.key === 'E') {
-        event.preventDefault();
-        setIsExpanded((prev) => !prev);
-      } else if (event.key === 'Escape' && isExpanded) {
+      if (event.key === 'Escape' && isExpanded) {
         event.preventDefault();
         setIsExpanded(false);
       }

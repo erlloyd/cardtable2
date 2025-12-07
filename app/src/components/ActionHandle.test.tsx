@@ -363,28 +363,6 @@ describe('ActionHandle', () => {
       expect(handle).toHaveClass('collapsed');
     });
 
-    it('should expand on E key press', () => {
-      const { container } = render(
-        <ActionHandle
-          screenCoords={defaultScreenCoords}
-          actionContext={mockActionContext}
-        />,
-      );
-
-      const handle = container.querySelector('.action-handle') as HTMLElement;
-
-      // Initially collapsed
-      expect(handle).toHaveClass('collapsed');
-
-      // Press E key
-      fireEvent.keyDown(window, { key: 'e' });
-      expect(handle).toHaveClass('expanded');
-
-      // Press E again to toggle
-      fireEvent.keyDown(window, { key: 'E' });
-      expect(handle).toHaveClass('collapsed');
-    });
-
     it('should collapse on Escape key press', () => {
       const { container } = render(
         <ActionHandle
@@ -418,14 +396,18 @@ describe('ActionHandle', () => {
       const handle = container.querySelector('.action-handle') as HTMLElement;
       const input = screen.getByTestId('test-input');
 
+      // Expand the handle first
+      fireEvent.click(handle);
+      expect(handle).toHaveClass('expanded');
+
       // Focus input
       input.focus();
 
-      // Press E while input is focused
-      fireEvent.keyDown(input, { key: 'e' });
+      // Press Escape while input is focused
+      fireEvent.keyDown(input, { key: 'Escape' });
 
-      // Should NOT expand
-      expect(handle).toHaveClass('collapsed');
+      // Should NOT collapse (keyboard shortcuts ignored when typing)
+      expect(handle).toHaveClass('expanded');
     });
 
     it('should execute action and collapse when action button clicked', () => {

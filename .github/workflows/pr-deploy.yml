@@ -147,9 +147,8 @@ jobs:
 
   docker-build-app:
     runs-on: ubuntu-latest
-    needs: [check-changes, deploy-railway-server]
-    # Run even if deploy-railway-server is skipped (using always())
-    if: github.event.pull_request.head.repo.full_name == github.repository && !cancelled() && needs.check-changes.outputs.should_build_app == 'true'
+    needs: check-changes
+    if: github.event.pull_request.head.repo.full_name == github.repository && needs.check-changes.outputs.should_build_app == 'true'
 
     steps:
       - uses: actions/checkout@v4

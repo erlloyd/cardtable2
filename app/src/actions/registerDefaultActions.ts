@@ -1,6 +1,10 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS } from './types';
 import { flipCards, exhaustCards, resetToTestScene } from '../store/YjsActions';
+import {
+  areAllSelectedStacksExhausted,
+  areAllSelectedStacksReady,
+} from '../store/YjsSelectors';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -13,6 +17,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'flip-cards',
     label: 'Flip Selected Objects',
+    shortLabel: 'Flip',
     icon: '🔄',
     shortcut: 'F',
     category: CARD_ACTIONS,
@@ -29,7 +34,20 @@ export function registerDefaultActions(): void {
   // Object action: Exhaust/Ready (only for stacks)
   registry.register({
     id: 'exhaust-cards',
-    label: 'Exhaust/Ready',
+    label: (ctx) => {
+      const allExhausted = areAllSelectedStacksExhausted(ctx.store);
+      const allReady = areAllSelectedStacksReady(ctx.store);
+      if (allExhausted) return 'Ready Cards';
+      if (allReady) return 'Exhaust Cards';
+      return 'Exhaust/Ready Cards';
+    },
+    shortLabel: (ctx) => {
+      const allExhausted = areAllSelectedStacksExhausted(ctx.store);
+      const allReady = areAllSelectedStacksReady(ctx.store);
+      if (allExhausted) return 'Ready';
+      if (allReady) return 'Exhaust';
+      return 'Exhaust/Ready';
+    },
     icon: '↻',
     shortcut: 'E',
     category: CARD_ACTIONS,
@@ -46,6 +64,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'shuffle-deck',
     label: 'Shuffle Deck',
+    shortLabel: 'Shuffle',
     icon: '🎲',
     category: CARD_ACTIONS,
     description: 'Shuffle all cards in the selected deck',
@@ -56,6 +75,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'draw-card',
     label: 'Draw Card',
+    shortLabel: 'Draw',
     icon: '🃏',
     shortcut: 'D',
     category: CARD_ACTIONS,
@@ -67,6 +87,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'deal-cards',
     label: 'Deal Cards',
+    shortLabel: 'Deal',
     icon: '📤',
     category: CARD_ACTIONS,
     description: 'Deal cards to all players',
@@ -77,6 +98,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'stack-cards',
     label: 'Stack Cards',
+    shortLabel: 'Stack',
     icon: '📚',
     category: CARD_ACTIONS,
     description: 'Stack selected cards together',
@@ -87,6 +109,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'unstack-cards',
     label: 'Unstack Cards',
+    shortLabel: 'Unstack',
     icon: '📖',
     category: CARD_ACTIONS,
     description: 'Unstack the selected stack',
@@ -97,6 +120,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'peek-card',
     label: 'Peek at Top Card',
+    shortLabel: 'Peek',
     icon: '👀',
     category: CARD_ACTIONS,
     description: 'Look at the top card without revealing to others',
@@ -107,6 +131,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'reveal-card',
     label: 'Reveal Card',
+    shortLabel: 'Reveal',
     icon: '💡',
     category: CARD_ACTIONS,
     description: 'Reveal the selected card to all players',
@@ -118,6 +143,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'lock-object',
     label: 'Lock Object',
+    shortLabel: 'Lock',
     icon: '🔒',
     shortcut: 'L',
     category: CARD_ACTIONS,
@@ -129,6 +155,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'unlock-object',
     label: 'Unlock Object',
+    shortLabel: 'Unlock',
     icon: '🔓',
     shortcut: 'Shift+L',
     category: CARD_ACTIONS,
@@ -141,6 +168,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'duplicate-object',
     label: 'Duplicate Object',
+    shortLabel: 'Duplicate',
     icon: '📋',
     shortcut: 'Cmd+D',
     category: CARD_ACTIONS,
@@ -152,6 +180,7 @@ export function registerDefaultActions(): void {
   registry.register({
     id: 'delete-object',
     label: 'Delete Object',
+    shortLabel: 'Delete',
     icon: '🗑️',
     shortcut: 'Delete',
     category: CARD_ACTIONS,
@@ -203,9 +232,10 @@ export function registerDefaultActions(): void {
     isAvailable: (ctx) =>
       ctx.selection.count === 0 &&
       ctx.navigate !== undefined &&
-      ctx.currentRoute?.startsWith('/table/') === true,
+      typeof ctx.currentRoute === 'string' &&
+      ctx.currentRoute.startsWith('/table/'),
     execute: (ctx) => {
-      if (ctx.navigate && ctx.currentRoute) {
+      if (ctx.navigate && typeof ctx.currentRoute === 'string') {
         // Extract table ID from current route (/table/{id})
         const tableId = ctx.currentRoute.split('/')[2];
         const devRoute = `/dev/table/${tableId}`;
@@ -225,9 +255,10 @@ export function registerDefaultActions(): void {
     isAvailable: (ctx) =>
       ctx.selection.count === 0 &&
       ctx.navigate !== undefined &&
-      ctx.currentRoute?.startsWith('/dev/table/') === true,
+      typeof ctx.currentRoute === 'string' &&
+      ctx.currentRoute.startsWith('/dev/table/'),
     execute: (ctx) => {
-      if (ctx.navigate && ctx.currentRoute) {
+      if (ctx.navigate && typeof ctx.currentRoute === 'string') {
         // Extract table ID from current route (/dev/table/{id})
         const tableId = ctx.currentRoute.split('/')[3];
         const fullRoute = `/table/${tableId}`;

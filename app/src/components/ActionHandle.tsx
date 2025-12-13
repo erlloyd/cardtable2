@@ -190,24 +190,36 @@ export function ActionHandle({
       ) : (
         // Expanded state: action buttons
         <div className="action-handle-bar" data-testid="action-handle-bar">
-          {mainActions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              className="action-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleActionClick(action.id);
-              }}
-              title={action.description}
-              data-testid={`action-button-${action.id}`}
-            >
-              <span className="action-button-icon">{action.icon}</span>
-              {!isTouch && (
-                <span className="action-button-label">{action.label}</span>
-              )}
-            </button>
-          ))}
+          {mainActions.map((action) => {
+            // Resolve dynamic labels
+            const label =
+              typeof action.label === 'function'
+                ? action.label(actionContext!)
+                : action.label;
+            const shortLabel = action.shortLabel
+              ? typeof action.shortLabel === 'function'
+                ? action.shortLabel(actionContext!)
+                : action.shortLabel
+              : undefined;
+
+            return (
+              <button
+                key={action.id}
+                type="button"
+                className="action-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleActionClick(action.id);
+                }}
+                title={action.description}
+                data-testid={`action-button-${action.id}`}
+              >
+                <span className="action-button-label">
+                  {shortLabel || label}
+                </span>
+              </button>
+            );
+          })}
           {moreActions.length > 0 && (
             <button
               type="button"

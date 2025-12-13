@@ -1,6 +1,6 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS } from './types';
-import { flipCards, exhaustCards } from '../store/YjsActions';
+import { flipCards, exhaustCards, resetToTestScene } from '../store/YjsActions';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -234,6 +234,20 @@ export function registerDefaultActions(): void {
         console.log(`Switching to full mode: ${fullRoute}`);
         ctx.navigate(fullRoute);
       }
+    },
+  });
+
+  // Global action: Reset to Test Scene (only when nothing selected)
+  registry.register({
+    id: 'reset-to-test-scene',
+    label: 'Reset to Test Scene',
+    icon: '🎨',
+    category: 'Global Actions',
+    description:
+      'Clear all objects and create a test scene with various object types',
+    isAvailable: (ctx) => ctx.selection.count === 0,
+    execute: (ctx) => {
+      resetToTestScene(ctx.store);
     },
   });
 }

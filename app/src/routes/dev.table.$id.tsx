@@ -9,7 +9,11 @@ import {
   useState,
 } from 'react';
 import { YjsStore } from '../store/YjsStore';
-import { createObject, clearAllSelections } from '../store/YjsActions';
+import {
+  createObject,
+  clearAllSelections,
+  resetToTestScene,
+} from '../store/YjsActions';
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
@@ -129,81 +133,7 @@ function DevTable() {
   // Handler to reset to test scene (M3-T2.5 Phase 7)
   const handleResetToTestScene = () => {
     if (!store) return;
-
-    // Clear existing objects
-    store.clearAllObjects();
-
-    const colors = [
-      0x6c5ce7, // Purple
-      0x00b894, // Green
-      0xfdcb6e, // Yellow
-      0xe17055, // Red
-      0x74b9ff, // Blue
-    ];
-
-    // Create 5 stacks (cards) - top left area
-    for (let i = 0; i < 5; i++) {
-      createObject(store, {
-        kind: ObjectKind.Stack,
-        pos: { x: -300 + i * 80, y: -200, r: 0 },
-        cards: [`test-card-${i + 1}`],
-        faceUp: true,
-        meta: { color: colors[i % colors.length] },
-      });
-    }
-
-    // Create 3 tokens - top right area
-    for (let i = 0; i < 3; i++) {
-      createObject(store, {
-        kind: ObjectKind.Token,
-        pos: { x: 150 + i * 100, y: -200, r: 0 },
-        meta: {
-          size: 40,
-          color: colors[(i + 1) % colors.length],
-        },
-      });
-    }
-
-    // Create 2 zones - middle area
-    for (let i = 0; i < 2; i++) {
-      createObject(store, {
-        kind: ObjectKind.Zone,
-        pos: { x: -150 + i * 350, y: 0, r: 0 },
-        meta: {
-          width: 300,
-          height: 200,
-          color: colors[(i + 2) % colors.length],
-        },
-      });
-    }
-
-    // Create 3 mats - bottom left area
-    for (let i = 0; i < 3; i++) {
-      createObject(store, {
-        kind: ObjectKind.Mat,
-        pos: { x: -250 + i * 100, y: 200, r: 0 },
-        meta: {
-          size: 50,
-          color: colors[(i + 3) % colors.length],
-        },
-      });
-    }
-
-    // Create 2 counters - bottom right area
-    for (let i = 0; i < 2; i++) {
-      createObject(store, {
-        kind: ObjectKind.Counter,
-        pos: { x: 150 + i * 120, y: 200, r: 0 },
-        meta: {
-          size: 45,
-          color: colors[(i + 4) % colors.length],
-        },
-      });
-    }
-
-    console.log(
-      '[DevTable] Reset to test scene: 5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters',
-    );
+    resetToTestScene(store);
   };
 
   // Track selection state for action context (same pattern as table route)

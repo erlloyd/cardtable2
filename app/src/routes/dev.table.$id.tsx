@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import {
   lazy,
   Suspense,
@@ -31,6 +31,7 @@ export const Route = createFileRoute('/dev/table/$id')({
 
 function DevTable() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const [objectCount, setObjectCount] = useState(0);
 
@@ -247,8 +248,16 @@ function DevTable() {
   // Create action context with live selection info (same pattern as table route)
   const actionContext: ActionContext | null = useMemo(() => {
     const { ids, objects } = selectionState;
-    return buildActionContext(store, ids, objects);
-  }, [store, selectionState]);
+    return buildActionContext(
+      store,
+      ids,
+      objects,
+      (path: string) => {
+        void navigate({ to: path });
+      },
+      `/dev/table/${id}`,
+    );
+  }, [store, selectionState, navigate, id]);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);

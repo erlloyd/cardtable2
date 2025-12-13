@@ -149,29 +149,36 @@ export function ContextMenu({
                 {index > 0 && <div className="context-menu-divider" />}
                 <div className="context-menu-section">
                   <div className="context-menu-section-title">{category}</div>
-                  {categoryActions.map((action) => (
-                    <MenuItem key={action.id}>
-                      {({ focus }) => (
-                        <button
-                          type="button"
-                          className={`context-menu-item ${focus ? 'focus' : ''}`}
-                          onClick={() => handleSelect(action)}
-                        >
-                          <span className="context-menu-icon">
-                            {action.icon}
-                          </span>
-                          <span className="context-menu-label">
-                            {action.label}
-                          </span>
-                          {action.shortcut && (
-                            <span className="context-menu-shortcut">
-                              {getShortcutDisplay(action.shortcut)}
+                  {categoryActions.map((action) => {
+                    // Resolve dynamic label
+                    const label =
+                      typeof action.label === 'function' && context
+                        ? action.label(context)
+                        : typeof action.label === 'string'
+                          ? action.label
+                          : '';
+                    return (
+                      <MenuItem key={action.id}>
+                        {({ focus }) => (
+                          <button
+                            type="button"
+                            className={`context-menu-item ${focus ? 'focus' : ''}`}
+                            onClick={() => handleSelect(action)}
+                          >
+                            <span className="context-menu-icon">
+                              {action.icon}
                             </span>
-                          )}
-                        </button>
-                      )}
-                    </MenuItem>
-                  ))}
+                            <span className="context-menu-label">{label}</span>
+                            {action.shortcut && (
+                              <span className="context-menu-shortcut">
+                                {getShortcutDisplay(action.shortcut)}
+                              </span>
+                            )}
+                          </button>
+                        )}
+                      </MenuItem>
+                    );
+                  })}
                 </div>
               </Fragment>
             ),

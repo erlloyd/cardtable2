@@ -32,6 +32,8 @@ export interface ActionContext {
   selection: SelectionInfo;
   actorId: string;
   clickedObjectId?: string; // ID of object under cursor when context menu opened (if any)
+  navigate?: (path: string) => void; // Optional navigation function for route-based actions
+  currentRoute?: string; // Current route path (e.g., '/table/123' or '/dev/table/123')
 }
 
 /**
@@ -39,7 +41,8 @@ export interface ActionContext {
  */
 export interface Action {
   id: string; // 'flip-cards', 'rotate-objects'
-  label: string; // 'Flip Cards'
+  label: string | ((context: ActionContext) => string); // 'Flip Cards' (used in command palette), can be dynamic
+  shortLabel?: string | ((context: ActionContext) => string); // 'Flip' (optional shorter label for action handle), can be dynamic
   icon: string; // '🔄' or icon name
   shortcut?: string; // 'F', 'Cmd+R', 'Shift+D'
   category: string; // CARD_ACTIONS, SELECTION_ACTIONS, etc.

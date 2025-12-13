@@ -14,12 +14,16 @@ import { ObjectKind, type TableObject } from '@cardtable2/shared';
  * @param store - The Yjs store instance
  * @param selectedIds - Array of selected object IDs (from selectionState)
  * @param selectedObjects - Array of selected TableObject instances (from selectionState)
+ * @param navigate - Optional navigation function for route-based actions
+ * @param currentRoute - Optional current route path
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
   store: YjsStore | null,
   selectedIds: string[],
   selectedObjects: TableObject[],
+  navigate?: (path: string) => void,
+  currentRoute?: string,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -39,5 +43,7 @@ export function buildActionContext(
       canAct: true, // All selected by this actor
     },
     actorId: store.getActorId(),
+    navigate,
+    currentRoute,
   };
 }

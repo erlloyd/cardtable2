@@ -1,4 +1,4 @@
-import { Fragment, useState, useMemo, useEffect } from 'react';
+import { Fragment, useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Combobox,
   ComboboxInput,
@@ -62,6 +62,15 @@ export function CommandPalette({
       .filter((action): action is Action => action !== undefined);
   }, [recentActionIds, actionRegistry]);
 
+  // Helper to resolve dynamic labels
+  const resolveLabel = useCallback(
+    (label: string | ((ctx: ActionContext) => string)): string => {
+      if (!context) return typeof label === 'string' ? label : '';
+      return typeof label === 'function' ? label(context) : label;
+    },
+    [context],
+  );
+
   // Filter actions by search query
   const filteredActions = useMemo(() => {
     if (!query) {
@@ -69,10 +78,11 @@ export function CommandPalette({
     }
     return fuzzySearch(allActions, query, (action) => {
       // Search in both label and description
-      const searchText = `${action.label} ${action.description || ''}`;
+      const label = resolveLabel(action.label);
+      const searchText = `${label} ${action.description || ''}`;
       return searchText;
     });
-  }, [allActions, query]);
+  }, [allActions, query, resolveLabel]);
 
   // Group actions by category
   const actionsByCategory = useMemo(() => {
@@ -201,6 +211,7 @@ export function CommandPalette({
                             const isAvailable = availableActionIds.has(
                               action.id,
                             );
+                            const label = resolveLabel(action.label);
                             return (
                               <ComboboxOption
                                 key={`recent-${action.id}`}
@@ -217,7 +228,7 @@ export function CommandPalette({
                                       {action.icon}
                                     </span>
                                     <span className="command-palette-label">
-                                      {action.label}
+                                      {label}
                                     </span>
                                     {action.shortcut && (
                                       <span className="command-palette-shortcut">
@@ -247,6 +258,7 @@ export function CommandPalette({
                               const isAvailable = availableActionIds.has(
                                 action.id,
                               );
+                              const label = resolveLabel(action.label);
                               return (
                                 <ComboboxOption
                                   key={`category-${category}-${action.id}`}
@@ -264,7 +276,7 @@ export function CommandPalette({
                                       </span>
                                       <div className="command-palette-details">
                                         <div className="command-palette-label">
-                                          {action.label}
+                                          {label}
                                         </div>
                                         {action.description && (
                                           <div className="command-palette-description">

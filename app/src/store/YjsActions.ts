@@ -452,3 +452,93 @@ export function exhaustCards(store: YjsStore, ids: string[]): string[] {
 
   return toggled;
 }
+
+/**
+ * Reset the table to a test scene with various object types.
+ * Useful for development and testing.
+ *
+ * Creates:
+ * - 5 stacks (cards) in top left area
+ * - 3 tokens in top right area
+ * - 2 zones in middle area
+ * - 3 mats in bottom left area
+ * - 2 counters in bottom right area
+ *
+ * @param store - YjsStore instance
+ */
+export function resetToTestScene(store: YjsStore): void {
+  // Clear existing objects
+  store.clearAllObjects();
+
+  const colors = [
+    0x6c5ce7, // Purple
+    0x00b894, // Green
+    0xfdcb6e, // Yellow
+    0xe17055, // Red
+    0x74b9ff, // Blue
+  ];
+
+  // Create 5 stacks (cards) - top left area
+  for (let i = 0; i < 5; i++) {
+    createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: -300 + i * 80, y: -200, r: 0 },
+      cards: [`test-card-${i + 1}`],
+      faceUp: true,
+      meta: { color: colors[i % colors.length] },
+    });
+  }
+
+  // Create 3 tokens - top right area
+  for (let i = 0; i < 3; i++) {
+    createObject(store, {
+      kind: ObjectKind.Token,
+      pos: { x: 150 + i * 100, y: -200, r: 0 },
+      meta: {
+        size: 40,
+        color: colors[(i + 1) % colors.length],
+      },
+    });
+  }
+
+  // Create 2 zones - middle area
+  for (let i = 0; i < 2; i++) {
+    createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: -150 + i * 350, y: 0, r: 0 },
+      meta: {
+        width: 300,
+        height: 200,
+        color: colors[(i + 2) % colors.length],
+      },
+    });
+  }
+
+  // Create 3 mats - bottom left area
+  for (let i = 0; i < 3; i++) {
+    createObject(store, {
+      kind: ObjectKind.Mat,
+      pos: { x: -250 + i * 100, y: 200, r: 0 },
+      meta: {
+        size: 50,
+        color: colors[(i + 3) % colors.length],
+      },
+    });
+  }
+
+  // Create 2 counters - bottom right area
+  for (let i = 0; i < 2; i++) {
+    createObject(store, {
+      kind: ObjectKind.Counter,
+      pos: { x: 150 + i * 120, y: 200, r: 0 },
+      meta: {
+        size: 45,
+        color: colors[(i + 4) % colors.length],
+      },
+    });
+  }
+
+  console.log(
+    '[resetToTestScene] Created test scene: 5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters',
+  );
+}

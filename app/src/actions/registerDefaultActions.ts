@@ -1,6 +1,6 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS } from './types';
-import { flipCards, exhaustCards } from '../store/YjsActions';
+import { flipCards, exhaustCards, resetToTestScene } from '../store/YjsActions';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -190,6 +190,64 @@ export function registerDefaultActions(): void {
     execute: (ctx) => {
       ctx.store.clearAllObjects();
       console.log('Cleared all objects');
+    },
+  });
+
+  // Global action: Switch to Dev Mode (only available in full mode)
+  registry.register({
+    id: 'switch-to-dev-mode',
+    label: 'Switch to Dev Mode',
+    icon: '🔧',
+    category: 'Global Actions',
+    description: 'Switch to development mode with debug tools',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 &&
+      ctx.navigate !== undefined &&
+      ctx.currentRoute?.startsWith('/table/') === true,
+    execute: (ctx) => {
+      if (ctx.navigate && ctx.currentRoute) {
+        // Extract table ID from current route (/table/{id})
+        const tableId = ctx.currentRoute.split('/')[2];
+        const devRoute = `/dev/table/${tableId}`;
+        console.log(`Switching to dev mode: ${devRoute}`);
+        ctx.navigate(devRoute);
+      }
+    },
+  });
+
+  // Global action: Switch to Full Mode (only available in dev mode)
+  registry.register({
+    id: 'switch-to-full-mode',
+    label: 'Switch to Full Mode',
+    icon: '🎮',
+    category: 'Global Actions',
+    description: 'Switch to full table mode without debug tools',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 &&
+      ctx.navigate !== undefined &&
+      ctx.currentRoute?.startsWith('/dev/table/') === true,
+    execute: (ctx) => {
+      if (ctx.navigate && ctx.currentRoute) {
+        // Extract table ID from current route (/dev/table/{id})
+        const tableId = ctx.currentRoute.split('/')[3];
+        const fullRoute = `/table/${tableId}`;
+        console.log(`Switching to full mode: ${fullRoute}`);
+        ctx.navigate(fullRoute);
+      }
+    },
+  });
+
+  // Global action: Reset to Test Scene (only when nothing selected)
+  registry.register({
+    id: 'reset-to-test-scene',
+    label: 'Reset to Test Scene',
+    icon: '🎨',
+    category: 'Global Actions',
+    description:
+      'Clear all objects and create a test scene with various object types',
+    isAvailable: (ctx) => ctx.selection.count === 0,
+    execute: (ctx) => {
+      resetToTestScene(ctx.store);
     },
   });
 }

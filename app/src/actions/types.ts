@@ -32,6 +32,8 @@ export interface ActionContext {
   selection: SelectionInfo;
   actorId: string;
   clickedObjectId?: string; // ID of object under cursor when context menu opened (if any)
+  navigate?: (path: string) => void; // Optional navigation function for route-based actions
+  currentRoute?: string; // Current route path (e.g., '/table/123' or '/dev/table/123')
 }
 
 /**

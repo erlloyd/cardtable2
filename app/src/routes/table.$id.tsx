@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTableStore } from '../hooks/useTableStore';
 import type { TableObject } from '@cardtable2/shared';
@@ -21,6 +21,7 @@ export const Route = createFileRoute('/table/$id')({
 
 function Table() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
     logPrefix: 'Table',
@@ -79,7 +80,15 @@ function Table() {
   // Create action context with live selection info
   const actionContext: ActionContext | null = useMemo(() => {
     const { ids, objects } = selectionState;
-    const context = buildActionContext(store, ids, objects);
+    const context = buildActionContext(
+      store,
+      ids,
+      objects,
+      (path: string) => {
+        void navigate({ to: path });
+      },
+      `/table/${id}`,
+    );
 
     if (context) {
       console.log('[Table] Action context updated:', {
@@ -90,7 +99,7 @@ function Table() {
     }
 
     return context;
-  }, [store, selectionState]);
+  }, [store, selectionState, navigate, id]);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);

@@ -2,17 +2,25 @@ import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { WebsocketProvider } from 'y-websocket';
 import { Awareness } from 'y-protocols/awareness';
-import type { TableObject, ActorId, AwarenessState } from '@cardtable2/shared';
+import type {
+  TableObject,
+  TableObjectProps,
+  ActorId,
+  AwarenessState,
+  ObjectKind,
+} from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { runMigrations } from './migrations';
+import type { TableObjectYMap } from './types';
 
 /**
- * Change information from Yjs observer
+ * Change information from Yjs observer (M3.6-T2)
+ * Now provides Y.Map references instead of plain objects for zero-allocation performance
  */
 export interface ObjectChanges {
-  added: Array<{ id: string; obj: TableObject }>;
-  updated: Array<{ id: string; obj: TableObject }>;
+  added: Array<{ id: string; yMap: TableObjectYMap }>;
+  updated: Array<{ id: string; yMap: TableObjectYMap }>;
   removed: Array<string>;
 }
 
@@ -42,8 +50,8 @@ export class YjsStore {
     | 'disconnected' = 'offline'; // M5-T1
   private connectionStatusCallbacks: Set<(status: string) => void> = new Set();
 
-  // Typed access to Y.Doc maps
-  public objects: Y.Map<Y.Map<unknown>>;
+  // Typed access to Y.Doc maps (M3.6-T2: now uses TypedMap for type-safe property access)
+  public objects: Y.Map<TableObjectYMap>;
 
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
@@ -181,47 +189,180 @@ export class YjsStore {
     return this.doc;
   }
 
+  // ============================================================================
+  // Y.Map Access Methods (M3.6-T2) - Zero-allocation, direct Y.Map access
+  // ============================================================================
+
   /**
-   * Get all objects as plain JavaScript objects
+   * Get a Y.Map reference for an object by ID (M3.6-T2)
+   *
+   * Returns the Y.Map directly without conversion - zero allocations.
+   * Use this when you need to work with Y.Map methods or read multiple properties.
+   *
+   * @example
+   * ```typescript
+   * const yMap = store.getObjectYMap(id);
+   * if (yMap) {
+   *   const kind = yMap.get('_kind');
+   *   const pos = yMap.get('_pos');
+   * }
+   * ```
    */
-  getAllObjects(): Map<string, TableObject> {
-    const result = new Map<string, TableObject>();
+  getObjectYMap(id: string): TableObjectYMap | undefined {
+    return this.objects.get(id);
+  }
 
-    this.objects.forEach((yMap, id) => {
-      // Convert Y.Map to plain object
-      const obj = yMap.toJSON() as TableObject;
-      result.set(id, obj);
+  /**
+   * Get a single property from an object (M3.6-T2)
+   *
+   * Type-safe property access without converting the entire object.
+   * Most efficient for reading a single property.
+   *
+   * @example
+   * ```typescript
+   * const kind = store.getObjectProperty(id, '_kind');
+   * const pos = store.getObjectProperty(id, '_pos');
+   * ```
+   */
+  getObjectProperty<K extends keyof TableObjectProps>(
+    id: string,
+    key: K,
+  ): TableObjectProps[K] | undefined {
+    const yMap = this.objects.get(id);
+    if (!yMap) return undefined;
+    return yMap.get(key);
+  }
+
+  /**
+   * Get all objects selected by a specific actor (M3.6-T2)
+   *
+   * Returns Y.Map references for selected objects - zero allocations.
+   * Efficient for selection queries.
+   *
+   * @example
+   * ```typescript
+   * const selected = store.getObjectsSelectedBy(store.getActorId());
+   * selected.forEach(yMap => {
+   *   const kind = yMap.get('_kind');
+   *   // ... work with Y.Map directly
+   * });
+   * ```
+   */
+  getObjectsSelectedBy(actorId: ActorId): TableObjectYMap[] {
+    const result: TableObjectYMap[] = [];
+    this.objects.forEach((yMap) => {
+      const selectedBy = yMap.get('_selectedBy');
+      if (selectedBy === actorId) {
+        result.push(yMap);
+      }
     });
-
     return result;
   }
 
   /**
-   * Get a single object by ID
+   * Get all objects of a specific kind (M3.6-T2)
+   *
+   * Returns Y.Map references for objects of the given kind - zero allocations.
+   *
+   * @example
+   * ```typescript
+   * const stacks = store.getObjectsByKind(ObjectKind.Stack);
+   * stacks.forEach(yMap => {
+   *   const cards = yMap.get('_cards');
+   *   // ... work with stack
+   * });
+   * ```
    */
-  getObject(id: string): TableObject | null {
-    const yMap = this.objects.get(id);
-    if (!yMap) return null;
-
-    return yMap.toJSON() as TableObject;
+  getObjectsByKind(kind: ObjectKind): TableObjectYMap[] {
+    const result: TableObjectYMap[] = [];
+    this.objects.forEach((yMap) => {
+      const objKind = yMap.get('_kind');
+      if (objKind === kind) {
+        result.push(yMap);
+      }
+    });
+    return result;
   }
 
   /**
-   * Create or update an object (M3-T1 basic implementation)
+   * Iterate over all objects with a callback (M3.6-T2)
+   *
+   * Helper utility for common iteration patterns.
+   * Works directly with Y.Maps - zero allocations.
+   *
+   * @example
+   * ```typescript
+   * store.forEachObject((yMap, id) => {
+   *   const kind = yMap.get('_kind');
+   *   console.log(`Object ${id} is ${kind}`);
+   * });
+   * ```
+   */
+  forEachObject(fn: (yMap: TableObjectYMap, id: string) => void): void {
+    this.objects.forEach(fn);
+  }
+
+  /**
+   * Filter objects by a predicate (M3.6-T2)
+   *
+   * Returns array of object IDs that match the predicate.
+   * Works directly with Y.Maps - zero allocations during iteration.
+   *
+   * @example
+   * ```typescript
+   * const lockedIds = store.filterObjects((yMap) => yMap.get('_locked') === true);
+   * ```
+   */
+  filterObjects(
+    predicate: (yMap: TableObjectYMap, id: string) => boolean,
+  ): string[] {
+    const result: string[] = [];
+    this.objects.forEach((yMap, id) => {
+      if (predicate(yMap, id)) {
+        result.push(id);
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Map objects to a new array (M3.6-T2)
+   *
+   * Transform objects using a mapping function.
+   * Works directly with Y.Maps - minimal allocations (only for result array).
+   *
+   * @example
+   * ```typescript
+   * const positions = store.mapObjects((yMap) => yMap.get('_pos'));
+   * ```
+   */
+  mapObjects<T>(fn: (yMap: TableObjectYMap, id: string) => T): T[] {
+    const result: T[] = [];
+    this.objects.forEach((yMap, id) => {
+      result.push(fn(yMap, id));
+    });
+    return result;
+  }
+
+  /**
+   * Create or update an object (M3-T1 basic implementation, M3.6-T2 typed)
    * Full engine actions will be implemented in M3-T2
    */
   setObject(id: string, obj: TableObject): void {
     this.doc.transact(() => {
       let yMap = this.objects.get(id);
       if (!yMap) {
-        yMap = new Y.Map();
+        yMap = new Y.Map() as TableObjectYMap;
         this.objects.set(id, yMap);
       }
 
       // Update all fields dynamically - iterate over all properties
       // This ensures we never miss a field when adding new object types or properties
       for (const [key, value] of Object.entries(obj)) {
-        yMap.set(key, value);
+        yMap.set(
+          key as keyof TableObjectProps,
+          value as TableObjectProps[keyof TableObjectProps],
+        );
       }
     });
   }
@@ -236,7 +377,9 @@ export class YjsStore {
   }
 
   /**
-   * Subscribe to object changes with detailed change information
+   * Subscribe to object changes with detailed change information (M3.6-T2)
+   *
+   * Now provides Y.Map references instead of plain objects - zero allocations.
    */
   onObjectsChange(callback: (changes: ObjectChanges) => void): () => void {
     const observer = (events: Y.YEvent<Y.Map<unknown>>[]) => {
@@ -256,7 +399,7 @@ export class YjsStore {
               if (yMap) {
                 changes.added.push({
                   id: key,
-                  obj: yMap.toJSON() as TableObject,
+                  yMap,
                 });
               }
             } else if (change.action === 'delete') {
@@ -273,7 +416,7 @@ export class YjsStore {
             if (yMap === event.target) {
               changes.updated.push({
                 id,
-                obj: yMap.toJSON() as TableObject,
+                yMap,
               });
             }
           });
@@ -309,7 +452,7 @@ export class YjsStore {
   }
 
   /**
-   * Clear stale selections from previous sessions (M3-T3).
+   * Clear stale selections from previous sessions (M3-T3, M3.6-T2).
    *
    * Called on initialization after IndexedDB loads. Each page load creates a new
    * actor ID, so selections from previous sessions are orphaned and should be cleared.
@@ -323,9 +466,9 @@ export class YjsStore {
     let clearedCount = 0;
 
     this.doc.transact(() => {
-      this.objects.forEach((yMap, _id) => {
-        const obj = yMap.toJSON() as TableObject;
-        if (obj._selectedBy !== null) {
+      this.objects.forEach((yMap) => {
+        const selectedBy = yMap.get('_selectedBy');
+        if (selectedBy !== null) {
           // Clear stale selection
           yMap.set('_selectedBy', null);
           clearedCount++;
@@ -341,7 +484,11 @@ export class YjsStore {
   }
 
   /**
-   * Export entire state as JSON for debugging
+   * Export entire state as JSON for debugging (M3.6-T2)
+   *
+   * NOTE: This is the ONLY method that still uses .toJSON() - it's explicitly
+   * for debugging/export purposes and is not used in the hot path.
+   *
    * Usage in browser console: JSON.stringify(window.__TEST_STORE__.toJSON(), null, 2)
    */
   toJSON(): Record<string, TableObject> {

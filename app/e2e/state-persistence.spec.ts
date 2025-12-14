@@ -40,6 +40,17 @@ test.describe('State Persistence (M3-T1)', () => {
       timeout: 5000,
     });
 
+    // Clear any leftover objects from previous test runs
+    await page.evaluate(() => {
+      declare const __TEST_STORE__: TestStore;
+      if (__TEST_STORE__) {
+        __TEST_STORE__.clearAllObjects();
+      }
+    });
+
+    // Wait for clear to propagate and UI to update
+    await page.waitForTimeout(200);
+
     // Verify initial state has no objects
     await expect(page.getByText(/Objects: 0/)).toBeVisible();
 

@@ -7,6 +7,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { routeTree } from '../../routeTree.gen';
+import * as Y from 'yjs';
 
 // Mock the Board component since it's lazy loaded
 vi.mock('../../components/Board', () => ({
@@ -15,14 +16,21 @@ vi.mock('../../components/Board', () => ({
   ),
 }));
 
-// Mock YjsStore since it's used by the Table route
+// Mock YjsStore since it's used by the Table route (M3.6-T5)
 vi.mock('../../store/YjsStore', () => ({
   YjsStore: class MockYjsStore {
+    objects = new Y.Map();
     async waitForReady() {
       return Promise.resolve();
     }
-    getAllObjects() {
-      return new Map();
+    forEachObject(_fn: (yMap: never, id: string) => void) {
+      // Mock - no objects, so this function is never called
+    }
+    getObjectYMap(_id: string) {
+      return undefined;
+    }
+    getObjectsSelectedBy(_actorId: string) {
+      return [];
     }
     onObjectsChange(_callback: () => void) {
       return () => {};

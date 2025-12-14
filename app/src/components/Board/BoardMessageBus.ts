@@ -81,14 +81,15 @@ export class BoardMessageBus {
       ctx.setIsCanvasInitialized(true);
       ctx.addMessage('Canvas initialized');
 
-      // Send initial sync of all objects from store
-      const allObjects = ctx.store.getAllObjects();
-      const objectsArray = Array.from(allObjects.entries()).map(
-        ([id, obj]) => ({
+      // Send initial sync of all objects from store (M3.6-T5)
+      // Convert Y.Maps to plain objects for renderer (worker needs serializable data)
+      const objectsArray: Array<{ id: string; obj: unknown }> = [];
+      ctx.store.forEachObject((yMap, id) => {
+        objectsArray.push({
           id,
-          obj,
-        }),
-      );
+          obj: yMap.toJSON(), // Convert Y.Map to plain object
+        });
+      });
 
       console.log(
         `[BoardMessageBus] Syncing ${objectsArray.length} objects to renderer`,

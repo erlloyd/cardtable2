@@ -9,10 +9,12 @@ import type {
 } from '@cardtable2/shared';
 import type { RenderMode } from '../renderer/RendererFactory';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 
-// Mock YjsStore
+// Mock YjsStore (M3.6-T5: updated to match new Y.Map-based API)
 class MockYjsStore implements Partial<YjsStore> {
+  objects = new Y.Map();
+
   async waitForReady(): Promise<void> {
     return Promise.resolve();
   }
@@ -21,12 +23,12 @@ class MockYjsStore implements Partial<YjsStore> {
     return 'test-actor-id';
   }
 
-  getAllObjects(): Map<string, TableObject> {
-    return new Map();
+  forEachObject(_fn: (yMap: never, id: string) => void): void {
+    // Mock implementation - empty, no objects
   }
 
-  getObject(_id: string): TableObject | null {
-    return null;
+  getObjectYMap(_id: string): never | undefined {
+    return undefined;
   }
 
   setObject(_id: string, _obj: TableObject): void {

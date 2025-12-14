@@ -12,7 +12,8 @@ import { useStoreSync } from './useStoreSync';
 import { RenderMode } from '../renderer/IRendererAdapter';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
-import type { TableObject } from '@cardtable2/shared';
+import * as Y from 'yjs';
+import type { TableObjectYMap } from '../store/types';
 
 describe('useStoreSync', () => {
   let mockRenderer: IRendererAdapter;
@@ -68,11 +69,18 @@ describe('useStoreSync', () => {
       useStoreSync(mockRenderer, mockStore as unknown as YjsStore, true),
     );
 
+    // Create Y.Map for test (M3.6-T5)
+    // Y.Map must be in a Y.Doc for .toJSON() to work
+    const doc = new Y.Doc();
+    const yMap = new Y.Map() as TableObjectYMap;
+    doc.getMap('test').set('obj1', yMap);
+    yMap.set('_kind', 'stack' as never);
+
     const changes: ObjectChanges = {
       added: [
         {
           id: 'obj1',
-          obj: { _kind: 'stack' } as Partial<TableObject> as TableObject,
+          yMap,
         },
       ],
       updated: [],
@@ -81,11 +89,12 @@ describe('useStoreSync', () => {
 
     changeCallback(changes);
 
+    // useStoreSync converts Y.Map to plain object via .toJSON()
     expect(
       mockRenderer.sendMessage as unknown as MockInstance,
     ).toHaveBeenCalledWith({
       type: 'objects-added',
-      objects: changes.added,
+      objects: [{ id: 'obj1', obj: { _kind: 'stack' } }],
     });
   });
 
@@ -94,12 +103,19 @@ describe('useStoreSync', () => {
       useStoreSync(mockRenderer, mockStore as unknown as YjsStore, true),
     );
 
+    // Create Y.Map for test (M3.6-T5)
+    // Y.Map must be in a Y.Doc for .toJSON() to work
+    const doc = new Y.Doc();
+    const yMap = new Y.Map() as TableObjectYMap;
+    doc.getMap('test').set('obj1', yMap);
+    yMap.set('_kind', 'stack' as never);
+
     const changes: ObjectChanges = {
       added: [],
       updated: [
         {
           id: 'obj1',
-          obj: { _kind: 'stack' } as Partial<TableObject> as TableObject,
+          yMap,
         },
       ],
       removed: [],
@@ -107,11 +123,12 @@ describe('useStoreSync', () => {
 
     changeCallback(changes);
 
+    // useStoreSync converts Y.Map to plain object via .toJSON()
     expect(
       mockRenderer.sendMessage as unknown as MockInstance,
     ).toHaveBeenCalledWith({
       type: 'objects-updated',
-      objects: changes.updated,
+      objects: [{ id: 'obj1', obj: { _kind: 'stack' } }],
     });
   });
 

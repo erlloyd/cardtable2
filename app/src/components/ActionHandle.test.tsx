@@ -6,6 +6,8 @@ import { ObjectKind } from '@cardtable2/shared';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
 import type { YjsStore } from '../store/YjsStore';
+import * as Y from 'yjs';
+import type { TableObjectYMap } from '../store/types';
 
 // Mock isTouchDevice
 vi.mock('../utils/detectTouch', () => ({
@@ -16,6 +18,7 @@ describe('ActionHandle', () => {
   let mockStore: YjsStore;
   let mockActionContext: ActionContext;
   let testStack: StackObject;
+  let testStackYMap: TableObjectYMap;
   let registry: ActionRegistry;
 
   // Default screen coordinates for tests (centered viewport at 1920x1080)
@@ -37,7 +40,7 @@ describe('ActionHandle', () => {
     // Create mock store
     mockStore = {
       getActorId: () => 'actor1',
-      getAllObjects: vi.fn(),
+      objects: new Y.Map(),
       onObjectsChange: vi.fn(),
     } as unknown as YjsStore;
 
@@ -54,12 +57,18 @@ describe('ActionHandle', () => {
       _faceUp: true,
     } as StackObject;
 
-    // Create mock action context
+    // Create mock Y.Map for test object (M3.6-T5)
+    testStackYMap = new Y.Map() as TableObjectYMap;
+    for (const [key, value] of Object.entries(testStack)) {
+      testStackYMap.set(key as keyof typeof testStack, value as never);
+    }
+
+    // Create mock action context (M3.6-T5: using yMaps instead of objects)
     mockActionContext = {
       store: mockStore,
       selection: {
         ids: ['stack1'],
-        objects: [testStack],
+        yMaps: [testStackYMap],
         count: 1,
         hasStacks: true,
         hasTokens: false,

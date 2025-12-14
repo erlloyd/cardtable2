@@ -9,7 +9,7 @@ import {
   exhaustCards,
   flipCards,
 } from './YjsActions';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, type TableObject } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
 vi.mock('y-indexeddb', () => ({
@@ -64,7 +64,7 @@ describe('YjsActions - createObject', () => {
       expect(typeof id).toBe('string');
       expect(id.length).toBeGreaterThan(0);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj).not.toBeNull();
       expect(obj?._kind).toBe(ObjectKind.Stack);
       expect(obj?._pos).toEqual({ x: 100, y: 200, r: 0 });
@@ -91,7 +91,7 @@ describe('YjsActions - createObject', () => {
         meta: { color: 'red', value: 5 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj).not.toBeNull();
       expect(obj?._kind).toBe(ObjectKind.Token);
       expect(obj?._pos).toEqual({ x: 50, y: 75, r: 45 });
@@ -105,7 +105,7 @@ describe('YjsActions - createObject', () => {
         meta: { width: 500, height: 300 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj).not.toBeNull();
       expect(obj?._kind).toBe(ObjectKind.Zone);
       expect(obj?._meta).toEqual({ width: 500, height: 300 });
@@ -119,7 +119,7 @@ describe('YjsActions - createObject', () => {
         pos: { x: 0, y: 0, r: 0 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._locked).toBe(false);
       expect(obj?._selectedBy).toBeNull();
       expect(obj?._containerId).toBeNull();
@@ -132,7 +132,7 @@ describe('YjsActions - createObject', () => {
         pos: { x: 0, y: 0, r: 0 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       if (
         obj &&
         obj._kind === ObjectKind.Stack &&
@@ -149,7 +149,7 @@ describe('YjsActions - createObject', () => {
         pos: { x: 0, y: 0, r: 0 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       if (
         obj &&
         obj._kind === ObjectKind.Stack &&
@@ -169,7 +169,7 @@ describe('YjsActions - createObject', () => {
         locked: true,
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._locked).toBe(true);
     });
 
@@ -180,7 +180,7 @@ describe('YjsActions - createObject', () => {
         containerId: 'zone-1',
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._containerId).toBe('zone-1');
     });
 
@@ -191,7 +191,7 @@ describe('YjsActions - createObject', () => {
         meta: { health: 10, defense: 5, name: 'Guard' },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._meta).toEqual({ health: 10, defense: 5, name: 'Guard' });
     });
 
@@ -202,7 +202,7 @@ describe('YjsActions - createObject', () => {
         faceUp: false,
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       if (
         obj &&
         obj._kind === ObjectKind.Stack &&
@@ -221,7 +221,7 @@ describe('YjsActions - createObject', () => {
         pos: { x: 0, y: 0, r: 0 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._sortKey).toBeDefined();
       expect(typeof obj?._sortKey).toBe('string');
     });
@@ -242,9 +242,15 @@ describe('YjsActions - createObject', () => {
         pos: { x: 20, y: 20, r: 0 },
       });
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
-      const obj3 = store.getObject(id3);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj3 = store.getObjectYMap(id3)?.toJSON() as
+        | TableObject
+        | undefined;
 
       // Higher sortKey = on top (lexicographic comparison for strings)
       expect(obj2!._sortKey > obj1!._sortKey).toBe(true);
@@ -257,7 +263,7 @@ describe('YjsActions - createObject', () => {
         pos: { x: 0, y: 0, r: 0 },
       });
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       // Should match format: "number|letter"
       expect(obj?._sortKey).toMatch(/^\d+\|[a-z]+$/);
     });
@@ -281,11 +287,17 @@ describe('YjsActions - createObject', () => {
         pos: { x: 200, y: 200, r: 0 },
       });
 
-      expect(store.getAllObjects().size).toBe(3);
+      expect(store.objects.size).toBe(3);
 
-      const stack = store.getObject(stackId);
-      const token = store.getObject(tokenId);
-      const zone = store.getObject(zoneId);
+      const stack = store.getObjectYMap(stackId)?.toJSON() as
+        | TableObject
+        | undefined;
+      const token = store.getObjectYMap(tokenId)?.toJSON() as
+        | TableObject
+        | undefined;
+      const zone = store.getObjectYMap(zoneId)?.toJSON() as
+        | TableObject
+        | undefined;
 
       expect(stack?._kind).toBe(ObjectKind.Stack);
       expect(token?._kind).toBe(ObjectKind.Token);
@@ -301,7 +313,7 @@ describe('YjsActions - createObject', () => {
       });
 
       // Verify object exists in store
-      const allObjects = store.getAllObjects();
+      const allObjects = store.objects;
       expect(allObjects.has(id)).toBe(true);
     });
 
@@ -357,7 +369,7 @@ describe('YjsActions - moveObjects', () => {
 
       moveObjects(store, [{ id, pos: { x: 150, y: 250, r: 45 } }]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos).toEqual({ x: 150, y: 250, r: 45 });
     });
 
@@ -371,7 +383,7 @@ describe('YjsActions - moveObjects', () => {
 
       moveObjects(store, [{ id, pos: { x: 100, y: 100, r: 90 } }]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._kind).toBe(ObjectKind.Token);
       expect(obj?._meta).toEqual({ color: 'red', value: 5 });
       expect(obj?._locked).toBe(true);
@@ -386,7 +398,7 @@ describe('YjsActions - moveObjects', () => {
 
       moveObjects(store, [{ id, pos: { x: 50, y: 50, r: 180 } }]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos.r).toBe(180);
       expect(obj?._pos.x).toBe(50);
       expect(obj?._pos.y).toBe(50);
@@ -414,9 +426,15 @@ describe('YjsActions - moveObjects', () => {
         { id: id3, pos: { x: 300, y: 300, r: 0 } },
       ]);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
-      const obj3 = store.getObject(id3);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj3 = store.getObjectYMap(id3)?.toJSON() as
+        | TableObject
+        | undefined;
 
       expect(obj1?._pos).toEqual({ x: 100, y: 100, r: 0 });
       expect(obj2?._pos).toEqual({ x: 200, y: 200, r: 0 });
@@ -436,8 +454,12 @@ describe('YjsActions - moveObjects', () => {
       // Only move id1, leave id2 unchanged
       moveObjects(store, [{ id: id1, pos: { x: 500, y: 500, r: 0 } }]);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
 
       expect(obj1?._pos).toEqual({ x: 500, y: 500, r: 0 });
       expect(obj2?._pos).toEqual({ x: 10, y: 10, r: 0 }); // Unchanged
@@ -455,7 +477,7 @@ describe('YjsActions - moveObjects', () => {
 
       moveObjects(store, [{ id, pos: { x: 250, y: 350, r: 0 } }]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos).toEqual({ x: 250, y: 350, r: 0 });
 
       if (
@@ -496,7 +518,7 @@ describe('YjsActions - moveObjects', () => {
       // Should not throw
       moveObjects(store, []);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos).toEqual({ x: 0, y: 0, r: 0 }); // Unchanged
     });
 
@@ -516,7 +538,9 @@ describe('YjsActions - moveObjects', () => {
       ]);
 
       // Valid object should be moved
-      const obj = store.getObject(validId);
+      const obj = store.getObjectYMap(validId)?.toJSON() as
+        | TableObject
+        | undefined;
       expect(obj?._pos).toEqual({ x: 100, y: 100, r: 0 });
 
       // Should warn about invalid ID
@@ -554,7 +578,11 @@ describe('YjsActions - moveObjects', () => {
       if (changes) {
         expect(changes.updated).toHaveLength(1);
         expect(changes.updated[0]?.id).toBe(id);
-        expect(changes.updated[0]?.obj._pos).toEqual({ x: 100, y: 100, r: 0 });
+        expect(changes.updated[0]?.yMap.get('_pos')).toEqual({
+          x: 100,
+          y: 100,
+          r: 0,
+        });
       }
     });
 
@@ -623,7 +651,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result.selected).toEqual([id]);
       expect(result.failed).toEqual([]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._selectedBy).toBe(actorId);
     });
 
@@ -642,8 +670,12 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result.selected).toEqual([id1, id2]);
       expect(result.failed).toEqual([]);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
       expect(obj1?._selectedBy).toBe(actorId);
       expect(obj2?._selectedBy).toBe(actorId);
     });
@@ -666,7 +698,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result.failed).toEqual([id]);
 
       // Should still be owned by first actor
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._selectedBy).toBe(actor1);
     });
 
@@ -683,7 +715,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result.selected).toEqual([]);
       expect(result.failed).toEqual([]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._selectedBy).toBe(actorId);
     });
 
@@ -699,7 +731,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result.selected).toEqual([]);
       expect(result.failed).toEqual([id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._selectedBy).toBeNull();
     });
 
@@ -719,8 +751,12 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result.selected).toEqual([id1]);
       expect(result.failed).toEqual([id2]);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
       expect(obj1?._selectedBy).toBe(actorId);
       expect(obj2?._selectedBy).toBeNull();
     });
@@ -754,7 +790,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 
       expect(result).toEqual([id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._selectedBy).toBeNull();
     });
 
@@ -773,8 +809,12 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 
       expect(result).toEqual([id1, id2]);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
       expect(obj1?._selectedBy).toBeNull();
       expect(obj2?._selectedBy).toBeNull();
     });
@@ -798,7 +838,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(result).toEqual([]);
       expect(consoleWarnSpy).toHaveBeenCalled();
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._selectedBy).toBe(actor1); // Still owned by actor1
 
       consoleWarnSpy.mockRestore();
@@ -855,8 +895,12 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 
       expect(cleared).toBe(2);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
       expect(obj1?._selectedBy).toBeNull();
       expect(obj2?._selectedBy).toBeNull();
     });
@@ -878,8 +922,12 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 
       expect(cleared).toBe(2);
 
-      const obj1 = store.getObject(id1);
-      const obj2 = store.getObject(id2);
+      const obj1 = store.getObjectYMap(id1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(id2)?.toJSON() as
+        | TableObject
+        | undefined;
       expect(obj1?._selectedBy).toBeNull();
       expect(obj2?._selectedBy).toBeNull();
     });
@@ -911,7 +959,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       const cleared = clearAllSelections(store);
 
       expect(cleared).toBe(1);
-      expect(store.getAllObjects().size).toBe(2); // Both objects still exist
+      expect(store.objects.size).toBe(2); // Both objects still exist
     });
 
     it('throws error when excludeDragging option is used', () => {
@@ -954,7 +1002,7 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 
       expect(result).toEqual([id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos.r).toBe(90);
     });
 
@@ -968,7 +1016,7 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 
       expect(result).toEqual([id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos.r).toBe(0);
     });
 
@@ -980,15 +1028,21 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 
       // Exhaust
       exhaustCards(store, [id]);
-      expect(store.getObject(id)?._pos.r).toBe(90);
+      expect(
+        (store.getObjectYMap(id)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(90);
 
       // Ready
       exhaustCards(store, [id]);
-      expect(store.getObject(id)?._pos.r).toBe(0);
+      expect(
+        (store.getObjectYMap(id)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(0);
 
       // Exhaust again
       exhaustCards(store, [id]);
-      expect(store.getObject(id)?._pos.r).toBe(90);
+      expect(
+        (store.getObjectYMap(id)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(90);
     });
   });
 
@@ -1006,8 +1060,12 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [id1, id2]);
 
       expect(result).toEqual([id1, id2]);
-      expect(store.getObject(id1)?._pos.r).toBe(90);
-      expect(store.getObject(id2)?._pos.r).toBe(90);
+      expect(
+        (store.getObjectYMap(id1)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(90);
+      expect(
+        (store.getObjectYMap(id2)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(90);
     });
 
     it('handles mix of exhausted and ready stacks', () => {
@@ -1023,8 +1081,12 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [id1, id2]);
 
       expect(result).toEqual([id1, id2]);
-      expect(store.getObject(id1)?._pos.r).toBe(90); // Now exhausted
-      expect(store.getObject(id2)?._pos.r).toBe(0); // Now ready
+      expect(
+        (store.getObjectYMap(id1)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(90); // Now exhausted
+      expect(
+        (store.getObjectYMap(id2)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(0); // Now ready
     });
   });
 
@@ -1042,8 +1104,14 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [stackId, tokenId]);
 
       expect(result).toEqual([stackId]); // Only stack affected
-      expect(store.getObject(stackId)?._pos.r).toBe(90);
-      expect(store.getObject(tokenId)?._pos.r).toBe(0); // Unchanged
+      expect(
+        (store.getObjectYMap(stackId)?.toJSON() as TableObject | undefined)
+          ?._pos.r,
+      ).toBe(90);
+      expect(
+        (store.getObjectYMap(tokenId)?.toJSON() as TableObject | undefined)
+          ?._pos.r,
+      ).toBe(0); // Unchanged
     });
 
     it('skips zones', () => {
@@ -1055,7 +1123,10 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [zoneId]);
 
       expect(result).toEqual([]);
-      expect(store.getObject(zoneId)?._pos.r).toBe(0); // Unchanged
+      expect(
+        (store.getObjectYMap(zoneId)?.toJSON() as TableObject | undefined)?._pos
+          .r,
+      ).toBe(0); // Unchanged
     });
   });
 
@@ -1069,7 +1140,9 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [id]);
 
       expect(result).toEqual([id]);
-      expect(store.getObject(id)?._pos.r).toBe(0); // Readied
+      expect(
+        (store.getObjectYMap(id)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(0); // Readied
     });
 
     it('treats 89.95° as exhausted (within tolerance)', () => {
@@ -1081,7 +1154,9 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [id]);
 
       expect(result).toEqual([id]);
-      expect(store.getObject(id)?._pos.r).toBe(0); // Readied
+      expect(
+        (store.getObjectYMap(id)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(0); // Readied
     });
 
     it('treats 45° as ready (not exhausted)', () => {
@@ -1093,7 +1168,9 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [id]);
 
       expect(result).toEqual([id]);
-      expect(store.getObject(id)?._pos.r).toBe(90); // Exhausted
+      expect(
+        (store.getObjectYMap(id)?.toJSON() as TableObject | undefined)?._pos.r,
+      ).toBe(90); // Exhausted
     });
 
     it('normalizes rotation to prevent drift', () => {
@@ -1104,12 +1181,16 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 
       // Exhaust
       exhaustCards(store, [id]);
-      const rotation1 = store.getObject(id)?._pos.r;
+      const rotation1 = (
+        store.getObjectYMap(id)?.toJSON() as TableObject | undefined
+      )?._pos.r;
       expect(rotation1).toBe(90);
 
       // Ready
       exhaustCards(store, [id]);
-      const rotation2 = store.getObject(id)?._pos.r;
+      const rotation2 = (
+        store.getObjectYMap(id)?.toJSON() as TableObject | undefined
+      )?._pos.r;
       expect(rotation2).toBe(0);
 
       // Verify exact values (no drift)
@@ -1153,7 +1234,10 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const result = exhaustCards(store, [validId, 'invalid']);
 
       expect(result).toEqual([validId]);
-      expect(store.getObject(validId)?._pos.r).toBe(90);
+      expect(
+        (store.getObjectYMap(validId)?.toJSON() as TableObject | undefined)
+          ?._pos.r,
+      ).toBe(90);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         '[exhaustCards] Object invalid not found',
       );
@@ -1171,7 +1255,7 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 
       exhaustCards(store, [id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._pos).toEqual({ x: 123, y: 456, r: 90 });
     });
 
@@ -1187,7 +1271,7 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 
       exhaustCards(store, [id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._kind).toBe(ObjectKind.Stack);
       expect(obj?._pos.x).toBe(100);
       expect(obj?._pos.y).toBe(200);
@@ -1234,7 +1318,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 
       expect(result).toEqual([id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
         expect(obj._faceUp).toBe(false);
       }
@@ -1251,7 +1335,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 
       expect(result).toEqual([id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
         expect(obj._faceUp).toBe(true);
       }
@@ -1266,14 +1350,14 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 
       // Flip to face down
       flipCards(store, [id]);
-      let obj = store.getObject(id);
+      let obj = store.getObjectYMap(id)?.toJSON();
       if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
         expect(obj._faceUp).toBe(false);
       }
 
       // Flip to face up
       flipCards(store, [id]);
-      obj = store.getObject(id);
+      obj = store.getObjectYMap(id)?.toJSON();
       if (obj && obj._kind === ObjectKind.Stack && '_faceUp' in obj) {
         expect(obj._faceUp).toBe(true);
       }
@@ -1302,9 +1386,15 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 
       expect(result).toEqual([stack1, stack2, token]);
 
-      const obj1 = store.getObject(stack1);
-      const obj2 = store.getObject(stack2);
-      const obj3 = store.getObject(token);
+      const obj1 = store.getObjectYMap(stack1)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj2 = store.getObjectYMap(stack2)?.toJSON() as
+        | TableObject
+        | undefined;
+      const obj3 = store.getObjectYMap(token)?.toJSON() as
+        | TableObject
+        | undefined;
 
       if (obj1 && obj1._kind === ObjectKind.Stack && '_faceUp' in obj1) {
         expect(obj1._faceUp).toBe(false);
@@ -1376,7 +1466,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 
       flipCards(store, [id]);
 
-      const obj = store.getObject(id);
+      const obj = store.getObjectYMap(id)?.toJSON() as TableObject | undefined;
       expect(obj?._kind).toBe(ObjectKind.Stack);
       expect(obj?._pos).toEqual({ x: 100, y: 200, r: 45 });
       expect(obj?._meta).toEqual({ deckName: 'Player 1' });

@@ -39,17 +39,19 @@ function Table() {
   }, []);
 
   // Track selection state for action context (M3.6-T4)
-  // Now stores Y.Map references directly - zero allocations
-  const [selectedYMaps, setSelectedYMaps] = useState<TableObjectYMap[]>([]);
+  // Now stores {id, yMap} pairs directly - zero allocations
+  const [selectedObjects, setSelectedObjects] = useState<
+    Array<{ id: string; yMap: TableObjectYMap }>
+  >([]);
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
     if (!store) return;
 
     const updateSelection = () => {
-      // Use getObjectsSelectedBy() - works with Y.Maps directly, zero allocations
+      // Use getObjectsSelectedBy() - returns {id, yMap} pairs
       const selected = store.getObjectsSelectedBy(store.getActorId());
-      setSelectedYMaps(selected);
+      setSelectedObjects(selected);
     };
 
     // Initial selection state
@@ -64,11 +66,11 @@ function Table() {
   }, [store]);
 
   // Create action context with live selection info (M3.6-T4)
-  // Now passes Y.Maps directly - zero allocations
+  // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
     const context = buildActionContext(
       store,
-      selectedYMaps,
+      selectedObjects,
       (path: string) => {
         void navigate({ to: path });
       },
@@ -84,7 +86,7 @@ function Table() {
     }
 
     return context;
-  }, [store, selectedYMaps, navigate, id]);
+  }, [store, selectedObjects, navigate, id]);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);

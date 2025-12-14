@@ -241,24 +241,26 @@ export class YjsStore {
   /**
    * Get all objects selected by a specific actor (M3.6-T2)
    *
-   * Returns Y.Map references for selected objects - zero allocations.
-   * Efficient for selection queries.
+   * Returns Y.Map references with their IDs for selected objects.
+   * This avoids expensive O(n*m) lookups when IDs are needed downstream.
    *
    * @example
    * ```typescript
    * const selected = store.getObjectsSelectedBy(store.getActorId());
-   * selected.forEach(yMap => {
+   * selected.forEach(({ id, yMap }) => {
    *   const kind = yMap.get('_kind');
-   *   // ... work with Y.Map directly
+   *   console.log(`Object ${id} has kind ${kind}`);
    * });
    * ```
    */
-  getObjectsSelectedBy(actorId: ActorId): TableObjectYMap[] {
-    const result: TableObjectYMap[] = [];
-    this.objects.forEach((yMap) => {
+  getObjectsSelectedBy(
+    actorId: ActorId,
+  ): Array<{ id: string; yMap: TableObjectYMap }> {
+    const result: Array<{ id: string; yMap: TableObjectYMap }> = [];
+    this.objects.forEach((yMap, id) => {
       const selectedBy = yMap.get('_selectedBy');
       if (selectedBy === actorId) {
-        result.push(yMap);
+        result.push({ id, yMap });
       }
     });
     return result;

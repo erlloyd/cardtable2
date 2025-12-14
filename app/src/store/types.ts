@@ -5,6 +5,7 @@
  * instead of converting to plain objects via .toJSON().
  */
 
+import type * as Y from 'yjs';
 import type { TypedMap } from 'yjs-types';
 import type { TableObjectProps, TableObject } from '@cardtable2/shared';
 
@@ -33,7 +34,7 @@ export type TableObjectYMap = TypedMap<TableObjectProps>;
  * });
  * ```
  */
-export type ObjectsYMap = Map<string, TableObjectYMap>;
+export type ObjectsYMap = Y.Map<TableObjectYMap>;
 
 /**
  * Converts a TableObjectYMap (typed Y.Map) to a plain TableObject.

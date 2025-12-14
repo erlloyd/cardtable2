@@ -17,7 +17,7 @@ import * as Y from 'yjs';
 
 // Mock YjsStore (M3.6-T5: updated to match new Y.Map-based API)
 class MockYjsStore implements Partial<YjsStore> {
-  objects = new Y.Map();
+  objects: Y.Map<TableObjectYMap> = new Y.Map();
 
   async waitForReady(): Promise<void> {
     return Promise.resolve();

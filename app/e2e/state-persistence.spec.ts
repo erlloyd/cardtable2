@@ -40,8 +40,16 @@ test.describe('State Persistence (M3-T1)', () => {
       timeout: 5000,
     });
 
-    // Verify initial state has no objects
-    await expect(page.getByText(/Objects: 0/)).toBeVisible();
+    // Clear any leftover objects from previous test runs
+    await page.evaluate(() => {
+      declare const __TEST_STORE__: TestStore;
+      if (__TEST_STORE__) {
+        __TEST_STORE__.clearAllObjects();
+      }
+    });
+
+    // Wait for UI to update - expect "Objects: 0" to be visible
+    await expect(page.getByText(/Objects: 0/)).toBeVisible({ timeout: 2000 });
 
     // Add test objects directly to the store via browser console
     // This simulates what will happen when the user interacts with the UI in M3-T2

@@ -13,6 +13,19 @@ import {
 import type { YjsStore } from '../store/YjsStore';
 import type { TableObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
+import * as Y from 'yjs';
+import type { TableObjectYMap } from '../store/types';
+
+/**
+ * Helper: Convert plain TableObject to Y.Map for testing (M3.6-T5)
+ */
+function toYMap(obj: TableObject): TableObjectYMap {
+  const yMap = new Y.Map() as TableObjectYMap;
+  for (const [key, value] of Object.entries(obj)) {
+    yMap.set(key as keyof TableObject, value as never);
+  }
+  return yMap;
+}
 
 describe('ContextMenu', () => {
   let registry: ActionRegistry;
@@ -24,10 +37,10 @@ describe('ContextMenu', () => {
     registry = ActionRegistry.getInstance();
     registry.clear();
 
-    // Mock store
+    // Mock store (M3.6-T5)
     mockStore = {
       getActorId: () => 'test-actor',
-      getAllObjects: () => new Map(),
+      objects: new Y.Map(),
     } as unknown as YjsStore;
 
     // Mock onClose callback
@@ -56,7 +69,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -85,7 +98,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -117,7 +130,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -171,7 +184,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -222,7 +235,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -281,7 +294,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: ['stack-1'],
-          objects: [stack],
+          yMaps: [toYMap(stack)],
           count: 1,
           hasStacks: true,
           hasTokens: false,
@@ -333,7 +346,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: ['stack-1'],
-          objects: [stack],
+          yMaps: [toYMap(stack)],
           count: 1,
           hasStacks: true,
           hasTokens: false,
@@ -397,7 +410,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: ['stack-1'],
-          objects: [stack],
+          yMaps: [toYMap(stack)],
           count: 1,
           hasStacks: true,
           hasTokens: false,
@@ -472,7 +485,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: ['stack-1', 'stack-2'],
-          objects: [stack1, stack2],
+          yMaps: [toYMap(stack1), toYMap(stack2)],
           count: 2,
           hasStacks: true,
           hasTokens: false,
@@ -547,7 +560,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: ['stack-1', 'token-1'],
-          objects: [stack, token],
+          yMaps: [toYMap(stack), toYMap(token)],
           count: 2,
           hasStacks: true,
           hasTokens: true,
@@ -596,7 +609,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -650,7 +663,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -699,7 +712,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -733,7 +746,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -769,7 +782,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -809,7 +822,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -867,7 +880,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,
@@ -911,7 +924,7 @@ describe('ContextMenu', () => {
         store: mockStore,
         selection: {
           ids: [],
-          objects: [],
+          yMaps: [],
           count: 0,
           hasStacks: false,
           hasTokens: false,

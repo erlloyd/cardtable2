@@ -1,9 +1,12 @@
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from './types';
-import { ObjectKind, type TableObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
+import type { TableObjectYMap } from '../store/types';
 
 /**
- * Build ActionContext from current store state and selection IDs.
+ * Build ActionContext from current store state and selection (M3.6-T4).
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * This is a domain model builder that transforms raw Yjs store data
  * into the structured ActionContext format required by the action system.
@@ -12,34 +15,50 @@ import { ObjectKind, type TableObject } from '@cardtable2/shared';
  * context for ActionHandle and KeyboardManager.
  *
  * @param store - The Yjs store instance
- * @param selectedIds - Array of selected object IDs (from selectionState)
- * @param selectedObjects - Array of selected TableObject instances (from selectionState)
+ * @param selectedObjects - Array of {id, yMap} pairs for selected objects
  * @param navigate - Optional navigation function for route-based actions
  * @param currentRoute - Optional current route path
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
   store: YjsStore | null,
-  selectedIds: string[],
-  selectedObjects: TableObject[],
+  selectedObjects: Array<{ id: string; yMap: TableObjectYMap }>,
   navigate?: (path: string) => void,
   currentRoute?: string,
 ): ActionContext | null {
   if (!store) return null;
 
-  const kinds = new Set(selectedObjects.map((obj) => obj._kind));
+  // Extract IDs and analyze selection by working with Y.Maps directly
+  const kinds = new Set<ObjectKind>();
+  const selectedIds: string[] = [];
+  const selectedYMaps: TableObjectYMap[] = [];
+  let allLocked = true;
+  let allUnlocked = true;
+
+  // Iterate over selected objects directly (O(m) instead of O(n*m))
+  for (const { id, yMap } of selectedObjects) {
+    selectedIds.push(id);
+    selectedYMaps.push(yMap);
+
+    const kind = yMap.get('_kind');
+    if (kind) kinds.add(kind);
+
+    const locked = yMap.get('_locked') === true;
+    if (!locked) allLocked = false;
+    if (locked) allUnlocked = false;
+  }
 
   return {
     store,
     selection: {
       ids: selectedIds,
-      objects: selectedObjects,
-      count: selectedIds.length,
+      yMaps: selectedYMaps,
+      count: selectedObjects.length,
       hasStacks: kinds.has(ObjectKind.Stack),
       hasTokens: kinds.has(ObjectKind.Token),
       hasMixed: kinds.size > 1,
-      allLocked: selectedObjects.every((obj) => obj._meta?.locked === true),
-      allUnlocked: selectedObjects.every((obj) => obj._meta?.locked !== true),
+      allLocked,
+      allUnlocked,
       canAct: true, // All selected by this actor
     },
     actorId: store.getActorId(),

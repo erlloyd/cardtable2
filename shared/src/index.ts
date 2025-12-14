@@ -41,6 +41,24 @@ export interface TableObject {
   _meta: Record<string, unknown>; // Freeform metadata
 }
 
+// Type definition for Y.Map properties (M3.6-T1)
+// This type represents the structure of properties stored in Y.Map<TableObjectProps>
+// and supports all possible object kinds (stack, token, zone, mat, counter)
+export type TableObjectProps = {
+  _kind: ObjectKind;
+  _containerId: string | null;
+  _pos: Position;
+  _sortKey: string;
+  _locked: boolean;
+  _selectedBy: string | null;
+  _meta: Record<string, unknown>;
+  // Stack-specific properties (when _kind === ObjectKind.Stack)
+  _cards?: string[];
+  _faceUp?: boolean;
+  // Token-specific properties (when _kind === ObjectKind.Token)
+  // (uses _faceUp from above)
+};
+
 // Stack-specific properties (when _kind === ObjectKind.Stack)
 export interface StackObject extends TableObject {
   _kind: ObjectKind.Stack;

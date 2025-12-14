@@ -213,8 +213,8 @@ export function registerDefaultActions(): void {
     category: 'Global Actions',
     description: 'Remove all objects from the table',
     isAvailable: (ctx) => {
-      // Only available when nothing selected AND there are objects
-      return ctx.selection.count === 0 && ctx.store.getAllObjects().size > 0;
+      // Only available when nothing selected AND there are objects (M3.6-T5)
+      return ctx.selection.count === 0 && ctx.store.objects.size > 0;
     },
     execute: (ctx) => {
       ctx.store.clearAllObjects();

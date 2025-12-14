@@ -8,11 +8,17 @@ import type {
   AwarenessState,
 } from '@cardtable2/shared';
 import type { RenderMode } from '../renderer/RendererFactory';
-import type { YjsStore, ObjectChanges } from '../store/YjsStore';
-import type * as Y from 'yjs';
+import type {
+  YjsStore,
+  ObjectChanges,
+  TableObjectYMap,
+} from '../store/YjsStore';
+import * as Y from 'yjs';
 
-// Mock YjsStore
+// Mock YjsStore (M3.6-T5: updated to match new Y.Map-based API)
 class MockYjsStore implements Partial<YjsStore> {
+  objects: Y.Map<TableObjectYMap> = new Y.Map();
+
   async waitForReady(): Promise<void> {
     return Promise.resolve();
   }
@@ -21,12 +27,12 @@ class MockYjsStore implements Partial<YjsStore> {
     return 'test-actor-id';
   }
 
-  getAllObjects(): Map<string, TableObject> {
-    return new Map();
+  forEachObject(_fn: (yMap: TableObjectYMap, id: string) => void): void {
+    // Mock implementation - empty, no objects
   }
 
-  getObject(_id: string): TableObject | null {
-    return null;
+  getObjectYMap(_id: string): TableObjectYMap | undefined {
+    return undefined;
   }
 
   setObject(_id: string, _obj: TableObject): void {

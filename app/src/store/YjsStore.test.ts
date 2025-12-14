@@ -99,25 +99,25 @@ describe('YjsStore', () => {
     };
 
     it('starts with no objects', () => {
-      const objects = store.getAllObjects();
+      const objects = store.objects;
       expect(objects.size).toBe(0);
     });
 
     it('can add and retrieve a stack object', () => {
       store.setObject('stack-1', testStack);
-      const retrieved = store.getObject('stack-1');
+      const retrieved = store.getObjectYMap('stack-1')?.toJSON();
       expect(retrieved).toEqual(testStack);
     });
 
     it('can add and retrieve a token object', () => {
       store.setObject('token-1', testToken);
-      const retrieved = store.getObject('token-1');
+      const retrieved = store.getObjectYMap('token-1')?.toJSON();
       expect(retrieved).toEqual(testToken);
     });
 
     it('returns null for non-existent objects', () => {
-      const retrieved = store.getObject('does-not-exist');
-      expect(retrieved).toBeNull();
+      const retrieved = store.getObjectYMap('does-not-exist')?.toJSON();
+      expect(retrieved).toBeUndefined();
     });
 
     it('can update an existing object', () => {
@@ -130,7 +130,7 @@ describe('YjsStore', () => {
       };
 
       store.setObject('stack-1', updated);
-      const retrieved = store.getObject('stack-1');
+      const retrieved = store.getObjectYMap('stack-1')?.toJSON();
       expect(retrieved?._pos).toEqual({ x: 300, y: 400, r: 0 });
       if (retrieved && retrieved._kind === ObjectKind.Stack) {
         expect((retrieved as StackObject)._faceUp).toBe(false);
@@ -139,29 +139,29 @@ describe('YjsStore', () => {
 
     it('can delete an object', () => {
       store.setObject('stack-1', testStack);
-      expect(store.getObject('stack-1')).toEqual(testStack);
+      expect(store.getObjectYMap('stack-1')?.toJSON()).toEqual(testStack);
 
       store.deleteObject('stack-1');
-      expect(store.getObject('stack-1')).toBeNull();
+      expect(store.getObjectYMap('stack-1')?.toJSON()).toBeUndefined();
     });
 
-    it('getAllObjects returns all stored objects', () => {
+    it('objects property returns all stored objects', () => {
       store.setObject('stack-1', testStack);
       store.setObject('token-1', testToken);
 
-      const allObjects = store.getAllObjects();
+      const allObjects = store.objects;
       expect(allObjects.size).toBe(2);
-      expect(allObjects.get('stack-1')).toEqual(testStack);
-      expect(allObjects.get('token-1')).toEqual(testToken);
+      expect(allObjects.get('stack-1')?.toJSON()).toEqual(testStack);
+      expect(allObjects.get('token-1')?.toJSON()).toEqual(testToken);
     });
 
     it('can clear all objects', () => {
       store.setObject('stack-1', testStack);
       store.setObject('token-1', testToken);
-      expect(store.getAllObjects().size).toBe(2);
+      expect(store.objects.size).toBe(2);
 
       store.clearAllObjects();
-      expect(store.getAllObjects().size).toBe(0);
+      expect(store.objects.size).toBe(0);
     });
   });
 

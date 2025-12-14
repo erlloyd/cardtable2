@@ -29,17 +29,17 @@ export interface CreateObjectOptions {
 }
 
 /**
- * Generate a sortKey that places the object on top of all existing objects
+ * Generate a sortKey that places the object on top of all existing objects (M3.6-T5)
  * Uses fractional indexing format: "prefix|suffix"
+ * Refactored to work with Y.Maps directly - zero allocations.
  */
 function generateTopSortKey(store: YjsStore): string {
-  const allObjects = store.getAllObjects();
-
-  // Find the maximum sortKey
+  // Find the maximum sortKey by iterating Y.Maps directly
   let maxSortKey = '0';
-  allObjects.forEach((obj) => {
-    if (obj._sortKey > maxSortKey) {
-      maxSortKey = obj._sortKey;
+  store.forEachObject((yMap) => {
+    const sortKey = yMap.get('_sortKey');
+    if (sortKey && sortKey > maxSortKey) {
+      maxSortKey = sortKey;
     }
   });
 
@@ -127,7 +127,9 @@ export function createObject(
 }
 
 /**
- * Update positions for one or more objects
+ * Update positions for one or more objects (M3.6-T5)
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * @param store - YjsStore instance
  * @param updates - Array of position updates
@@ -153,24 +155,22 @@ export function moveObjects(
   // Use single transaction for atomicity
   store.getDoc().transact(() => {
     updates.forEach(({ id, pos }) => {
-      const obj = store.getObject(id);
-      if (!obj) {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) {
         console.warn(`[moveObjects] Object ${id} not found`);
         return;
       }
 
-      // Update position using setObject (which internally uses transactions)
-      // We're already in a transaction, so this will be batched
-      store.setObject(id, {
-        ...obj,
-        _pos: pos,
-      });
+      // Update position directly on Y.Map - no conversion needed
+      yMap.set('_pos', pos);
     });
   });
 }
 
 /**
- * Select objects with exclusive ownership tracking (M3-T3)
+ * Select objects with exclusive ownership tracking (M3-T3, M3.6-T5)
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * Attempts to claim selection ownership for the given objects. Selection fails
  * gracefully for objects already owned by another actor.
@@ -195,39 +195,40 @@ export function selectObjects(
 
   store.getDoc().transact(() => {
     ids.forEach((id) => {
-      const obj = store.getObject(id);
-      if (!obj) {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) {
         console.warn(`[selectObjects] Object ${id} not found`);
         failed.push(id);
         return;
       }
 
+      // Read properties directly from Y.Map
+      const selectedBy = yMap.get('_selectedBy');
+      const locked = yMap.get('_locked');
+
       // Check if already selected by another actor
-      if (obj._selectedBy !== null && obj._selectedBy !== actorId) {
+      if (selectedBy !== null && selectedBy !== actorId) {
         console.warn(
-          `[selectObjects] Object ${id} already selected by ${obj._selectedBy}`,
+          `[selectObjects] Object ${id} already selected by ${selectedBy}`,
         );
         failed.push(id);
         return;
       }
 
       // Skip if already selected by this actor (idempotent)
-      if (obj._selectedBy === actorId) {
+      if (selectedBy === actorId) {
         return;
       }
 
       // Check if object is locked
-      if (obj._locked) {
+      if (locked) {
         console.warn(`[selectObjects] Object ${id} is locked`);
         failed.push(id);
         return;
       }
 
-      // Claim ownership
-      store.setObject(id, {
-        ...obj,
-        _selectedBy: actorId,
-      });
+      // Claim ownership - update Y.Map directly
+      yMap.set('_selectedBy', actorId);
       selected.push(id);
     });
   });
@@ -236,7 +237,9 @@ export function selectObjects(
 }
 
 /**
- * Unselect objects, releasing ownership (M3-T3)
+ * Unselect objects, releasing ownership (M3-T3, M3.6-T5)
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * Only releases selection if the object is currently selected by the given actor.
  *
@@ -258,25 +261,25 @@ export function unselectObjects(
 
   store.getDoc().transact(() => {
     ids.forEach((id) => {
-      const obj = store.getObject(id);
-      if (!obj) {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) {
         console.warn(`[unselectObjects] Object ${id} not found`);
         return;
       }
 
+      // Read property directly from Y.Map
+      const selectedBy = yMap.get('_selectedBy');
+
       // Only unselect if currently selected by this actor
-      if (obj._selectedBy !== actorId) {
+      if (selectedBy !== actorId) {
         console.warn(
-          `[unselectObjects] Object ${id} not selected by ${actorId} (currently: ${obj._selectedBy})`,
+          `[unselectObjects] Object ${id} not selected by ${actorId} (currently: ${selectedBy})`,
         );
         return;
       }
 
-      // Release ownership
-      store.setObject(id, {
-        ...obj,
-        _selectedBy: null,
-      });
+      // Release ownership - update Y.Map directly
+      yMap.set('_selectedBy', null);
       unselected.push(id);
     });
   });
@@ -285,7 +288,9 @@ export function unselectObjects(
 }
 
 /**
- * Clear all selections in the store, optionally excluding objects being dragged (M3-T3)
+ * Clear all selections in the store, optionally excluding objects being dragged (M3-T3, M3.6-T5)
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * This is a force-clear that removes all selection ownership, useful for
  * "reset" scenarios or cleaning up stale selections.
@@ -311,10 +316,13 @@ export function clearAllSelections(
   let cleared = 0;
 
   store.getDoc().transact(() => {
-    const allObjects = store.getAllObjects();
-    allObjects.forEach((obj, id) => {
+    // Iterate Y.Maps directly - no conversion needed
+    store.forEachObject((yMap) => {
+      // Read property directly from Y.Map
+      const selectedBy = yMap.get('_selectedBy');
+
       // Skip if no selection to clear
-      if (obj._selectedBy === null) {
+      if (selectedBy === null) {
         return;
       }
 
@@ -326,11 +334,8 @@ export function clearAllSelections(
         );
       }
 
-      // Clear selection
-      store.setObject(id, {
-        ...obj,
-        _selectedBy: null,
-      });
+      // Clear selection - update Y.Map directly
+      yMap.set('_selectedBy', null);
       cleared++;
     });
   });
@@ -339,7 +344,9 @@ export function clearAllSelections(
 }
 
 /**
- * Flip cards/tokens to toggle their face up/down state (M3.5-T1)
+ * Flip cards/tokens to toggle their face up/down state (M3.5-T1, M3.6-T5)
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * Only affects objects that support flipping (stacks and tokens).
  * Non-flippable objects are silently skipped.
@@ -358,28 +365,25 @@ export function flipCards(store: YjsStore, ids: string[]): string[] {
 
   store.getDoc().transact(() => {
     ids.forEach((id) => {
-      const obj = store.getObject(id);
-      if (!obj) {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) {
         console.warn(`[flipCards] Object ${id} not found`);
         return;
       }
 
+      // Read properties directly from Y.Map
+      const kind = yMap.get('_kind');
+      const faceUp = yMap.get('_faceUp');
+
       // Only flip stacks and tokens (objects with _faceUp property)
-      if (obj._kind === ObjectKind.Stack || obj._kind === ObjectKind.Token) {
-        // Type narrowing: both Stack and Token have _faceUp
-        if ('_faceUp' in obj && typeof obj._faceUp === 'boolean') {
-          // Type assertion safe here due to runtime checks above
-          const flippableObj = obj as TableObject & { _faceUp: boolean };
-          const updatedObj: TableObject = {
-            ...obj,
-            _faceUp: !flippableObj._faceUp,
-          } as TableObject;
-          store.setObject(id, updatedObj);
+      if (kind === ObjectKind.Stack || kind === ObjectKind.Token) {
+        if (typeof faceUp === 'boolean') {
+          // Toggle faceUp - update Y.Map directly
+          yMap.set('_faceUp', !faceUp);
           flipped.push(id);
         } else {
           console.warn(
-            `[flipCards] Object ${id} is a ${obj._kind} but missing _faceUp property`,
-            obj,
+            `[flipCards] Object ${id} is a ${kind} but missing _faceUp property`,
           );
         }
       }
@@ -399,7 +403,9 @@ function normalizeRotation(r: number): number {
 }
 
 /**
- * Exhaust/Ready cards - toggle rotation by 90 degrees (M3.5-T2)
+ * Exhaust/Ready cards - toggle rotation by 90 degrees (M3.5-T2, M3.6-T5)
+ *
+ * Refactored to work with Y.Maps directly - zero allocations.
  *
  * Exhausts (rotates 90°) or readies (rotates back to 0°) stack objects.
  * This is a toggle: exhausted stacks return to 0°, non-exhausted stacks rotate to 90°.
@@ -421,29 +427,30 @@ export function exhaustCards(store: YjsStore, ids: string[]): string[] {
 
   store.getDoc().transact(() => {
     ids.forEach((id) => {
-      const obj = store.getObject(id);
-      if (!obj) {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) {
         console.warn(`[exhaustCards] Object ${id} not found`);
         return;
       }
 
+      // Read properties directly from Y.Map
+      const kind = yMap.get('_kind');
+      const pos = yMap.get('_pos');
+
       // Only exhaust stacks
-      if (obj._kind === ObjectKind.Stack) {
+      if (kind === ObjectKind.Stack && pos) {
         // Toggle: if exhausted (90°), ready to 0°, otherwise exhaust to 90°
         const isExhausted =
-          Math.abs(obj._pos.r - EXHAUST_ROTATION) < ROTATION_EPSILON;
+          Math.abs(pos.r - EXHAUST_ROTATION) < ROTATION_EPSILON;
         const newRotation = normalizeRotation(
           isExhausted ? 0 : EXHAUST_ROTATION,
         );
 
-        const updatedObj: TableObject = {
-          ...obj,
-          _pos: {
-            ...obj._pos,
-            r: newRotation,
-          },
-        };
-        store.setObject(id, updatedObj);
+        // Update position directly on Y.Map - no conversion needed
+        yMap.set('_pos', {
+          ...pos,
+          r: newRotation,
+        });
         toggled.push(id);
       }
       // Silently skip non-stack objects

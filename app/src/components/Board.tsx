@@ -267,11 +267,10 @@ function Board({
         selectionSettledCallbacksRef.current.push(resolve);
       });
 
-      const selectionCount = store.getAllObjects
-        ? Array.from(store.getAllObjects().values()).filter(
-            (obj) => obj._selectedBy === store.getActorId(),
-          ).length
-        : 0;
+      // Count selected objects using Y.Map iteration (M3.6-T5)
+      const selectionCount = store.getObjectsSelectedBy(
+        store.getActorId(),
+      ).length;
       console.log(
         `[Board] Selection settled, opening context menu (selection count: ${selectionCount})`,
       );

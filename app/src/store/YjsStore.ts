@@ -632,6 +632,37 @@ export class YjsStore {
     }
   }
 
+  // ============================================================================
+  // Test-only helper methods (M3.6-T5)
+  // ============================================================================
+
+  /**
+   * Get all objects as a Map of plain objects (test-only helper)
+   * This method is only for E2E tests to maintain compatibility with old API.
+   * Production code should use `objects` getter or `toJSON()` instead.
+   *
+   * @returns Map of object IDs to plain TableObject instances
+   */
+  getAllObjects(): Map<string, TableObject> {
+    const result = new Map<string, TableObject>();
+    this.objects.forEach((yMap, id) => {
+      result.set(id, yMap.toJSON() as TableObject);
+    });
+    return result;
+  }
+
+  /**
+   * Get a single object as a plain object (test-only helper)
+   * This method is only for E2E tests to maintain compatibility with old API.
+   * Production code should use `getObjectYMap()` instead.
+   *
+   * @param id - Object ID
+   * @returns Plain TableObject or undefined
+   */
+  getObject(id: string): TableObject | undefined {
+    return this.getObjectYMap(id)?.toJSON() as TableObject | undefined;
+  }
+
   /**
    * Clean up resources
    */

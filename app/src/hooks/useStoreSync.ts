@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
+import { toTableObject } from '../store/YjsStore';
 
 /**
  * Hook for synchronizing store changes to renderer (M3.6-T5)
@@ -60,7 +61,7 @@ export function useStoreSync(
             type: 'objects-added',
             objects: changes.added.map(({ id, yMap }) => ({
               id,
-              obj: yMap.toJSON(),
+              obj: toTableObject(yMap),
             })),
           });
         }
@@ -75,7 +76,7 @@ export function useStoreSync(
             type: 'objects-updated',
             objects: changes.updated.map(({ id, yMap }) => ({
               id,
-              obj: yMap.toJSON(),
+              obj: toTableObject(yMap),
             })),
           });
         }

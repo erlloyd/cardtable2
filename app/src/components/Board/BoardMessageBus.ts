@@ -1,7 +1,8 @@
 import { MessageHandlerRegistry } from '../../messaging/MessageHandlerRegistry';
-import type { RendererToMainMessage } from '@cardtable2/shared';
+import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
+import { toTableObject } from '../../store/YjsStore';
 import type { ThrottledFunction } from '../../utils/throttle';
 import {
   moveObjects,
@@ -83,11 +84,11 @@ export class BoardMessageBus {
 
       // Send initial sync of all objects from store (M3.6-T5)
       // Convert Y.Maps to plain objects for renderer (worker needs serializable data)
-      const objectsArray: Array<{ id: string; obj: unknown }> = [];
+      const objectsArray: Array<{ id: string; obj: TableObject }> = [];
       ctx.store.forEachObject((yMap, id) => {
         objectsArray.push({
           id,
-          obj: yMap.toJSON(), // Convert Y.Map to plain object
+          obj: toTableObject(yMap), // Convert Y.Map to plain object
         });
       });
 

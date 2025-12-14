@@ -31,7 +31,7 @@ describe('KeyboardManager', () => {
       store: mockStore,
       selection: {
         ids: ['obj1'],
-        objects: [],
+        yMaps: [],
         count: 1,
         hasStacks: true,
         hasTokens: false,

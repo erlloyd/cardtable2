@@ -6,7 +6,7 @@
  */
 
 import type { TypedMap } from 'yjs-types';
-import type { TableObjectProps } from '@cardtable2/shared';
+import type { TableObjectProps, TableObject } from '@cardtable2/shared';
 
 /**
  * Type alias for a typed Y.Map representing a table object.
@@ -34,3 +34,24 @@ export type TableObjectYMap = TypedMap<TableObjectProps>;
  * ```
  */
 export type ObjectsYMap = Map<string, TableObjectYMap>;
+
+/**
+ * Converts a TableObjectYMap (typed Y.Map) to a plain TableObject.
+ *
+ * This centralizes the conversion logic and makes it easy to add
+ * validation or debug checks in the future.
+ *
+ * @param yMap - The typed Y.Map to convert
+ * @returns The plain TableObject representation
+ *
+ * @example
+ * ```typescript
+ * const yMap = store.getObjectYMap(id);
+ * const obj = toTableObject(yMap);
+ * renderer.sendMessage({ type: 'update', obj });
+ * ```
+ */
+export function toTableObject(yMap: TableObjectYMap): TableObject {
+  // TODO: Add debug checks in development mode to validate object structure
+  return yMap.toJSON() as TableObject;
+}

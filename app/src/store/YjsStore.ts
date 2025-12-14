@@ -13,6 +13,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { runMigrations } from './migrations';
 import type { TableObjectYMap } from './types';
+import { toTableObject } from './types';
+
+// Re-export types and utilities for convenience
+export type { TableObjectYMap };
+export { toTableObject };
 
 /**
  * Change information from Yjs observer (M3.6-T2)
@@ -494,7 +499,7 @@ export class YjsStore {
   toJSON(): Record<string, TableObject> {
     const result: Record<string, TableObject> = {};
     this.objects.forEach((yMap, id) => {
-      result[id] = yMap.toJSON() as TableObject;
+      result[id] = toTableObject(yMap);
     });
     return result;
   }
@@ -646,7 +651,7 @@ export class YjsStore {
   getAllObjects(): Map<string, TableObject> {
     const result = new Map<string, TableObject>();
     this.objects.forEach((yMap, id) => {
-      result.set(id, yMap.toJSON() as TableObject);
+      result.set(id, toTableObject(yMap));
     });
     return result;
   }
@@ -660,7 +665,8 @@ export class YjsStore {
    * @returns Plain TableObject or undefined
    */
   getObject(id: string): TableObject | undefined {
-    return this.getObjectYMap(id)?.toJSON() as TableObject | undefined;
+    const yMap = this.getObjectYMap(id);
+    return yMap ? toTableObject(yMap) : undefined;
   }
 
   /**

@@ -8,7 +8,11 @@ import type {
   AwarenessState,
 } from '@cardtable2/shared';
 import type { RenderMode } from '../renderer/RendererFactory';
-import type { YjsStore, ObjectChanges } from '../store/YjsStore';
+import type {
+  YjsStore,
+  ObjectChanges,
+  TableObjectYMap,
+} from '../store/YjsStore';
 import * as Y from 'yjs';
 
 // Mock YjsStore (M3.6-T5: updated to match new Y.Map-based API)
@@ -23,11 +27,11 @@ class MockYjsStore implements Partial<YjsStore> {
     return 'test-actor-id';
   }
 
-  forEachObject(_fn: (yMap: never, id: string) => void): void {
+  forEachObject(_fn: (yMap: TableObjectYMap, id: string) => void): void {
     // Mock implementation - empty, no objects
   }
 
-  getObjectYMap(_id: string): never | undefined {
+  getObjectYMap(_id: string): TableObjectYMap | undefined {
     return undefined;
   }
 

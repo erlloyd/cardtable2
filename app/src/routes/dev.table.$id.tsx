@@ -14,9 +14,10 @@ import {
   clearAllSelections,
   resetToTestScene,
 } from '../store/YjsActions';
-import { ObjectKind, type TableObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
+import type { TableObjectYMap } from '../store/types';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import { CommandPalette } from '../components/CommandPalette';
@@ -41,16 +42,15 @@ function DevTable() {
 
   // Set up object change subscription when store is ready
   const handleStoreReady = useCallback((store: YjsStore) => {
-    // Get initial object count
-    const objects = store.getAllObjects();
-    setObjectCount(objects.size);
-    console.log(`[DevTable] Loaded ${objects.size} objects from IndexedDB`);
+    // Get initial object count (M3.6-T4: use objects.size directly)
+    const count = store.objects.size;
+    setObjectCount(count);
+    console.log(`[DevTable] Loaded ${count} objects from IndexedDB`);
 
     // Subscribe to object changes
     const unsubscribe = store.onObjectsChange((changes) => {
-      // Update object count based on current state
-      const updatedObjects = store.getAllObjects();
-      setObjectCount(updatedObjects.size);
+      // Update object count based on current state (M3.6-T4: use objects.size directly)
+      setObjectCount(store.objects.size);
 
       // Log changes for debugging
       if (changes.added.length > 0) {
@@ -136,32 +136,18 @@ function DevTable() {
     resetToTestScene(store);
   };
 
-  // Track selection state for action context (same pattern as table route)
-  const [selectionState, setSelectionState] = useState<{
-    ids: string[];
-    objects: TableObject[];
-  }>({ ids: [], objects: [] });
+  // Track selection state for action context (M3.6-T4)
+  // Now stores Y.Map references directly - zero allocations
+  const [selectedYMaps, setSelectedYMaps] = useState<TableObjectYMap[]>([]);
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
     if (!store) return;
 
     const updateSelection = () => {
-      const allObjects = store.getAllObjects();
-      const actorId = store.getActorId();
-
-      // Find all objects selected by this actor
-      const selectedIds: string[] = [];
-      const selectedObjects: TableObject[] = [];
-
-      for (const [id, obj] of allObjects.entries()) {
-        if (obj._selectedBy === actorId) {
-          selectedIds.push(id);
-          selectedObjects.push(obj);
-        }
-      }
-
-      setSelectionState({ ids: selectedIds, objects: selectedObjects });
+      // Use getObjectsSelectedBy() - works with Y.Maps directly, zero allocations
+      const selected = store.getObjectsSelectedBy(store.getActorId());
+      setSelectedYMaps(selected);
     };
 
     // Initial selection state
@@ -175,19 +161,18 @@ function DevTable() {
     return unsubscribe;
   }, [store]);
 
-  // Create action context with live selection info (same pattern as table route)
+  // Create action context with live selection info (M3.6-T4)
+  // Now passes Y.Maps directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
-    const { ids, objects } = selectionState;
     return buildActionContext(
       store,
-      ids,
-      objects,
+      selectedYMaps,
       (path: string) => {
         void navigate({ to: path });
       },
       `/dev/table/${id}`,
     );
-  }, [store, selectionState, navigate, id]);
+  }, [store, selectedYMaps, navigate, id]);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);

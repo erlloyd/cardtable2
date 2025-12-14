@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTableStore } from '../hooks/useTableStore';
-import type { TableObject } from '@cardtable2/shared';
 import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
@@ -11,6 +10,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
+import type { TableObjectYMap } from '../store/types';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -38,32 +38,18 @@ function Table() {
     registerDefaultActions();
   }, []);
 
-  // Track selection state for action context
-  const [selectionState, setSelectionState] = useState<{
-    ids: string[];
-    objects: TableObject[];
-  }>({ ids: [], objects: [] });
+  // Track selection state for action context (M3.6-T4)
+  // Now stores Y.Map references directly - zero allocations
+  const [selectedYMaps, setSelectedYMaps] = useState<TableObjectYMap[]>([]);
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
     if (!store) return;
 
     const updateSelection = () => {
-      const allObjects = store.getAllObjects();
-      const actorId = store.getActorId();
-
-      // Find all objects selected by this actor
-      const selectedIds: string[] = [];
-      const selectedObjects: TableObject[] = [];
-
-      for (const [id, obj] of allObjects.entries()) {
-        if (obj._selectedBy === actorId) {
-          selectedIds.push(id);
-          selectedObjects.push(obj);
-        }
-      }
-
-      setSelectionState({ ids: selectedIds, objects: selectedObjects });
+      // Use getObjectsSelectedBy() - works with Y.Maps directly, zero allocations
+      const selected = store.getObjectsSelectedBy(store.getActorId());
+      setSelectedYMaps(selected);
     };
 
     // Initial selection state
@@ -77,13 +63,12 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
-  // Create action context with live selection info
+  // Create action context with live selection info (M3.6-T4)
+  // Now passes Y.Maps directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
-    const { ids, objects } = selectionState;
     const context = buildActionContext(
       store,
-      ids,
-      objects,
+      selectedYMaps,
       (path: string) => {
         void navigate({ to: path });
       },
@@ -99,7 +84,7 @@ function Table() {
     }
 
     return context;
-  }, [store, selectionState, navigate, id]);
+  }, [store, selectedYMaps, navigate, id]);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);

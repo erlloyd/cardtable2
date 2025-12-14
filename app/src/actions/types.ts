@@ -1,5 +1,5 @@
 import type { YjsStore } from '../store/YjsStore';
-import type { TableObject } from '@cardtable2/shared';
+import type { TableObjectYMap } from '../store/types';
 
 /**
  * Category constants for grouping actions
@@ -10,11 +10,13 @@ export const VIEW_ACTIONS = 'View';
 export const MANAGEMENT_ACTIONS = 'Management';
 
 /**
- * Selection context information for action availability and execution
+ * Selection context information for action availability and execution (M3.6-T4)
+ *
+ * Now uses Y.Maps directly instead of plain objects for zero-allocation performance.
  */
 export interface SelectionInfo {
   ids: string[];
-  objects: TableObject[];
+  yMaps: TableObjectYMap[]; // Y.Map references (no conversion, zero allocations)
   count: number;
   hasStacks: boolean;
   hasTokens: boolean;

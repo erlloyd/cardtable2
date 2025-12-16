@@ -33,7 +33,7 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 
 ```
 /
-├── _plans/               # Planning documents and milestone tracking
+├── _plans/               # Planning documents organized by theme and status
 ├── shared/              # Shared types & utilities
 │   └── src/
 │       └── index.ts    # ObjectKind, TableObject types
@@ -106,7 +106,7 @@ pnpm run format
 - Main-thread mode for maximum compatibility (iOS 16.x, debugging, user preference)
 - Shared core logic (SceneManager, HitTester, InputHandler, RenderCore)
 - User-toggleable in settings (auto-detect, force mode, debug tools)
-- See `_plans/completed/` for detailed architecture documentation
+- See `_plans/board-rendering/completed/` for detailed architecture documentation
 
 #### PixiJS Ticker Management
 - **CRITICAL**: PixiJS is configured with `autoStart: false` to prevent iOS worker crashes
@@ -191,16 +191,22 @@ See `app/src/renderer/objects/README.md` for full documentation.
 
 ## Project Status & Planning
 
-For detailed information about project progress, completed work, and upcoming milestones:
-- **Active plans**: See `_plans/README.md`
-- **Completed work**: See `_plans/completed/README.md`
+**The folder structure is the source of truth.**
+
+Plans are organized by **theme** with **status** subfolders:
+- **Themes**: core-infrastructure, board-rendering, data-layer, object-interactions, multiplayer, content-assets, ux-polish, performance, production, architecture
+- **Status folders**: completed/, in-progress/, planned/, future/, reference/
+- **Find work status**: Browse `_plans/{theme}/{status}/` directly - the folder location tells you the status
+- **Structure overview**: See `_plans/README.md` for workflow and conventions
+
+Don't look for status summaries in README files - just browse the folders to see what's completed, in-progress, planned, or future.
 
 ## Important Notes
 
 ### Branching Strategy
 - **IMPORTANT**: All work must be done on feature branches (e.g., `feature/m2-board-core`)
 - Never commit directly to main unless explicitly instructed
-- Branch naming: `feature/{milestone}-{description}` or `fix/{description}`
+- Branch naming: `feature/{theme}-{description}` or `fix/{description}`
 - Merge to main only after testing and validation
 - CI/CD deploys automatically on merge to main
 
@@ -340,3 +346,8 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
 ## Planning & Documentation
 
 When asked to plan something, always ask if it should be saved in the `_plans/` folder.
+
+Plans are organized by theme with status subfolders:
+- Place new plans in the appropriate theme folder (`object-interactions/`, `multiplayer/`, etc.)
+- Use status subfolders: `planned/` for ready work, `in-progress/` for active work, `completed/` for finished work
+- See `_plans/README.md` for the complete structure and guidelines

@@ -9,13 +9,15 @@ Add a toggleable grid snap mode that snaps objects to grid positions during drag
 ## Prerequisites
 - Board rendering core completed ✅
 - Object dragging system completed ✅
+- Exhaust/ready card rotation completed ✅
 
 ## Motivation
 Many card and board games benefit from precise grid-based positioning:
 - Tactical card games with positional mechanics
-- Board games with hex or square grids
+- Board game grid layouts
 - Layout organization and alignment
 - Precise spacing for multi-card arrangements
+- Prevents card overlap when exhausting (90° rotation)
 
 ## Features
 
@@ -23,20 +25,24 @@ Many card and board games benefit from precise grid-based positioning:
 - Similar UX to pan/select mode toggle
 - Keyboard shortcut (e.g., 'G' key)
 - Persistent preference (store in IndexedDB)
-- Visual indicator in UI when grid mode is active
+- No visual indicator needed (shadow preview provides sufficient feedback)
 
 ### Grid Configuration
-- **Grid size**: Configurable spacing (e.g., 50px, 100px, 150px)
+- **Grid size**: Default sized to accommodate exhausted cards without overlap
+  - Standard card dimensions: ~100px wide × 140px tall
+  - Exhausted (90° rotated): 140px wide × 100px tall
+  - Recommended grid size: 150px (allows slight spacing between exhausted cards)
 - **Grid origin**: Center-based (0,0) grid alignment
-- **Grid type**: Square grid (future: hex grid support)
-- **Snap threshold**: Configurable snap distance (default: 50% of grid size)
+- **Grid type**: Square grid only
+- **Snap threshold**: Cards snap to nearest grid point (no threshold configuration needed)
+- **No grid overlay**: No visual grid lines rendered (shadow preview provides all necessary feedback)
 
 ### Snap Behavior
 
 **During Drag:**
 - When grid mode is active, object positions snap to nearest grid point
-- Live snapping feedback as user drags
-- Smooth visual transition to snapped position
+- Shadow preview shows where object will land when dropped
+- Shadow is local-only (not synced in multiplayer)
 - Works with both single objects and multi-object selection
 
 **During Drop:**
@@ -50,17 +56,12 @@ Many card and board games benefit from precise grid-based positioning:
 
 ### Visual Feedback
 
-**Grid Overlay (Optional):**
-- Subtle grid lines rendered on canvas
-- Toggleable independently from snap mode
-- Fades at high zoom out, becomes more prominent when zoomed in
-- Low-opacity lines that don't interfere with gameplay
-- Configurable color/opacity
-
-**Snap Indicators:**
-- Highlight nearest grid point while dragging
-- Visual "magnetism" effect as object approaches grid point
-- Clear feedback that grid mode is affecting placement
+**Drop Shadow Preview (Local Only):**
+- Semi-transparent "ghost" shows where object will snap when dropped
+- Renders at the snapped grid position while dragging
+- Only visible on the local machine (not synced to other players)
+- Uses same rendering as the object but with reduced opacity (e.g., 40%)
+- For multi-object selection, shows shadows for all objects at their snapped positions
 
 ## Implementation Plan
 
@@ -68,18 +69,17 @@ Many card and board games benefit from precise grid-based positioning:
 **Objective:** Add grid settings to store and UI
 
 **Deliverables:**
-- Grid configuration in YjsStore or local settings
-- UI controls for grid size, visibility, and snap threshold
+- Grid configuration in local settings (IndexedDB)
+- UI controls for grid size
 - Persistence of grid preferences
+- Default grid size: 150px (accommodates exhausted cards)
 
 **Spec:**
 ```typescript
 interface GridSettings {
   enabled: boolean;
-  visible: boolean;
-  size: number; // pixels
-  snapThreshold: number; // 0-1, percentage of grid size
-  origin: { x: number; y: number }; // world coordinates
+  size: number; // pixels, default 150
+  origin: { x: number; y: number }; // world coordinates, default (0, 0)
 }
 ```
 
@@ -110,42 +110,48 @@ function snapToGrid(
 }
 ```
 
-### Task 3: Integrate with Drag System
+### Task 3: Drop Shadow Preview
+**Objective:** Add local-only shadow preview during drag
+
+**Deliverables:**
+- Shadow renderer that shows snapped position during drag
+- Semi-transparent preview (40% opacity)
+- Multi-object shadow support
+- Local-only rendering (no multiplayer sync)
+
+**Integration Points:**
+- Render shadows in `SceneManager` during drag operations
+- Calculate shadow positions using `snapToGrid()` function
+- Use existing object rendering logic with opacity override
+- Clear shadows on pointer up or drag cancel
+
+**Rendering Strategy:**
+- Reuse existing object rendering with opacity parameter
+- Render at snapped grid position (not current drag position)
+- Z-index below drag ghosts but above static objects
+- Update shadow position on every pointer move
+
+### Task 4: Integrate with Drag System
 **Objective:** Apply grid snapping during drag operations
 
 **Deliverables:**
 - Modify `InputHandler` to apply grid snap during drag
-- Update drag preview positions with snapping
-- Maintain smooth visual feedback
+- Update final drop positions with snapping
+- Trigger shadow rendering during drag
 
 **Integration Points:**
-- `InputHandler.onPointerMove()` - apply snap to drag position
-- `DragGhost` rendering - show snapped preview positions
+- `InputHandler.onPointerMove()` - calculate snapped preview position
+- `InputHandler.onPointerUp()` - apply snap to final drop position
+- Send shadow position to renderer for preview
 - `moveObjects()` action - final position uses snapped coordinates
-
-### Task 4: Grid Overlay Renderer
-**Objective:** Add visual grid overlay to canvas
-
-**Deliverables:**
-- Grid line renderer in PixiJS scene
-- Zoom-aware line thickness and opacity
-- Performance-optimized (cull off-screen lines)
-- Configurable appearance
-
-**Rendering Strategy:**
-- Use PixiJS Graphics for lines
-- Calculate visible grid range based on camera viewport
-- Update on camera move/zoom
-- Low z-index (render below all objects)
 
 ### Task 5: UI Controls and Toggle
 **Objective:** Add grid mode controls to UI
 
 **Deliverables:**
 - Grid mode toggle button (similar to pan/select)
-- Grid settings panel (size, visibility, snap threshold)
+- Grid settings panel (size)
 - Keyboard shortcut ('G' key)
-- Status indicator when grid mode active
 
 **UI Placement:**
 - Toggle button in main toolbar
@@ -157,22 +163,23 @@ function snapToGrid(
 **Unit Tests:**
 - `snapToGrid()` function with various positions and grid sizes
 - Grid configuration persistence
-- Snap threshold calculations
 - Multi-object relative positioning preservation
+- Shadow position calculations
 
 **E2E Tests:**
 - Toggle grid mode on/off via keyboard and UI
-- Drag object with grid snap enabled
+- Drag object with grid snap enabled - shadow appears at snapped position
 - Drop object onto grid position
 - Create new object that snaps to grid
+- Multi-object selection shows multiple shadows
 - Multi-object selection maintains relative positions
-- Grid overlay visibility toggles correctly
 - Grid settings persist after refresh
+- Shadow disappears after drop
+- Shadow not visible in multiplayer (local only)
 
 **Performance Tests:**
-- Grid rendering with 1000+ grid lines (zoom out scenario)
-- Drag performance with grid snap enabled
-- No frame drops during snap calculations
+- Drag performance with grid snap + shadow rendering enabled
+- No frame drops during snap calculations or shadow updates
 
 ## Edge Cases
 
@@ -180,6 +187,7 @@ function snapToGrid(
 - When dragging multiple objects, snap the "primary" object (first selected)
 - Maintain relative offsets for other objects
 - All objects move together, relative positions preserved
+- Show shadows for all selected objects
 
 **Grid Size Changes:**
 - Objects don't automatically re-snap when grid size changes
@@ -187,49 +195,47 @@ function snapToGrid(
 - Provide "Snap All to Grid" action for bulk re-alignment
 
 **Zoom Levels:**
-- Grid overlay fades out at low zoom (< 0.5x)
-- Grid overlay becomes more prominent at high zoom (> 2x)
 - Snap behavior works consistently at all zoom levels
+- Shadow preview scales correctly with zoom
 
 **Pan Mode:**
 - Grid snap disabled while in pan mode
 - Automatically re-enabled when switching back to select mode
-- Grid overlay still visible in pan mode (if enabled)
 
-## Future Enhancements
-
-**Phase 2 (Later):**
-- Hex grid support
-- Isometric grid support
-- Custom grid origins per zone/mat
-- Grid-aligned rotation (45°, 90° snaps)
-- "Snap to objects" mode (align with nearby objects)
-- Grid templates for specific game boards
+**Multiplayer:**
+- Shadow preview is local-only (not sent to other players)
+- Only final drop position is synced
+- Grid settings are per-user (not synced)
+- Different players can have different grid settings
 
 ## Success Metrics
 
 **Functional:**
 - Grid mode toggles smoothly without lag
 - Objects snap accurately to grid points
+- Shadow preview shows correct snapped position
+- Shadow is local-only (not visible to other players)
 - Multi-object selections maintain relative positions
-- Grid overlay renders clearly at various zoom levels
 - Settings persist across sessions
+- Exhausted cards don't overlap on default grid size
 
 **Performance:**
-- 60fps during drag with grid snap enabled
-- Grid overlay rendering < 2ms per frame
+- 60fps during drag with grid snap + shadow enabled
+- Shadow rendering < 1ms per frame
 - No perceptible lag when toggling grid mode
 
 **UX:**
-- Clear visual feedback when grid mode active
+- Shadow preview provides clear feedback of snap position
 - Intuitive keyboard shortcut and UI controls
 - Grid snapping feels natural and helpful (not frustrating)
 - Easy to enable/disable on the fly
+- Grid size accommodates exhausted cards without overlap
 
 ## Notes
 
 - Grid mode is optional and off by default
-- Should feel like a helpful tool, not a constraint
-- Consider game-specific grid presets (e.g., "Chess 8x8", "Hex Grid")
-- Grid visualization should be subtle and not distracting
-- Performance is critical - grid calculations happen on every pointer move during drag
+- Default grid size (150px) is sized for exhausted card clearance
+- Shadow preview is the only visual feedback - no grid overlay needed
+- Shadow preview shows exactly where object will land
+- Shadow is local-only to avoid multiplayer clutter
+- Performance is critical - snap calculations + shadow rendering happen on every pointer move

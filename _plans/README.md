@@ -1,91 +1,170 @@
 # Cardtable 2.0 Planning Documents
 
-This directory contains active planning documents for ongoing and upcoming work.
+This directory contains planning documents organized by theme and status.
 
-## Directory Structure
+## Understanding the Structure
 
-- **Active Plans** - Current and upcoming milestone plans (this directory)
-- **completed/** - Completed milestone and refactor plans
+**The folder structure IS the source of truth.**
 
-## Active Milestones
+Plans are organized by **theme** (what area of the project) with **status** subfolders (where the work stands):
 
-### In Progress
+```
+_plans/
+├── core-infrastructure/     # Repo, tooling, app shell, routing
+├── board-rendering/         # Canvas, camera, gestures, hit-testing
+├── data-layer/              # Yjs, store, persistence, sync
+├── object-interactions/     # Card manipulation (flip, exhaust, stack, etc.)
+├── multiplayer/             # Server, networking, awareness
+├── content-assets/          # Game loading, manifests, images
+├── ux-polish/               # Mobile, touch, input refinement
+├── performance/             # Optimization, profiling, scaling
+├── production/              # Packaging, deployment, documentation
+└── architecture/            # Cross-cutting architectural docs, reference materials
+```
 
-#### M5 - Multiplayer Server
-**File:** `M5_multiplayer_server.md`
-**Status:** In Progress (1/3 tasks complete)
-- ✅ M5-T1: WS Server Scaffold (with Railway deployment)
-- ⏸️ M5-T2: Persistence Adapter (LevelDB integration)
-- ⏸️ M5-T3: TTL Sweeper (30-day room cleanup)
+Each theme contains status subfolders:
+- **completed/** - ✅ Work is done and merged
+- **in-progress/** - 🚧 Currently being worked on
+- **planned/** - 📋 Designed and ready to start
+- **future/** - 💡 Ideas for later consideration
+- **reference/** - 📖 Reference materials and historical context (architecture theme only)
 
-**Next:** Implement LevelDB persistence adapter for document storage
+## How to Find Work Status
 
-### Planned (Upcoming)
+**To see what's completed:** Browse `{theme}/completed/` folders
+**To see what's active:** Browse `{theme}/in-progress/` folders
+**To see what's next:** Browse `{theme}/planned/` folders
+**To see future ideas:** Browse `{theme}/future/` folders
 
-#### M3.5 - Additional Functionality
-**File:** `M3.5_additional_functionality.md`
-**Status:** Planned
-**Description:** Additional object manipulation actions
-- Flip cards
-- Rotate objects
-- Stack objects
-- Unstack objects
+The location of a plan file tells you its status. If it's in `planned/`, it's planned. If it's in `in-progress/`, it's being actively worked on. If it's in `completed/`, it's done. Simple.
 
-#### M4 - Set Loader & Assets
-**File:** `M4_set_loader_and_assets.md`
-**Status:** Planned
-**Description:** Game content loading system
+**Note:** `in-progress/` folders may be empty when nothing is actively being worked on. That's normal and expected.
 
-#### M6 - Frontend Multiplayer
-**File:** `M6_frontend_multiplayer.md`
-**Status:** Planned
-**Description:** Connect frontend to multiplayer server
+## Plan Lifecycle
 
-#### M7 - Offline Support
-**File:** `M7_offline.md`
-**Status:** Planned
-**Description:** Progressive Web App features
+A typical plan moves through these folders:
 
-#### M8 - Mobile & Input Polish
-**File:** `M8_mobile_and_input_polish.md`
-**Status:** Planned
-**Description:** Touch optimization and mobile UX
+1. **`planned/`** - Initial planning, ready to implement
+2. **`in-progress/`** - Currently being worked on (move here when you start coding)
+3. **`completed/`** - Implementation finished and merged
 
-#### M9 - Performance & QA
-**File:** `M9_perf_and_qa.md`
-**Status:** Planned
-**Description:** Performance profiling and quality assurance
+Alternative paths:
+- **`future/`** - Ideas that aren't ready for implementation yet
+- **`planned/` → `future/`** - Deprioritized
+- **`in-progress/` → `planned/`** - Paused or blocked
 
-#### M10 - Packaging & Documentation
-**File:** `M10_packaging_and_docs.md`
-**Status:** Planned
-**Description:** Production builds and documentation
+**Important:** Always move plans to `in-progress/` when you start working. This keeps the project state visible and prevents duplicate work.
 
-## Architecture Documents
+## Workflow
 
-### Games System (Future)
-**File:** `cardtable_games_system.md`
-**Description:** Long-term vision for game plugin architecture
-- Phase 1: Content-only games (JSON + images)
-- Phase 2: Automation & rules enforcement
-- Phase 3: Custom actions & UI extensions
+### When Starting New Work
+1. Browse the relevant theme folder (e.g., `object-interactions/`)
+2. Look in `planned/` for work ready to implement
+3. **Move the plan file to `in-progress/`** when you start
+4. Update the plan's status badge: `🚧 **In Progress**`
 
-### Original Planning
-**File:** `cardtable2_mvp_plan_and_wireframes.md`
-**Description:** Original MVP specification and wireframes
+**Example:**
+```bash
+# Moving stack-operations from planned to in-progress
+mv object-interactions/planned/stack-operations.md \
+   object-interactions/in-progress/stack-operations.md
+```
 
-**File:** `cardtable2_agent_task_plans.md`
-**Description:** Original task breakdown for agent-assisted development
+This signals to everyone (including yourself) that this work is actively being developed.
 
-## Milestone Completion Order
+### When Planning New Features
+1. Create a new markdown file in the appropriate theme folder
+2. Place it in `planned/` or `future/` based on priority
+3. Use clear, descriptive filenames (kebab-case)
+4. Include status badge in the file: `📋 **Planned**` or `💡 **Future**`
 
-**Completed:** M0 → M0.5 → M1 → M2 (all tasks) → M3 (all tasks) → M5-T1
+### When Completing Work
+1. **Move the plan from `in-progress/` to `completed/`**
+2. Update the plan with:
+   - Final implementation notes
+   - PR numbers
+   - Test coverage summary
+   - Lessons learned
+3. Update status badge: `✅ **Completed**`
 
-**Current Priority:** M5-T2 (Persistence Adapter)
+**Example:**
+```bash
+# Moving completed stack-operations plan
+mv object-interactions/in-progress/stack-operations.md \
+   object-interactions/completed/stack-operations.md
+```
 
-**Reordered (2025-11-17):** M5 prioritized before M3.5 and M4 to enable real multiplayer testing
+### When Abandoning/Deferring Work
+- Move from `in-progress/` back to `planned/` or `future/`
+- Add notes about why it was deferred
+- Don't delete plans unless truly obsolete
+
+## File Naming Conventions
+
+Use kebab-case for filenames:
+- ✅ `grid-snap-mode.md`
+- ✅ `persistence-and-ttl.md`
+- ✅ `flip-and-exhaust.md`
+- ❌ `Grid_Snap_Mode.md`
+- ❌ `PersistenceAndTTL.md`
+
+Be descriptive but concise:
+- ✅ `stack-operations.md`
+- ✅ `yjs-performance-optimization.md`
+- ❌ `feature.md`
+- ❌ `M3.5-T3-implement-stacking-and-unstacking-of-cards.md`
+
+## Status Badges in Plan Files
+
+Each plan should include a status badge at the top:
+
+```markdown
+## Status
+✅ **Completed** - Description of completion (PR #123)
+🚧 **In Progress** - What's currently being worked on
+📋 **Planned** - Ready to implement when needed
+💡 **Future** - Ideas for later consideration
+📖 **Reference** - Historical or reference material
+```
+
+The badge should match the folder location. If you move a file, update the badge.
+
+## Don't Duplicate Status Information
+
+**This README should NOT contain status summaries.**
+
+If you want to know what's completed, look in `{theme}/completed/`. If you want to know what's being worked on, look in `{theme}/in-progress/`. If you want to know what's planned, look in `{theme}/planned/`.
+
+**Examples:**
+- What's being worked on in multiplayer? → Check `multiplayer/in-progress/`
+- What's completed in object-interactions? → Check `object-interactions/completed/`
+- What's planned for board-rendering? → Check `board-rendering/planned/`
+
+The folder structure is self-documenting. Keep it that way.
+
+## Theme Descriptions
+
+**core-infrastructure** - Foundation: repository setup, tooling, app shell, navigation, upgrades
+
+**board-rendering** - Canvas rendering, PixiJS, camera/gestures, hit-testing, drag/drop, architecture
+
+**data-layer** - Yjs integration, store, persistence, IndexedDB, performance optimization
+
+**object-interactions** - Card/object manipulation: flip, exhaust, stack, unstack, rotate, etc.
+
+**multiplayer** - Server, WebSocket, y-websocket, persistence, room management, frontend integration
+
+**content-assets** - Game loading, manifests, image assets, content management
+
+**ux-polish** - UI/UX improvements, mobile optimization, touch input, polish
+
+**performance** - Performance profiling, optimization, load testing, scaling
+
+**production** - Deployment, offline support, packaging, documentation, distribution
+
+**architecture** - Cross-cutting architectural decisions, reference materials, vision docs
 
 ## See Also
 
-- `completed/README.md` - Documentation of completed work
-- `CLAUDE.md` (project root) - Current project status and context for Claude
+- `/CLAUDE.md` - Current project status and context for Claude
+- Individual theme folders for detailed plans

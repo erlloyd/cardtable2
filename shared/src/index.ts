@@ -121,6 +121,7 @@ export type MainToRendererMessage =
   | { type: 'resize'; width: number; height: number; dpr: number }
   | { type: 'test-animation' }
   | { type: 'set-interaction-mode'; mode: InteractionMode }
+  | { type: 'set-grid-snap-enabled'; enabled: boolean }
   | { type: 'pointer-down'; event: PointerEventData }
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }

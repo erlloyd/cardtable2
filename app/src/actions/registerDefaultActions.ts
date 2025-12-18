@@ -1,5 +1,5 @@
 import { ActionRegistry } from './ActionRegistry';
-import { CARD_ACTIONS } from './types';
+import { CARD_ACTIONS, VIEW_ACTIONS } from './types';
 import { flipCards, exhaustCards, resetToTestScene } from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
@@ -279,6 +279,24 @@ export function registerDefaultActions(): void {
     isAvailable: (ctx) => ctx.selection.count === 0,
     execute: (ctx) => {
       resetToTestScene(ctx.store);
+    },
+  });
+
+  // View action: Toggle Grid Snap
+  registry.register({
+    id: 'toggle-grid-snap',
+    label: (ctx) =>
+      ctx.gridSnapEnabled ? 'Disable Grid Snap' : 'Enable Grid Snap',
+    shortLabel: 'Grid Snap',
+    icon: '⊞',
+    shortcut: 'G',
+    category: VIEW_ACTIONS,
+    description: 'Toggle grid snapping for precise object placement',
+    isAvailable: (ctx) => ctx.onGridSnapEnabledChange !== undefined,
+    execute: (ctx) => {
+      if (ctx.onGridSnapEnabledChange && ctx.gridSnapEnabled !== undefined) {
+        ctx.onGridSnapEnabledChange(!ctx.gridSnapEnabled);
+      }
     },
   });
 }

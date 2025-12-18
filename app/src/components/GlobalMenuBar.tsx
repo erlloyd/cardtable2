@@ -14,6 +14,8 @@ export interface GlobalMenuBarProps {
   onCommandPaletteOpen: () => void;
   isMultiSelectMode?: boolean;
   onMultiSelectModeChange?: (enabled: boolean) => void;
+  gridSnapEnabled?: boolean;
+  onGridSnapEnabledChange?: (enabled: boolean) => void;
 }
 
 /**
@@ -29,6 +31,8 @@ export function GlobalMenuBar({
   onCommandPaletteOpen,
   isMultiSelectMode = false,
   onMultiSelectModeChange,
+  gridSnapEnabled = false,
+  onGridSnapEnabledChange,
 }: GlobalMenuBarProps) {
   const spaceKeyDownRef = useRef(false);
   const previousModeRef = useRef<'pan' | 'select'>(interactionMode);
@@ -49,6 +53,13 @@ export function GlobalMenuBar({
       if (event.key === 'v' || event.key === 'V') {
         event.preventDefault();
         onInteractionModeChange('select');
+        return;
+      }
+
+      // G key: Toggle grid snap
+      if ((event.key === 'g' || event.key === 'G') && onGridSnapEnabledChange) {
+        event.preventDefault();
+        onGridSnapEnabledChange(!gridSnapEnabled);
         return;
       }
 
@@ -79,7 +90,12 @@ export function GlobalMenuBar({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [interactionMode, onInteractionModeChange]);
+  }, [
+    interactionMode,
+    onInteractionModeChange,
+    gridSnapEnabled,
+    onGridSnapEnabledChange,
+  ]);
 
   return (
     <div className="global-menu-bar">
@@ -174,6 +190,34 @@ export function GlobalMenuBar({
                     <div className="menu-section-help">
                       When enabled, touch selections add to current selection
                       instead of replacing it
+                    </div>
+                  </div>
+                )}
+
+                {/* Grid Snap Section */}
+                {onGridSnapEnabledChange && (
+                  <div className="menu-section">
+                    <div className="menu-section-label">Grid Snap</div>
+                    <MenuItem>
+                      {({ focus }) => (
+                        <button
+                          type="button"
+                          className={`menu-item ${focus ? 'focused' : ''} ${gridSnapEnabled ? 'active' : ''}`}
+                          onClick={() =>
+                            onGridSnapEnabledChange(!gridSnapEnabled)
+                          }
+                        >
+                          <span className="menu-item-icon">
+                            {gridSnapEnabled ? '✓' : '○'}
+                          </span>
+                          <span className="menu-item-label">
+                            {gridSnapEnabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </button>
+                      )}
+                    </MenuItem>
+                    <div className="menu-section-help">
+                      When enabled, objects snap to grid on drop (Shortcut: G)
                     </div>
                   </div>
                 )}

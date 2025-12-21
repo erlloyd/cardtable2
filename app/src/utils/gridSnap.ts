@@ -11,9 +11,11 @@ export const GRID_ORIGIN = { x: 0, y: 0 };
 /**
  * Snaps a position to the nearest grid point
  *
- * @param pos - The world position to snap
+ * @param pos - The world position to snap (only x/y coordinates are snapped; rotation is ignored)
  * @param enabled - Whether grid snapping is enabled
- * @returns The snapped position (or original if disabled)
+ * @returns Object with snapped x and y coordinates { x: number; y: number }
+ *          (rotation is NOT included - caller must preserve it separately)
+ *          If disabled, returns the original position unchanged (without rotation)
  */
 export function snapToGrid(
   pos: { x: number; y: number },

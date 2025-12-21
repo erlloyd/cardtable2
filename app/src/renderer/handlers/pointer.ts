@@ -259,20 +259,28 @@ export function handlePointerMove(
           }> = [];
 
           // Calculate snapped positions for all dragged objects
-          // Each object snaps independently to its nearest grid point
+          // NOTE: Each object snaps independently to its nearest grid point.
+          // This means multi-selection will NOT preserve relative positions during snap.
+          // Example: Two cards 50px apart may both snap to the same grid point if close enough.
           for (const objectId of draggedIds) {
             const obj = context.sceneManager.getObject(objectId);
-            if (obj) {
-              const snappedPos = snapToGrid(obj._pos, true);
-              ghostData.push({
-                id: objectId,
-                snappedPos: {
-                  x: snappedPos.x,
-                  y: snappedPos.y,
-                  r: obj._pos.r,
-                },
-              });
+            if (!obj) {
+              console.warn(
+                `[pointer] Cannot calculate snap position for object ${objectId}: Object not found. ` +
+                  'Drag state may be stale.',
+              );
+              continue;
             }
+
+            const snappedPos = snapToGrid(obj._pos, true);
+            ghostData.push({
+              id: objectId,
+              snappedPos: {
+                x: snappedPos.x,
+                y: snappedPos.y,
+                r: obj._pos.r,
+              },
+            });
           }
 
           // Render ghosts
@@ -697,17 +705,37 @@ function clearDragState(
   if (event.isPrimary) {
     // Clear object drag state (M2-T5)
     if (context.drag.isDragging()) {
-      // Apply grid snap to final positions if enabled
+      // Apply grid snap to final positions on pointer-up if enabled
+      // DESIGN: Snap occurs at drag end rather than during drag for two reasons:
+      //   1. Performance: Avoid modifying Yjs store on every pointer-move event
+      //   2. UX: Allow free dragging with visual preview, snap only on commit
       // Each object snaps independently to its nearest grid point
       if (context.gridSnapEnabled) {
         const draggedIds = context.drag.getDraggedObjectIds();
+        let snappedCount = 0;
+        let failedCount = 0;
+
         for (const objectId of draggedIds) {
           const obj = context.sceneManager.getObject(objectId);
-          if (obj) {
-            const snappedPos = snapToGrid(obj._pos, true);
-            obj._pos.x = snappedPos.x;
-            obj._pos.y = snappedPos.y;
+          if (!obj) {
+            console.warn(
+              `[pointer] Cannot snap object ${objectId}: Object not found during drop. ` +
+                'This object will not be snapped to grid.',
+            );
+            failedCount++;
+            continue;
           }
+
+          const snappedPos = snapToGrid(obj._pos, true);
+          obj._pos.x = snappedPos.x;
+          obj._pos.y = snappedPos.y;
+          snappedCount++;
+        }
+
+        if (failedCount > 0) {
+          console.warn(
+            `[pointer] Grid snap completed with failures: ${snappedCount} snapped, ${failedCount} failed`,
+          );
         }
       }
 

@@ -52,21 +52,22 @@ test.describe('Grid Snap Mode', () => {
 
     test('menu toggle changes grid snap state', async ({ page }) => {
       // Open settings menu
-      await page.getByRole('button', { name: /settings/i }).click();
+      const settingsButton = page.getByLabel('Settings and actions');
+      await settingsButton.click();
 
-      // Click grid snap toggle
-      await page
-        .locator('.menu-section')
-        .filter({ hasText: 'Grid Snap' })
-        .getByRole('button')
-        .click();
+      // Verify Grid Snap section appears
+      await expect(page.getByText('Grid Snap')).toBeVisible();
 
-      // Verify enabled
-      const menuText = await page
-        .locator('.menu-section')
-        .filter({ hasText: 'Grid Snap' })
-        .textContent();
-      expect(menuText).toContain('Enabled');
+      // Click the "Disabled" button to toggle
+      await page.getByText('Disabled').click();
+
+      // Menu closes after clicking - reopen to verify state change
+      await settingsButton.click();
+
+      // Verify state changed to Enabled
+      await expect(
+        page.locator('.menu-item-label').filter({ hasText: 'Enabled' }),
+      ).toBeVisible();
     });
 
     test('command palette shows toggle grid snap action', async ({ page }) => {
@@ -74,15 +75,19 @@ test.describe('Grid Snap Mode', () => {
       const isMac = process.platform === 'darwin';
       await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k');
 
-      // Wait for command palette
-      await page.waitForSelector('[role="dialog"]', { timeout: 5000 });
+      // Wait for command palette input to be visible (like global-menu-bar.spec.ts does)
+      const paletteInput = page.locator('input[placeholder*="Search"]').first();
+      await expect(paletteInput).toBeVisible({ timeout: 2000 });
 
       // Search for grid snap
       await page.keyboard.type('grid snap');
 
-      // Verify action appears
-      const action = page.getByText(/grid snap/i);
-      await expect(action).toBeVisible();
+      // Verify action appears in results - target the command palette label specifically
+      await expect(
+        page
+          .locator('.command-palette-label')
+          .filter({ hasText: /Grid Snap/i }),
+      ).toBeVisible();
     });
   });
 

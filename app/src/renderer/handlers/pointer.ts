@@ -10,7 +10,7 @@ import type {
   PointerEventData,
 } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
-import { snapToGrid } from '../../utils/gridSnap';
+import { snapMultipleToGrid } from '../../utils/gridSnap';
 
 /**
  * Handle pointer down event
@@ -253,15 +253,13 @@ export function handlePointerMove(
         // Render grid snap ghosts if enabled
         if (context.gridSnapEnabled) {
           const draggedIds = context.drag.getDraggedObjectIds();
-          const ghostData: Array<{
+
+          // Gather all dragged objects with their current positions
+          const objectsToSnap: Array<{
             id: string;
-            snappedPos: { x: number; y: number; r: number };
+            pos: { x: number; y: number; r: number };
           }> = [];
 
-          // Calculate snapped positions for all dragged objects
-          // NOTE: Each object snaps independently to its nearest grid point.
-          // This means multi-selection will NOT preserve relative positions during snap.
-          // Example: Two cards 50px apart may both snap to the same grid point if close enough.
           for (const objectId of draggedIds) {
             const obj = context.sceneManager.getObject(objectId);
             if (!obj) {
@@ -271,17 +269,24 @@ export function handlePointerMove(
               );
               continue;
             }
-
-            const snappedPos = snapToGrid(obj._pos, true);
-            ghostData.push({
-              id: objectId,
-              snappedPos: {
-                x: snappedPos.x,
-                y: snappedPos.y,
-                r: obj._pos.r,
-              },
-            });
+            objectsToSnap.push({ id: objectId, pos: obj._pos });
           }
+
+          // Calculate collision-free snapped positions for all objects
+          const snappedPositions = snapMultipleToGrid(objectsToSnap, true);
+
+          // Convert to ghost data format
+          const ghostData: Array<{
+            id: string;
+            snappedPos: { x: number; y: number; r: number };
+          }> = [];
+
+          snappedPositions.forEach((pos, id) => {
+            ghostData.push({
+              id,
+              snappedPos: pos,
+            });
+          });
 
           // Render ghosts
           context.gridSnap.renderSnapGhosts(
@@ -709,11 +714,15 @@ function clearDragState(
       // DESIGN: Snap occurs at drag end rather than during drag for two reasons:
       //   1. Performance: Avoid modifying Yjs store on every pointer-move event
       //   2. UX: Allow free dragging with visual preview, snap only on commit
-      // Each object snaps independently to its nearest grid point
+      // Uses collision-free snapping to ensure each object gets its own grid space
       if (context.gridSnapEnabled) {
         const draggedIds = context.drag.getDraggedObjectIds();
-        let snappedCount = 0;
-        let failedCount = 0;
+
+        // Gather all dragged objects with their current positions
+        const objectsToSnap: Array<{
+          id: string;
+          pos: { x: number; y: number; r: number };
+        }> = [];
 
         for (const objectId of draggedIds) {
           const obj = context.sceneManager.getObject(objectId);
@@ -722,16 +731,26 @@ function clearDragState(
               `[pointer] Cannot snap object ${objectId}: Object not found during drop. ` +
                 'This object will not be snapped to grid.',
             );
-            failedCount++;
             continue;
           }
-
-          const snappedPos = snapToGrid(obj._pos, true);
-          obj._pos.x = snappedPos.x;
-          obj._pos.y = snappedPos.y;
-          snappedCount++;
+          objectsToSnap.push({ id: objectId, pos: obj._pos });
         }
 
+        // Calculate collision-free snapped positions
+        const snappedPositions = snapMultipleToGrid(objectsToSnap, true);
+
+        // Apply snapped positions to objects
+        let snappedCount = 0;
+        snappedPositions.forEach((pos, id) => {
+          const obj = context.sceneManager.getObject(id);
+          if (obj) {
+            obj._pos.x = pos.x;
+            obj._pos.y = pos.y;
+            snappedCount++;
+          }
+        });
+
+        const failedCount = draggedIds.length - snappedCount;
         if (failedCount > 0) {
           console.warn(
             `[pointer] Grid snap completed with failures: ${snappedCount} snapped, ${failedCount} failed`,

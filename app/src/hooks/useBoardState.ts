@@ -38,6 +38,8 @@ export interface UseBoardStateResult {
   setInteractionMode: (mode: 'pan' | 'select') => void;
   isMultiSelectMode: boolean;
   setIsMultiSelectMode: (enabled: boolean) => void;
+  gridSnapEnabled: boolean;
+  setGridSnapEnabled: (enabled: boolean) => void;
 
   // Awareness
   awarenessHz: number;
@@ -58,6 +60,8 @@ export interface UseBoardStateResult {
  * @param onInteractionModeChange - Optional callback for interaction mode changes
  * @param externalIsMultiSelectMode - Optional external multi-select mode (for GlobalMenuBar integration)
  * @param onMultiSelectModeChange - Optional callback for multi-select mode changes
+ * @param externalGridSnapEnabled - Optional external grid snap enabled state (for GlobalMenuBar integration)
+ * @param onGridSnapEnabledChange - Optional callback for grid snap enabled changes
  * @returns All board state and setters
  */
 export function useBoardState(
@@ -65,6 +69,8 @@ export function useBoardState(
   onInteractionModeChange?: (mode: 'pan' | 'select') => void,
   externalIsMultiSelectMode?: boolean,
   onMultiSelectModeChange?: (enabled: boolean) => void,
+  externalGridSnapEnabled?: boolean,
+  onGridSnapEnabledChange?: (enabled: boolean) => void,
 ): UseBoardStateResult {
   // Renderer state
   const [isReady, setIsReady] = useState(false);
@@ -90,6 +96,7 @@ export function useBoardState(
   >('pan');
   const [internalIsMultiSelectMode, setInternalIsMultiSelectMode] =
     useState(false);
+  const [internalGridSnapEnabled, setInternalGridSnapEnabled] = useState(false);
 
   // Awareness
   const [awarenessHz, setAwarenessHz] = useState<number>(0);
@@ -105,6 +112,9 @@ export function useBoardState(
     externalIsMultiSelectMode ?? internalIsMultiSelectMode;
   const setIsMultiSelectMode =
     onMultiSelectModeChange ?? setInternalIsMultiSelectMode;
+  const gridSnapEnabled = externalGridSnapEnabled ?? internalGridSnapEnabled;
+  const setGridSnapEnabled =
+    onGridSnapEnabledChange ?? setInternalGridSnapEnabled;
 
   // Helper to add a message to the messages array
   const addMessage = (msg: string) => {
@@ -128,6 +138,8 @@ export function useBoardState(
     setInteractionMode,
     isMultiSelectMode,
     setIsMultiSelectMode,
+    gridSnapEnabled,
+    setGridSnapEnabled,
     awarenessHz,
     setAwarenessHz,
     isSynced,

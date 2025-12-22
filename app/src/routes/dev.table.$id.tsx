@@ -88,6 +88,7 @@ function DevTable() {
     'pan',
   );
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(false);
 
   // Register default actions (shared with table route)
   useEffect(() => {
@@ -173,8 +174,17 @@ function DevTable() {
         void navigate({ to: path });
       },
       `/dev/table/${id}`,
+      gridSnapEnabled,
+      setGridSnapEnabled,
     );
-  }, [store, selectedObjects, navigate, id]);
+  }, [
+    store,
+    selectedObjects,
+    navigate,
+    id,
+    gridSnapEnabled,
+    setGridSnapEnabled,
+  ]);
 
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);
@@ -273,6 +283,8 @@ function DevTable() {
             onInteractionModeChange={setInteractionMode}
             isMultiSelectMode={isMultiSelectMode}
             onMultiSelectModeChange={setIsMultiSelectMode}
+            gridSnapEnabled={gridSnapEnabled}
+            onGridSnapEnabledChange={setGridSnapEnabled}
             actionContext={actionContext}
             onActionExecuted={commandPalette.recordAction}
           />
@@ -288,6 +300,8 @@ function DevTable() {
         onCommandPaletteOpen={commandPalette.open}
         isMultiSelectMode={isMultiSelectMode}
         onMultiSelectModeChange={setIsMultiSelectMode}
+        gridSnapEnabled={gridSnapEnabled}
+        onGridSnapEnabledChange={setGridSnapEnabled}
       />
 
       {/* Command Palette */}

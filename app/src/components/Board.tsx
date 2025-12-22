@@ -35,6 +35,8 @@ export interface BoardProps {
   onInteractionModeChange?: (mode: 'pan' | 'select') => void;
   isMultiSelectMode?: boolean;
   onMultiSelectModeChange?: (enabled: boolean) => void;
+  gridSnapEnabled?: boolean;
+  onGridSnapEnabledChange?: (enabled: boolean) => void;
   actionContext?: ActionContext | null;
   onActionExecuted?: (actionId: string) => void;
 }
@@ -49,6 +51,8 @@ function Board({
   onInteractionModeChange,
   isMultiSelectMode: externalIsMultiSelectMode,
   onMultiSelectModeChange,
+  gridSnapEnabled: externalGridSnapEnabled,
+  onGridSnapEnabledChange,
   actionContext,
   onActionExecuted,
 }: BoardProps) {
@@ -106,6 +110,7 @@ function Board({
     setInteractionMode,
     isMultiSelectMode,
     setIsMultiSelectMode,
+    gridSnapEnabled,
     awarenessHz,
     setAwarenessHz,
     isSynced,
@@ -115,6 +120,8 @@ function Board({
     onInteractionModeChange,
     externalIsMultiSelectMode,
     onMultiSelectModeChange,
+    externalGridSnapEnabled,
+    onGridSnapEnabledChange,
   );
 
   // Message bus
@@ -213,6 +220,16 @@ function Board({
       mode: interactionMode,
     });
   }, [interactionMode, isCanvasInitialized, renderer]);
+
+  // Send grid snap enabled changes to renderer
+  useEffect(() => {
+    if (!renderer || !isCanvasInitialized) return;
+
+    renderer.sendMessage({
+      type: 'set-grid-snap-enabled',
+      enabled: gridSnapEnabled,
+    });
+  }, [gridSnapEnabled, isCanvasInitialized, renderer]);
 
   // Handle context menu
   const handleCanvasContextMenu = (event: React.MouseEvent) => {

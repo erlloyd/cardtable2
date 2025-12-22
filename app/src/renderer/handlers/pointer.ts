@@ -10,6 +10,7 @@ import type {
   PointerEventData,
 } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
+import { snapMultipleToGrid } from '../../utils/gridSnap';
 
 /**
  * Handle pointer down event
@@ -247,6 +248,56 @@ export function handlePointerMove(
             pos: dragStateUpdate.pos,
             secondaryOffsets: dragStateUpdate.secondaryOffsets,
           });
+        }
+
+        // Render grid snap ghosts if enabled
+        if (context.gridSnapEnabled) {
+          const draggedIds = context.drag.getDraggedObjectIds();
+
+          // Gather all dragged objects with their current positions
+          const objectsToSnap: Array<{
+            id: string;
+            pos: { x: number; y: number; r: number };
+          }> = [];
+
+          for (const objectId of draggedIds) {
+            const obj = context.sceneManager.getObject(objectId);
+            if (!obj) {
+              console.warn(
+                `[pointer] Cannot calculate snap position for object ${objectId}: Object not found. ` +
+                  'Drag state may be stale.',
+              );
+              continue;
+            }
+            objectsToSnap.push({ id: objectId, pos: obj._pos });
+          }
+
+          // Calculate collision-free snapped positions for all objects
+          const snappedPositions = snapMultipleToGrid(objectsToSnap, true);
+
+          // Convert to ghost data format
+          const ghostData: Array<{
+            id: string;
+            snappedPos: { x: number; y: number; r: number };
+          }> = [];
+
+          snappedPositions.forEach((pos, id) => {
+            ghostData.push({
+              id,
+              snappedPos: pos,
+            });
+          });
+
+          // Render ghosts
+          context.gridSnap.renderSnapGhosts(
+            ghostData,
+            context.sceneManager,
+            context.worldContainer.scale.x,
+            context.worldContainer,
+          );
+        } else {
+          // Clear ghosts if grid snap is disabled
+          context.gridSnap.clearGhosts();
         }
 
         // Request render
@@ -659,6 +710,57 @@ function clearDragState(
   if (event.isPrimary) {
     // Clear object drag state (M2-T5)
     if (context.drag.isDragging()) {
+      // Apply grid snap to final positions on pointer-up if enabled
+      // DESIGN: Snap occurs at drag end rather than during drag for two reasons:
+      //   1. Performance: Avoid modifying Yjs store on every pointer-move event
+      //   2. UX: Allow free dragging with visual preview, snap only on commit
+      // Uses collision-free snapping to ensure each object gets its own grid space
+      if (context.gridSnapEnabled) {
+        const draggedIds = context.drag.getDraggedObjectIds();
+
+        // Gather all dragged objects with their current positions
+        const objectsToSnap: Array<{
+          id: string;
+          pos: { x: number; y: number; r: number };
+        }> = [];
+
+        for (const objectId of draggedIds) {
+          const obj = context.sceneManager.getObject(objectId);
+          if (!obj) {
+            console.warn(
+              `[pointer] Cannot snap object ${objectId}: Object not found during drop. ` +
+                'This object will not be snapped to grid.',
+            );
+            continue;
+          }
+          objectsToSnap.push({ id: objectId, pos: obj._pos });
+        }
+
+        // Calculate collision-free snapped positions
+        const snappedPositions = snapMultipleToGrid(objectsToSnap, true);
+
+        // Apply snapped positions to objects
+        let snappedCount = 0;
+        snappedPositions.forEach((pos, id) => {
+          const obj = context.sceneManager.getObject(id);
+          if (obj) {
+            obj._pos.x = pos.x;
+            obj._pos.y = pos.y;
+            snappedCount++;
+          }
+        });
+
+        const failedCount = draggedIds.length - snappedCount;
+        if (failedCount > 0) {
+          console.warn(
+            `[pointer] Grid snap completed with failures: ${snappedCount} snapped, ${failedCount} failed`,
+          );
+        }
+      }
+
+      // Clear snap ghosts
+      context.gridSnap.clearGhosts();
+
       // End drag and get position updates (M3-T2.5)
       const positionUpdates = context.drag.endObjectDrag(context.sceneManager);
 

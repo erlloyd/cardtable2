@@ -24,6 +24,7 @@ import {
   SelectionRectangleManager,
   AwarenessManager,
   VisualManager,
+  GridSnapManager,
 } from './managers';
 import { RendererMessageBus } from './RendererMessageBus';
 import type { RendererContext } from './RendererContext';
@@ -61,12 +62,14 @@ export abstract class RendererOrchestrator {
     new SelectionRectangleManager();
   private awareness: AwarenessManager = new AwarenessManager();
   private visual: VisualManager = new VisualManager();
+  private gridSnap: GridSnapManager = new GridSnapManager();
 
   // Message bus
   private messageBus: RendererMessageBus | null = null;
 
   // State
   private interactionMode: InteractionMode = 'pan';
+  private gridSnapEnabled: boolean = false;
 
   // Zoom debounce (M3.5.1-T6)
   // Debounces zoom-ended messages to avoid flickering ActionHandle during rapid scroll
@@ -106,6 +109,19 @@ export abstract class RendererOrchestrator {
         console.log(
           `[RendererOrchestrator] Interaction mode set to: ${message.mode}`,
         );
+        return;
+      }
+
+      // Handle set-grid-snap-enabled here (needs to update orchestrator state)
+      if (message.type === 'set-grid-snap-enabled') {
+        this.gridSnapEnabled = message.enabled;
+        console.log(
+          `[RendererOrchestrator] Grid snap enabled set to: ${message.enabled}`,
+        );
+        // Clear ghosts when grid snap is disabled
+        if (!message.enabled) {
+          this.gridSnap.clearGhosts();
+        }
         return;
       }
 
@@ -281,6 +297,7 @@ export abstract class RendererOrchestrator {
     this.camera.initialize(this.app, this.worldContainer);
     this.visual.initialize(this.app, this.renderMode);
     this.awareness.initialize(this.app.stage);
+    this.gridSnap.initialize(this.app.stage);
     this.animation.initialize(this.app, this.visual.getAllVisuals());
   }
 
@@ -311,6 +328,7 @@ export abstract class RendererOrchestrator {
       rectangleSelect: this.rectangleSelect,
       awareness: this.awareness,
       visual: this.visual,
+      gridSnap: this.gridSnap,
       sceneManager: this.sceneManager,
 
       // Communication
@@ -321,6 +339,7 @@ export abstract class RendererOrchestrator {
 
       // Mutable state
       interactionMode: this.interactionMode,
+      gridSnapEnabled: this.gridSnapEnabled,
     };
   }
 

@@ -15,6 +15,7 @@ import type {
   SelectionRectangleManager,
   AwarenessManager,
   VisualManager,
+  GridSnapManager,
 } from './managers';
 import type { SceneManager } from './SceneManager';
 
@@ -60,6 +61,7 @@ export interface RendererContext {
   rectangleSelect: SelectionRectangleManager;
   awareness: AwarenessManager;
   visual: VisualManager;
+  gridSnap: GridSnapManager;
   sceneManager: SceneManager;
 
   // Communication
@@ -70,4 +72,5 @@ export interface RendererContext {
 
   // Mutable state (handlers can update)
   interactionMode: InteractionMode;
+  gridSnapEnabled: boolean;
 }

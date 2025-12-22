@@ -12,6 +12,7 @@
  * - CoordinateConverter: Screen/world/canvas coordinate transformations
  * - DragManager: Object dragging logic and multi-select drag
  * - GestureRecognizer: Pointer event interpretation and gesture detection
+ * - GridSnapManager: Local grid snap preview ghosts during drag
  * - HoverManager: Hover state and visual feedback
  * - SelectionManager: Object selection state (derived from store)
  * - SelectionRectangleManager: Rectangle selection state and visuals
@@ -24,6 +25,7 @@ export { CameraManager } from './CameraManager';
 export { CoordinateConverter } from './CoordinateConverter';
 export { DragManager } from './DragManager';
 export { GestureRecognizer } from './GestureRecognizer';
+export { GridSnapManager } from './GridSnapManager';
 export { HoverManager } from './HoverManager';
 export { SelectionManager } from './SelectionManager';
 export { SelectionRectangleManager } from './SelectionRectangleManager';

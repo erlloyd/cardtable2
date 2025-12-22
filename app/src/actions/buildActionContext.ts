@@ -18,6 +18,8 @@ import type { TableObjectYMap } from '../store/types';
  * @param selectedObjects - Array of {id, yMap} pairs for selected objects
  * @param navigate - Optional navigation function for route-based actions
  * @param currentRoute - Optional current route path
+ * @param gridSnapEnabled - Optional grid snap enabled state
+ * @param onGridSnapEnabledChange - Optional grid snap toggle callback
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -25,6 +27,8 @@ export function buildActionContext(
   selectedObjects: Array<{ id: string; yMap: TableObjectYMap }>,
   navigate?: (path: string) => void,
   currentRoute?: string,
+  gridSnapEnabled?: boolean,
+  onGridSnapEnabledChange?: (enabled: boolean) => void,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -64,5 +68,7 @@ export function buildActionContext(
     actorId: store.getActorId(),
     navigate,
     currentRoute,
+    gridSnapEnabled,
+    onGridSnapEnabledChange,
   };
 }

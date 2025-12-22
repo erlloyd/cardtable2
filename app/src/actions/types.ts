@@ -36,6 +36,8 @@ export interface ActionContext {
   clickedObjectId?: string; // ID of object under cursor when context menu opened (if any)
   navigate?: (path: string) => void; // Optional navigation function for route-based actions
   currentRoute?: string; // Current route path (e.g., '/table/123' or '/dev/table/123')
+  gridSnapEnabled?: boolean; // Whether grid snapping is enabled
+  onGridSnapEnabledChange?: (enabled: boolean) => void; // Toggle grid snap callback
 }
 
 /**

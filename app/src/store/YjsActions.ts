@@ -485,12 +485,17 @@ export function resetToTestScene(store: YjsStore): void {
     0x74b9ff, // Blue
   ];
 
-  // Create 5 stacks (cards) - top left area
+  // Create 5 stacks (cards) - top left area with varying card counts
+  const cardCounts = [1, 2, 3, 5, 1]; // Different stack sizes for visual testing
   for (let i = 0; i < 5; i++) {
+    const cards: string[] = [];
+    for (let j = 0; j < cardCounts[i]; j++) {
+      cards.push(`test-card-${i + 1}-${j + 1}`);
+    }
     createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: -300 + i * 80, y: -200, r: 0 },
-      cards: [`test-card-${i + 1}`],
+      cards,
       faceUp: true,
       meta: { color: colors[i % colors.length] },
     });
@@ -546,6 +551,6 @@ export function resetToTestScene(store: YjsStore): void {
   }
 
   console.log(
-    '[resetToTestScene] Created test scene: 5 stacks, 3 tokens, 2 zones, 3 mats, 2 counters',
+    '[resetToTestScene] Created test scene: 5 stacks (1,2,3,5,1 cards), 3 tokens, 2 zones, 3 mats, 2 counters',
   );
 }

@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { Graphics, Text } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
@@ -7,14 +7,42 @@ import {
   STACK_BORDER_RADIUS,
   STACK_BORDER_COLOR_NORMAL,
   STACK_BORDER_COLOR_SELECTED,
+  STACK_3D_OFFSET_X,
+  STACK_3D_OFFSET_Y,
+  STACK_3D_COLOR,
+  STACK_3D_ALPHA,
+  STACK_BADGE_SIZE,
+  STACK_BADGE_RADIUS,
+  STACK_BADGE_COLOR,
+  STACK_BADGE_ALPHA,
+  STACK_BADGE_TEXT_COLOR,
+  STACK_BADGE_FONT_SIZE,
 } from './constants';
-import { getStackColor } from './utils';
+import { getStackColor, getCardCount } from './utils';
 
 export const StackBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Graphics {
     const graphic = new Graphics();
     const color = getStackColor(obj);
+    const cardCount = getCardCount(obj);
 
+    // Draw 3D effect (background rectangle) for stacks with 2+ cards
+    if (cardCount >= 2) {
+      graphic.rect(
+        -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
+        -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
+        STACK_WIDTH,
+        STACK_HEIGHT,
+      );
+      graphic.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
+      graphic.stroke({
+        width: 1,
+        color: 0x000000,
+        alpha: 0.3,
+      });
+    }
+
+    // Draw main card rectangle
     graphic.rect(
       -STACK_WIDTH / 2,
       -STACK_HEIGHT / 2,
@@ -45,6 +73,60 @@ export const StackBehaviors: ObjectBehaviors = {
       graphic.moveTo(-STACK_WIDTH / 2, STACK_HEIGHT / 2);
       graphic.lineTo(STACK_WIDTH / 2, -STACK_HEIGHT / 2);
       graphic.stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
+    }
+
+    // Draw count badge for stacks with 2+ cards
+    if (cardCount >= 2) {
+      // Badge rounded square (top-center, half on/half off the card)
+      const badgeX = 0;
+      const badgeY = -STACK_HEIGHT / 2; // Position at top edge so half extends above
+
+      graphic.roundRect(
+        badgeX - STACK_BADGE_SIZE / 2,
+        badgeY - STACK_BADGE_SIZE / 2,
+        STACK_BADGE_SIZE,
+        STACK_BADGE_SIZE,
+        STACK_BADGE_RADIUS,
+      );
+      graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+      graphic.stroke({ width: 1, color: 0xffffff, alpha: 0.3 });
+
+      // Badge text
+      const text = new Text({
+        text: cardCount.toString(),
+        style: {
+          fontSize: STACK_BADGE_FONT_SIZE,
+          fill: STACK_BADGE_TEXT_COLOR,
+          fontWeight: 'bold',
+        },
+      });
+      text.anchor.set(0.5, 0.5);
+      text.position.set(badgeX, badgeY);
+      graphic.addChild(text);
+
+      // Unstack handle (upper-right corner, flush with card borders)
+      const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2; // Right edge
+      const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2; // Top edge
+
+      graphic.rect(
+        handleX - STACK_BADGE_SIZE / 2,
+        handleY - STACK_BADGE_SIZE / 2,
+        STACK_BADGE_SIZE,
+        STACK_BADGE_SIZE,
+      );
+      graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+
+      // Handle icon (unicode arrow)
+      const handleIcon = new Text({
+        text: '⬆', // Upward arrow unicode character
+        style: {
+          fontSize: 14,
+          fill: STACK_BADGE_TEXT_COLOR,
+        },
+      });
+      handleIcon.anchor.set(0.5, 0.5);
+      handleIcon.position.set(handleX, handleY);
+      graphic.addChild(handleIcon);
     }
 
     return graphic;

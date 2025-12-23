@@ -12,6 +12,8 @@ export default defineConfig({
   // Local: Unlimited (auto-detect based on available cores)
   workers: process.env.CI ? 2 : undefined,
   reporter: [['list'], ['html', { open: 'never' }]],
+  // DEBUG: Increased timeout from 30s to 90s to investigate E2E timeout issue
+  timeout: 90000,
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',

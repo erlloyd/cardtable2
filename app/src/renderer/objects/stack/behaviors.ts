@@ -35,8 +35,12 @@ export const StackBehaviors: ObjectBehaviors = {
       (ctx.isSelected ? 4 : 2) / zoomFactor,
     );
 
+    // Skip expensive rendering during drag for performance (CI environments)
+    // Text creation (rasterization + GPU upload) is too slow for frequent updates
+    const skipExpensiveOperations = ctx.isDragging;
+
     // Draw 3D effect (background rectangle) for stacks with 2+ cards
-    if (cardCount >= 2) {
+    if (cardCount >= 2 && !skipExpensiveOperations) {
       graphic.rect(
         -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
         -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
@@ -88,8 +92,8 @@ export const StackBehaviors: ObjectBehaviors = {
       });
     }
 
-    // Draw count badge for stacks with 2+ cards
-    if (cardCount >= 2) {
+    // Draw count badge for stacks with 2+ cards (skip during drag to avoid expensive text creation)
+    if (cardCount >= 2 && !skipExpensiveOperations) {
       // Badge rounded square (top-center, half on/half off the card)
       const badgeX = 0;
       const badgeY = -STACK_HEIGHT / 2; // Position at top edge so half extends above

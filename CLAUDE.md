@@ -143,8 +143,12 @@ See `app/src/renderer/objects/README.md` for full documentation.
 - Located at `@cardtable2/shared`
 
 ### CI/CD & Deployment
-- **Feature branch workflow**: All development on feature branches
-- **Main branch protected**: Only merge via tested feature branches
+
+**⚠️ CRITICAL: Feature Branch Workflow Only**
+
+- **ALL development on feature branches**: Never commit directly to main
+- **Main branch protected**: Only accepts PRs from feature branches (direct pushes bypass review)
+- **Push to feature branch → Create PR → Merge to main**: This is the ONLY acceptable workflow
 - **Selective deployment**: Only deploys changed packages on main
 - **PNPM filtering**: Detects which packages have changed
 - **Changes to shared**: Triggers both app and server deployments
@@ -203,12 +207,50 @@ Don't look for status summaries in README files - just browse the folders to see
 
 ## Important Notes
 
-### Branching Strategy
-- **IMPORTANT**: All work must be done on feature branches (e.g., `feature/m2-board-core`)
-- Never commit directly to main unless explicitly instructed
-- Branch naming: `feature/{theme}-{description}` or `fix/{description}`
-- Merge to main only after testing and validation
-- CI/CD deploys automatically on merge to main
+### Branching Strategy ⚠️ CRITICAL - READ THIS FIRST
+
+**🚫 NEVER PUSH DIRECTLY TO MAIN 🚫**
+
+All work MUST follow this workflow:
+
+1. **Start new work**: Create a feature branch
+   ```bash
+   git checkout -b feature/{theme}-{description}
+   # Example: git checkout -b feature/m3.7-stack-operations
+   ```
+
+2. **Commit your changes**: Work on the feature branch
+   ```bash
+   git add .
+   git commit -m "feat: your changes"
+   ```
+
+3. **Push feature branch**: Push to remote feature branch (NOT main)
+   ```bash
+   git push origin feature/{theme}-{description}
+   ```
+
+4. **Create Pull Request**: Merge to main via PR
+   ```bash
+   gh pr create --title "Your PR title" --body "Description"
+   ```
+
+5. **After PR approval**: Main branch is updated automatically
+
+**Why this matters:**
+- Main branch is protected and should only receive tested code via PRs
+- PR previews allow testing changes before production deployment
+- CI/CD runs full test suite on PRs before merge
+- Violating this workflow bypasses all safety checks
+
+**If you're asked to "push" or "create PR":**
+- ✅ CORRECT: `git push origin feature/your-branch` → create PR
+- ❌ WRONG: `git push origin main` (this deploys directly to production!)
+
+Branch naming conventions:
+- Features: `feature/{theme}-{description}` (e.g., `feature/object-interactions-stacking`)
+- Fixes: `fix/{description}` (e.g., `fix/selection-bug`)
+- Themes: See `_plans/` folders (core-infrastructure, board-rendering, object-interactions, etc.)
 
 ### Testing Workflow
 
@@ -250,6 +292,19 @@ cd app && pnpm run test:e2e
 ### Pre-Push Checklist
 
 Before pushing to remote, the following checks MUST pass (enforced by Git hooks and CI):
+
+**⚠️ BRANCH CHECK (CRITICAL):**
+```bash
+# Verify you're on a feature branch, NOT main
+git branch --show-current
+# Output should be: feature/something (NOT "main")
+```
+**If you're on main, STOP:**
+```bash
+# Create feature branch and move your commits there
+git checkout -b feature/{theme}-{description}
+git push origin feature/{theme}-{description}
+```
 
 **Git Hooks:**
 - **pre-commit**: `npx lint-staged` (auto-formats staged files)

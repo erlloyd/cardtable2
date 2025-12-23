@@ -92,11 +92,19 @@ export class SelectionManager {
     );
 
     // E2E Test API: Decrement pending operations counter
-    // Only decrement if there was actually a change (added or removed)
-    if (added.length > 0 || removed.length > 0) {
+    // Decrement regardless of whether there was a change, because every pointer-down
+    // increments the counter and every store sync completes that round-trip.
+    // The operation "completes" even if the result is "no change" (e.g., clicking
+    // an already-selected object).
+    const hadPendingOps = this.pendingOperations > 0;
+    if (hadPendingOps) {
       this.pendingOperations = Math.max(0, this.pendingOperations - 1);
       console.log(
-        `[SelectionManager] pendingOperations-- → ${this.pendingOperations} (after syncFromStore)`,
+        `[SelectionManager] pendingOperations-- → ${this.pendingOperations} (after syncFromStore, changed: ${added.length + removed.length > 0})`,
+      );
+    } else {
+      console.log(
+        `[SelectionManager] syncFromStore called with no pending operations (added: ${added.length}, removed: ${removed.length})`,
       );
     }
 

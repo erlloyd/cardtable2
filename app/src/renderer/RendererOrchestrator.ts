@@ -380,6 +380,10 @@ export abstract class RendererOrchestrator {
   private regenerateSceneAtZoom(zoomLevel: number): void {
     if (!this.worldContainer || !this.app) return;
 
+    console.log(
+      `[RendererOrchestrator] regenerateSceneAtZoom called with zoomLevel: ${zoomLevel}`,
+    );
+
     // Update visual manager with new zoom level for counter-scaled stroke widths
     this.visual.setCameraScale(zoomLevel);
 

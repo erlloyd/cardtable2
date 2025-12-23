@@ -37,13 +37,21 @@ export function handleFlush(
     // 2. Renderer sends objects-selected/moved/unselected to Board
     // 3. Board updates store, Yjs observer sends objects-updated back
     // 4. Renderer receives objects-updated and calls syncSelectionCache (counter--)
-    const maxPolls = 100; // Safety limit (100 frames = ~1.67s at 60fps)
+    const maxPolls = 3000; // DEBUG: Increased from 100 to 3000 to test if it's just timing
     let pollCount = 0;
 
     const pollFrame = () => {
       pollCount++;
+      const pendingOps = context.selection.getPendingOperations();
 
-      if (context.selection.getPendingOperations() === 0) {
+      // Log every 100 frames and at end
+      if (pollCount % 100 === 0 || pollCount >= maxPolls || pendingOps === 0) {
+        console.log(
+          `[RendererCore] Flush poll frame ${pollCount}/${maxPolls}, pendingOps: ${pendingOps}`,
+        );
+      }
+
+      if (pendingOps === 0) {
         console.log(`[RendererCore] Flush complete after ${pollCount} frames`);
         context.postResponse({
           type: 'flushed',
@@ -51,7 +59,11 @@ export function handleFlush(
       } else if (pollCount >= maxPolls) {
         // Safety timeout - warn but still resolve
         console.warn(
-          `[RendererCore] Flush timeout after ${maxPolls} frames (${context.selection.getPendingOperations()} ops still pending)`,
+          `[RendererCore] Flush timeout after ${maxPolls} frames (${pendingOps} ops still pending)`,
+        );
+        console.warn(
+          `[RendererCore] Debug: Selected count = ${context.selection.getSelectedCount()}, Selected IDs:`,
+          context.selection.getSelectedIds(),
         );
         context.postResponse({
           type: 'flushed',

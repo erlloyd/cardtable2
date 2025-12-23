@@ -42,8 +42,16 @@ export function handleFlush(
 
     const pollFrame = () => {
       pollCount++;
+      const pendingOps = context.selection.getPendingOperations();
 
-      if (context.selection.getPendingOperations() === 0) {
+      // Log every 10 frames and at end
+      if (pollCount % 10 === 0 || pollCount >= maxPolls || pendingOps === 0) {
+        console.log(
+          `[RendererCore] Flush poll frame ${pollCount}/${maxPolls}, pendingOps: ${pendingOps}`,
+        );
+      }
+
+      if (pendingOps === 0) {
         console.log(`[RendererCore] Flush complete after ${pollCount} frames`);
         context.postResponse({
           type: 'flushed',
@@ -51,7 +59,11 @@ export function handleFlush(
       } else if (pollCount >= maxPolls) {
         // Safety timeout - warn but still resolve
         console.warn(
-          `[RendererCore] Flush timeout after ${maxPolls} frames (${context.selection.getPendingOperations()} ops still pending)`,
+          `[RendererCore] Flush timeout after ${maxPolls} frames (${pendingOps} ops still pending)`,
+        );
+        console.warn(
+          `[RendererCore] Debug: Selected count = ${context.selection.getSelectedCount()}, Selected IDs:`,
+          context.selection.getSelectedIds(),
         );
         context.postResponse({
           type: 'flushed',

@@ -42,6 +42,9 @@ export function handlePointerDown(
   } else if (event.isPrimary) {
     // E2E Test API: Increment pending operations counter
     // This will be decremented after the full round-trip completes (syncSelectionCache)
+    console.log(
+      '[PointerDown] Incrementing pendingOperations for pointer-down event',
+    );
     context.selection.incrementPendingOperations();
 
     // Store pointer down event for selection logic on pointer up

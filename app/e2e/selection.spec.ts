@@ -681,6 +681,7 @@ test.describe('Selection Ownership E2E', () => {
     for (let i = 1; i <= 5; i++) {
       const moveX = clickX + (dragDeltaX * i) / 5;
       const moveY = clickY + (dragDeltaY * i) / 5;
+      console.log(`[E2E-DEBUG] Pointer-move iteration ${i}/5`);
       await canvas.dispatchEvent('pointermove', {
         bubbles: true,
         cancelable: true,
@@ -693,9 +694,15 @@ test.describe('Selection Ownership E2E', () => {
         button: 0,
         buttons: 1,
       });
+      console.log(
+        `[E2E-DEBUG] Dispatched pointer-move ${i}, calling waitForRenderer...`,
+      );
       await page.evaluate(async () => {
+        console.log('[E2E-DEBUG] Inside waitForRenderer evaluate');
         await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+        console.log('[E2E-DEBUG] waitForRenderer completed');
       }); // REPLACED waitForTimeout(16);
+      console.log(`[E2E-DEBUG] waitForRenderer ${i} finished`);
     }
 
     await canvas.dispatchEvent('pointerup', {

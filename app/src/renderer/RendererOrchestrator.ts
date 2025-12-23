@@ -133,7 +133,14 @@ export abstract class RendererOrchestrator {
 
       // Sync selection cache for messages that affect objects (M3-T3)
       if (this.shouldSyncSelectionCache(message.type)) {
+        console.log(
+          `[RendererOrchestrator] Calling syncSelectionCache for message type: ${message.type}`,
+        );
         this.syncSelectionCache();
+      } else {
+        console.log(
+          `[RendererOrchestrator] NOT syncing cache for message type: ${message.type}`,
+        );
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

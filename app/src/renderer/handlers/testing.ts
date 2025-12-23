@@ -37,7 +37,8 @@ export function handleFlush(
     // 2. Renderer sends objects-selected/moved/unselected to Board
     // 3. Board updates store, Yjs observer sends objects-updated back
     // 4. Renderer receives objects-updated and calls syncSelectionCache (counter--)
-    const maxPolls = 100; // Safety limit (100 frames = ~1.67s at 60fps)
+    // CI environments are slower - need more generous timeout (observed: 1.7s round-trip)
+    const maxPolls = 300; // Safety limit (300 frames = ~5s at 60fps, handles CI overhead)
     let pollCount = 0;
 
     const pollFrame = () => {

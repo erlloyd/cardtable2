@@ -38,15 +38,15 @@ export function handleFlush(
     // 3. Board updates store, Yjs observer sends objects-updated back
     // 4. Renderer receives objects-updated and calls syncSelectionCache (counter--)
     // CI environments are slower - need more generous timeout (observed: 1.7s round-trip)
-    const maxPolls = 300; // Safety limit (300 frames = ~5s at 60fps, handles CI overhead)
+    const maxPolls = 3000; // DEBUG: Increased from 300 to 3000 to test if it's just timing
     let pollCount = 0;
 
     const pollFrame = () => {
       pollCount++;
       const pendingOps = context.selection.getPendingOperations();
 
-      // Log every 10 frames and at end
-      if (pollCount % 10 === 0 || pollCount >= maxPolls || pendingOps === 0) {
+      // Log every 100 frames and at end
+      if (pollCount % 100 === 0 || pollCount >= maxPolls || pendingOps === 0) {
         console.log(
           `[RendererCore] Flush poll frame ${pollCount}/${maxPolls}, pendingOps: ${pendingOps}`,
         );

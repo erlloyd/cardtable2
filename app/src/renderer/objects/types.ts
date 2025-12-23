@@ -2,12 +2,15 @@ import type { Graphics } from 'pixi.js';
 import type { TableObject, PointerEventData } from '@cardtable2/shared';
 import type { BBox } from '../SceneManager';
 
+import type { Text, TextOptions } from 'pixi.js';
+
 // Render context provides extra info during rendering
 export interface RenderContext {
   isSelected: boolean;
   isHovered: boolean;
   isDragging: boolean;
-  cameraScale: number;
+  cameraScale: number; // Current zoom level for scaling stroke widths
+  createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution
 }
 
 // Shadow configuration

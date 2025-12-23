@@ -25,6 +25,7 @@ export function handleAwarenessUpdate(
     context.sceneManager,
     context.worldContainer,
     context.coordConverter.getCameraScale(),
+    context.visual,
   );
 
   // Render to show awareness changes

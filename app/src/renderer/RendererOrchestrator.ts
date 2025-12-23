@@ -71,10 +71,14 @@ export abstract class RendererOrchestrator {
   private interactionMode: InteractionMode = 'pan';
   private gridSnapEnabled: boolean = false;
 
+  // Zoom tracking for scene regeneration
+  private lastRegeneratedZoom: number = 1.0;
+  private readonly REGENERATION_DELTA = 0.5; // Only regenerate if zoom changes by this amount
+
   // Zoom debounce (M3.5.1-T6)
   // Debounces zoom-ended messages to avoid flickering ActionHandle during rapid scroll
   private debouncedZoomEnd = debounce(() => {
-    this.postResponse({ type: 'zoom-ended' });
+    this.handleZoomEnd();
   }, 250);
 
   constructor(renderMode: RenderMode) {
@@ -106,18 +110,12 @@ export abstract class RendererOrchestrator {
       // Handle set-interaction-mode here (needs to update orchestrator state)
       if (message.type === 'set-interaction-mode') {
         this.interactionMode = message.mode;
-        console.log(
-          `[RendererOrchestrator] Interaction mode set to: ${message.mode}`,
-        );
         return;
       }
 
       // Handle set-grid-snap-enabled here (needs to update orchestrator state)
       if (message.type === 'set-grid-snap-enabled') {
         this.gridSnapEnabled = message.enabled;
-        console.log(
-          `[RendererOrchestrator] Grid snap enabled set to: ${message.enabled}`,
-        );
         // Clear ghosts when grid snap is disabled
         if (!message.enabled) {
           this.gridSnap.clearGhosts();
@@ -192,6 +190,8 @@ export abstract class RendererOrchestrator {
         autoDensity: true,
         backgroundColor: 0xd4d4d4,
         autoStart: false, // CRITICAL: Prevent automatic ticker start (causes iOS worker crashes)
+        antialias: true, // Enable antialiasing for smooth graphics and text
+        roundPixels: true, // Round pixel values for sharper rendering
       });
 
       console.log('[RendererOrchestrator] ✓ PixiJS initialized successfully');
@@ -341,6 +341,70 @@ export abstract class RendererOrchestrator {
       interactionMode: this.interactionMode,
       gridSnapEnabled: this.gridSnapEnabled,
     };
+  }
+
+  /**
+   * Handle zoom end - regenerate text if needed for quality
+   *
+   * Called after zoom gesture completes (debounced 250ms).
+   * Regenerates stack text textures if zoom exceeds pre-rendered capacity.
+   */
+  private handleZoomEnd(): void {
+    // Send zoom-ended message to main thread
+    this.postResponse({ type: 'zoom-ended' });
+
+    // Check if text regeneration is needed
+    if (!this.worldContainer) return;
+
+    const currentZoom = this.worldContainer.scale.x;
+    const zoomChange = Math.abs(currentZoom - this.lastRegeneratedZoom);
+
+    // Regenerate on ANY significant zoom change to update stroke widths
+    // Threshold check only applies to text resolution multiplier
+    if (zoomChange > this.REGENERATION_DELTA) {
+      this.regenerateSceneAtZoom(currentZoom);
+      this.lastRegeneratedZoom = currentZoom;
+    }
+  }
+
+  /**
+   * Regenerate all scene visuals at current zoom level
+   *
+   * Updates text resolution to maintain sharp text at high zoom.
+   * Updates camera scale for counter-scaled stroke widths (maintains visual consistency).
+   *
+   * Counter-scaling approach: Stroke widths are divided by sqrt(zoom) to maintain
+   * consistent visual appearance across all zoom levels. This is standard practice
+   * in WebGL applications for zoom-independent rendering.
+   */
+  private regenerateSceneAtZoom(zoomLevel: number): void {
+    if (!this.worldContainer || !this.app) return;
+
+    // Update visual manager with new zoom level for counter-scaled stroke widths
+    this.visual.setCameraScale(zoomLevel);
+
+    // Update text resolution multiplier for sharp text at high zoom
+    this.visual.setTextResolutionMultiplier(zoomLevel);
+
+    // Iterate through ALL objects and redraw visuals
+    // This forces Text objects to regenerate at higher resolution
+    for (const [objectId] of this.sceneManager.getAllObjects()) {
+      // Check if object is selected or hovered
+      const isSelected = this.selection.isSelected(objectId);
+      const isHovered = this.hover.getHoveredObjectId() === objectId;
+
+      // Redraw the visual to regenerate text with new resolution
+      this.visual.updateVisualForObjectChange(
+        objectId,
+        isHovered,
+        false, // Not dragging during zoom
+        isSelected,
+        this.sceneManager,
+      );
+    }
+
+    // Force a render to display the updated visuals
+    this.app.renderer.render(this.app.stage);
   }
 
   /**

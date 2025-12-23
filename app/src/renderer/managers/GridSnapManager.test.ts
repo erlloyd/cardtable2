@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Container, Text } from 'pixi.js';
+import { Container } from 'pixi.js';
 import { GridSnapManager } from './GridSnapManager';
 import type { SceneManager } from '../SceneManager';
 import { ObjectKind } from '@cardtable2/shared';
-import type { VisualManager } from './VisualManager';
 
 // Mock getBehaviors
 vi.mock('../objects', () => ({
@@ -25,7 +24,6 @@ describe('GridSnapManager', () => {
   let parentContainer: Container;
   let worldContainer: Container;
   let mockSceneManager: SceneManager;
-  let mockVisualManager: VisualManager;
 
   beforeEach(() => {
     manager = new GridSnapManager();
@@ -49,13 +47,6 @@ describe('GridSnapManager', () => {
         return undefined;
       }),
     } as unknown as SceneManager;
-
-    // Mock visual manager
-    mockVisualManager = {
-      createText: vi.fn(
-        (options: import('pixi.js').TextOptions) => new Text(options),
-      ),
-    } as unknown as VisualManager;
   });
 
   describe('Initialization', () => {
@@ -90,7 +81,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -104,7 +94,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       // Ghost container should have one child (the ghost)
@@ -120,7 +109,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -147,7 +135,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(consoleSpy).toHaveBeenCalledWith(
@@ -162,7 +149,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -174,7 +160,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(ghostContainer.children.length).toBe(initialChildCount);
@@ -186,7 +171,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -200,7 +184,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(ghost.x).not.toBe(initialX);
@@ -212,7 +195,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -231,7 +213,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         cameraScale,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -267,7 +248,6 @@ describe('GridSnapManager', () => {
         } as unknown as SceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -279,7 +259,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(ghostContainer.children.length).toBe(1);
@@ -320,7 +299,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -340,7 +318,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -376,7 +353,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -413,7 +389,6 @@ describe('GridSnapManager', () => {
         } as unknown as SceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       const ghostContainer = parentContainer.children[0] as Container;
@@ -426,7 +401,6 @@ describe('GridSnapManager', () => {
         mockSceneManager,
         1.0,
         worldContainer,
-        mockVisualManager,
       );
 
       expect(destroySpy).toHaveBeenCalledWith({ children: true });

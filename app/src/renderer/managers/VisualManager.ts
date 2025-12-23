@@ -40,9 +40,6 @@ export class VisualManager {
   private hoverBlurFilter: BlurFilter | null = null;
   private dragBlurFilter: BlurFilter | null = null;
 
-  // Text resolution for zoom quality
-  private textResolutionMultiplier: number = 1.0;
-
   /**
    * Initialize with app reference.
    */
@@ -56,21 +53,6 @@ export class VisualManager {
    */
   setCameraScale(scale: number): void {
     this.cameraScale = scale;
-  }
-
-  /**
-   * Set text resolution multiplier for dynamic zoom quality.
-   * Used to render text at higher resolution when zoomed in.
-   */
-  setTextResolutionMultiplier(multiplier: number): void {
-    this.textResolutionMultiplier = multiplier;
-  }
-
-  /**
-   * Get the current text resolution multiplier.
-   */
-  getTextResolutionMultiplier(): number {
-    return this.textResolutionMultiplier;
   }
 
   /**
@@ -326,22 +308,6 @@ export class VisualManager {
       isHovered: false, // Hover state handled by shadow, not render
       isDragging: false, // Drag state handled by shadow, not render
       cameraScale: this.cameraScale,
-      createText: this.createText.bind(this),
-    });
-  }
-
-  /**
-   * Create text with automatic zoom-aware resolution.
-   * Use this instead of `new Text()` to ensure text stays sharp at all zoom levels.
-   */
-  createText(options: import('pixi.js').TextOptions): Text {
-    // Apply default base resolution (3x for crisp rendering)
-    const baseResolution = 3;
-    const zoomAwareResolution = baseResolution * this.textResolutionMultiplier;
-
-    return new Text({
-      ...options,
-      resolution: zoomAwareResolution,
     });
   }
 
@@ -350,10 +316,6 @@ export class VisualManager {
    * Returns a centered Text object ready to be added to a container.
    */
   private createKindLabel(kind: string): Text {
-    // Use lower base resolution for labels (2x instead of 3x)
-    const baseResolution = 2;
-    const textResolution = baseResolution * this.textResolutionMultiplier;
-
     const kindText = new Text({
       text: kind,
       style: {
@@ -363,7 +325,6 @@ export class VisualManager {
         stroke: { color: 0x000000, width: 2 }, // Black outline for readability
         align: 'center',
       },
-      resolution: textResolution,
     });
     kindText.anchor.set(0.5); // Center the text
     kindText.y = 0; // Center vertically in the object

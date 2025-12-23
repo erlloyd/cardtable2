@@ -58,7 +58,6 @@ export class AwarenessManager {
     sceneManager: SceneManager,
     worldContainer: Container,
     cameraScale: number,
-    visual: import('./VisualManager').VisualManager,
   ): { hz: number } | null {
     if (!this.awarenessContainer) return null;
 
@@ -137,7 +136,6 @@ export class AwarenessManager {
           sceneManager,
           worldContainer,
           cameraScale,
-          visual,
         );
       } else if (awarenessData.dragGhost) {
         // Remove drag ghost if drag data is gone
@@ -237,7 +235,6 @@ export class AwarenessManager {
     sceneManager: SceneManager,
     worldContainer: Container,
     cameraScale: number,
-    visual: import('./VisualManager').VisualManager,
   ): void {
     if (!this.awarenessContainer || !state.drag) return;
 
@@ -276,7 +273,6 @@ export class AwarenessManager {
           isHovered: false,
           isDragging: false,
           cameraScale,
-          createText: visual.createText.bind(visual),
         });
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
@@ -296,7 +292,6 @@ export class AwarenessManager {
                 isHovered: false,
                 isDragging: false,
                 cameraScale,
-                createText: visual.createText.bind(visual),
               });
               secondaryGraphic.alpha = 0.5; // Semi-transparent
 

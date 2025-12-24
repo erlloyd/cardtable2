@@ -46,6 +46,7 @@ export class GridSnapManager {
    * @param sceneManager - Scene manager to get object data and render behaviors
    * @param cameraScale - Current camera zoom scale (1.0 = 100%, 2.0 = 200%)
    * @param worldContainer - World container for transforming world coords to stage coords
+   * @param visual - Visual manager for creating text with zoom-aware resolution
    */
   renderSnapGhosts(
     draggedObjects: Array<{
@@ -55,6 +56,7 @@ export class GridSnapManager {
     sceneManager: SceneManager,
     cameraScale: number,
     worldContainer: Container,
+    visual: import('./VisualManager').VisualManager,
   ): void {
     if (!this.ghostContainer) {
       console.warn(
@@ -100,6 +102,7 @@ export class GridSnapManager {
             isHovered: false,
             isDragging: false,
             cameraScale,
+            createText: visual.createText.bind(visual),
           });
 
           // Make it semi-transparent

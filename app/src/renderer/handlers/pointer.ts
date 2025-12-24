@@ -294,6 +294,7 @@ export function handlePointerMove(
             context.sceneManager,
             context.worldContainer.scale.x,
             context.worldContainer,
+            context.visual,
           );
         } else {
           // Clear ghosts if grid snap is disabled

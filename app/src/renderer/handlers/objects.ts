@@ -348,6 +348,7 @@ function createBaseShapeGraphic(
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
     cameraScale: context.coordConverter.getCameraScale(),
+    createText: context.visual.createText.bind(context.visual),
   });
 }
 

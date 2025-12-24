@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { AwarenessState } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
 import type { SceneManager } from '../SceneManager';
+import type { VisualManager } from './VisualManager';
 
 /**
  * Awareness data for a remote actor.
@@ -58,6 +59,7 @@ export class AwarenessManager {
     sceneManager: SceneManager,
     worldContainer: Container,
     cameraScale: number,
+    visual: VisualManager,
   ): { hz: number } | null {
     if (!this.awarenessContainer) return null;
 
@@ -136,6 +138,7 @@ export class AwarenessManager {
           sceneManager,
           worldContainer,
           cameraScale,
+          visual,
         );
       } else if (awarenessData.dragGhost) {
         // Remove drag ghost if drag data is gone
@@ -235,6 +238,7 @@ export class AwarenessManager {
     sceneManager: SceneManager,
     worldContainer: Container,
     cameraScale: number,
+    visual: import('./VisualManager').VisualManager,
   ): void {
     if (!this.awarenessContainer || !state.drag) return;
 
@@ -273,6 +277,7 @@ export class AwarenessManager {
           isHovered: false,
           isDragging: false,
           cameraScale,
+          createText: visual.createText.bind(visual),
         });
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
@@ -292,6 +297,7 @@ export class AwarenessManager {
                 isHovered: false,
                 isDragging: false,
                 cameraScale,
+                createText: visual.createText.bind(visual),
               });
               secondaryGraphic.alpha = 0.5; // Semi-transparent
 

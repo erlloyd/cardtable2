@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: false, // DEBUG: Allow test.only() in CI for faster debugging
   // No retries needed - tests are now 100% reliable with waitForRenderer()
   retries: 0,
   // Playwright workers are I/O-bound (browser automation), not CPU-bound

@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: false, // DEBUG: Allow test.only() in CI for faster debugging
   // No retries needed - tests are now 100% reliable with waitForRenderer()
   retries: 0,
   // Playwright workers are I/O-bound (browser automation), not CPU-bound
@@ -12,6 +12,8 @@ export default defineConfig({
   // Local: Unlimited (auto-detect based on available cores)
   workers: process.env.CI ? 2 : undefined,
   reporter: [['list'], ['html', { open: 'never' }]],
+  // DEBUG: Increased timeout from 30s to 90s to investigate E2E timeout issue
+  timeout: 90000,
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',

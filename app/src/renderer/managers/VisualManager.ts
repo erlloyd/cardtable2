@@ -59,6 +59,13 @@ export class VisualManager {
   }
 
   /**
+   * Set text resolution multiplier for zoom-aware text rendering (Step 3 - DEBUG: added but not used yet).
+   */
+  setTextResolutionMultiplier(multiplier: number): void {
+    this.textResolutionMultiplier = multiplier;
+  }
+
+  /**
    * Create a visual representation for a TableObject.
    */
   createObjectVisual(objectId: string, obj: TableObject): Container {

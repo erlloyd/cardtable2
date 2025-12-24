@@ -71,16 +71,14 @@ export abstract class RendererOrchestrator {
   private interactionMode: InteractionMode = 'pan';
   private gridSnapEnabled: boolean = false;
 
-  // Zoom regeneration (Step 3 - DEBUG: added but not used yet)
-  // @ts-expect-error -- Step 3: Added but not used yet for incremental debugging
+  // Zoom regeneration (Step 4 - DEBUG: now actively used)
   private lastRegeneratedZoom: number = 1.0;
-  // @ts-expect-error -- Step 3: Added but not used yet for incremental debugging
   private readonly REGENERATION_DELTA = 0.5; // Only regenerate if zoom changes by this amount
 
   // Zoom debounce (M3.5.1-T6)
   // Debounces zoom-ended messages to avoid flickering ActionHandle during rapid scroll
   private debouncedZoomEnd = debounce(() => {
-    this.postResponse({ type: 'zoom-ended' });
+    this.handleZoomEnd();
   }, 250);
 
   constructor(renderMode: RenderMode) {
@@ -400,7 +398,31 @@ export abstract class RendererOrchestrator {
   }
 
   /**
-   * Regenerate all scene visuals at current zoom level (Step 3 - DEBUG: added but not called yet)
+   * Handle zoom end - regenerate text if needed for quality (Step 4 - DEBUG: now called on zoom end)
+   *
+   * Called after zoom gesture completes (debounced 250ms).
+   * Regenerates stack text textures if zoom exceeds pre-rendered capacity.
+   */
+  private handleZoomEnd(): void {
+    // Send zoom-ended message to main thread
+    this.postResponse({ type: 'zoom-ended' });
+
+    // Check if text regeneration is needed
+    if (!this.worldContainer) return;
+
+    const currentZoom = this.worldContainer.scale.x;
+    const zoomChange = Math.abs(currentZoom - this.lastRegeneratedZoom);
+
+    // Regenerate on ANY significant zoom change to update stroke widths
+    // Threshold check only applies to text resolution multiplier
+    if (zoomChange > this.REGENERATION_DELTA) {
+      this.regenerateSceneAtZoom(currentZoom);
+      this.lastRegeneratedZoom = currentZoom;
+    }
+  }
+
+  /**
+   * Regenerate all scene visuals at current zoom level
    *
    * Updates text resolution to maintain sharp text at high zoom.
    * Updates camera scale for counter-scaled stroke widths (maintains visual consistency).
@@ -409,7 +431,6 @@ export abstract class RendererOrchestrator {
    * consistent visual appearance across all zoom levels. This is standard practice
    * in WebGL applications for zoom-independent rendering.
    */
-  // @ts-expect-error -- Step 3: Added but not called yet for incremental debugging
   private regenerateSceneAtZoom(zoomLevel: number): void {
     if (!this.worldContainer || !this.app) return;
 

@@ -71,7 +71,7 @@ export abstract class RendererOrchestrator {
   private interactionMode: InteractionMode = 'pan';
   private gridSnapEnabled: boolean = false;
 
-  // Zoom regeneration (Step 4 - DEBUG: now actively used)
+  // Zoom tracking for scene regeneration
   private lastRegeneratedZoom: number = 1.0;
   private readonly REGENERATION_DELTA = 0.5; // Only regenerate if zoom changes by this amount
 
@@ -110,18 +110,12 @@ export abstract class RendererOrchestrator {
       // Handle set-interaction-mode here (needs to update orchestrator state)
       if (message.type === 'set-interaction-mode') {
         this.interactionMode = message.mode;
-        console.log(
-          `[RendererOrchestrator] Interaction mode set to: ${message.mode}`,
-        );
         return;
       }
 
       // Handle set-grid-snap-enabled here (needs to update orchestrator state)
       if (message.type === 'set-grid-snap-enabled') {
         this.gridSnapEnabled = message.enabled;
-        console.log(
-          `[RendererOrchestrator] Grid snap enabled set to: ${message.enabled}`,
-        );
         // Clear ghosts when grid snap is disabled
         if (!message.enabled) {
           this.gridSnap.clearGhosts();
@@ -196,6 +190,8 @@ export abstract class RendererOrchestrator {
         autoDensity: true,
         backgroundColor: 0xd4d4d4,
         autoStart: false, // CRITICAL: Prevent automatic ticker start (causes iOS worker crashes)
+        antialias: true, // Enable antialiasing for smooth graphics and text
+        roundPixels: true, // Round pixel values for sharper rendering
       });
 
       console.log('[RendererOrchestrator] ✓ PixiJS initialized successfully');
@@ -348,57 +344,7 @@ export abstract class RendererOrchestrator {
   }
 
   /**
-   * Check if message type requires selection cache sync
-   *
-   * Returns true only for message types that could affect object presence or _selectedBy field.
-   */
-  private shouldSyncSelectionCache(messageType: string): boolean {
-    return (
-      messageType === 'sync-objects' ||
-      messageType === 'objects-added' ||
-      messageType === 'objects-updated' ||
-      messageType === 'objects-removed'
-    );
-  }
-
-  /**
-   * Sync selection cache from store (M3-T3 - Derived State Pattern)
-   *
-   * Rebuilds the selectedObjectIds cache based on the _selectedBy field
-   * for ALL objects currently in the scene, and updates visual feedback for changed objects.
-   */
-  private syncSelectionCache(): void {
-    if (!this.app || !this.worldContainer) return;
-
-    // Sync selection state from store (returns which objects changed)
-    const { added, removed } = this.selection.syncFromStore(this.sceneManager);
-
-    // Update visual feedback for objects whose selection state changed
-    const changedIds = [...added, ...removed];
-    for (const objectId of changedIds) {
-      const obj = this.sceneManager.getObject(objectId);
-      if (!obj) continue;
-
-      const isSelected = this.selection.isSelected(objectId);
-      const isHovered = this.hover.getHoveredObjectId() === objectId;
-
-      // Update visual feedback (this will redraw with/without red border)
-      this.visual.updateVisualFeedback(
-        objectId,
-        isHovered,
-        isSelected,
-        this.sceneManager,
-      );
-    }
-
-    // Render if there were any changes
-    if (changedIds.length > 0) {
-      this.app.renderer.render(this.app.stage);
-    }
-  }
-
-  /**
-   * Handle zoom end - regenerate text if needed for quality (Step 4 - DEBUG: now called on zoom end)
+   * Handle zoom end - regenerate text if needed for quality
    *
    * Called after zoom gesture completes (debounced 250ms).
    * Regenerates stack text textures if zoom exceeds pre-rendered capacity.
@@ -459,6 +405,56 @@ export abstract class RendererOrchestrator {
 
     // Force a render to display the updated visuals
     this.app.renderer.render(this.app.stage);
+  }
+
+  /**
+   * Check if message type requires selection cache sync
+   *
+   * Returns true only for message types that could affect object presence or _selectedBy field.
+   */
+  private shouldSyncSelectionCache(messageType: string): boolean {
+    return (
+      messageType === 'sync-objects' ||
+      messageType === 'objects-added' ||
+      messageType === 'objects-updated' ||
+      messageType === 'objects-removed'
+    );
+  }
+
+  /**
+   * Sync selection cache from store (M3-T3 - Derived State Pattern)
+   *
+   * Rebuilds the selectedObjectIds cache based on the _selectedBy field
+   * for ALL objects currently in the scene, and updates visual feedback for changed objects.
+   */
+  private syncSelectionCache(): void {
+    if (!this.app || !this.worldContainer) return;
+
+    // Sync selection state from store (returns which objects changed)
+    const { added, removed } = this.selection.syncFromStore(this.sceneManager);
+
+    // Update visual feedback for objects whose selection state changed
+    const changedIds = [...added, ...removed];
+    for (const objectId of changedIds) {
+      const obj = this.sceneManager.getObject(objectId);
+      if (!obj) continue;
+
+      const isSelected = this.selection.isSelected(objectId);
+      const isHovered = this.hover.getHoveredObjectId() === objectId;
+
+      // Update visual feedback (this will redraw with/without red border)
+      this.visual.updateVisualFeedback(
+        objectId,
+        isHovered,
+        isSelected,
+        this.sceneManager,
+      );
+    }
+
+    // Render if there were any changes
+    if (changedIds.length > 0) {
+      this.app.renderer.render(this.app.stage);
+    }
   }
 
   /**

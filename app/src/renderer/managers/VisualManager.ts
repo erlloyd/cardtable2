@@ -40,7 +40,7 @@ export class VisualManager {
   private hoverBlurFilter: BlurFilter | null = null;
   private dragBlurFilter: BlurFilter | null = null;
 
-  // Text resolution for zoom quality (DEBUG: added but not used yet)
+  // Text resolution for zoom quality
   private textResolutionMultiplier: number = 1.0;
 
   /**
@@ -59,10 +59,18 @@ export class VisualManager {
   }
 
   /**
-   * Set text resolution multiplier for zoom-aware text rendering (Step 3 - DEBUG: added but not used yet).
+   * Set text resolution multiplier for dynamic zoom quality.
+   * Used to render text at higher resolution when zoomed in.
    */
   setTextResolutionMultiplier(multiplier: number): void {
     this.textResolutionMultiplier = multiplier;
+  }
+
+  /**
+   * Get the current text resolution multiplier.
+   */
+  getTextResolutionMultiplier(): number {
+    return this.textResolutionMultiplier;
   }
 
   /**
@@ -318,33 +326,12 @@ export class VisualManager {
       isHovered: false, // Hover state handled by shadow, not render
       isDragging: false, // Drag state handled by shadow, not render
       cameraScale: this.cameraScale,
-      createText: this.createText.bind(this), // DEBUG: Step 1 - passed but not used yet
+      createText: this.createText.bind(this),
     });
   }
 
   /**
-   * Create a text label showing the object's kind.
-   * Returns a centered Text object ready to be added to a container.
-   */
-  private createKindLabel(kind: string): Text {
-    const kindText = new Text({
-      text: kind,
-      style: {
-        fontFamily: 'Arial',
-        fontSize: 24,
-        fill: 0xffffff, // White text
-        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
-        align: 'center',
-      },
-    });
-    kindText.anchor.set(0.5); // Center the text
-    kindText.y = 0; // Center vertically in the object
-
-    return kindText;
-  }
-
-  /**
-   * Create text with automatic zoom-aware resolution (DEBUG: Step 1 - method exists but not used yet).
+   * Create text with automatic zoom-aware resolution.
    * Use this instead of `new Text()` to ensure text stays sharp at all zoom levels.
    */
   createText(options: import('pixi.js').TextOptions): Text {
@@ -356,6 +343,32 @@ export class VisualManager {
       ...options,
       resolution: zoomAwareResolution,
     });
+  }
+
+  /**
+   * Create a text label showing the object's kind.
+   * Returns a centered Text object ready to be added to a container.
+   */
+  private createKindLabel(kind: string): Text {
+    // Use lower base resolution for labels (2x instead of 3x)
+    const baseResolution = 2;
+    const textResolution = baseResolution * this.textResolutionMultiplier;
+
+    const kindText = new Text({
+      text: kind,
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 24,
+        fill: 0xffffff, // White text
+        stroke: { color: 0x000000, width: 2 }, // Black outline for readability
+        align: 'center',
+      },
+      resolution: textResolution,
+    });
+    kindText.anchor.set(0.5); // Center the text
+    kindText.y = 0; // Center vertically in the object
+
+    return kindText;
   }
 
   /**

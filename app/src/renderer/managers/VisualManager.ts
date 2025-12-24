@@ -40,6 +40,9 @@ export class VisualManager {
   private hoverBlurFilter: BlurFilter | null = null;
   private dragBlurFilter: BlurFilter | null = null;
 
+  // Text resolution for zoom quality (DEBUG: added but not used yet)
+  private textResolutionMultiplier: number = 1.0;
+
   /**
    * Initialize with app reference.
    */
@@ -308,6 +311,7 @@ export class VisualManager {
       isHovered: false, // Hover state handled by shadow, not render
       isDragging: false, // Drag state handled by shadow, not render
       cameraScale: this.cameraScale,
+      createText: this.createText.bind(this), // DEBUG: Step 1 - passed but not used yet
     });
   }
 
@@ -330,6 +334,21 @@ export class VisualManager {
     kindText.y = 0; // Center vertically in the object
 
     return kindText;
+  }
+
+  /**
+   * Create text with automatic zoom-aware resolution (DEBUG: Step 1 - method exists but not used yet).
+   * Use this instead of `new Text()` to ensure text stays sharp at all zoom levels.
+   */
+  createText(options: import('pixi.js').TextOptions): Text {
+    // Apply default base resolution (3x for crisp rendering)
+    const baseResolution = 3;
+    const zoomAwareResolution = baseResolution * this.textResolutionMultiplier;
+
+    return new Text({
+      ...options,
+      resolution: zoomAwareResolution,
+    });
   }
 
   /**

@@ -580,7 +580,7 @@ test.describe('Selection Ownership E2E', () => {
     expect(positionChanged).toBe(true);
   });
 
-  test('dragging an already selected object keeps it selected and moves it', async ({
+  test.only('dragging an already selected object keeps it selected and moves it', async ({
     page,
   }) => {
     // Reset to test scene

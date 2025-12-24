@@ -1,4 +1,4 @@
-import type { Graphics } from 'pixi.js';
+import type { Graphics, Text, TextOptions } from 'pixi.js';
 import type { TableObject, PointerEventData } from '@cardtable2/shared';
 import type { BBox } from '../SceneManager';
 
@@ -7,7 +7,8 @@ export interface RenderContext {
   isSelected: boolean;
   isHovered: boolean;
   isDragging: boolean;
-  cameraScale: number;
+  cameraScale: number; // Current zoom level for scaling stroke widths
+  createText: (options: TextOptions) => Text; // DEBUG: Step 1 - added but not used yet
 }
 
 // Shadow configuration

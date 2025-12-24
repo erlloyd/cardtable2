@@ -1,4 +1,4 @@
-import { Graphics, Text } from 'pixi.js';
+import { Graphics } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
@@ -91,8 +91,8 @@ export const StackBehaviors: ObjectBehaviors = {
       graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
       graphic.stroke({ width: 1, color: 0xffffff, alpha: 0.3 });
 
-      // Badge text
-      const text = new Text({
+      // Badge text (uses ctx.createText for automatic zoom-aware resolution)
+      const text = ctx.createText({
         text: cardCount.toString(),
         style: {
           fontSize: STACK_BADGE_FONT_SIZE,
@@ -116,8 +116,8 @@ export const StackBehaviors: ObjectBehaviors = {
       );
       graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
 
-      // Handle icon (unicode arrow)
-      const handleIcon = new Text({
+      // Handle icon (unicode arrow, uses ctx.createText for automatic zoom-aware resolution)
+      const handleIcon = ctx.createText({
         text: '⬆', // Upward arrow unicode character
         style: {
           fontSize: 14,

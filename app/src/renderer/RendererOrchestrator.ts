@@ -73,7 +73,10 @@ export abstract class RendererOrchestrator {
 
   // Zoom tracking for scene regeneration
   private lastRegeneratedZoom: number = 1.0;
-  private readonly REGENERATION_DELTA = 0.5; // Absolute zoom change threshold (e.g., 1.0→1.5 or 2.0→2.5)
+  // Regeneration threshold balances quality vs performance
+  // Only regenerate visuals when zoom changes by ±0.5 (50% zoom change)
+  // Lower values = smoother quality transitions but more frequent regeneration cost
+  private readonly REGENERATION_DELTA = 0.5;
 
   // Zoom debounce (M3.5.1-T6)
   // Debounces zoom-ended messages to avoid flickering ActionHandle during rapid scroll

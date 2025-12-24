@@ -371,6 +371,9 @@ export class VisualManager {
    *
    * Resolution scaling: baseResolution (3x) × textResolutionMultiplier
    * At 2x zoom: 3 × 2 = 6x resolution (maintains sharpness)
+   *
+   * WARNING: If you pass a `resolution` option, it will be OVERRIDDEN by the
+   * zoom-aware resolution calculation. Let this helper manage resolution automatically.
    */
   createText(options: import('pixi.js').TextOptions): Text {
     // Validate text resolution multiplier

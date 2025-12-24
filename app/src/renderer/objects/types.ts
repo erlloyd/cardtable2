@@ -4,11 +4,11 @@ import type { BBox } from '../SceneManager';
 
 // Render context provides extra info during rendering
 export interface RenderContext {
-  isSelected: boolean;
-  isHovered: boolean;
-  isDragging: boolean;
-  cameraScale: number; // Current zoom level for zoom-aware rendering (strokes, effects, etc.)
-  createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution
+  isSelected: boolean; // Whether this object is in the current selection set
+  isHovered: boolean; // Whether the pointer is currently over this object
+  isDragging: boolean; // Whether this object is being actively dragged
+  cameraScale: number; // Current zoom level (1.0 = 100%, 2.0 = 200%). Use for counter-scaling stroke widths via sqrt(cameraScale)
+  createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution (DO NOT create Text objects directly)
 }
 
 // Shadow configuration

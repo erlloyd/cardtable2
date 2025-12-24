@@ -1,6 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { AwarenessState } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
+import { createScaleStrokeWidth } from '../handlers/objects';
 import type { SceneManager } from '../SceneManager';
 import type { VisualManager } from './VisualManager';
 
@@ -278,6 +279,10 @@ export class AwarenessManager {
           isDragging: false,
           cameraScale,
           createText: visual.createText.bind(visual),
+          scaleStrokeWidth: createScaleStrokeWidth(
+            cameraScale,
+            'AwarenessManager',
+          ),
         });
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
@@ -298,6 +303,10 @@ export class AwarenessManager {
                 isDragging: false,
                 cameraScale,
                 createText: visual.createText.bind(visual),
+                scaleStrokeWidth: createScaleStrokeWidth(
+                  cameraScale,
+                  'AwarenessManager',
+                ),
               });
               secondaryGraphic.alpha = 0.5; // Semi-transparent
 

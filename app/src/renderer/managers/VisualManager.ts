@@ -2,6 +2,7 @@ import { Application, Container, Graphics, BlurFilter, Text } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
+import { createScaleStrokeWidth } from '../handlers/objects';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
@@ -362,6 +363,10 @@ export class VisualManager {
       isDragging: false, // Drag state handled by shadow, not render
       cameraScale: this.cameraScale,
       createText: this.createText.bind(this),
+      scaleStrokeWidth: createScaleStrokeWidth(
+        this.cameraScale,
+        'VisualManager',
+      ),
     });
   }
 

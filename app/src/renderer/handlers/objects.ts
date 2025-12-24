@@ -332,6 +332,38 @@ function createObjectGraphics(
 }
 
 /**
+ * Helper: Create scaleStrokeWidth function for RenderContext
+ *
+ * Creates a closure that counter-scales stroke widths using sqrt(cameraScale)
+ * for visual consistency across zoom levels.
+ */
+export function createScaleStrokeWidth(
+  cameraScale: number,
+  context: string = 'RenderContext',
+): (baseWidth: number) => number {
+  return (baseWidth: number) => {
+    // Validate inputs
+    if (!Number.isFinite(baseWidth) || baseWidth < 0) {
+      console.error(`[${context}] Invalid baseWidth in scaleStrokeWidth:`, {
+        baseWidth,
+        cameraScale,
+      });
+      return 0.5;
+    }
+    if (!Number.isFinite(cameraScale) || cameraScale <= 0) {
+      console.error(`[${context}] Invalid cameraScale in scaleStrokeWidth:`, {
+        baseWidth,
+        cameraScale,
+      });
+      return baseWidth;
+    }
+    // Counter-scale using sqrt for perceptual consistency
+    const zoomFactor = Math.max(1, Math.sqrt(cameraScale));
+    return Math.max(0.5, baseWidth / zoomFactor);
+  };
+}
+
+/**
  * Helper: Create base shape graphic for an object based on its kind
  *
  * Does NOT include text label or shadow.
@@ -343,12 +375,15 @@ function createBaseShapeGraphic(
   isSelected: boolean,
 ): Graphics {
   const behaviors = getBehaviors(obj._kind);
+  const cameraScale = context.coordConverter.getCameraScale();
+
   return behaviors.render(obj, {
     isSelected,
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
-    cameraScale: context.coordConverter.getCameraScale(),
+    cameraScale,
     createText: context.visual.createText.bind(context.visual),
+    scaleStrokeWidth: createScaleStrokeWidth(cameraScale),
   });
 }
 

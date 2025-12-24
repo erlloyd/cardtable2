@@ -1,5 +1,6 @@
 import { Container } from 'pixi.js';
 import { getBehaviors } from '../objects';
+import { createScaleStrokeWidth } from '../handlers/objects';
 import type { SceneManager } from '../SceneManager';
 import type { VisualManager } from './VisualManager';
 
@@ -104,6 +105,10 @@ export class GridSnapManager {
             isDragging: false,
             cameraScale,
             createText: visual.createText.bind(visual),
+            scaleStrokeWidth: createScaleStrokeWidth(
+              cameraScale,
+              'GridSnapManager',
+            ),
           });
 
           // Make it semi-transparent

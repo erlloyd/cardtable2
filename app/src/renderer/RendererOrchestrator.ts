@@ -190,8 +190,6 @@ export abstract class RendererOrchestrator {
         autoDensity: true,
         backgroundColor: 0xd4d4d4,
         autoStart: false, // CRITICAL: Prevent automatic ticker start (causes iOS worker crashes)
-        antialias: true, // Enable antialiasing for smooth graphics and text
-        roundPixels: true, // Round pixel values for sharper rendering
       });
 
       console.log('[RendererOrchestrator] ✓ PixiJS initialized successfully');

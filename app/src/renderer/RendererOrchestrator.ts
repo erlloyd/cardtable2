@@ -171,18 +171,11 @@ export abstract class RendererOrchestrator {
       this.app = new Application();
 
       console.log('[RendererOrchestrator] Calling app.init()...');
-      console.log('[RendererOrchestrator] Init config:', {
-        canvasType: canvas.constructor.name,
-        width,
-        height,
-        resolution: dpr,
-        autoDensity: true,
-        backgroundColor: 0xd4d4d4,
-        autoStart: false, // CRITICAL: Disable auto-start to prevent iOS crashes
-      });
 
-      // Initialize PixiJS app
-      await this.app.init({
+      // Build PixiJS init config
+      // Disable antialias during E2E tests to avoid performance/memory issues in CI
+      // Enable in development and production for smoother graphics
+      const initConfig = {
         canvas,
         width,
         height,
@@ -190,9 +183,16 @@ export abstract class RendererOrchestrator {
         autoDensity: true,
         backgroundColor: 0xd4d4d4,
         autoStart: false, // CRITICAL: Prevent automatic ticker start (causes iOS worker crashes)
-        antialias: true, // Enable antialiasing for smooth graphics and text
-        roundPixels: true, // Round pixel values for sharper rendering
+        antialias: !import.meta.env.VITE_E2E,
+      };
+
+      console.log('[RendererOrchestrator] Init config:', {
+        canvasType: canvas.constructor.name,
+        ...initConfig,
       });
+
+      // Initialize PixiJS app
+      await this.app.init(initConfig);
 
       console.log('[RendererOrchestrator] ✓ PixiJS initialized successfully');
       console.log(

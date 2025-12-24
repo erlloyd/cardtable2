@@ -66,8 +66,8 @@ export function useTableStore({
     );
     connectionStatusUnsubscribeRef.current = connectionStatusUnsubscribe;
 
-    // Expose store globally for E2E testing (development only)
-    if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+    // Expose store globally for E2E testing (development and E2E mode only)
+    if (import.meta.env.DEV || import.meta.env.VITE_E2E) {
       window.__TEST_STORE__ = store;
     }
 
@@ -110,7 +110,7 @@ export function useTableStore({
       setIsStoreReady(false);
 
       // Clean up global test reference
-      if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+      if (import.meta.env.DEV || import.meta.env.VITE_E2E) {
         delete window.__TEST_STORE__;
       }
     };

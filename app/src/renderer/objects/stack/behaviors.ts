@@ -20,20 +20,56 @@ import {
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 
+/**
+ * Calculate counter-scaled stroke width for zoom-independent rendering.
+ * Uses square root for perceptual consistency (perceived width scales differently than linear).
+ *
+ * Algorithm:
+ * - At zoom < 1x: No counter-scaling applied (strokes scale naturally with zoom)
+ * - At zoom >= 1x: Width = baseWidth / sqrt(zoom) with minimum of 0.5px
+ *
+ * @param baseWidth - The stroke width at 1x zoom
+ * @param cameraScale - Current camera zoom level
+ * @returns Adjusted stroke width (minimum 0.5 to remain visible)
+ */
+function getScaledStrokeWidth(baseWidth: number, cameraScale: number): number {
+  // Validate inputs to prevent NaN/Infinity propagation
+  if (!Number.isFinite(baseWidth) || baseWidth < 0) {
+    console.error(
+      '[StackBehaviors] Invalid baseWidth in getScaledStrokeWidth:',
+      { baseWidth, cameraScale },
+    );
+    return 0.5; // Minimum visible width
+  }
+
+  if (!Number.isFinite(cameraScale) || cameraScale <= 0) {
+    console.error(
+      '[StackBehaviors] Invalid cameraScale in getScaledStrokeWidth:',
+      { baseWidth, cameraScale },
+    );
+    return baseWidth; // Fall back to unscaled width
+  }
+
+  const zoomFactor = Math.max(1, Math.sqrt(cameraScale));
+  const scaledWidth = Math.max(0.5, baseWidth / zoomFactor);
+
+  // Final validation to catch any unexpected math results
+  if (!Number.isFinite(scaledWidth)) {
+    console.error(
+      '[StackBehaviors] Math operation produced invalid stroke width:',
+      { baseWidth, cameraScale, zoomFactor, scaledWidth },
+    );
+    return 0.5; // Minimum visible width
+  }
+
+  return scaledWidth;
+}
+
 export const StackBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Graphics {
     const graphic = new Graphics();
     const color = getStackColor(obj);
     const cardCount = getCardCount(obj);
-
-    // Scale stroke widths inversely with zoom for consistent visual appearance
-    // Use square root for perceptual consistency (perceived width scales differently than linear)
-    const zoomFactor = Math.max(1, Math.sqrt(ctx.cameraScale));
-    const adjustedStrokeWidth3D = Math.max(0.5, 1 / zoomFactor);
-    const adjustedStrokeWidthMain = Math.max(
-      0.5,
-      (ctx.isSelected ? 4 : 2) / zoomFactor,
-    );
 
     // Draw 3D effect (background rectangle) for stacks with 2+ cards
     if (cardCount >= 2) {
@@ -45,7 +81,7 @@ export const StackBehaviors: ObjectBehaviors = {
       );
       graphic.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
       graphic.stroke({
-        width: adjustedStrokeWidth3D,
+        width: getScaledStrokeWidth(1, ctx.cameraScale),
         color: 0x000000,
         alpha: 0.3,
       });
@@ -60,7 +96,7 @@ export const StackBehaviors: ObjectBehaviors = {
     );
     graphic.fill(color);
     graphic.stroke({
-      width: adjustedStrokeWidthMain,
+      width: getScaledStrokeWidth(ctx.isSelected ? 4 : 2, ctx.cameraScale),
       color: ctx.isSelected
         ? STACK_BORDER_COLOR_SELECTED
         : STACK_BORDER_COLOR_NORMAL,
@@ -82,7 +118,7 @@ export const StackBehaviors: ObjectBehaviors = {
       graphic.moveTo(-STACK_WIDTH / 2, STACK_HEIGHT / 2);
       graphic.lineTo(STACK_WIDTH / 2, -STACK_HEIGHT / 2);
       graphic.stroke({
-        width: Math.max(0.5, 2 / zoomFactor),
+        width: getScaledStrokeWidth(2, ctx.cameraScale),
         color: 0xffffff,
         alpha: 0.5,
       });
@@ -103,7 +139,7 @@ export const StackBehaviors: ObjectBehaviors = {
       );
       graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
       graphic.stroke({
-        width: Math.max(0.5, 1 / zoomFactor),
+        width: getScaledStrokeWidth(1, ctx.cameraScale),
         color: 0xffffff,
         alpha: 0.3,
       });

@@ -1,6 +1,7 @@
 import { Container } from 'pixi.js';
 import { getBehaviors } from '../objects';
 import type { SceneManager } from '../SceneManager';
+import type { VisualManager } from './VisualManager';
 
 /**
  * GridSnapManager - Manages local grid snap preview ghosts during drag.
@@ -56,7 +57,7 @@ export class GridSnapManager {
     sceneManager: SceneManager,
     cameraScale: number,
     worldContainer: Container,
-    visual: import('./VisualManager').VisualManager,
+    visual: VisualManager,
   ): void {
     if (!this.ghostContainer) {
       console.warn(

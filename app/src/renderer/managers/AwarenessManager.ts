@@ -2,6 +2,7 @@ import { Container, Graphics, Text } from 'pixi.js';
 import type { AwarenessState } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
 import type { SceneManager } from '../SceneManager';
+import type { VisualManager } from './VisualManager';
 
 /**
  * Awareness data for a remote actor.
@@ -58,7 +59,7 @@ export class AwarenessManager {
     sceneManager: SceneManager,
     worldContainer: Container,
     cameraScale: number,
-    visual: import('./VisualManager').VisualManager,
+    visual: VisualManager,
   ): { hz: number } | null {
     if (!this.awarenessContainer) return null;
 
@@ -237,7 +238,7 @@ export class AwarenessManager {
     sceneManager: SceneManager,
     worldContainer: Container,
     cameraScale: number,
-    visual: import('./VisualManager').VisualManager,
+    visual: VisualManager,
   ): void {
     if (!this.awarenessContainer || !state.drag) return;
 

@@ -227,10 +227,32 @@ export class VisualManager {
     preserveScale = false,
   ): void {
     const visual = this.objectVisuals.get(objectId);
-    if (!visual) return;
+    if (!visual) {
+      console.error(
+        '[VisualManager] Attempted to redraw visual that does not exist',
+        {
+          objectId,
+          hasObject: !!sceneManager.getObject(objectId),
+          totalVisuals: this.objectVisuals.size,
+          context: 'redrawVisual',
+        },
+      );
+      return;
+    }
 
     const obj = sceneManager.getObject(objectId);
-    if (!obj) return;
+    if (!obj) {
+      console.error(
+        '[VisualManager] Attempted to redraw object that no longer exists in scene',
+        {
+          objectId,
+          hasVisual: true, // We know visual exists from above
+          totalObjects: sceneManager.getAllObjects().size,
+          context: 'redrawVisual',
+        },
+      );
+      return;
+    }
 
     // Preserve position and scale if requested (for transient states like drag/animation)
     const preservedX = preservePosition ? visual.x : undefined;

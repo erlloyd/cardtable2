@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createScaleStrokeWidth } from './objects';
 
 describe('createScaleStrokeWidth - Counter-Scaled Stroke Widths', () => {
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn<Console, 'error'>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn<any, any>>;
 
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

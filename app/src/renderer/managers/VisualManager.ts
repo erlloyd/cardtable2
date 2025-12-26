@@ -70,9 +70,9 @@ export class VisualManager {
    * zoomed in, lower when zoomed out).
    */
   setTextResolutionMultiplier(multiplier: number): void {
-    if (!Number.isFinite(multiplier) || multiplier < 1.0) {
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
       console.error(
-        '[VisualManager] Invalid text resolution multiplier (must be >= 1.0):',
+        '[VisualManager] Invalid text resolution multiplier (must be > 0):',
         multiplier,
       );
       return; // Don't update with invalid value

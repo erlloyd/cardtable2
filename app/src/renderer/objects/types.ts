@@ -1,16 +1,16 @@
-import type { Graphics } from 'pixi.js';
+import type { Graphics, Text, TextOptions } from 'pixi.js';
 import type { TableObject, PointerEventData } from '@cardtable2/shared';
 import type { BBox } from '../SceneManager';
 
-import type { Text, TextOptions } from 'pixi.js';
-
 // Render context provides extra info during rendering
 export interface RenderContext {
-  isSelected: boolean;
-  isHovered: boolean;
-  isDragging: boolean;
-  cameraScale: number; // Current zoom level for scaling stroke widths
-  createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution
+  readonly isSelected: boolean; // Whether this object is in the current selection set
+  readonly isHovered: boolean; // Whether the pointer is currently over this object
+  readonly isDragging: boolean; // Whether this object is being actively dragged
+  readonly minimal?: boolean; // When true, skip decorative elements (badges, 3D effects, handles). Used for ghost previews and simplified rendering.
+  readonly cameraScale: number; // Current zoom level (1.0 = 100%, 2.0 = 200%). Use for manual counter-scaling or pass to scaleStrokeWidth helper
+  readonly createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution (DO NOT create Text objects directly)
+  readonly scaleStrokeWidth: (baseWidth: number) => number; // Helper that counter-scales stroke widths using sqrt(cameraScale) for visual consistency
 }
 
 // Shadow configuration

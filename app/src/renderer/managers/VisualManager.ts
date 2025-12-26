@@ -2,6 +2,7 @@ import { Application, Container, Graphics, BlurFilter, Text } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
+import { createScaleStrokeWidth } from '../handlers/objects';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
@@ -52,17 +53,30 @@ export class VisualManager {
   }
 
   /**
-   * Set the current camera scale (for zoom-aware shadows).
+   * Set the current camera scale (for zoom-aware shadows and stroke widths).
+   * Scales with zoom level to maintain consistent visual appearance.
    */
   setCameraScale(scale: number): void {
+    if (!Number.isFinite(scale) || scale <= 0) {
+      console.error('[VisualManager] Invalid camera scale:', scale);
+      return; // Don't update with invalid value
+    }
     this.cameraScale = scale;
   }
 
   /**
    * Set text resolution multiplier for dynamic zoom quality.
-   * Used to render text at higher resolution when zoomed in.
+   * Scales text resolution with zoom level to maintain sharpness (higher when
+   * zoomed in, lower when zoomed out).
    */
   setTextResolutionMultiplier(multiplier: number): void {
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+      console.error(
+        '[VisualManager] Invalid text resolution multiplier (must be > 0):',
+        multiplier,
+      );
+      return; // Don't update with invalid value
+    }
     this.textResolutionMultiplier = multiplier;
   }
 
@@ -214,10 +228,32 @@ export class VisualManager {
     preserveScale = false,
   ): void {
     const visual = this.objectVisuals.get(objectId);
-    if (!visual) return;
+    if (!visual) {
+      console.error(
+        '[VisualManager] Attempted to redraw visual that does not exist',
+        {
+          objectId,
+          hasObject: !!sceneManager.getObject(objectId),
+          totalVisuals: this.objectVisuals.size,
+          context: 'redrawVisual',
+        },
+      );
+      return;
+    }
 
     const obj = sceneManager.getObject(objectId);
-    if (!obj) return;
+    if (!obj) {
+      console.error(
+        '[VisualManager] Attempted to redraw object that no longer exists in scene',
+        {
+          objectId,
+          hasVisual: true, // We know visual exists from above
+          totalObjects: sceneManager.getAllObjects().size,
+          context: 'redrawVisual',
+        },
+      );
+      return;
+    }
 
     // Preserve position and scale if requested (for transient states like drag/animation)
     const preservedX = preservePosition ? visual.x : undefined;
@@ -327,32 +363,120 @@ export class VisualManager {
       isDragging: false, // Drag state handled by shadow, not render
       cameraScale: this.cameraScale,
       createText: this.createText.bind(this),
+      scaleStrokeWidth: createScaleStrokeWidth(
+        this.cameraScale,
+        'VisualManager',
+      ),
     });
   }
 
   /**
    * Create text with automatic zoom-aware resolution.
    * Use this instead of `new Text()` to ensure text stays sharp at all zoom levels.
+   *
+   * Resolution scaling: baseResolution (3x) × textResolutionMultiplier
+   * At 2x zoom: 3 × 2 = 6x resolution (maintains sharpness)
+   *
+   * WARNING: If you pass a `resolution` option, it will be OVERRIDDEN by the
+   * zoom-aware resolution calculation. Let this helper manage resolution automatically.
    */
   createText(options: import('pixi.js').TextOptions): Text {
+    // Validate text resolution multiplier
+    if (
+      !Number.isFinite(this.textResolutionMultiplier) ||
+      this.textResolutionMultiplier <= 0
+    ) {
+      console.error(
+        '[VisualManager] Invalid textResolutionMultiplier in createText:',
+        {
+          textResolutionMultiplier: this.textResolutionMultiplier,
+          textContent: options.text,
+        },
+      );
+      // Fall back to base resolution
+      return new Text({
+        ...options,
+        resolution: 3, // Base resolution
+      });
+    }
+
     // Apply default base resolution (3x for crisp rendering)
     const baseResolution = 3;
     const zoomAwareResolution = baseResolution * this.textResolutionMultiplier;
 
-    return new Text({
-      ...options,
-      resolution: zoomAwareResolution,
-    });
+    // Clamp resolution to reasonable limits to prevent memory issues
+    // At 10x zoom: 3 × 10 = 30x resolution (maximum)
+    const maxResolution = 30;
+    const clampedResolution = Math.min(zoomAwareResolution, maxResolution);
+
+    if (zoomAwareResolution !== clampedResolution) {
+      console.warn('[VisualManager] Text resolution clamped to maximum:', {
+        requested: zoomAwareResolution,
+        clamped: clampedResolution,
+        textResolutionMultiplier: this.textResolutionMultiplier,
+      });
+    }
+
+    try {
+      return new Text({
+        ...options,
+        resolution: clampedResolution,
+      });
+    } catch (error) {
+      console.error('[VisualManager] Failed to create Text object:', {
+        options,
+        resolution: clampedResolution,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Return minimal fallback text
+      return new Text({ text: '?', resolution: 3 });
+    }
   }
 
   /**
    * Create a text label showing the object's kind.
    * Returns a centered Text object ready to be added to a container.
+   *
+   * Uses lower base resolution (2x vs 3x) for performance since labels
+   * are larger and less critical for visual quality.
    */
   private createKindLabel(kind: string): Text {
+    // Validate text resolution multiplier
+    if (
+      !Number.isFinite(this.textResolutionMultiplier) ||
+      this.textResolutionMultiplier <= 0
+    ) {
+      console.error(
+        '[VisualManager] Invalid textResolutionMultiplier in createKindLabel:',
+        {
+          textResolutionMultiplier: this.textResolutionMultiplier,
+          kind,
+        },
+      );
+      // Fall back to base resolution
+      const kindText = new Text({
+        text: kind,
+        style: {
+          fontFamily: 'Arial',
+          fontSize: 24,
+          fill: 0xffffff,
+          stroke: { color: 0x000000, width: 2 },
+          align: 'center',
+        },
+        resolution: 2, // Base resolution
+      });
+      kindText.anchor.set(0.5);
+      kindText.y = 0;
+      return kindText;
+    }
+
     // Use lower base resolution for labels (2x instead of 3x)
     const baseResolution = 2;
     const textResolution = baseResolution * this.textResolutionMultiplier;
+
+    // Clamp resolution to reasonable limits
+    const maxResolution = 20; // Lower than createText since labels are less critical
+    const clampedResolution = Math.min(textResolution, maxResolution);
 
     const kindText = new Text({
       text: kind,
@@ -363,7 +487,7 @@ export class VisualManager {
         stroke: { color: 0x000000, width: 2 }, // Black outline for readability
         align: 'center',
       },
-      resolution: textResolution,
+      resolution: clampedResolution,
     });
     kindText.anchor.set(0.5); // Center the text
     kindText.y = 0; // Center vertically in the object

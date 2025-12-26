@@ -23,14 +23,14 @@ Stacks with 2+ cards display three visual elements:
 
 2. **Count Badge**: Shows number of cards in stack
    - Position: Top-center of card
-   - Style: Dark circular background, white text, slightly transparent
+   - Style: Dark rounded square background, white text, slightly transparent
    - Always visible for stacks with 2+ cards
    - Remains visible when stack is selected (renders on top of selection indicator)
 
 3. **Unstack Handle**: Icon for extracting cards
    - Position: Upper-right corner of card
-   - Style: Similar to count badge (dark circle, slightly transparent)
-   - Icon: To be designed (arrow/separation symbol)
+   - Style: Similar to count badge (dark square, slightly transparent)
+   - Icon: Upward arrow unicode character (⬆)
    - Always visible for stacks with 2+ cards
    - Remains visible when stack is selected
 

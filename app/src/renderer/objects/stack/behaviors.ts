@@ -27,7 +27,8 @@ export const StackBehaviors: ObjectBehaviors = {
     const cardCount = getCardCount(obj);
 
     // Draw 3D effect (background rectangle) for stacks with 2+ cards
-    if (cardCount >= 2) {
+    // Skip decorative elements in minimal mode (e.g., ghost previews)
+    if (cardCount >= 2 && !ctx.minimal) {
       graphic.rect(
         -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
         -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
@@ -79,8 +80,9 @@ export const StackBehaviors: ObjectBehaviors = {
       });
     }
 
-    // Draw count badge for stacks with 2+ cards
-    if (cardCount >= 2) {
+    // Draw count badge and unstack handle for stacks with 2+ cards
+    // Skip decorative elements in minimal mode (e.g., ghost previews)
+    if (cardCount >= 2 && !ctx.minimal) {
       // Badge rounded square (top-center, half on/half off the card)
       const badgeX = 0;
       const badgeY = -STACK_HEIGHT / 2; // Position at top edge so half extends above

@@ -103,6 +103,7 @@ export class GridSnapManager {
             isSelected: false,
             isHovered: false,
             isDragging: false,
+            minimal: true,
             cameraScale,
             createText: visual.createText.bind(visual),
             scaleStrokeWidth: createScaleStrokeWidth(

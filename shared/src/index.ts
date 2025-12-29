@@ -212,7 +212,17 @@ export type RendererToMainMessage =
   | { type: 'zoom-started' } // M3.5.1-T6: Zoom started (wheel or pinch)
   | { type: 'zoom-ended' } // M3.5.1-T6: Zoom ended
   | { type: 'object-drag-started' } // M3.5.1-T6: Object drag started
-  | { type: 'object-drag-ended' }; // M3.5.1-T6: Object drag ended
+  | { type: 'object-drag-ended' } // M3.5.1-T6: Object drag ended
+  | {
+      type: 'stack-objects'; // Stack operations: merge multiple stacks into target
+      ids: string[]; // Source stack IDs to merge
+      targetId: string; // Target stack ID
+    }
+  | {
+      type: 'unstack-card'; // Unstack operation: extract top card from stack
+      stackId: string; // Source stack ID
+      pos: Position; // Position for new single-card stack
+    };
 
 // ============================================================================
 // Yjs Document Schema (M3-T1)

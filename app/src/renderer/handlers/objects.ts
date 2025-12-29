@@ -213,42 +213,36 @@ function updateObjectVisual(
     // Animate flip: compress → update visual → expand
     const flipOnMidpoint = () => {
       // At midpoint (scaleX = 0), update the visual
-      context.visual.updateVisualForObjectChange(
-        id,
+      context.visual.updateVisualForObjectChange(id, context.sceneManager, {
         isHovered,
         isDragging,
         isSelected,
-        context.sceneManager,
-        isDragging, // Preserve position during drag to avoid flashing
-        true, // Preserve scale during flip animation
-      );
+        preservePosition: isDragging, // Preserve position during drag to avoid flashing
+        preserveScale: true, // Preserve scale during flip animation
+      });
     };
 
     const flipOnComplete = () => {
       // After flip completes, do a final redraw to ensure correct state
-      context.visual.updateVisualForObjectChange(
-        id,
+      context.visual.updateVisualForObjectChange(id, context.sceneManager, {
         isHovered,
         isDragging,
         isSelected,
-        context.sceneManager,
-        isDragging,
-        false, // No need to preserve scale after animation completes
-      );
+        preservePosition: isDragging,
+        // No need to preserve scale after animation completes
+      });
     };
 
     context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
   } else {
     // No flip - just update visual immediately
-    context.visual.updateVisualForObjectChange(
-      id,
+    context.visual.updateVisualForObjectChange(id, context.sceneManager, {
       isHovered,
       isDragging,
       isSelected,
-      context.sceneManager,
-      isDragging, // Preserve position during drag to avoid flashing
-      false, // No scale animation, use default scale
-    );
+      preservePosition: isDragging, // Preserve position during drag to avoid flashing
+      // No need to set preserveScale - defaults to false for normal scale
+    });
   }
 
   // Animate rotation changes for smooth exhaust/ready
@@ -293,9 +287,15 @@ function removeObjectVisual(context: RendererContext, id: string): void {
   context.visual.removeVisual(id);
   context.sceneManager.removeObject(id);
 
-  // Clear selection if this object was selected (handled by SelectionManager)
+  // Clear selection if this object was selected
   if (context.selection.isSelected(id)) {
-    // Selection will be synced from store
+    context.selection.clearSelection(id);
+
+    // Notify Board to clear screen coordinates for this deleted object
+    context.postResponse({
+      type: 'objects-unselected',
+      ids: [id],
+    });
   }
 
   // Clear hover if this object was hovered
@@ -381,6 +381,7 @@ function createBaseShapeGraphic(
     isSelected,
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
+    isStackTarget: false, // Stack target state managed by VisualManager
     cameraScale,
     createText: context.visual.createText.bind(context.visual),
     scaleStrokeWidth: createScaleStrokeWidth(cameraScale),

@@ -31,6 +31,7 @@ export class DragManager {
   private isObjectDragging = false;
   private dragState: DragState | null = null;
   private pointerDownEvent: PointerEventData | null = null;
+  private isUnstackDrag = false; // Track if this is an unstack operation
 
   /**
    * Store pointer down event for selection logic on pointer up.
@@ -94,6 +95,29 @@ export class DragManager {
       currentDragGestureId: null,
     };
     this.isObjectDragging = false;
+    this.isUnstackDrag = false;
+  }
+
+  /**
+   * Prepare for potential unstack drag (pointer down on unstack handle).
+   */
+  prepareUnstackDrag(stackId: string, worldX: number, worldY: number): void {
+    this.dragState = {
+      draggedObjectId: stackId,
+      dragStartWorldX: worldX,
+      dragStartWorldY: worldY,
+      draggedObjectsStartPositions: new Map(),
+      currentDragGestureId: null,
+    };
+    this.isObjectDragging = false;
+    this.isUnstackDrag = true;
+  }
+
+  /**
+   * Check if this is an unstack drag operation.
+   */
+  isUnstackDragActive(): boolean {
+    return this.isUnstackDrag;
   }
 
   /**
@@ -285,6 +309,7 @@ export class DragManager {
   cancelObjectDrag(): void {
     this.isObjectDragging = false;
     this.dragState = null;
+    this.isUnstackDrag = false;
   }
 
   /**
@@ -328,5 +353,6 @@ export class DragManager {
     this.isObjectDragging = false;
     this.dragState = null;
     this.pointerDownEvent = null;
+    this.isUnstackDrag = false;
   }
 }

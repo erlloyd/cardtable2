@@ -51,11 +51,19 @@ export const StackBehaviors: ObjectBehaviors = {
       STACK_HEIGHT,
     );
     graphic.fill(color);
+
+    // Determine border color based on visual state (priority: target/selected > normal)
+    // Note: Stack target uses same color as selection for better visibility on all card colors
+    let borderColor = STACK_BORDER_COLOR_NORMAL;
+    let borderWidth = 2;
+    if (ctx.isStackTarget || ctx.isSelected) {
+      borderColor = STACK_BORDER_COLOR_SELECTED;
+      borderWidth = 4;
+    }
+
     graphic.stroke({
-      width: ctx.scaleStrokeWidth(ctx.isSelected ? 4 : 2),
-      color: ctx.isSelected
-        ? STACK_BORDER_COLOR_SELECTED
-        : STACK_BORDER_COLOR_NORMAL,
+      width: ctx.scaleStrokeWidth(borderWidth),
+      color: borderColor,
     });
 
     // Visual indicator for face-down state (diagonal lines)

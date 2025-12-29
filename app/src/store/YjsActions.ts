@@ -380,6 +380,16 @@ export function flipCards(store: YjsStore, ids: string[]): string[] {
         if (typeof faceUp === 'boolean') {
           // Toggle faceUp - update Y.Map directly
           yMap.set('_faceUp', !faceUp);
+
+          // For stacks, reverse card order to simulate physical flip
+          if (kind === ObjectKind.Stack) {
+            const cards = yMap.get('_cards');
+            if (cards && Array.isArray(cards) && cards.length > 0) {
+              const reversedCards = [...cards].reverse();
+              yMap.set('_cards', reversedCards);
+            }
+          }
+
           flipped.push(id);
         } else {
           console.warn(
@@ -458,6 +468,234 @@ export function exhaustCards(store: YjsStore, ids: string[]): string[] {
   });
 
   return toggled;
+}
+
+/**
+ * Stack objects - merge multiple stacks into one (M3.5-T3)
+ *
+ * Physical card behavior:
+ * - Target stack cards remain at bottom
+ * - Source stack cards placed on top (order between sources doesn't matter, but order within each stack preserved)
+ *
+ * Target stack state wins:
+ * - All cards adopt target's _faceUp state
+ * - All cards adopt target's _exhausted state (rotation)
+ * - Target position preserved
+ *
+ * @param store - YjsStore instance
+ * @param ids - Array of source stack IDs to merge into target
+ * @param targetId - Optional target stack ID. If not provided, uses first id in ids array
+ * @returns Array of successfully stacked source IDs
+ *
+ * @example
+ * // Merge stack-2 into stack-1
+ * stackObjects(store, ['stack-2'], 'stack-1');
+ * // stack-1 now contains all cards (stack-1 cards at bottom, stack-2 cards on top)
+ *
+ * @example
+ * // Merge multiple stacks (targetId defaults to first)
+ * stackObjects(store, ['stack-1', 'stack-2', 'stack-3']);
+ * // stack-1 becomes the target, stack-2 and stack-3 merge into it
+ */
+export function stackObjects(
+  store: YjsStore,
+  ids: string[],
+  targetId?: string,
+): string[] {
+  // Determine target and source ids
+  let target: string;
+  let sourceIds: string[];
+
+  if (targetId) {
+    // Explicit target provided
+    target = targetId;
+    // Validate targetId not in ids array
+    if (ids.includes(target)) {
+      throw new Error('[stackObjects] targetId cannot appear in ids array');
+    }
+    sourceIds = ids;
+  } else {
+    // Use first id as target
+    if (ids.length === 0) {
+      throw new Error(
+        '[stackObjects] No target stack specified and ids array is empty',
+      );
+    }
+    target = ids[0];
+    sourceIds = ids.slice(1); // Remaining ids are sources
+  }
+
+  // Get target stack
+  const targetYMap = store.getObjectYMap(target);
+  if (!targetYMap) {
+    throw new Error(`[stackObjects] Target stack ${target} not found`);
+  }
+
+  // Verify target is a stack
+  const targetKind = targetYMap.get('_kind');
+  if (targetKind !== ObjectKind.Stack) {
+    throw new Error(
+      `[stackObjects] Target ${target} is not a stack (kind: ${targetKind})`,
+    );
+  }
+
+  // Get target state (wins for merged stack)
+  const targetCards = targetYMap.get('_cards') as string[];
+  if (!targetCards) {
+    throw new Error(
+      `[stackObjects] Target stack ${target} has no _cards array`,
+    );
+  }
+
+  // Collect cards from all source stacks
+  const sourceStacksData: Array<{ id: string; cards: string[] }> = [];
+
+  for (const sourceId of sourceIds) {
+    const sourceYMap = store.getObjectYMap(sourceId);
+    if (!sourceYMap) {
+      console.warn(
+        `[stackObjects] Source stack ${sourceId} not found, skipping`,
+      );
+      continue;
+    }
+
+    // Verify source is a stack
+    const sourceKind = sourceYMap.get('_kind');
+    if (sourceKind !== ObjectKind.Stack) {
+      console.warn(
+        `[stackObjects] Source ${sourceId} is not a stack (kind: ${sourceKind}), skipping`,
+      );
+      continue;
+    }
+
+    // Get source cards
+    const sourceCards = sourceYMap.get('_cards') as string[];
+    if (sourceCards && sourceCards.length > 0) {
+      sourceStacksData.push({ id: sourceId, cards: sourceCards });
+    }
+  }
+
+  // If no valid sources, return early
+  if (sourceStacksData.length === 0) {
+    console.warn('[stackObjects] No valid source stacks to merge');
+    return [];
+  }
+
+  const stackedIds: string[] = [];
+
+  // Use single transaction for atomicity
+  store.getDoc().transact(() => {
+    // Build new card array: target cards at bottom, source cards on top
+    const newCards = [...targetCards];
+    for (const sourceData of sourceStacksData) {
+      newCards.push(...sourceData.cards);
+      stackedIds.push(sourceData.id);
+    }
+
+    // Update target stack with merged cards
+    targetYMap.set('_cards', newCards);
+
+    // Delete source stacks
+    for (const sourceData of sourceStacksData) {
+      store.deleteObject(sourceData.id);
+    }
+  });
+
+  console.log(
+    `[stackObjects] Merged ${sourceStacksData.length} stack(s) into ${target}. ` +
+      `Total cards: ${(targetYMap.get('_cards') as string[]).length}`,
+  );
+
+  return stackedIds;
+}
+
+/**
+ * Unstack card - extract top card from a stack into a new stack (M3.5-T3)
+ *
+ * Extracts the top card (index 0) from a stack and creates a new single-card stack
+ * at the specified position. The new stack inherits the source stack's face-up/down
+ * state and rotation. If the source stack becomes empty after extraction, it is deleted.
+ *
+ * @param store - YjsStore instance
+ * @param stackId - ID of the stack to extract from
+ * @param pos - Position for the new single-card stack (x, y). Rotation (r) is ignored and inherited from source.
+ * @returns ID of the newly created stack, or null if operation failed
+ *
+ * @example
+ * // Extract top card from a stack and place at (150, 200)
+ * // Note: Only x and y are used; rotation is inherited from source stack
+ * const newStackId = unstackCard(store, 'stack-1', { x: 150, y: 200, r: 0 });
+ * // Creates new single-card stack at (150, 200) with source stack's rotation and faceUp state
+ * // stack-1 loses its top card (or is deleted if it was the last card)
+ */
+export function unstackCard(
+  store: YjsStore,
+  stackId: string,
+  pos: Position,
+): string | null {
+  // Get source stack
+  const sourceYMap = store.getObjectYMap(stackId);
+  if (!sourceYMap) {
+    console.warn(`[unstackCard] Stack ${stackId} not found`);
+    return null;
+  }
+
+  // Verify source is a stack
+  const sourceKind = sourceYMap.get('_kind');
+  if (sourceKind !== ObjectKind.Stack) {
+    console.warn(
+      `[unstackCard] Object ${stackId} is not a stack (kind: ${sourceKind})`,
+    );
+    return null;
+  }
+
+  // Get source cards
+  const sourceCards = sourceYMap.get('_cards') as string[];
+  if (!sourceCards || sourceCards.length === 0) {
+    console.warn(`[unstackCard] Stack ${stackId} has no cards`);
+    return null;
+  }
+
+  // Extract top card (index 0)
+  const topCard = sourceCards[0];
+  const remainingCards = sourceCards.slice(1);
+
+  // Get source stack state to preserve in new stack
+  const sourceFaceUp = sourceYMap.get('_faceUp') as boolean;
+  const sourcePos = sourceYMap.get('_pos') as Position;
+
+  let newStackId: string | null = null;
+
+  // Use single transaction for atomicity
+  store.getDoc().transact(() => {
+    // Create new single-card stack at specified position
+    // Inherit face-up state and rotation from source stack
+    newStackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: pos.x, y: pos.y, r: sourcePos.r }, // Inherit rotation
+      cards: [topCard],
+      faceUp: sourceFaceUp,
+    });
+
+    // Update or delete source stack
+    if (remainingCards.length === 0) {
+      // No cards left - delete source stack
+      store.deleteObject(stackId);
+      console.log(`[unstackCard] Deleted empty stack ${stackId}`);
+    } else {
+      // Update source stack with remaining cards
+      sourceYMap.set('_cards', remainingCards);
+      console.log(
+        `[unstackCard] Updated stack ${stackId}, now has ${remainingCards.length} card(s)`,
+      );
+    }
+  });
+
+  console.log(
+    `[unstackCard] Extracted card ${topCard} from ${stackId} to new stack ${newStackId}`,
+  );
+
+  return newStackId;
 }
 
 /**

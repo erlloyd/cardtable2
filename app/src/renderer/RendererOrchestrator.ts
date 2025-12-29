@@ -459,13 +459,11 @@ export abstract class RendererOrchestrator {
           const isHovered = this.hover.getHoveredObjectId() === objectId;
 
           // Redraw the visual to regenerate text with new resolution
-          this.visual.updateVisualForObjectChange(
-            objectId,
+          this.visual.updateVisualForObjectChange(objectId, this.sceneManager, {
             isHovered,
-            false, // Not dragging during zoom
             isSelected,
-            this.sceneManager,
-          );
+            // Not dragging during zoom
+          });
         } catch (error) {
           // Track but don't stop - try to regenerate as many objects as possible
           failedObjects.push(objectId);

@@ -277,6 +277,7 @@ export class AwarenessManager {
           isSelected: false,
           isHovered: false,
           isDragging: false,
+          isStackTarget: false,
           cameraScale,
           createText: visual.createText.bind(visual),
           scaleStrokeWidth: createScaleStrokeWidth(
@@ -301,6 +302,7 @@ export class AwarenessManager {
                 isSelected: false,
                 isHovered: false,
                 isDragging: false,
+                isStackTarget: false,
                 cameraScale,
                 createText: visual.createText.bind(visual),
                 scaleStrokeWidth: createScaleStrokeWidth(

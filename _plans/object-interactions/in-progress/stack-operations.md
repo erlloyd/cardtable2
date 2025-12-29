@@ -6,7 +6,15 @@ Implement stacking and unstacking actions to merge and separate card stacks. The
 **CRITICAL:** All stack operations and visuals apply ONLY to `ObjectKind.Stack` - not tokens, zones, mats, or other object types.
 
 ## Status
-🚧 **In Progress** - Visual design and core actions being implemented
+✅ **Complete** - All stack operations implemented and tested
+
+**Completed:**
+- ✅ Visual Stack Rendering (3D effect, count badge, unstack handle)
+- ✅ Stack Objects Action (drag-and-drop merge)
+- ✅ Stack target visual feedback (selection-colored border)
+- ✅ Selection cleanup on object deletion
+- ✅ Unstack Action (extract top card via drag handle)
+- ✅ Stack Flip Behavior (reverse card order)
 
 ## Prerequisites
 - Card flip and exhaust/ready actions completed ✅

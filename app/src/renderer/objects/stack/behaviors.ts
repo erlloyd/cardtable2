@@ -26,17 +26,9 @@ export const StackBehaviors: ObjectBehaviors = {
     const color = getStackColor(obj);
     const cardCount = getCardCount(obj);
 
-    // Scale stroke widths inversely with zoom for consistent visual appearance
-    // Use square root for perceptual consistency (perceived width scales differently than linear)
-    const zoomFactor = Math.max(1, Math.sqrt(ctx.cameraScale));
-    const adjustedStrokeWidth3D = Math.max(0.5, 1 / zoomFactor);
-    const adjustedStrokeWidthMain = Math.max(
-      0.5,
-      (ctx.isSelected ? 4 : 2) / zoomFactor,
-    );
-
     // Draw 3D effect (background rectangle) for stacks with 2+ cards
-    if (cardCount >= 2) {
+    // Skip decorative elements in minimal mode (e.g., ghost previews)
+    if (cardCount >= 2 && !ctx.minimal) {
       graphic.rect(
         -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
         -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
@@ -45,7 +37,7 @@ export const StackBehaviors: ObjectBehaviors = {
       );
       graphic.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
       graphic.stroke({
-        width: adjustedStrokeWidth3D,
+        width: ctx.scaleStrokeWidth(1),
         color: 0x000000,
         alpha: 0.3,
       });
@@ -60,7 +52,7 @@ export const StackBehaviors: ObjectBehaviors = {
     );
     graphic.fill(color);
     graphic.stroke({
-      width: adjustedStrokeWidthMain,
+      width: ctx.scaleStrokeWidth(ctx.isSelected ? 4 : 2),
       color: ctx.isSelected
         ? STACK_BORDER_COLOR_SELECTED
         : STACK_BORDER_COLOR_NORMAL,
@@ -82,14 +74,15 @@ export const StackBehaviors: ObjectBehaviors = {
       graphic.moveTo(-STACK_WIDTH / 2, STACK_HEIGHT / 2);
       graphic.lineTo(STACK_WIDTH / 2, -STACK_HEIGHT / 2);
       graphic.stroke({
-        width: Math.max(0.5, 2 / zoomFactor),
+        width: ctx.scaleStrokeWidth(2),
         color: 0xffffff,
         alpha: 0.5,
       });
     }
 
-    // Draw count badge for stacks with 2+ cards
-    if (cardCount >= 2) {
+    // Draw count badge and unstack handle for stacks with 2+ cards
+    // Skip decorative elements in minimal mode (e.g., ghost previews)
+    if (cardCount >= 2 && !ctx.minimal) {
       // Badge rounded square (top-center, half on/half off the card)
       const badgeX = 0;
       const badgeY = -STACK_HEIGHT / 2; // Position at top edge so half extends above
@@ -103,7 +96,7 @@ export const StackBehaviors: ObjectBehaviors = {
       );
       graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
       graphic.stroke({
-        width: Math.max(0.5, 1 / zoomFactor),
+        width: ctx.scaleStrokeWidth(1),
         color: 0xffffff,
         alpha: 0.3,
       });

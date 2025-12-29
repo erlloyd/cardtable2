@@ -204,11 +204,37 @@ Don't look for status summaries in README files - just browse the folders to see
 ## Important Notes
 
 ### Branching Strategy
-- **IMPORTANT**: All work must be done on feature branches (e.g., `feature/m2-board-core`)
-- Never commit directly to main unless explicitly instructed
-- Branch naming: `feature/{theme}-{description}` or `fix/{description}`
-- Merge to main only after testing and validation
-- CI/CD deploys automatically on merge to main
+
+**CRITICAL - NEVER PUSH TO MAIN WITHOUT EXPLICIT CONFIRMATION:**
+
+1. **DEFAULT BEHAVIOR**: ALL work MUST be done on feature branches
+   - Always create a feature branch for any work
+   - Branch naming: `feature/{theme}-{description}` or `fix/{description}`
+   - Example: `feature/zoom-quality`, `fix/selection-bug`
+
+2. **BEFORE EVERY PUSH**:
+   - Check current branch with `git branch --show-current`
+   - If on `main`, STOP immediately
+   - Ask user: "I'm currently on main. Should I push to main or create a feature branch?"
+   - WAIT for explicit user confirmation before pushing to main
+
+3. **NEVER ASSUME**:
+   - Do NOT push to main just because changes look ready
+   - Do NOT push to main because tests pass
+   - Do NOT push to main because user said "push" (they might mean push feature branch)
+   - ALWAYS explicitly confirm with user if pushing to main
+
+4. **ONLY PUSH TO MAIN WHEN**:
+   - User explicitly says "push to main" or "push this to main"
+   - User confirms "yes" when you ask about pushing to main
+   - User gives unambiguous instruction to commit/push directly to main
+
+5. **AFTER FEATURE WORK**:
+   - Push feature branch to remote
+   - Let user decide when/how to merge to main
+   - CI/CD deploys automatically when main is updated
+
+**Why this matters**: Direct pushes to main trigger production deployments. Always use feature branches for safety.
 
 ### Testing Workflow
 

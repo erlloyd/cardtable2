@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  forbidOnly: !!process.env.CI,
+  forbidOnly: true,
   // No retries needed - tests are now 100% reliable with waitForRenderer()
   retries: 0,
   // Playwright workers are I/O-bound (browser automation), not CPU-bound
@@ -26,5 +26,8 @@ export default defineConfig({
     command: 'pnpm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    env: {
+      VITE_E2E: 'true', // Disable antialias during E2E tests
+    },
   },
 });

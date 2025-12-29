@@ -73,7 +73,10 @@ export abstract class RendererOrchestrator {
 
   // Zoom tracking for scene regeneration
   private lastRegeneratedZoom: number = 1.0;
-  private readonly REGENERATION_DELTA = 0.5; // Only regenerate if zoom changes by this amount
+  // Regeneration threshold balances quality vs performance
+  // Only regenerate visuals when zoom changes by ±0.5 (50% zoom change)
+  // Lower values = smoother quality transitions but more frequent regeneration cost
+  private readonly REGENERATION_DELTA = 0.5;
 
   // Zoom debounce (M3.5.1-T6)
   // Debounces zoom-ended messages to avoid flickering ActionHandle during rapid scroll
@@ -171,18 +174,11 @@ export abstract class RendererOrchestrator {
       this.app = new Application();
 
       console.log('[RendererOrchestrator] Calling app.init()...');
-      console.log('[RendererOrchestrator] Init config:', {
-        canvasType: canvas.constructor.name,
-        width,
-        height,
-        resolution: dpr,
-        autoDensity: true,
-        backgroundColor: 0xd4d4d4,
-        autoStart: false, // CRITICAL: Disable auto-start to prevent iOS crashes
-      });
 
-      // Initialize PixiJS app
-      await this.app.init({
+      // Build PixiJS init config
+      // Disable antialias during E2E tests to avoid performance/memory issues in CI
+      // Enable in development and production for smoother graphics
+      const initConfig = {
         canvas,
         width,
         height,
@@ -190,9 +186,16 @@ export abstract class RendererOrchestrator {
         autoDensity: true,
         backgroundColor: 0xd4d4d4,
         autoStart: false, // CRITICAL: Prevent automatic ticker start (causes iOS worker crashes)
-        antialias: true, // Enable antialiasing for smooth graphics and text
-        roundPixels: true, // Round pixel values for sharper rendering
+        antialias: !import.meta.env.VITE_E2E,
+      };
+
+      console.log('[RendererOrchestrator] Init config:', {
+        canvasType: canvas.constructor.name,
+        ...initConfig,
       });
+
+      // Initialize PixiJS app
+      await this.app.init(initConfig);
 
       console.log('[RendererOrchestrator] ✓ PixiJS initialized successfully');
       console.log(
@@ -344,23 +347,51 @@ export abstract class RendererOrchestrator {
   }
 
   /**
-   * Handle zoom end - regenerate text if needed for quality
+   * Handle zoom end - regenerate visuals if zoom changed significantly
    *
    * Called after zoom gesture completes (debounced 250ms).
-   * Regenerates stack text textures if zoom exceeds pre-rendered capacity.
+   * Regenerates all object visuals (text and strokes) when zoom changes by
+   * more than REGENERATION_DELTA (0.5) to maintain visual quality and consistency.
+   * Updates both text resolution (for sharpness) and stroke widths (for consistent appearance).
    */
   private handleZoomEnd(): void {
     // Send zoom-ended message to main thread
     this.postResponse({ type: 'zoom-ended' });
 
     // Check if text regeneration is needed
-    if (!this.worldContainer) return;
+    if (!this.worldContainer) {
+      console.error(
+        '[RendererOrchestrator] handleZoomEnd called without worldContainer',
+        {
+          hasApp: !!this.app,
+          orchestratorState: 'zoom-end-handler',
+        },
+      );
+      return;
+    }
 
     const currentZoom = this.worldContainer.scale.x;
+
+    // Validate zoom value before proceeding
+    if (!Number.isFinite(currentZoom) || currentZoom <= 0) {
+      console.error(
+        '[RendererOrchestrator] Invalid zoom value in handleZoomEnd',
+        {
+          currentZoom,
+          containerScale: {
+            x: this.worldContainer.scale.x,
+            y: this.worldContainer.scale.y,
+          },
+        },
+      );
+      return;
+    }
+
     const zoomChange = Math.abs(currentZoom - this.lastRegeneratedZoom);
 
-    // Regenerate on ANY significant zoom change to update stroke widths
-    // Threshold check only applies to text resolution multiplier
+    // Regenerate when zoom changes significantly to update both:
+    // - Stroke widths (counter-scaled to maintain consistent visual appearance)
+    // - Text resolution (scaled to maintain sharpness)
     if (zoomChange > this.REGENERATION_DELTA) {
       this.regenerateSceneAtZoom(currentZoom);
       this.lastRegeneratedZoom = currentZoom;
@@ -370,41 +401,111 @@ export abstract class RendererOrchestrator {
   /**
    * Regenerate all scene visuals at current zoom level
    *
-   * Updates text resolution to maintain sharp text at high zoom.
-   * Updates camera scale for counter-scaled stroke widths (maintains visual consistency).
+   * Updates text resolution to maintain sharp text (scales linearly with zoom).
+   * Updates camera scale for counter-scaled stroke widths (maintains consistent
+   * visual stroke width on screen regardless of zoom level).
    *
    * Counter-scaling approach: Stroke widths are divided by sqrt(zoom) to maintain
-   * consistent visual appearance across all zoom levels. This is standard practice
-   * in WebGL applications for zoom-independent rendering.
+   * consistent visual appearance across all zoom levels. This prevents strokes
+   * from appearing too thick when zoomed in or too thin when zoomed out.
+   * Square root scaling (rather than linear) provides better perceptual consistency.
+   *
+   * Note: This assumes graphics are rendered as tessellated vectors. If cacheAsBitmap
+   * or texture-based rendering is used, this approach may need adjustment.
    */
   private regenerateSceneAtZoom(zoomLevel: number): void {
-    if (!this.worldContainer || !this.app) return;
-
-    // Update visual manager with new zoom level for counter-scaled stroke widths
-    this.visual.setCameraScale(zoomLevel);
-
-    // Update text resolution multiplier for sharp text at high zoom
-    this.visual.setTextResolutionMultiplier(zoomLevel);
-
-    // Iterate through ALL objects and redraw visuals
-    // This forces Text objects to regenerate at higher resolution
-    for (const [objectId] of this.sceneManager.getAllObjects()) {
-      // Check if object is selected or hovered
-      const isSelected = this.selection.isSelected(objectId);
-      const isHovered = this.hover.getHoveredObjectId() === objectId;
-
-      // Redraw the visual to regenerate text with new resolution
-      this.visual.updateVisualForObjectChange(
-        objectId,
-        isHovered,
-        false, // Not dragging during zoom
-        isSelected,
-        this.sceneManager,
+    // Validate dependencies first
+    if (!this.worldContainer || !this.app) {
+      console.error(
+        '[RendererOrchestrator] regenerateSceneAtZoom called with missing dependencies',
+        {
+          hasWorldContainer: !!this.worldContainer,
+          hasApp: !!this.app,
+          zoomLevel,
+          orchestratorState: 'regenerate-scene',
+        },
       );
+      return;
     }
 
-    // Force a render to display the updated visuals
-    this.app.renderer.render(this.app.stage);
+    // Validate zoom level before proceeding
+    if (!Number.isFinite(zoomLevel) || zoomLevel <= 0) {
+      console.error(
+        '[RendererOrchestrator] Invalid zoom level in regenerateSceneAtZoom',
+        {
+          zoomLevel,
+          type: typeof zoomLevel,
+        },
+      );
+      return;
+    }
+
+    try {
+      // Update visual manager with new zoom level for counter-scaled stroke widths
+      this.visual.setCameraScale(zoomLevel);
+
+      // Update text resolution multiplier for sharp text at high zoom
+      this.visual.setTextResolutionMultiplier(zoomLevel);
+
+      // Track regeneration failures for reporting
+      const failedObjects: string[] = [];
+
+      // Iterate through ALL objects and redraw visuals to apply updated zoom settings
+      // This forces Text objects to regenerate at the appropriate resolution for current zoom
+      for (const [objectId] of this.sceneManager.getAllObjects()) {
+        try {
+          // Check if object is selected or hovered
+          const isSelected = this.selection.isSelected(objectId);
+          const isHovered = this.hover.getHoveredObjectId() === objectId;
+
+          // Redraw the visual to regenerate text with new resolution
+          this.visual.updateVisualForObjectChange(
+            objectId,
+            isHovered,
+            false, // Not dragging during zoom
+            isSelected,
+            this.sceneManager,
+          );
+        } catch (error) {
+          // Track but don't stop - try to regenerate as many objects as possible
+          failedObjects.push(objectId);
+          console.error(
+            '[RendererOrchestrator] Failed to regenerate object visual at zoom',
+            {
+              objectId,
+              zoomLevel,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          );
+        }
+      }
+
+      // Report if any objects failed
+      if (failedObjects.length > 0) {
+        console.error(
+          '[RendererOrchestrator] Some objects failed to regenerate at new zoom level',
+          {
+            failedCount: failedObjects.length,
+            totalObjects: this.sceneManager.getAllObjects().size,
+            failedObjectIds: failedObjects.slice(0, 10), // First 10 for debugging
+            zoomLevel,
+          },
+        );
+      }
+
+      // Force an immediate render since ticker may not be running (autoStart: false)
+      // This ensures visual updates are displayed immediately after zoom ends
+      this.app.renderer.render(this.app.stage);
+    } catch (error) {
+      console.error(
+        '[RendererOrchestrator] Critical failure during scene regeneration at zoom',
+        {
+          zoomLevel,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+      );
+    }
   }
 
   /**

@@ -11,7 +11,11 @@ import {
   stackObjects,
   unstackCard,
 } from './YjsActions';
-import { ObjectKind, type TableObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  type StackObject,
+  type TableObject,
+} from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
 vi.mock('y-indexeddb', () => ({
@@ -1483,14 +1487,10 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       flipCards(store, [id]);
 
       const obj = toTableObject(store.getObjectYMap(id)!);
-      if (
-        obj &&
-        obj._kind === ObjectKind.Stack &&
-        '_cards' in obj &&
-        '_faceUp' in obj
-      ) {
-        expect(obj._cards[0]).toBe('bottom-card'); // Was at bottom, now at top
-        expect(obj._cards[obj._cards.length - 1]).toBe('top-card'); // Was at top, now at bottom
+      if (obj && obj._kind === ObjectKind.Stack) {
+        const stackObj = obj as StackObject;
+        expect(stackObj._cards[0]).toBe('bottom-card'); // Was at bottom, now at top
+        expect(stackObj._cards[stackObj._cards.length - 1]).toBe('top-card'); // Was at top, now at bottom
       }
     });
 
@@ -2383,36 +2383,21 @@ describe('Concurrent Operations', () => {
 
       // Verify first new stack has card-1 (was top)
       const stack1Obj = toTableObject(store.getObjectYMap(newStack1!)!);
-      if (
-        stack1Obj &&
-        stack1Obj._kind === ObjectKind.Stack &&
-        '_cards' in stack1Obj &&
-        '_faceUp' in stack1Obj
-      ) {
-        expect(stack1Obj._cards).toEqual(['card-1']);
+      if (stack1Obj && stack1Obj._kind === ObjectKind.Stack) {
+        expect((stack1Obj as StackObject)._cards).toEqual(['card-1']);
       }
 
       // Verify second new stack has card-2 (became top after first unstack)
       const stack2Obj = toTableObject(store.getObjectYMap(newStack2!)!);
-      if (
-        stack2Obj &&
-        stack2Obj._kind === ObjectKind.Stack &&
-        '_cards' in stack2Obj &&
-        '_faceUp' in stack2Obj
-      ) {
-        expect(stack2Obj._cards).toEqual(['card-2']);
+      if (stack2Obj && stack2Obj._kind === ObjectKind.Stack) {
+        expect((stack2Obj as StackObject)._cards).toEqual(['card-2']);
       }
 
       // Verify source stack still exists with 1 card remaining
       const sourceObj = toTableObject(store.getObjectYMap(stackId)!);
       expect(sourceObj).toBeDefined();
-      if (
-        sourceObj &&
-        sourceObj._kind === ObjectKind.Stack &&
-        '_cards' in sourceObj &&
-        '_faceUp' in sourceObj
-      ) {
-        expect(sourceObj._cards).toEqual(['card-3']);
+      if (sourceObj && sourceObj._kind === ObjectKind.Stack) {
+        expect((sourceObj as StackObject)._cards).toEqual(['card-3']);
       }
     });
 

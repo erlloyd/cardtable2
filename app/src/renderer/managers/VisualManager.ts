@@ -177,9 +177,6 @@ export class VisualManager {
     isSelected: boolean,
     sceneManager: SceneManager,
   ): void {
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] updateDragFeedback: objectId=${objectId} isDragging=${isDragging} isSelected=${isSelected}`,
-    );
     const visual = this.objectVisuals.get(objectId);
     if (!visual) return;
 
@@ -279,10 +276,6 @@ export class VisualManager {
       preserveScale = false,
     } = options ?? {};
 
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] redrawVisual: objectId=${objectId} isSelected=${isSelected} isDragging=${isDragging} isHovered=${isHovered}`,
-    );
-
     const visual = this.objectVisuals.get(objectId);
     if (!visual) {
       console.error(
@@ -319,11 +312,7 @@ export class VisualManager {
     const preservedScaleY = preserveScale ? visual.scale.y : 1;
 
     // Clear existing children
-    const childrenBefore = visual.children.length;
     visual.removeChildren();
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] Cleared ${childrenBefore} children from visual ${objectId}`,
-    );
 
     // Apply shadow for both hover and drag states (M2-T4, M2-T5)
     // For drag, only apply shadow in worker mode (performance optimization for main-thread mode)
@@ -399,10 +388,6 @@ export class VisualManager {
     // Add text label showing object type
     visual.addChild(this.createKindLabel(obj._kind));
 
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] Finished redrawVisual: objectId=${objectId} childrenCount=${visual.children.length}`,
-    );
-
     // Restore preserved position if requested (for transient states like drag/animation)
     if (preservePosition && preservedX !== undefined) {
       visual.x = preservedX;
@@ -426,9 +411,6 @@ export class VisualManager {
     isSelected: boolean,
     isStackTarget: boolean,
   ): Graphics {
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] createBaseShapeGraphic: objectId=${_objectId} isSelected=${isSelected} kind=${obj._kind}`,
-    );
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(obj, {
       isSelected,

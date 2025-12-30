@@ -51,20 +51,10 @@ export function handleObjectsAdded(
     // Check if this is the new stack from an unstack operation
     const unstackSourceId = context.drag.getUnstackSourceId();
     if (unstackSourceId) {
-      console.log(
-        `[UNSTACK-VISUAL-DEBUG] New stack arrived: newStackId=${id} sourceStackId=${unstackSourceId}`,
-      );
-      console.log(
-        `[UNSTACK-VISUAL-DEBUG] Source stack selected before: ${context.selection.isSelected(unstackSourceId)}`,
-      );
-
       // Clear waiting state
       context.drag.clearUnstackWaiting();
 
       // Clear stale drag visual feedback from source stack
-      console.log(
-        `[UNSTACK-VISUAL-DEBUG] Clearing drag feedback from source stack: ${unstackSourceId}`,
-      );
       context.visual.updateDragFeedback(
         unstackSourceId,
         false, // isDragging = false
@@ -103,9 +93,6 @@ export function handleObjectsAdded(
           height: 0,
         };
       });
-      console.log(
-        `[UNSTACK-VISUAL-DEBUG] Sending objects-selected for new stack: ids=${draggedIds.join(',')}`,
-      );
       context.postResponse({
         type: 'objects-selected',
         ids: draggedIds,
@@ -129,9 +116,6 @@ export function handleObjectsUpdated(
   console.log(`[RendererCore] Updating ${message.objects.length} object(s)`);
 
   for (const { id, obj } of message.objects) {
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] objects-updated: id=${id} _selectedBy=${obj._selectedBy}`,
-    );
     updateObjectVisual(context, id, obj);
   }
 
@@ -267,10 +251,6 @@ function updateObjectVisual(
   const isHovered = context.hover.getHoveredObjectId() === id;
   const isSelected = context.selection.isSelected(id);
 
-  console.log(
-    `[UNSTACK-VISUAL-DEBUG] updateObjectVisual: id=${id} obj._selectedBy=${obj._selectedBy} isSelected=${isSelected} isDragging=${isDragging}`,
-  );
-
   // Detect _faceUp changes (flip) and animate
   const hasFaceUp = '_faceUp' in obj && typeof obj._faceUp === 'boolean';
   const prevHasFaceUp =
@@ -308,9 +288,6 @@ function updateObjectVisual(
     context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
   } else {
     // No flip - just update visual immediately
-    console.log(
-      `[UNSTACK-VISUAL-DEBUG] Calling updateVisualForObjectChange: id=${id} isSelected=${isSelected} isDragging=${isDragging}`,
-    );
     context.visual.updateVisualForObjectChange(id, context.sceneManager, {
       isHovered,
       isDragging,

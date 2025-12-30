@@ -215,17 +215,10 @@ export function handlePointerMove(
               context.worldContainer,
             );
 
-            console.log(
-              `[UNSTACK-VISUAL-DEBUG] Unstack drag detected on slop exceeded for ${draggedId} at (${worldPos.x}, ${worldPos.y})`,
-            );
-
             // CRITICAL: Clear all selections FIRST (before sending unstack-card)
             // This ensures no lingering visual feedback on the source stack or other objects
             const currentlySelected = context.selection.getSelectedIds();
             if (currentlySelected.length > 0) {
-              console.log(
-                `[UNSTACK-VISUAL-DEBUG] Clearing ${currentlySelected.length} selected objects: ${currentlySelected.join(',')}`,
-              );
               context.postResponse({
                 type: 'objects-unselected',
                 ids: currentlySelected,

@@ -1,5 +1,6 @@
 import { MessageHandlerRegistry } from '../../messaging/MessageHandlerRegistry';
 import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
+import { isValidPosition } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
 import { toTableObject } from '../../store/YjsStore';
@@ -133,6 +134,10 @@ export class BoardMessageBus {
                 : error,
           },
         );
+        // User feedback: Notify about failure
+        ctx.addMessage(
+          '❌ Failed to merge stacks. Target may have been modified.',
+        );
       }
     });
 
@@ -140,6 +145,20 @@ export class BoardMessageBus {
       console.log(
         `[BoardMessageBus] Unstacking top card from ${msg.stackId} to (${msg.pos.x}, ${msg.pos.y})`,
       );
+
+      // Validate position data before attempting operation
+      if (!isValidPosition(msg.pos)) {
+        console.error(
+          '[BoardMessageBus] Invalid position in unstack-card message',
+          {
+            stackId: msg.stackId,
+            pos: msg.pos,
+          },
+        );
+        ctx.addMessage('❌ Cannot unstack: Invalid position data');
+        return;
+      }
+
       try {
         // Perform the unstack operation
         const newStackId = unstackCard(ctx.store, msg.stackId, msg.pos);
@@ -155,6 +174,8 @@ export class BoardMessageBus {
               targetPosition: msg.pos,
             },
           );
+          // User feedback: Explain why operation failed
+          ctx.addMessage('⚠️ Cannot unstack: Stack not found or has no cards');
         }
       } catch (error) {
         console.error(
@@ -168,6 +189,8 @@ export class BoardMessageBus {
                 : error,
           },
         );
+        // User feedback: Generic error message for exceptions
+        ctx.addMessage('❌ Failed to unstack card. Please try again.');
       }
     });
 

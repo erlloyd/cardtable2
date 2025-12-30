@@ -21,6 +21,26 @@ export interface Position {
   r: number; // rotation in degrees
 }
 
+/**
+ * Validates that a Position contains valid finite numbers.
+ *
+ * Returns false if any coordinate is NaN, Infinity, or not a number.
+ * This prevents corrupted position data from breaking scene rendering.
+ *
+ * @param pos - Position to validate
+ * @returns true if all coordinates are valid finite numbers
+ */
+export function isValidPosition(
+  pos: Position | null | undefined,
+): pos is Position {
+  if (!pos || typeof pos !== 'object') {
+    return false;
+  }
+  return (
+    Number.isFinite(pos.x) && Number.isFinite(pos.y) && Number.isFinite(pos.r)
+  );
+}
+
 // Placeholder for Set JSON types (from MVP plan)
 export interface SetJson {
   schema: 'ct-set@1';

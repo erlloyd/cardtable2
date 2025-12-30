@@ -232,8 +232,15 @@ export function handlePointerMove(
               pos: { x: worldPos.x, y: worldPos.y, r: 0 },
             });
 
-            // Mark that we're waiting for the new stack to arrive
-            context.drag.setWaitingForUnstackResponse(draggedId);
+            // Mark that we're waiting for the new stack to arrive (with 2s timeout)
+            context.drag.setWaitingForUnstackResponse(draggedId, () => {
+              // Timeout callback: notify main thread of failure
+              context.postResponse({
+                type: 'error',
+                error: 'Unstack operation timed out',
+                context: 'pointer-unstack',
+              });
+            });
 
             // Don't start dragging yet - wait for objects-added
             // Clear the drag preparation so we don't try to drag the source stack

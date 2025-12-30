@@ -33,6 +33,7 @@ export class DragManager {
   private pointerDownEvent: PointerEventData | null = null;
   private isUnstackDrag = false; // Track if this is an unstack operation
   private waitingForUnstackSource: string | null = null; // Source stack ID when waiting for unstack response
+  private unstackTimeoutId: NodeJS.Timeout | null = null; // Timeout for unstack operations
 
   /**
    * Store pointer down event for selection logic on pointer up.
@@ -123,10 +124,32 @@ export class DragManager {
 
   /**
    * Mark that we're waiting for a new stack to be created from an unstack operation.
+   * Sets a 2-second timeout to prevent indefinite waiting.
    * @param sourceStackId - The ID of the source stack that was unstacked
+   * @param onTimeout - Callback to invoke if the timeout expires
    */
-  setWaitingForUnstackResponse(sourceStackId: string): void {
+  setWaitingForUnstackResponse(
+    sourceStackId: string,
+    onTimeout: () => void,
+  ): void {
     this.waitingForUnstackSource = sourceStackId;
+
+    // Clear any existing timeout
+    if (this.unstackTimeoutId !== null) {
+      clearTimeout(this.unstackTimeoutId);
+    }
+
+    // Set a 2-second timeout for the unstack operation
+    this.unstackTimeoutId = setTimeout(() => {
+      if (this.waitingForUnstackSource === sourceStackId) {
+        console.error('[DragManager] Unstack operation timed out', {
+          stackId: sourceStackId,
+          timeoutMs: 2000,
+        });
+        this.clearUnstackWaiting();
+        onTimeout();
+      }
+    }, 2000);
   }
 
   /**
@@ -146,10 +169,16 @@ export class DragManager {
   }
 
   /**
-   * Clear waiting-for-unstack state.
+   * Clear waiting-for-unstack state and cancel any pending timeout.
    */
   clearUnstackWaiting(): void {
     this.waitingForUnstackSource = null;
+
+    // Clear the timeout if it exists
+    if (this.unstackTimeoutId !== null) {
+      clearTimeout(this.unstackTimeoutId);
+      this.unstackTimeoutId = null;
+    }
   }
 
   /**

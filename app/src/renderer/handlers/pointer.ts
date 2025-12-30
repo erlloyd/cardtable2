@@ -34,22 +34,28 @@ function isPointInUnstackHandle(
   const cardCount = getCardCount(obj);
   if (cardCount < 2) return false;
 
-  // Calculate object-relative coordinates
-  const relX = worldX - obj._pos.x;
-  const relY = worldY - obj._pos.y;
+  // Calculate world-relative coordinates
+  const worldRelX = worldX - obj._pos.x;
+  const worldRelY = worldY - obj._pos.y;
 
-  // Unstack handle position (upper-right corner, from behaviors.ts)
+  // Transform to object's local coordinate space (apply inverse rotation)
+  const angleRad = (obj._pos.r * Math.PI) / 180;
+  const cos = Math.cos(-angleRad); // Negative angle for inverse rotation
+  const sin = Math.sin(-angleRad);
+  const localX = worldRelX * cos - worldRelY * sin;
+  const localY = worldRelX * sin + worldRelY * cos;
+
+  // Unstack handle position in local space (upper-right corner, from behaviors.ts)
   const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2; // Right edge
   const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2; // Top edge
 
-  // Check if point is within handle bounds (accounting for rotation later if needed)
-  // For now, simple rectangular check (works for 0° and 90° rotations approximately)
+  // Check if point is within handle bounds in local space
   const minX = handleX - STACK_BADGE_SIZE / 2;
   const maxX = handleX + STACK_BADGE_SIZE / 2;
   const minY = handleY - STACK_BADGE_SIZE / 2;
   const maxY = handleY + STACK_BADGE_SIZE / 2;
 
-  return relX >= minX && relX <= maxX && relY >= minY && relY <= maxY;
+  return localX >= minX && localX <= maxX && localY >= minY && localY <= maxY;
 }
 
 /**

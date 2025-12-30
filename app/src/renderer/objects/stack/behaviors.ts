@@ -154,11 +154,45 @@ export const StackBehaviors: ObjectBehaviors = {
   },
 
   getBounds(obj: TableObject) {
+    // If no rotation, use simple axis-aligned bounds
+    if (obj._pos.r === 0) {
+      return {
+        minX: obj._pos.x - STACK_WIDTH / 2,
+        minY: obj._pos.y - STACK_HEIGHT / 2,
+        maxX: obj._pos.x + STACK_WIDTH / 2,
+        maxY: obj._pos.y + STACK_HEIGHT / 2,
+      };
+    }
+
+    // With rotation, calculate axis-aligned bounding box of rotated rectangle
+    // Transform all four corners and find min/max
+    const angleRad = (obj._pos.r * Math.PI) / 180;
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+
+    // Four corners in local space (centered at origin)
+    const corners = [
+      { x: -STACK_WIDTH / 2, y: -STACK_HEIGHT / 2 }, // Top-left
+      { x: STACK_WIDTH / 2, y: -STACK_HEIGHT / 2 }, // Top-right
+      { x: -STACK_WIDTH / 2, y: STACK_HEIGHT / 2 }, // Bottom-left
+      { x: STACK_WIDTH / 2, y: STACK_HEIGHT / 2 }, // Bottom-right
+    ];
+
+    // Transform corners by rotation and translate to world position
+    const transformed = corners.map((corner) => ({
+      x: corner.x * cos - corner.y * sin + obj._pos.x,
+      y: corner.x * sin + corner.y * cos + obj._pos.y,
+    }));
+
+    // Find axis-aligned bounding box
+    const xs = transformed.map((p) => p.x);
+    const ys = transformed.map((p) => p.y);
+
     return {
-      minX: obj._pos.x - STACK_WIDTH / 2,
-      minY: obj._pos.y - STACK_HEIGHT / 2,
-      maxX: obj._pos.x + STACK_WIDTH / 2,
-      maxY: obj._pos.y + STACK_HEIGHT / 2,
+      minX: Math.min(...xs),
+      minY: Math.min(...ys),
+      maxX: Math.max(...xs),
+      maxY: Math.max(...ys),
     };
   },
 

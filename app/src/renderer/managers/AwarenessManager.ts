@@ -284,6 +284,7 @@ export class AwarenessManager {
             cameraScale,
             'AwarenessManager',
           ),
+          minimal: true, // Render in minimal mode (skip decorative elements)
         });
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
@@ -309,6 +310,7 @@ export class AwarenessManager {
                   cameraScale,
                   'AwarenessManager',
                 ),
+                minimal: true, // Render in minimal mode (skip decorative elements)
               });
               secondaryGraphic.alpha = 0.5; // Semi-transparent
 

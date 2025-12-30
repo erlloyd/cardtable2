@@ -924,6 +924,9 @@ function clearDragState(
       // M3.5.1-T6: Notify Board that object drag ended
       context.postResponse({ type: 'object-drag-ended' });
 
+      // M5-T1: Clear drag awareness state for multiplayer
+      context.postResponse({ type: 'drag-state-clear' });
+
       // Request render to update visuals
       context.app.renderer.render(context.app.stage);
     }

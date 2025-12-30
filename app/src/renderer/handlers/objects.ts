@@ -47,6 +47,71 @@ export function handleObjectsAdded(
 
   for (const { id, obj } of message.objects) {
     addObjectVisual(context, id, obj);
+
+    // Check if this is the new stack from an unstack operation
+    const unstackSourceId = context.drag.getUnstackSourceId();
+    if (unstackSourceId) {
+      console.log(
+        `[UNSTACK-VISUAL-DEBUG] New stack arrived: newStackId=${id} sourceStackId=${unstackSourceId}`,
+      );
+      console.log(
+        `[UNSTACK-VISUAL-DEBUG] Source stack selected before: ${context.selection.isSelected(unstackSourceId)}`,
+      );
+
+      // Clear waiting state
+      context.drag.clearUnstackWaiting();
+
+      // Clear stale drag visual feedback from source stack
+      console.log(
+        `[UNSTACK-VISUAL-DEBUG] Clearing drag feedback from source stack: ${unstackSourceId}`,
+      );
+      context.visual.updateDragFeedback(
+        unstackSourceId,
+        false, // isDragging = false
+        false, // isSelected = false (will be deselected by main thread)
+        context.sceneManager,
+      );
+
+      // Prepare drag for the new stack at its current position
+      context.drag.prepareObjectDrag(id, obj._pos.x, obj._pos.y);
+
+      // Start dragging immediately
+      context.postResponse({ type: 'object-drag-started' });
+      const draggedIds = context.drag.startObjectDrag(
+        context.sceneManager,
+        context.selection,
+      );
+
+      // Apply drag visual feedback to new stack
+      for (const objectId of draggedIds) {
+        const isSelected = context.selection.isSelected(objectId);
+        context.visual.updateDragFeedback(
+          objectId,
+          true,
+          isSelected,
+          context.sceneManager,
+        );
+      }
+
+      // Send selection message for new stack (this will unselect source stack via main thread)
+      const screenCoords = draggedIds.map((objectId) => {
+        return {
+          id: objectId,
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+        };
+      });
+      console.log(
+        `[UNSTACK-VISUAL-DEBUG] Sending objects-selected for new stack: ids=${draggedIds.join(',')}`,
+      );
+      context.postResponse({
+        type: 'objects-selected',
+        ids: draggedIds,
+        screenCoords,
+      });
+    }
   }
 
   context.app.renderer.render(context.app.stage);
@@ -64,6 +129,9 @@ export function handleObjectsUpdated(
   console.log(`[RendererCore] Updating ${message.objects.length} object(s)`);
 
   for (const { id, obj } of message.objects) {
+    console.log(
+      `[UNSTACK-VISUAL-DEBUG] objects-updated: id=${id} _selectedBy=${obj._selectedBy}`,
+    );
     updateObjectVisual(context, id, obj);
   }
 
@@ -199,6 +267,10 @@ function updateObjectVisual(
   const isHovered = context.hover.getHoveredObjectId() === id;
   const isSelected = context.selection.isSelected(id);
 
+  console.log(
+    `[UNSTACK-VISUAL-DEBUG] updateObjectVisual: id=${id} obj._selectedBy=${obj._selectedBy} isSelected=${isSelected} isDragging=${isDragging}`,
+  );
+
   // Detect _faceUp changes (flip) and animate
   const hasFaceUp = '_faceUp' in obj && typeof obj._faceUp === 'boolean';
   const prevHasFaceUp =
@@ -236,6 +308,9 @@ function updateObjectVisual(
     context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
   } else {
     // No flip - just update visual immediately
+    console.log(
+      `[UNSTACK-VISUAL-DEBUG] Calling updateVisualForObjectChange: id=${id} isSelected=${isSelected} isDragging=${isDragging}`,
+    );
     context.visual.updateVisualForObjectChange(id, context.sceneManager, {
       isHovered,
       isDragging,

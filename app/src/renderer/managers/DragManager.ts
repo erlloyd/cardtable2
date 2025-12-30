@@ -32,6 +32,7 @@ export class DragManager {
   private dragState: DragState | null = null;
   private pointerDownEvent: PointerEventData | null = null;
   private isUnstackDrag = false; // Track if this is an unstack operation
+  private waitingForUnstackSource: string | null = null; // Source stack ID when waiting for unstack response
 
   /**
    * Store pointer down event for selection logic on pointer up.
@@ -118,6 +119,37 @@ export class DragManager {
    */
   isUnstackDragActive(): boolean {
     return this.isUnstackDrag;
+  }
+
+  /**
+   * Mark that we're waiting for a new stack to be created from an unstack operation.
+   * @param sourceStackId - The ID of the source stack that was unstacked
+   */
+  setWaitingForUnstackResponse(sourceStackId: string): void {
+    this.waitingForUnstackSource = sourceStackId;
+  }
+
+  /**
+   * Check if we're waiting for an unstack response and if this is the source stack.
+   * @param stackId - Stack ID to check
+   * @returns True if we're waiting for an unstack from this source
+   */
+  isWaitingForUnstackFrom(stackId: string): boolean {
+    return this.waitingForUnstackSource === stackId;
+  }
+
+  /**
+   * Get the source stack ID we're waiting for unstack from (if any).
+   */
+  getUnstackSourceId(): string | null {
+    return this.waitingForUnstackSource;
+  }
+
+  /**
+   * Clear waiting-for-unstack state.
+   */
+  clearUnstackWaiting(): void {
+    this.waitingForUnstackSource = null;
   }
 
   /**

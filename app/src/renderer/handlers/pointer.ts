@@ -200,6 +200,48 @@ export function handlePointerMove(
         const draggedId = context.drag.getDraggedObjectId();
 
         if (draggedId) {
+          // Check if this is an unstack drag - if so, create real stack immediately
+          if (context.drag.isUnstackDragActive()) {
+            // Calculate world position for new stack
+            const worldPos = context.coordConverter.screenToWorld(
+              event.clientX,
+              event.clientY,
+              context.worldContainer,
+            );
+
+            console.log(
+              `[UNSTACK-VISUAL-DEBUG] Unstack drag detected on slop exceeded for ${draggedId} at (${worldPos.x}, ${worldPos.y})`,
+            );
+
+            // CRITICAL: Clear all selections FIRST (before sending unstack-card)
+            // This ensures no lingering visual feedback on the source stack or other objects
+            const currentlySelected = context.selection.getSelectedIds();
+            if (currentlySelected.length > 0) {
+              console.log(
+                `[UNSTACK-VISUAL-DEBUG] Clearing ${currentlySelected.length} selected objects: ${currentlySelected.join(',')}`,
+              );
+              context.postResponse({
+                type: 'objects-unselected',
+                ids: currentlySelected,
+              });
+            }
+
+            // Send unstack message immediately - Yjs will create real stack
+            context.postResponse({
+              type: 'unstack-card',
+              stackId: draggedId,
+              pos: { x: worldPos.x, y: worldPos.y, r: 0 },
+            });
+
+            // Mark that we're waiting for the new stack to arrive
+            context.drag.setWaitingForUnstackResponse(draggedId);
+
+            // Don't start dragging yet - wait for objects-added
+            // Clear the drag preparation so we don't try to drag the source stack
+            context.drag.clear();
+            return;
+          }
+
           // M3.5.1-T6: Notify Board that object drag started
           context.postResponse({ type: 'object-drag-started' });
 
@@ -851,19 +893,9 @@ function clearDragState(
         );
       }
 
-      // Check if this is an unstack drag operation
-      if (context.drag.isUnstackDragActive()) {
-        // Unstack operation: extract top card from stack
-        const stackId = draggedIds[0]; // Only one stack for unstack operations
-        console.log(
-          `[RendererCore] Unstacking top card from ${stackId} to (${worldPos.x}, ${worldPos.y})`,
-        );
-        context.postResponse({
-          type: 'unstack-card',
-          stackId,
-          pos: { x: worldPos.x, y: worldPos.y, r: 0 }, // Rotation inherited from source
-        });
-      } else if (stackTargetId && draggedIds.length > 0) {
+      // Note: Unstack operation already handled earlier (sent unstack-card on slop exceeded)
+      // So we don't need special handling here - just normal drag completion or stack merge
+      if (stackTargetId && draggedIds.length > 0) {
         // Stack operation: merge multiple stacks
         console.log(
           `[RendererCore] Stacking ${draggedIds.length} object(s) onto ${stackTargetId}`,

@@ -91,6 +91,10 @@ export class SelectionManager {
       (id) => !this.selectedObjectIds.has(id),
     );
 
+    console.log(
+      `[UNSTACK-VISUAL-DEBUG] syncFromStore: added=${added.join(',')} removed=${removed.join(',')}`,
+    );
+
     // E2E Test API: Decrement pending operations counter
     // Only decrement if there was actually a change (added or removed)
     if (added.length > 0 || removed.length > 0) {

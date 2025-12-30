@@ -7,6 +7,7 @@ import {
   STACK_BORDER_RADIUS,
   STACK_BORDER_COLOR_NORMAL,
   STACK_BORDER_COLOR_SELECTED,
+  STACK_BORDER_COLOR_TARGET,
   STACK_3D_OFFSET_X,
   STACK_3D_OFFSET_Y,
   STACK_3D_COLOR,
@@ -52,12 +53,14 @@ export const StackBehaviors: ObjectBehaviors = {
     );
     graphic.fill(color);
 
-    // Determine border color based on visual state (priority: target/selected > normal)
-    // Note: Stack target uses same color as selection for better visibility on all card colors
+    // Determine border color based on visual state (priority: selected > target > normal)
     let borderColor = STACK_BORDER_COLOR_NORMAL;
     let borderWidth = 2;
-    if (ctx.isStackTarget || ctx.isSelected) {
-      borderColor = STACK_BORDER_COLOR_SELECTED;
+    if (ctx.isSelected) {
+      borderColor = STACK_BORDER_COLOR_SELECTED; // Red for selected
+      borderWidth = 4;
+    } else if (ctx.isStackTarget) {
+      borderColor = STACK_BORDER_COLOR_TARGET; // Green for drop target
       borderWidth = 4;
     }
 

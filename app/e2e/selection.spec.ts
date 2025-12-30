@@ -579,7 +579,7 @@ test.describe('Selection Ownership E2E', () => {
     expect(positionChanged).toBe(true);
   });
 
-  test.only('dragging an already selected object keeps it selected and moves it', async ({
+  test('dragging an already selected object keeps it selected and moves it', async ({
     page,
   }) => {
     // Reset to test scene
@@ -864,9 +864,8 @@ test.describe('Selection Ownership E2E', () => {
         buttons: 1,
         metaKey: true,
       });
-      await page.evaluate(async () => {
-        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
-      }); // REPLACED waitForTimeout(16);
+      // No waitForRenderer needed - pointermove events process asynchronously
+      // Only wait after pointerup for final state synchronization
     }
 
     await canvas.dispatchEvent('pointerup', {

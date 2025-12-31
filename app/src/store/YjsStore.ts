@@ -69,13 +69,14 @@ export class YjsStore {
       pos: { x: number; y: number; r: number },
       secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
     ) => {
-      this.awareness.setLocalStateField('drag', {
+      const dragState = {
         gid,
         primaryId,
         pos,
         secondaryOffsets,
         ts: Date.now(),
-      });
+      };
+      this.awareness.setLocalStateField('drag', dragState);
     },
     AWARENESS_UPDATE_INTERVAL_MS,
   );

@@ -241,7 +241,18 @@ export class AwarenessManager {
     cameraScale: number,
     visual: VisualManager,
   ): void {
-    if (!this.awarenessContainer || !state.drag) return;
+    if (!this.awarenessContainer) return;
+
+    // Validate that drag state has all required fields
+    // Skip rendering if state is incomplete (can happen during cancel race conditions)
+    if (
+      !state.drag ||
+      !state.drag.pos ||
+      !state.drag.primaryId ||
+      !state.drag.gid
+    ) {
+      return;
+    }
 
     // Build set of current IDs (primary + secondaries)
     const currentIds = new Set<string>([state.drag.primaryId]);

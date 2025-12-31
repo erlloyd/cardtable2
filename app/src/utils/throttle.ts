@@ -59,10 +59,14 @@ export function throttle<T extends (...args: any[]) => void>(
         const remainingTime = intervalMs - timeSinceLastCall;
         timeoutId = setTimeout(() => {
           lastCallTime = Date.now();
-          const argsToUse = pendingArgs!;
+          const argsToUse = pendingArgs;
           pendingArgs = null;
           timeoutId = null;
-          fn.apply(this, argsToUse);
+
+          // Only execute if we have args (cancel() may have cleared them)
+          if (argsToUse) {
+            fn.apply(this, argsToUse);
+          }
         }, remainingTime);
       }
       // If timeout already scheduled, pendingArgs will be used (trailing edge)

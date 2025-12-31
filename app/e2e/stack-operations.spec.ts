@@ -531,4 +531,248 @@ test.describe('Stack Operations E2E', () => {
 
     expect(stackCountAfterRefresh).toBe(stackCountBeforeRefresh);
   });
+
+  test('should immediately drag new stack after unstack without second click', async ({
+    page,
+  }) => {
+    // Get a multi-card stack and its position
+    const stackData = await page.evaluate(() => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+      const canvasBBox = canvas.getBoundingClientRect();
+
+      const objects = Array.from(__TEST_STORE__.getAllObjects().entries());
+      const multiCardStack = objects.find(
+        ([, obj]) =>
+          obj._kind === 'stack' && obj._cards && obj._cards.length >= 2,
+      );
+
+      if (!multiCardStack) return null;
+
+      const [, stack] = multiCardStack;
+
+      const viewportX = canvasBBox.x + canvasWidth / 2 + stack._pos.x;
+      const viewportY = canvasBBox.y + canvasHeight / 2 + stack._pos.y;
+
+      return {
+        stackPos: { x: viewportX, y: viewportY },
+      };
+    });
+
+    if (!stackData) {
+      throw new Error('Failed to find multi-card stack');
+    }
+
+    const stackPos: StackPosition = stackData.stackPos;
+
+    // Calculate unstack handle position (upper-right corner)
+    const handleX: number = stackPos.x + 25;
+    const handleY: number = stackPos.y - 35;
+
+    // Drag unstack handle to extract top card and continue dragging
+    // This should immediately start dragging the new stack without requiring a second click
+    const dragEndX = handleX + 200;
+    const dragEndY = handleY + 100;
+
+    await page.mouse.move(handleX, handleY);
+    await page.mouse.down();
+    await page.mouse.move(dragEndX, dragEndY, { steps: 20 }); // More steps for smooth continuous drag
+    await page.mouse.up();
+
+    // Wait for renderer to process unstack operation
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+
+    // Verify: a new stack should exist and be positioned near the drag end point
+    const result = await page.evaluate(
+      (data: {
+        originalStackPos: { x: number; y: number };
+        dragEndX: number;
+        dragEndY: number;
+      }) => {
+        const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return null;
+
+        const canvasWidth = canvas.clientWidth;
+        const canvasHeight = canvas.clientHeight;
+        const canvasBBox = canvas.getBoundingClientRect();
+
+        // Convert drag end viewport coordinates back to world coordinates
+        const dragEndWorldX = data.dragEndX - canvasBBox.x - canvasWidth / 2;
+        const dragEndWorldY = data.dragEndY - canvasBBox.y - canvasHeight / 2;
+
+        const allObjects = Array.from(__TEST_STORE__.getAllObjects().entries());
+        const stacks = allObjects.filter(([, obj]) => obj._kind === 'stack');
+
+        // Find new stack (should be close to drag end position)
+        // Original stack was at (-220, -200), new stack should be ~200px right and ~100px down
+        const originalWorldX =
+          data.originalStackPos.x - canvasBBox.x - canvasWidth / 2;
+        const originalWorldY =
+          data.originalStackPos.y - canvasBBox.y - canvasHeight / 2;
+
+        const newStack = stacks.find(([, stack]) => {
+          // New stack should be significantly displaced from original position
+          const dx = stack._pos.x - originalWorldX;
+          const dy = stack._pos.y - originalWorldY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          return distance > 150; // More than 150px away from original
+        });
+
+        if (!newStack) {
+          return {
+            found: false,
+            newStackPos: null,
+            expectedPos: { x: dragEndWorldX, y: dragEndWorldY },
+          };
+        }
+
+        const [, stack] = newStack;
+
+        // Calculate distance from drag end position
+        const dx = stack._pos.x - dragEndWorldX;
+        const dy = stack._pos.y - dragEndWorldY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        return {
+          found: true,
+          newStackPos: stack._pos,
+          expectedPos: { x: dragEndWorldX, y: dragEndWorldY },
+          distance,
+        };
+      },
+      {
+        originalStackPos: stackPos,
+        dragEndX,
+        dragEndY,
+      },
+    );
+
+    expect(result?.found).toBe(true);
+    // New stack should be within 100px of where we dragged to (accounts for snap-to-grid, etc.)
+    expect(result?.distance).toBeLessThan(100);
+  });
+
+  test('should merge stack onto rotated/exhausted target stack', async ({
+    page,
+  }) => {
+    // Get two stacks and rotate the target stack (exhaust it)
+    const stackData = await page.evaluate(() => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+      const canvasBBox = canvas.getBoundingClientRect();
+
+      const objects = Array.from(__TEST_STORE__.getAllObjects().entries());
+      const stacks = objects.filter(([, obj]) => obj._kind === 'stack');
+
+      if (stacks.length < 2) return null;
+
+      const [sourceId, source] = stacks[0];
+      const [targetId, target] = stacks[1];
+
+      const toViewport = (worldX: number, worldY: number) => ({
+        x: canvasBBox.x + canvasWidth / 2 + worldX,
+        y: canvasBBox.y + canvasHeight / 2 + worldY,
+      });
+
+      return {
+        sourcePos: toViewport(source._pos.x, source._pos.y),
+        targetPos: toViewport(target._pos.x, target._pos.y),
+        sourceId: String(sourceId),
+        targetId: String(targetId),
+        sourceCardCount: source._cards?.length ?? 0,
+        targetCardCount: target._cards?.length ?? 0,
+      };
+    });
+
+    if (!stackData) {
+      throw new Error('Failed to get stack positions');
+    }
+
+    const sourcePos: StackPosition = stackData.sourcePos;
+    const targetPos: StackPosition = stackData.targetPos;
+    const sourceId: string = stackData.sourceId;
+    const targetId: string = stackData.targetId;
+    const sourceCardCount: number = stackData.sourceCardCount;
+    const targetCardCount: number = stackData.targetCardCount;
+
+    // Select and exhaust the target stack (rotate 90 degrees)
+    await page.mouse.click(targetPos.x, targetPos.y);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
+    });
+
+    // Press 'e' to exhaust (rotate)
+    await page.keyboard.press('e');
+
+    // Wait for renderer to process rotation
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+
+    // Verify target is rotated
+    const targetRotation = await page.evaluate((id: string) => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const targetYMap = __TEST_STORE__.getObjectYMap(id);
+      const pos = targetYMap ? targetYMap.get('_pos') : null;
+      return pos ? pos.r : 0;
+    }, targetId);
+
+    expect(targetRotation).toBe(90); // Exhausted = 90 degrees
+
+    // Now drag source stack onto the rotated target stack
+    await page.mouse.click(sourcePos.x, sourcePos.y);
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
+    });
+
+    await page.mouse.move(sourcePos.x, sourcePos.y);
+    await page.mouse.down();
+    await page.mouse.move(targetPos.x, targetPos.y, { steps: 10 });
+    await page.mouse.up();
+
+    // Wait for renderer to process stack merge
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+
+    // Verify: source stack deleted, target stack has combined cards
+    const result = await page.evaluate(
+      (ids: {
+        sourceId: string;
+        targetId: string;
+        expectedCardCount: number;
+      }) => {
+        const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+
+        const sourceExists =
+          __TEST_STORE__.getObjectYMap(ids.sourceId) !== undefined;
+        const targetYMap = __TEST_STORE__.getObjectYMap(ids.targetId);
+        const targetCards = targetYMap ? targetYMap.get('_cards') : null;
+
+        return {
+          sourceExists,
+          targetCardCount: targetCards?.length ?? 0,
+        };
+      },
+      {
+        sourceId,
+        targetId,
+        expectedCardCount: sourceCardCount + targetCardCount,
+      },
+    );
+
+    expect(result.sourceExists).toBe(false);
+    expect(result.targetCardCount).toBe(sourceCardCount + targetCardCount);
+  });
 });

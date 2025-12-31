@@ -47,6 +47,9 @@ export class VisualManager {
   // Track current stack target for clearing
   private currentStackTargetId: string | null = null;
 
+  // Track objects hidden due to remote awareness drag (only show ghost)
+  private hiddenObjectIds: Set<string> = new Set();
+
   /**
    * Initialize with app reference.
    */
@@ -243,6 +246,35 @@ export class VisualManager {
   }
 
   /**
+   * Hide an object (typically because remote user is dragging it - only ghost should show).
+   */
+  hideObject(objectId: string): void {
+    this.hiddenObjectIds.add(objectId);
+    const visual = this.objectVisuals.get(objectId);
+    if (visual) {
+      visual.alpha = 0;
+    }
+  }
+
+  /**
+   * Show a previously hidden object.
+   */
+  showObject(objectId: string): void {
+    this.hiddenObjectIds.delete(objectId);
+    const visual = this.objectVisuals.get(objectId);
+    if (visual) {
+      visual.alpha = 1;
+    }
+  }
+
+  /**
+   * Check if an object is hidden.
+   */
+  isHidden(objectId: string): boolean {
+    return this.hiddenObjectIds.has(objectId);
+  }
+
+  /**
    * Redraw an object's visual representation.
    * @param objectId - ID of the object to redraw
    * @param sceneManager - Scene manager for accessing object data
@@ -398,6 +430,11 @@ export class VisualManager {
     // Restore scale if requested (for animations like flip that modify scaleX/Y)
     if (preserveScale) {
       visual.scale.set(preservedScaleX, preservedScaleY);
+    }
+
+    // Hide object if marked as hidden (remote awareness ghost is showing it)
+    if (this.isHidden(objectId)) {
+      visual.alpha = 0;
     }
   }
 

@@ -48,6 +48,11 @@ export function handleObjectsAdded(
   for (const { id, obj } of message.objects) {
     addObjectVisual(context, id, obj);
 
+    // Check if this object is being remotely dragged - hide it immediately (only ghost should show)
+    if (context.awareness.isObjectRemotelyDragged(id)) {
+      context.visual.hideObject(id);
+    }
+
     // Check if this is the new stack from an unstack operation
     const unstackSourceId = context.drag.getUnstackSourceId();
     if (unstackSourceId) {

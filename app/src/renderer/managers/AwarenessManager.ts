@@ -141,17 +141,42 @@ export class AwarenessManager {
           cameraScale,
           visual,
         );
+
+        // Hide underlying objects (ghost is the source of truth during drag)
+        if (state.drag.primaryId) {
+          visual.hideObject(state.drag.primaryId);
+        }
+        if (state.drag.secondaryOffsets) {
+          for (const secondaryId of Object.keys(state.drag.secondaryOffsets)) {
+            visual.hideObject(secondaryId);
+          }
+        }
       } else if (awarenessData.dragGhost) {
-        // Remove drag ghost if drag data is gone
+        // Drag ended - show the underlying objects again
+        if (awarenessData.draggedObjectIds) {
+          for (const objectId of awarenessData.draggedObjectIds) {
+            visual.showObject(objectId);
+          }
+        }
+
+        // Remove drag ghost visual
         this.awarenessContainer.removeChild(awarenessData.dragGhost);
         awarenessData.dragGhost.destroy();
         awarenessData.dragGhost = undefined;
+        awarenessData.draggedObjectIds = undefined;
       }
     }
 
     // Clean up actors that are no longer present
     for (const [clientId, data] of this.remoteAwareness.entries()) {
       if (!activeClientIds.has(clientId)) {
+        // Show any hidden objects (in case actor disconnected mid-drag)
+        if (data.draggedObjectIds) {
+          for (const objectId of data.draggedObjectIds) {
+            visual.showObject(objectId);
+          }
+        }
+
         // Remove visuals
         if (data.cursor) {
           this.awarenessContainer.removeChild(data.cursor);
@@ -362,11 +387,18 @@ export class AwarenessManager {
   /**
    * Clear all awareness state.
    */
-  clear(): void {
+  clear(visual?: VisualManager): void {
     if (!this.awarenessContainer) return;
 
     // Clean up all visuals
     for (const [, data] of this.remoteAwareness.entries()) {
+      // Show any hidden objects
+      if (visual && data.draggedObjectIds) {
+        for (const objectId of data.draggedObjectIds) {
+          visual.showObject(objectId);
+        }
+      }
+
       if (data.cursor) {
         this.awarenessContainer.removeChild(data.cursor);
         data.cursor.destroy();
@@ -379,5 +411,24 @@ export class AwarenessManager {
 
     this.remoteAwareness.clear();
     this.awarenessUpdateTimestamps = [];
+  }
+
+  /**
+   * Check if an object is being dragged by any remote user.
+   * Used to immediately hide objects when they're added while a remote drag is active.
+   */
+  isObjectRemotelyDragged(objectId: string): boolean {
+    for (const data of this.remoteAwareness.values()) {
+      if (data.state.drag?.primaryId === objectId) {
+        return true;
+      }
+      if (
+        data.state.drag?.secondaryOffsets &&
+        objectId in data.state.drag.secondaryOffsets
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -6,15 +6,33 @@ Implement stacking and unstacking actions to merge and separate card stacks. The
 **CRITICAL:** All stack operations and visuals apply ONLY to `ObjectKind.Stack` - not tokens, zones, mats, or other object types.
 
 ## Status
-✅ **Complete** - All stack operations implemented and tested
+✅ **COMPLETED** - All stack operations implemented, tested, and deployed
 
-**Completed:**
+**Pull Request:** [#46](https://github.com/erlloyd/cardtable2/pull/46)
+**Completion Date:** December 31, 2024
+
+**Core Features Completed:**
 - ✅ Visual Stack Rendering (3D effect, count badge, unstack handle)
 - ✅ Stack Objects Action (drag-and-drop merge)
 - ✅ Stack target visual feedback (selection-colored border)
 - ✅ Selection cleanup on object deletion
 - ✅ Unstack Action (extract top card via drag handle)
 - ✅ Stack Flip Behavior (reverse card order)
+- ✅ Immediate drag continuation after unstack (no second click required)
+- ✅ Hit detection for rotated/exhausted cards (90° rotation support)
+
+**Multiplayer & Polish:**
+- ✅ Fixed awareness ghost jumping to 0,0 (throttle race condition)
+- ✅ Fixed visual duplication during remote unstack operations
+- ✅ Object hide/show system for clean remote awareness rendering
+- ✅ Replaced custom throttle with lodash-es for long-term reliability
+- ✅ Removed color references from comments (maintainability)
+
+**Testing:**
+- ✅ 101 unit tests passing (YjsActions, VisualManager, AwarenessManager)
+- ✅ 7 E2E tests passing (stack-operations.spec.ts)
+- ✅ Concurrent operation tests (race condition handling)
+- ✅ Multiplayer scenario tests
 
 ## Prerequisites
 - Card flip and exhaust/ready actions completed ✅

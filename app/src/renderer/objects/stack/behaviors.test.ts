@@ -45,6 +45,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       isSelected: false,
       isHovered: false,
       isDragging: false,
+      isStackTarget: false,
       cameraScale: 4.0,
       createText: mockCreateText,
       scaleStrokeWidth: mockScaleStrokeWidth,

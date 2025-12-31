@@ -1,17 +1,20 @@
 /**
  * Throttle utility for awareness updates (M3-T4)
  *
- * Ensures a function is called at most once per interval (e.g., 30Hz = 33ms).
- * Uses trailing edge execution to ensure the latest value is always sent.
+ * Re-exports lodash-es throttle with trailing edge semantics.
+ * Previously used a custom implementation that had a race condition
+ * between cancel() and setTimeout callbacks.
  */
+
+import { throttle as lodashThrottle, type DebouncedFunc } from 'lodash-es';
 
 /**
  * Type for throttled functions with cancel method
+ * (lodash's DebouncedFunc includes cancel and flush methods)
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic function signature requires any for proper type inference
-export type ThrottledFunction<T extends (...args: any[]) => void> = T & {
-  cancel: () => void;
-};
+export type ThrottledFunction<T extends (...args: any[]) => void> =
+  DebouncedFunc<T>;
 
 /**
  * Throttle a function to be called at most once per interval
@@ -36,49 +39,12 @@ export function throttle<T extends (...args: any[]) => void>(
   fn: T,
   intervalMs: number,
 ): ThrottledFunction<T> {
-  let lastCallTime = 0;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let pendingArgs: Parameters<T> | null = null;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserving original function's this context
-  const throttled = function (this: any, ...args: Parameters<T>) {
-    const now = Date.now();
-    const timeSinceLastCall = now - lastCallTime;
-
-    // Store the latest arguments
-    pendingArgs = args;
-
-    if (timeSinceLastCall >= intervalMs) {
-      // Enough time has passed, execute immediately
-      lastCallTime = now;
-      pendingArgs = null;
-      fn.apply(this, args);
-    } else {
-      // Schedule execution with latest args at the end of the interval
-      if (timeoutId === null) {
-        const remainingTime = intervalMs - timeSinceLastCall;
-        timeoutId = setTimeout(() => {
-          lastCallTime = Date.now();
-          const argsToUse = pendingArgs!;
-          pendingArgs = null;
-          timeoutId = null;
-          fn.apply(this, argsToUse);
-        }, remainingTime);
-      }
-      // If timeout already scheduled, pendingArgs will be used (trailing edge)
-    }
-  } as T & { cancel: () => void };
-
-  // Add cancel method to clear pending timeouts
-  throttled.cancel = () => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-      pendingArgs = null;
-    }
-  };
-
-  return throttled;
+  // Use lodash throttle with trailing edge (default behavior)
+  // This ensures the latest value is always sent
+  return lodashThrottle(fn, intervalMs, {
+    leading: true,
+    trailing: true,
+  });
 }
 
 /**

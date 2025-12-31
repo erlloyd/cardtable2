@@ -44,6 +44,12 @@ export class VisualManager {
   // Text resolution for zoom quality
   private textResolutionMultiplier: number = 1.0;
 
+  // Track current stack target for clearing
+  private currentStackTargetId: string | null = null;
+
+  // Track objects hidden due to remote awareness drag (only show ghost)
+  private hiddenObjectIds: Set<string> = new Set();
+
   /**
    * Initialize with app reference.
    */
@@ -94,7 +100,12 @@ export class VisualManager {
     const container = new Container();
 
     // Create base shape using behaviors
-    const shapeGraphic = this.createBaseShapeGraphic(objectId, obj, false);
+    const shapeGraphic = this.createBaseShapeGraphic(
+      objectId,
+      obj,
+      false,
+      false,
+    );
     container.addChild(shapeGraphic);
 
     // Add text label showing object type
@@ -157,7 +168,7 @@ export class VisualManager {
     }
 
     // Redraw the visual with current hover state
-    this.redrawVisual(objectId, isHovered, false, isSelected, sceneManager);
+    this.redrawVisual(objectId, sceneManager, { isHovered, isSelected });
   }
 
   /**
@@ -181,52 +192,122 @@ export class VisualManager {
     }
 
     // Redraw the visual with current drag state
-    this.redrawVisual(objectId, false, isDragging, isSelected, sceneManager);
+    this.redrawVisual(objectId, sceneManager, { isDragging, isSelected });
+  }
+
+  /**
+   * Update stack target visual feedback - highlights a stack as a valid drop target.
+   */
+  updateStackTargetFeedback(
+    objectId: string,
+    isStackTarget: boolean,
+    isSelected: boolean,
+    sceneManager: SceneManager,
+  ): void {
+    // Clear previous stack target feedback if it's different from the new one
+    if (this.currentStackTargetId && this.currentStackTargetId !== objectId) {
+      const prevIsSelected =
+        sceneManager.getObject(this.currentStackTargetId)?._selectedBy !== null;
+      this.redrawVisual(this.currentStackTargetId, sceneManager, {
+        isStackTarget: false,
+        isSelected: prevIsSelected,
+      });
+    }
+
+    // Update current stack target ID
+    this.currentStackTargetId = isStackTarget ? objectId : null;
+
+    // Apply feedback to new stack target (if objectId is valid)
+    if (objectId && isStackTarget) {
+      const visual = this.objectVisuals.get(objectId);
+      if (!visual) return;
+
+      // Redraw the visual with stack target state
+      this.redrawVisual(objectId, sceneManager, { isStackTarget, isSelected });
+    }
   }
 
   /**
    * Update object visual when object data changes (e.g., _faceUp, _meta).
    * Forces a full re-render to reflect updated properties.
-   * @param preservePosition - If true, maintain the visual's current position after redraw (useful during drag/animation)
-   * @param preserveScale - If true, maintain the visual's current scale after redraw (useful during flip animations)
    */
   updateVisualForObjectChange(
     objectId: string,
-    isHovered: boolean,
-    isDragging: boolean,
-    isSelected: boolean,
     sceneManager: SceneManager,
-    preservePosition = false,
-    preserveScale = false,
+    options?: {
+      isHovered?: boolean;
+      isDragging?: boolean;
+      isSelected?: boolean;
+      preservePosition?: boolean;
+      preserveScale?: boolean;
+    },
   ): void {
-    this.redrawVisual(
-      objectId,
-      isHovered,
-      isDragging,
-      isSelected,
-      sceneManager,
-      preservePosition,
-      preserveScale,
-    );
+    this.redrawVisual(objectId, sceneManager, options);
+  }
+
+  /**
+   * Hide an object (typically because remote user is dragging it - only ghost should show).
+   */
+  hideObject(objectId: string): void {
+    this.hiddenObjectIds.add(objectId);
+    const visual = this.objectVisuals.get(objectId);
+    if (visual) {
+      visual.alpha = 0;
+    }
+  }
+
+  /**
+   * Show a previously hidden object.
+   */
+  showObject(objectId: string): void {
+    this.hiddenObjectIds.delete(objectId);
+    const visual = this.objectVisuals.get(objectId);
+    if (visual) {
+      visual.alpha = 1;
+    }
+  }
+
+  /**
+   * Check if an object is hidden.
+   */
+  isHidden(objectId: string): boolean {
+    return this.hiddenObjectIds.has(objectId);
   }
 
   /**
    * Redraw an object's visual representation.
-   * @param isHovered - Whether the object is hovered (black shadow)
-   * @param isDragging - Whether the object is being dragged (blue shadow)
-   * @param isSelected - Whether the object is selected (red border)
-   * @param preservePosition - If true, restore visual position after redraw (for transient states like drag)
-   * @param preserveScale - If true, restore visual scale after redraw (for animations like flip)
+   * @param objectId - ID of the object to redraw
+   * @param sceneManager - Scene manager for accessing object data
+   * @param options - Visual state options
+   * @param options.isHovered - Whether the object is hovered (black shadow)
+   * @param options.isDragging - Whether the object is being dragged (blue shadow)
+   * @param options.isSelected - Whether the object is selected (red border)
+   * @param options.isStackTarget - Whether the object is a valid stack drop target (green border)
+   * @param options.preservePosition - If true, restore visual position after redraw (for transient states like drag)
+   * @param options.preserveScale - If true, restore visual scale after redraw (for animations like flip)
    */
   private redrawVisual(
     objectId: string,
-    isHovered: boolean,
-    isDragging: boolean,
-    isSelected: boolean,
     sceneManager: SceneManager,
-    preservePosition = false,
-    preserveScale = false,
+    options?: {
+      isHovered?: boolean;
+      isDragging?: boolean;
+      isSelected?: boolean;
+      isStackTarget?: boolean;
+      preservePosition?: boolean;
+      preserveScale?: boolean;
+    },
   ): void {
+    // Destructure with defaults
+    const {
+      isHovered = false,
+      isDragging = false,
+      isSelected = false,
+      isStackTarget = false,
+      preservePosition = false,
+      preserveScale = false,
+    } = options ?? {};
+
     const visual = this.objectVisuals.get(objectId);
     if (!visual) {
       console.error(
@@ -328,7 +409,12 @@ export class VisualManager {
     }
 
     // Create and add the base shape graphic
-    const shapeGraphic = this.createBaseShapeGraphic(objectId, obj, isSelected);
+    const shapeGraphic = this.createBaseShapeGraphic(
+      objectId,
+      obj,
+      isSelected,
+      isStackTarget,
+    );
     visual.addChild(shapeGraphic);
 
     // Add text label showing object type
@@ -345,6 +431,11 @@ export class VisualManager {
     if (preserveScale) {
       visual.scale.set(preservedScaleX, preservedScaleY);
     }
+
+    // Hide object if marked as hidden (remote awareness ghost is showing it)
+    if (this.isHidden(objectId)) {
+      visual.alpha = 0;
+    }
   }
 
   /**
@@ -355,12 +446,14 @@ export class VisualManager {
     _objectId: string,
     obj: TableObject,
     isSelected: boolean,
+    isStackTarget: boolean,
   ): Graphics {
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(obj, {
       isSelected,
       isHovered: false, // Hover state handled by shadow, not render
       isDragging: false, // Drag state handled by shadow, not render
+      isStackTarget,
       cameraScale: this.cameraScale,
       createText: this.createText.bind(this),
       scaleStrokeWidth: createScaleStrokeWidth(
@@ -652,5 +745,6 @@ export class VisualManager {
     }
 
     this.objectVisuals.clear();
+    this.currentStackTargetId = null;
   }
 }

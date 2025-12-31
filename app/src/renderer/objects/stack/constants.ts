@@ -11,6 +11,7 @@ export const STACK_DEFAULT_COLOR = 0x6c5ce7; // Purple
 /** Border colors */
 export const STACK_BORDER_COLOR_NORMAL = 0x2d3436; // Dark gray
 export const STACK_BORDER_COLOR_SELECTED = 0xef4444; // Red
+export const STACK_BORDER_COLOR_TARGET = 0xef4444; // Red (same as selection for consistent visual)
 
 /** 3D effect for multi-card stacks */
 export const STACK_3D_OFFSET_X = -3; // Offset left

@@ -8,8 +8,14 @@ import {
   clearAllSelections,
   exhaustCards,
   flipCards,
+  stackObjects,
+  unstackCard,
 } from './YjsActions';
-import { ObjectKind, type TableObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  type StackObject,
+  type TableObject,
+} from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
 vi.mock('y-indexeddb', () => ({
@@ -1441,9 +1447,980 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
         '_cards' in obj &&
         '_faceUp' in obj
       ) {
-        expect(obj._cards).toEqual(['card-1', 'card-2']);
+        expect(obj._cards).toEqual(['card-2', 'card-1']); // Card order reversed on flip
         expect(obj._faceUp).toBe(false);
       }
+    });
+  });
+
+  describe('Stack Card Order', () => {
+    it('reverses card order when flipping a stack', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2', 'card-3'],
+        faceUp: true,
+      });
+
+      flipCards(store, [id]);
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      if (
+        obj &&
+        obj._kind === ObjectKind.Stack &&
+        '_cards' in obj &&
+        '_faceUp' in obj
+      ) {
+        expect(obj._cards).toEqual(['card-3', 'card-2', 'card-1']); // Reversed
+        expect(obj._faceUp).toBe(false);
+      }
+    });
+
+    it('swaps top and bottom cards on flip', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['top-card', 'middle-1', 'middle-2', 'bottom-card'],
+        faceUp: true,
+      });
+
+      flipCards(store, [id]);
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      if (obj && obj._kind === ObjectKind.Stack) {
+        const stackObj = obj as StackObject;
+        expect(stackObj._cards[0]).toBe('bottom-card'); // Was at bottom, now at top
+        expect(stackObj._cards[stackObj._cards.length - 1]).toBe('top-card'); // Was at top, now at bottom
+      }
+    });
+
+    it('reverses card order on each flip', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2', 'card-3'],
+        faceUp: true,
+      });
+
+      // First flip: face down, cards reversed
+      flipCards(store, [id]);
+      let obj = toTableObject(store.getObjectYMap(id)!);
+      if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
+        expect(obj._cards).toEqual(['card-3', 'card-2', 'card-1']);
+      }
+
+      // Second flip: face up, cards reversed again (back to original)
+      flipCards(store, [id]);
+      obj = toTableObject(store.getObjectYMap(id)!);
+      if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
+        expect(obj._cards).toEqual(['card-1', 'card-2', 'card-3']);
+      }
+    });
+
+    it('handles single-card stacks', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['only-card'],
+        faceUp: true,
+      });
+
+      flipCards(store, [id]);
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
+        expect(obj._cards).toEqual(['only-card']); // Single card stays same
+      }
+    });
+
+    it('handles empty card arrays', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: [],
+        faceUp: true,
+      });
+
+      flipCards(store, [id]);
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
+        expect(obj._cards).toEqual([]); // Empty stays empty
+      }
+    });
+  });
+});
+
+describe('YjsActions - stackObjects (M3.5-T3)', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('Basic Stack Merging', () => {
+    it('merges two stacks with target cards at bottom, source cards on top', () => {
+      // Create target stack with 2 cards
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1', 'target-2'],
+        faceUp: true,
+      });
+
+      // Create source stack with 2 cards
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source-1', 'source-2'],
+        faceUp: true,
+      });
+
+      const result = stackObjects(store, [sourceId], targetId);
+
+      expect(result).toEqual([sourceId]);
+
+      // Verify target stack has merged cards in correct order
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      if (
+        targetObj &&
+        targetObj._kind === ObjectKind.Stack &&
+        '_cards' in targetObj
+      ) {
+        expect(targetObj._cards).toEqual([
+          'target-1',
+          'target-2',
+          'source-1',
+          'source-2',
+        ]);
+      }
+
+      // Verify source stack was deleted
+      expect(store.getObjectYMap(sourceId)).toBeUndefined();
+    });
+
+    it('merges multiple stacks (3+)', () => {
+      // Create target stack
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      // Create source stacks
+      const source1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source1-1', 'source1-2'],
+        faceUp: true,
+      });
+
+      const source2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 300, y: 300, r: 0 },
+        cards: ['source2-1'],
+        faceUp: true,
+      });
+
+      const source3 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 400, y: 400, r: 0 },
+        cards: ['source3-1', 'source3-2', 'source3-3'],
+        faceUp: true,
+      });
+
+      const result = stackObjects(store, [source1, source2, source3], targetId);
+
+      expect(result).toEqual([source1, source2, source3]);
+
+      // Verify target stack has all cards (target at bottom, sources on top)
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      if (
+        targetObj &&
+        targetObj._kind === ObjectKind.Stack &&
+        '_cards' in targetObj
+      ) {
+        expect(targetObj._cards).toEqual([
+          'target-1',
+          'source1-1',
+          'source1-2',
+          'source2-1',
+          'source3-1',
+          'source3-2',
+          'source3-3',
+        ]);
+      }
+
+      // Verify all source stacks were deleted
+      expect(store.getObjectYMap(source1)).toBeUndefined();
+      expect(store.getObjectYMap(source2)).toBeUndefined();
+      expect(store.getObjectYMap(source3)).toBeUndefined();
+    });
+
+    it('uses first id as target when targetId not provided', () => {
+      const stack1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['stack1-1', 'stack1-2'],
+        faceUp: true,
+      });
+
+      const stack2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['stack2-1'],
+        faceUp: true,
+      });
+
+      const stack3 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 300, y: 300, r: 0 },
+        cards: ['stack3-1'],
+        faceUp: true,
+      });
+
+      // No targetId provided - should use first id (stack1)
+      const result = stackObjects(store, [stack1, stack2, stack3]);
+
+      expect(result).toEqual([stack2, stack3]);
+
+      // Verify stack1 is the target and has merged cards
+      const stack1Obj = toTableObject(store.getObjectYMap(stack1)!);
+      if (
+        stack1Obj &&
+        stack1Obj._kind === ObjectKind.Stack &&
+        '_cards' in stack1Obj
+      ) {
+        expect(stack1Obj._cards).toEqual([
+          'stack1-1',
+          'stack1-2',
+          'stack2-1',
+          'stack3-1',
+        ]);
+      }
+
+      // Verify stack2 and stack3 were deleted
+      expect(store.getObjectYMap(stack2)).toBeUndefined();
+      expect(store.getObjectYMap(stack3)).toBeUndefined();
+    });
+  });
+
+  describe('Target State Wins', () => {
+    it('merged stack adopts target _faceUp state', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: false, // Face down
+      });
+
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source-1'],
+        faceUp: true, // Face up (different from target)
+      });
+
+      stackObjects(store, [sourceId], targetId);
+
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      if (
+        targetObj &&
+        targetObj._kind === ObjectKind.Stack &&
+        '_faceUp' in targetObj
+      ) {
+        expect(targetObj._faceUp).toBe(false); // Should still be face down
+      }
+    });
+
+    it('merged stack preserves target rotation (exhausted state)', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 90 }, // Exhausted
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 }, // Ready (different from target)
+        cards: ['source-1'],
+        faceUp: true,
+      });
+
+      stackObjects(store, [sourceId], targetId);
+
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      expect(targetObj?._pos.r).toBe(90); // Should still be exhausted
+    });
+
+    it('merged stack preserves target position', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 123, y: 456, r: 45 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 789, y: 101, r: 0 },
+        cards: ['source-1'],
+        faceUp: true,
+      });
+
+      stackObjects(store, [sourceId], targetId);
+
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      expect(targetObj?._pos).toEqual({ x: 123, y: 456, r: 45 });
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('throws error when targetId appears in ids array', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      expect(() => {
+        stackObjects(store, [targetId], targetId);
+      }).toThrow('targetId cannot appear in ids array');
+    });
+
+    it('throws error when ids array is empty and no targetId', () => {
+      expect(() => {
+        stackObjects(store, []);
+      }).toThrow('No target stack specified and ids array is empty');
+    });
+
+    it('throws error when target stack not found', () => {
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['source-1'],
+        faceUp: true,
+      });
+
+      expect(() => {
+        stackObjects(store, [sourceId], 'non-existent-target');
+      }).toThrow('Target stack non-existent-target not found');
+    });
+
+    it('throws error when target is not a stack', () => {
+      const tokenId = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 100, y: 100, r: 0 },
+      });
+
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source-1'],
+        faceUp: true,
+      });
+
+      expect(() => {
+        stackObjects(store, [sourceId], tokenId);
+      }).toThrow(/Target .* is not a stack/);
+    });
+
+    it('warns and skips non-existent source stacks', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const validSourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source-1'],
+        faceUp: true,
+      });
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = stackObjects(
+        store,
+        [validSourceId, 'non-existent'],
+        targetId,
+      );
+
+      expect(result).toEqual([validSourceId]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[stackObjects] Source stack non-existent not found, skipping',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('warns and skips non-stack source objects', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const tokenId = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 200, y: 200, r: 0 },
+      });
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = stackObjects(store, [tokenId], targetId);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('is not a stack'),
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('returns empty array when no valid source stacks', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const result = stackObjects(store, ['non-existent'], targetId);
+
+      expect(result).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[stackObjects] No valid source stacks to merge',
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('handles empty source stack (no cards)', () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const emptySourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: [], // Empty
+        faceUp: true,
+      });
+
+      const result = stackObjects(store, [emptySourceId], targetId);
+
+      // Empty sources should be skipped (no cards to add)
+      expect(result).toEqual([]);
+
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      if (
+        targetObj &&
+        targetObj._kind === ObjectKind.Stack &&
+        '_cards' in targetObj
+      ) {
+        expect(targetObj._cards).toEqual(['target-1']); // Unchanged
+      }
+    });
+
+    it('handles target with many cards', () => {
+      const manyCards = Array.from({ length: 100 }, (_, i) => `card-${i}`);
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: manyCards,
+        faceUp: true,
+      });
+
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source-1', 'source-2'],
+        faceUp: true,
+      });
+
+      stackObjects(store, [sourceId], targetId);
+
+      const targetObj = toTableObject(store.getObjectYMap(targetId)!);
+      if (
+        targetObj &&
+        targetObj._kind === ObjectKind.Stack &&
+        '_cards' in targetObj
+      ) {
+        const cards = (targetObj as { _cards: string[] })._cards;
+        expect(cards.length).toBe(102);
+        expect(cards.slice(-2)).toEqual(['source-1', 'source-2']);
+      }
+    });
+  });
+
+  describe('Transaction Atomicity', () => {
+    it('uses single transaction for atomic merge', async () => {
+      const targetId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['target-1'],
+        faceUp: true,
+      });
+
+      const source1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['source1-1'],
+        faceUp: true,
+      });
+
+      const source2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 300, y: 300, r: 0 },
+        cards: ['source2-1'],
+        faceUp: true,
+      });
+
+      // Wait for create events
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const callback = vi.fn();
+      store.onObjectsChange(callback);
+
+      stackObjects(store, [source1, source2], targetId);
+
+      // Wait for Yjs to trigger observers
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Should be called once with all changes (atomic transaction)
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('YjsActions - unstackCard', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('Basic Unstacking', () => {
+    it('extracts top card from multi-card stack', () => {
+      // Create source stack with 3 cards
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2', 'card-3'],
+        faceUp: true,
+      });
+
+      // Unstack top card
+      const newStackId = unstackCard(store, sourceId, { x: 150, y: 250, r: 0 });
+
+      expect(newStackId).not.toBeNull();
+      expect(typeof newStackId).toBe('string');
+
+      // Verify new stack has only the top card
+      const newStack = toTableObject(store.getObjectYMap(newStackId!)!);
+      expect(newStack?._kind).toBe(ObjectKind.Stack);
+      expect(newStack?._pos.x).toBe(150);
+      expect(newStack?._pos.y).toBe(250);
+      if (
+        newStack &&
+        newStack._kind === ObjectKind.Stack &&
+        '_cards' in newStack
+      ) {
+        expect(newStack._cards).toEqual(['card-1']);
+      }
+
+      // Verify source stack has remaining cards
+      const sourceStack = toTableObject(store.getObjectYMap(sourceId)!);
+      expect(sourceStack).not.toBeNull();
+      if (
+        sourceStack &&
+        sourceStack._kind === ObjectKind.Stack &&
+        '_cards' in sourceStack
+      ) {
+        expect(sourceStack._cards).toEqual(['card-2', 'card-3']);
+      }
+    });
+
+    it('extracts last card and deletes source stack', () => {
+      // Create source stack with 1 card
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['only-card'],
+        faceUp: true,
+      });
+
+      // Unstack the only card
+      const newStackId = unstackCard(store, sourceId, { x: 150, y: 250, r: 0 });
+
+      expect(newStackId).not.toBeNull();
+
+      // Verify new stack exists with the card
+      const newStack = toTableObject(store.getObjectYMap(newStackId!)!);
+      expect(newStack?._kind).toBe(ObjectKind.Stack);
+      if (
+        newStack &&
+        newStack._kind === ObjectKind.Stack &&
+        '_cards' in newStack
+      ) {
+        expect(newStack._cards).toEqual(['only-card']);
+      }
+
+      // Verify source stack was deleted
+      const sourceStack = store.getObjectYMap(sourceId);
+      expect(sourceStack).toBeUndefined();
+    });
+
+    it('inherits face-up state from source stack', () => {
+      // Create face-down source stack
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2'],
+        faceUp: false,
+      });
+
+      // Unstack top card
+      const newStackId = unstackCard(store, sourceId, { x: 150, y: 250, r: 0 });
+
+      // Verify new stack is face-down
+      const newStack = toTableObject(store.getObjectYMap(newStackId!)!);
+      if (
+        newStack &&
+        newStack._kind === ObjectKind.Stack &&
+        '_faceUp' in newStack
+      ) {
+        expect(newStack._faceUp).toBe(false);
+      }
+    });
+
+    it('inherits rotation from source stack', () => {
+      // Create exhausted (rotated) source stack
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 90 },
+        cards: ['card-1', 'card-2'],
+        faceUp: true,
+      });
+
+      // Unstack top card (requested position has r: 0, but should inherit r: 90)
+      const newStackId = unstackCard(store, sourceId, { x: 150, y: 250, r: 0 });
+
+      // Verify new stack has inherited rotation
+      const newStack = toTableObject(store.getObjectYMap(newStackId!)!);
+      expect(newStack?._pos.r).toBe(90);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('returns null if stack not found', () => {
+      const result = unstackCard(store, 'non-existent', {
+        x: 150,
+        y: 250,
+        r: 0,
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null if object is not a stack', () => {
+      // Create a token (not a stack)
+      const tokenId = createObject(store, {
+        kind: ObjectKind.Token,
+        pos: { x: 100, y: 200, r: 0 },
+        meta: { color: 'red' },
+      });
+
+      const result = unstackCard(store, tokenId, { x: 150, y: 250, r: 0 });
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('Transaction Atomicity', () => {
+    it('executes unstack in single transaction', async () => {
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2'],
+        faceUp: true,
+      });
+
+      // Wait for create event
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const callback = vi.fn();
+      store.onObjectsChange(callback);
+
+      unstackCard(store, sourceId, { x: 150, y: 250, r: 0 });
+
+      // Wait for Yjs to trigger observers
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Should be called once with all changes (atomic transaction)
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Z-Order', () => {
+    it('creates new stack on top of existing objects', () => {
+      // Create source stack
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 200, r: 0 },
+        cards: ['card-1', 'card-2'],
+        faceUp: true,
+      });
+
+      // Get source sortKey
+      const sourceStack = toTableObject(store.getObjectYMap(sourceId)!);
+      const sourceSortKey = sourceStack?._sortKey;
+
+      // Unstack
+      const newStackId = unstackCard(store, sourceId, { x: 150, y: 250, r: 0 });
+
+      // New stack should have higher sortKey
+      const newStack = toTableObject(store.getObjectYMap(newStackId!)!);
+      const newSortKey = newStack?._sortKey;
+
+      expect(newSortKey).toBeDefined();
+      expect(sourceSortKey).toBeDefined();
+      if (newSortKey && sourceSortKey) {
+        expect(newSortKey > sourceSortKey).toBe(true);
+      }
+    });
+  });
+});
+
+describe('Concurrent Operations', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-concurrent-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  describe('stackObjects race conditions', () => {
+    it('handles concurrent stack operations on same objects', () => {
+      // Create three stacks
+      const stack1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['card-1'],
+        faceUp: true,
+      });
+      const stack2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 100, r: 0 },
+        cards: ['card-2'],
+        faceUp: true,
+      });
+      const stack3 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 300, y: 100, r: 0 },
+        cards: ['card-3'],
+        faceUp: true,
+      });
+
+      // Simulate two actors trying to stack same objects concurrently
+      // Actor 1: stack1 + stack2 -> stack1
+      // Actor 2: stack2 + stack3 -> stack2
+      // One should succeed, one should fail (stack2 gets deleted by first operation)
+
+      // Use separate transactions to simulate concurrent operations
+      let actor1Success = false;
+      let actor2Success = false;
+
+      try {
+        store.getDoc().transact(() => {
+          stackObjects(store, [stack2], stack1);
+        });
+        actor1Success = true;
+      } catch {
+        // Expected: might fail if stack2 already deleted
+      }
+
+      try {
+        store.getDoc().transact(() => {
+          stackObjects(store, [stack3], stack2);
+        });
+        actor2Success = true;
+      } catch {
+        // Expected: might fail if stack2 already deleted
+      }
+
+      // Verify: At least one operation should succeed
+      // If both succeed, it means operations didn't conflict
+      // If one fails, it's because stack2 was deleted
+      expect(actor1Success || actor2Success).toBe(true);
+
+      // Verify stack integrity: deleted stacks should not exist
+      if (actor1Success) {
+        expect(store.getObjectYMap(stack2)).toBeUndefined();
+      }
+      if (actor2Success) {
+        expect(store.getObjectYMap(stack3)).toBeUndefined();
+      }
+    });
+
+    it('handles stack operation on object being deleted', async () => {
+      // Create two stacks
+      const stack1 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['card-1'],
+        faceUp: true,
+      });
+      const stack2 = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 100, r: 0 },
+        cards: ['card-2'],
+        faceUp: true,
+      });
+
+      // Wait for objects to be created
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Simulate concurrent operations:
+      // Actor 1: Delete stack2
+      // Actor 2: Stack stack2 onto stack1
+      let deleteSuccess = false;
+
+      try {
+        store.getDoc().transact(() => {
+          store.deleteObject(stack2);
+        });
+        deleteSuccess = true;
+      } catch {
+        // Unexpected
+      }
+
+      try {
+        store.getDoc().transact(() => {
+          stackObjects(store, [stack2], stack1);
+        });
+        // Stack operation may succeed or fail depending on timing
+      } catch {
+        // Expected: stack2 no longer exists
+      }
+
+      // Delete should always succeed
+      expect(deleteSuccess).toBe(true);
+
+      // Stack2 should be deleted regardless of stack operation outcome
+      // Note: Current implementation doesn't validate existence before transaction
+      // so this test documents current behavior
+      expect(store.getObjectYMap(stack2)).toBeUndefined();
+    });
+  });
+
+  describe('unstackCard race conditions', () => {
+    it('handles concurrent unstack operations on same stack', async () => {
+      // Create stack with 3 cards
+      const stackId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['card-1', 'card-2', 'card-3'],
+        faceUp: true,
+      });
+
+      // Wait for object to be created
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Simulate two actors unstacking concurrently
+      let newStack1: string | null = null;
+      let newStack2: string | null = null;
+
+      // First unstack (should succeed)
+      newStack1 = unstackCard(store, stackId, { x: 200, y: 100, r: 0 });
+
+      // Second unstack (should also succeed - different top card now)
+      newStack2 = unstackCard(store, stackId, { x: 300, y: 100, r: 0 });
+
+      // Both operations should succeed
+      expect(newStack1).not.toBeNull();
+      expect(newStack2).not.toBeNull();
+
+      // Verify first new stack has card-1 (was top)
+      const stack1Obj = toTableObject(store.getObjectYMap(newStack1!)!);
+      if (stack1Obj && stack1Obj._kind === ObjectKind.Stack) {
+        expect((stack1Obj as StackObject)._cards).toEqual(['card-1']);
+      }
+
+      // Verify second new stack has card-2 (became top after first unstack)
+      const stack2Obj = toTableObject(store.getObjectYMap(newStack2!)!);
+      if (stack2Obj && stack2Obj._kind === ObjectKind.Stack) {
+        expect((stack2Obj as StackObject)._cards).toEqual(['card-2']);
+      }
+
+      // Verify source stack still exists with 1 card remaining
+      const sourceObj = toTableObject(store.getObjectYMap(stackId)!);
+      expect(sourceObj).toBeDefined();
+      if (sourceObj && sourceObj._kind === ObjectKind.Stack) {
+        expect((sourceObj as StackObject)._cards).toEqual(['card-3']);
+      }
+    });
+
+    it('handles unstack on stack being deleted', async () => {
+      // Create stack with 2 cards
+      const stackId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['card-1', 'card-2'],
+        faceUp: true,
+      });
+
+      // Wait for object to be created
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Delete the stack
+      store.deleteObject(stackId);
+
+      // Try to unstack (should fail gracefully)
+      const result = unstackCard(store, stackId, { x: 200, y: 100, r: 0 });
+
+      // Should return null (stack not found)
+      expect(result).toBeNull();
     });
   });
 });

@@ -510,9 +510,8 @@ test.describe('Selection Ownership E2E', () => {
         button: 0,
         buttons: 1,
       });
-      await page.evaluate(async () => {
-        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
-      });
+      // No waitForRenderer needed - pointermove events process asynchronously
+      // Only wait after pointerup for final state synchronization
     }
 
     // Dispatch pointerup event at final position
@@ -693,9 +692,8 @@ test.describe('Selection Ownership E2E', () => {
         button: 0,
         buttons: 1,
       });
-      await page.evaluate(async () => {
-        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
-      }); // REPLACED waitForTimeout(16);
+      // No waitForRenderer needed - pointermove events process asynchronously
+      // Only wait after pointerup for final state synchronization
     }
 
     await canvas.dispatchEvent('pointerup', {
@@ -866,9 +864,8 @@ test.describe('Selection Ownership E2E', () => {
         buttons: 1,
         metaKey: true,
       });
-      await page.evaluate(async () => {
-        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
-      }); // REPLACED waitForTimeout(16);
+      // No waitForRenderer needed - pointermove events process asynchronously
+      // Only wait after pointerup for final state synchronization
     }
 
     await canvas.dispatchEvent('pointerup', {

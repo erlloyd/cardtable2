@@ -8,9 +8,55 @@
 import type {
   MainToRendererMessage,
   PointerEventData,
+  TableObject,
 } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { snapMultipleToGrid } from '../../utils/gridSnap';
+import { getBehaviors } from '../objects';
+import {
+  STACK_WIDTH,
+  STACK_HEIGHT,
+  STACK_BADGE_SIZE,
+} from '../objects/stack/constants';
+import { getCardCount } from '../objects/stack/utils';
+
+/**
+ * Helper: Check if a world position is within the unstack handle region of a stack
+ *
+ * Returns true if the stack has 2+ cards and the position is within the unstack handle bounds.
+ */
+function isPointInUnstackHandle(
+  worldX: number,
+  worldY: number,
+  obj: TableObject,
+): boolean {
+  // Only stacks with 2+ cards have unstack handles
+  const cardCount = getCardCount(obj);
+  if (cardCount < 2) return false;
+
+  // Calculate world-relative coordinates
+  const worldRelX = worldX - obj._pos.x;
+  const worldRelY = worldY - obj._pos.y;
+
+  // Transform to object's local coordinate space (apply inverse rotation)
+  const angleRad = (obj._pos.r * Math.PI) / 180;
+  const cos = Math.cos(-angleRad); // Negative angle for inverse rotation
+  const sin = Math.sin(-angleRad);
+  const localX = worldRelX * cos - worldRelY * sin;
+  const localY = worldRelX * sin + worldRelY * cos;
+
+  // Unstack handle position in local space (upper-right corner, from behaviors.ts)
+  const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2; // Right edge
+  const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2; // Top edge
+
+  // Check if point is within handle bounds in local space
+  const minX = handleX - STACK_BADGE_SIZE / 2;
+  const maxX = handleX + STACK_BADGE_SIZE / 2;
+  const minY = handleY - STACK_BADGE_SIZE / 2;
+  const maxY = handleY + STACK_BADGE_SIZE / 2;
+
+  return localX >= minX && localX <= maxX && localY >= minY && localY <= maxY;
+}
 
 /**
  * Handle pointer down event
@@ -64,8 +110,20 @@ export function handlePointerDown(
       (context.interactionMode === 'pan' && modifierPressed);
 
     if (hitResult) {
-      // Clicking on a card - always prepare for object drag (regardless of mode)
-      context.drag.prepareObjectDrag(hitResult.id, worldPos.x, worldPos.y);
+      // Check if clicking on unstack handle (upper-right corner of stack with 2+ cards)
+      // Only active when 0-1 stacks selected (not during multi-select)
+      const selectedCount = context.selection.getSelectedCount();
+      const isUnstackHandleClick =
+        selectedCount <= 1 &&
+        isPointInUnstackHandle(worldPos.x, worldPos.y, hitResult.object);
+
+      if (isUnstackHandleClick) {
+        // Clicking on unstack handle - prepare for unstack drag
+        context.drag.prepareUnstackDrag(hitResult.id, worldPos.x, worldPos.y);
+      } else {
+        // Clicking on a card - always prepare for object drag (regardless of mode)
+        context.drag.prepareObjectDrag(hitResult.id, worldPos.x, worldPos.y);
+      }
       context.rectangleSelect.clear(context.worldContainer);
     } else if (shouldRectangleSelect) {
       // Clicking on empty space in rectangle select mode - prepare for rectangle selection
@@ -148,6 +206,48 @@ export function handlePointerMove(
         const draggedId = context.drag.getDraggedObjectId();
 
         if (draggedId) {
+          // Check if this is an unstack drag - if so, create real stack immediately
+          if (context.drag.isUnstackDragActive()) {
+            // Calculate world position for new stack
+            const worldPos = context.coordConverter.screenToWorld(
+              event.clientX,
+              event.clientY,
+              context.worldContainer,
+            );
+
+            // CRITICAL: Clear all selections FIRST (before sending unstack-card)
+            // This ensures no lingering visual feedback on the source stack or other objects
+            const currentlySelected = context.selection.getSelectedIds();
+            if (currentlySelected.length > 0) {
+              context.postResponse({
+                type: 'objects-unselected',
+                ids: currentlySelected,
+              });
+            }
+
+            // Send unstack message immediately - Yjs will create real stack
+            context.postResponse({
+              type: 'unstack-card',
+              stackId: draggedId,
+              pos: { x: worldPos.x, y: worldPos.y, r: 0 },
+            });
+
+            // Mark that we're waiting for the new stack to arrive (with 2s timeout)
+            context.drag.setWaitingForUnstackResponse(draggedId, () => {
+              // Timeout callback: notify main thread of failure
+              context.postResponse({
+                type: 'error',
+                error: 'Unstack operation timed out',
+                context: 'pointer-unstack',
+              });
+            });
+
+            // Don't start dragging yet - wait for objects-added
+            // Clear the drag preparation so we don't try to drag the source stack
+            context.drag.clear();
+            return;
+          }
+
           // M3.5.1-T6: Notify Board that object drag started
           context.postResponse({ type: 'object-drag-started' });
 
@@ -235,6 +335,9 @@ export function handlePointerMove(
           context.sceneManager,
           context.visual.getAllVisuals(),
         );
+
+        // Detect stack target for visual feedback
+        detectAndShowStackTarget(context, worldPos.x, worldPos.y);
 
         // Send drag state update for awareness (M5-T1)
         const dragStateUpdate = context.drag.getDragStateUpdate(
@@ -762,11 +865,30 @@ function clearDragState(
       // Clear snap ghosts
       context.gridSnap.clearGhosts();
 
+      // Get dragged object IDs before ending drag
+      const draggedIds = context.drag.getDraggedObjectIds();
+
+      // Detect stack target at final drop position
+      const worldPos = context.coordConverter.screenToWorld(
+        event.clientX,
+        event.clientY,
+        context.worldContainer,
+      );
+      const stackTargetId = detectStackTarget(context, worldPos.x, worldPos.y);
+
+      // Clear stack target feedback (pass empty string since we're clearing)
+      // Note: When clearing, objectId is not used, but signature requires it
+      context.visual.updateStackTargetFeedback(
+        '',
+        false,
+        false,
+        context.sceneManager,
+      );
+
       // End drag and get position updates (M3-T2.5)
       const positionUpdates = context.drag.endObjectDrag(context.sceneManager);
 
       // Clear drag visual feedback for all dragged objects
-      const draggedIds = context.drag.getDraggedObjectIds();
       for (const objectId of draggedIds) {
         const isSelected = context.selection.isSelected(objectId);
         context.visual.updateDragFeedback(
@@ -777,16 +899,33 @@ function clearDragState(
         );
       }
 
-      // Send position updates to store (M3-T2.5)
-      if (positionUpdates.length > 0) {
+      // Note: Unstack operation already handled earlier (sent unstack-card on slop exceeded)
+      // So we don't need special handling here - just normal drag completion or stack merge
+      if (stackTargetId && draggedIds.length > 0) {
+        // Stack operation: merge multiple stacks
+        console.log(
+          `[RendererCore] Stacking ${draggedIds.length} object(s) onto ${stackTargetId}`,
+        );
         context.postResponse({
-          type: 'objects-moved',
-          updates: positionUpdates,
+          type: 'stack-objects',
+          ids: draggedIds,
+          targetId: stackTargetId,
         });
+      } else {
+        // Normal drag: send position updates to store (M3-T2.5)
+        if (positionUpdates.length > 0) {
+          context.postResponse({
+            type: 'objects-moved',
+            updates: positionUpdates,
+          });
+        }
       }
 
       // M3.5.1-T6: Notify Board that object drag ended
       context.postResponse({ type: 'object-drag-ended' });
+
+      // M5-T1: Clear drag awareness state for multiplayer
+      context.postResponse({ type: 'drag-state-clear' });
 
       // Request render to update visuals
       context.app.renderer.render(context.app.stage);
@@ -862,5 +1001,92 @@ function unselectObjects(context: RendererContext, ids: string[]): void {
       type: 'objects-unselected',
       ids,
     });
+  }
+}
+
+/**
+ * Helper: Detect if dragged objects are over a valid stack target
+ *
+ * Returns the target stack ID if valid, or null otherwise.
+ * A valid target must:
+ * - Be a stack with canStack capability
+ * - Not be one of the dragged objects
+ * - All dragged objects must be stacks with canStack capability
+ *
+ * @param context - Renderer context
+ * @param worldX - World X coordinate to test
+ * @param worldY - World Y coordinate to test
+ * @returns Target stack ID or null
+ */
+function detectStackTarget(
+  context: RendererContext,
+  worldX: number,
+  worldY: number,
+): string | null {
+  const draggedIds = context.drag.getDraggedObjectIds();
+  if (draggedIds.length === 0) return null;
+
+  // Check if all dragged objects are stacks with canStack capability
+  for (const id of draggedIds) {
+    const obj = context.sceneManager.getObject(id);
+    if (!obj) continue;
+
+    const behaviors = getBehaviors(obj._kind);
+    if (!behaviors.capabilities.canStack) {
+      return null; // At least one dragged object cannot stack
+    }
+  }
+
+  // Hit-test at current position to find potential target
+  const hitResult = context.sceneManager.hitTest(worldX, worldY);
+  if (!hitResult) return null;
+
+  // Target must not be one of the dragged objects
+  if (draggedIds.includes(hitResult.id)) return null;
+
+  // Target must be a stack with canStack capability
+  const targetObj = context.sceneManager.getObject(hitResult.id);
+  if (!targetObj) return null;
+
+  const targetBehaviors = getBehaviors(targetObj._kind);
+  if (!targetBehaviors.capabilities.canStack) return null;
+
+  return hitResult.id;
+}
+
+/**
+ * Helper: Detect and show stack target feedback during drag
+ *
+ * Updates visual feedback to show which stack (if any) will be the target
+ * when the drag ends.
+ *
+ * @param context - Renderer context
+ * @param worldX - World X coordinate
+ * @param worldY - World Y coordinate
+ */
+function detectAndShowStackTarget(
+  context: RendererContext,
+  worldX: number,
+  worldY: number,
+): void {
+  const targetId = detectStackTarget(context, worldX, worldY);
+
+  // Update stack target feedback
+  if (targetId) {
+    const isSelected = context.selection.isSelected(targetId);
+    context.visual.updateStackTargetFeedback(
+      targetId,
+      true,
+      isSelected,
+      context.sceneManager,
+    );
+  } else {
+    // Clear any existing stack target feedback
+    context.visual.updateStackTargetFeedback(
+      '',
+      false,
+      false,
+      context.sceneManager,
+    );
   }
 }

@@ -31,6 +31,9 @@ export class DragManager {
   private isObjectDragging = false;
   private dragState: DragState | null = null;
   private pointerDownEvent: PointerEventData | null = null;
+  private isUnstackDrag = false; // Track if this is an unstack operation
+  private waitingForUnstackSource: string | null = null; // Source stack ID when waiting for unstack response
+  private unstackTimeoutId: NodeJS.Timeout | null = null; // Timeout for unstack operations
 
   /**
    * Store pointer down event for selection logic on pointer up.
@@ -94,6 +97,88 @@ export class DragManager {
       currentDragGestureId: null,
     };
     this.isObjectDragging = false;
+    this.isUnstackDrag = false;
+  }
+
+  /**
+   * Prepare for potential unstack drag (pointer down on unstack handle).
+   */
+  prepareUnstackDrag(stackId: string, worldX: number, worldY: number): void {
+    this.dragState = {
+      draggedObjectId: stackId,
+      dragStartWorldX: worldX,
+      dragStartWorldY: worldY,
+      draggedObjectsStartPositions: new Map(),
+      currentDragGestureId: null,
+    };
+    this.isObjectDragging = false;
+    this.isUnstackDrag = true;
+  }
+
+  /**
+   * Check if this is an unstack drag operation.
+   */
+  isUnstackDragActive(): boolean {
+    return this.isUnstackDrag;
+  }
+
+  /**
+   * Mark that we're waiting for a new stack to be created from an unstack operation.
+   * Sets a 2-second timeout to prevent indefinite waiting.
+   * @param sourceStackId - The ID of the source stack that was unstacked
+   * @param onTimeout - Callback to invoke if the timeout expires
+   */
+  setWaitingForUnstackResponse(
+    sourceStackId: string,
+    onTimeout: () => void,
+  ): void {
+    this.waitingForUnstackSource = sourceStackId;
+
+    // Clear any existing timeout
+    if (this.unstackTimeoutId !== null) {
+      clearTimeout(this.unstackTimeoutId);
+    }
+
+    // Set a 2-second timeout for the unstack operation
+    this.unstackTimeoutId = setTimeout(() => {
+      if (this.waitingForUnstackSource === sourceStackId) {
+        console.error('[DragManager] Unstack operation timed out', {
+          stackId: sourceStackId,
+          timeoutMs: 2000,
+        });
+        this.clearUnstackWaiting();
+        onTimeout();
+      }
+    }, 2000);
+  }
+
+  /**
+   * Check if we're waiting for an unstack response and if this is the source stack.
+   * @param stackId - Stack ID to check
+   * @returns True if we're waiting for an unstack from this source
+   */
+  isWaitingForUnstackFrom(stackId: string): boolean {
+    return this.waitingForUnstackSource === stackId;
+  }
+
+  /**
+   * Get the source stack ID we're waiting for unstack from (if any).
+   */
+  getUnstackSourceId(): string | null {
+    return this.waitingForUnstackSource;
+  }
+
+  /**
+   * Clear waiting-for-unstack state and cancel any pending timeout.
+   */
+  clearUnstackWaiting(): void {
+    this.waitingForUnstackSource = null;
+
+    // Clear the timeout if it exists
+    if (this.unstackTimeoutId !== null) {
+      clearTimeout(this.unstackTimeoutId);
+      this.unstackTimeoutId = null;
+    }
   }
 
   /**
@@ -285,6 +370,7 @@ export class DragManager {
   cancelObjectDrag(): void {
     this.isObjectDragging = false;
     this.dragState = null;
+    this.isUnstackDrag = false;
   }
 
   /**
@@ -328,5 +414,6 @@ export class DragManager {
     this.isObjectDragging = false;
     this.dragState = null;
     this.pointerDownEvent = null;
+    this.isUnstackDrag = false;
   }
 }

@@ -1,5 +1,6 @@
 import { MessageHandlerRegistry } from '../../messaging/MessageHandlerRegistry';
 import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
+import { isValidPosition } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
 import { toTableObject } from '../../store/YjsStore';
@@ -8,6 +9,8 @@ import {
   moveObjects,
   selectObjects,
   unselectObjects,
+  stackObjects,
+  unstackCard,
 } from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
 
@@ -106,6 +109,89 @@ export class BoardMessageBus {
     this.registry.register('objects-moved', (msg, ctx) => {
       console.log(`[BoardMessageBus] ${msg.updates.length} object(s) moved`);
       moveObjects(ctx.store, msg.updates);
+    });
+
+    this.registry.register('stack-objects', (msg, ctx) => {
+      console.log(
+        `[BoardMessageBus] Stacking ${msg.ids.length} object(s) onto ${msg.targetId}`,
+      );
+      try {
+        // Perform the stack operation (deletes source stacks)
+        // Don't manually unselect - the renderer will clean up when objects are removed
+        const deletedIds = stackObjects(ctx.store, msg.ids, msg.targetId);
+        console.log(
+          `[BoardMessageBus] Successfully stacked. Deleted ${deletedIds.length} source stack(s)`,
+        );
+      } catch (error) {
+        console.error(
+          '[BoardMessageBus] Stack operation failed - User attempted to merge stacks but operation failed.',
+          {
+            sourceIds: msg.ids,
+            targetId: msg.targetId,
+            error:
+              error instanceof Error
+                ? { message: error.message, stack: error.stack }
+                : error,
+          },
+        );
+        // User feedback: Notify about failure
+        ctx.addMessage(
+          '❌ Failed to merge stacks. Target may have been modified.',
+        );
+      }
+    });
+
+    this.registry.register('unstack-card', (msg, ctx) => {
+      console.log(
+        `[BoardMessageBus] Unstacking top card from ${msg.stackId} to (${msg.pos.x}, ${msg.pos.y})`,
+      );
+
+      // Validate position data before attempting operation
+      if (!isValidPosition(msg.pos)) {
+        console.error(
+          '[BoardMessageBus] Invalid position in unstack-card message',
+          {
+            stackId: msg.stackId,
+            pos: msg.pos,
+          },
+        );
+        ctx.addMessage('❌ Cannot unstack: Invalid position data');
+        return;
+      }
+
+      try {
+        // Perform the unstack operation
+        const newStackId = unstackCard(ctx.store, msg.stackId, msg.pos);
+        if (newStackId) {
+          console.log(
+            `[BoardMessageBus] Successfully unstacked. Created new stack ${newStackId}`,
+          );
+        } else {
+          console.warn(
+            '[BoardMessageBus] Unstack operation failed - Stack may not exist or operation returned null.',
+            {
+              stackId: msg.stackId,
+              targetPosition: msg.pos,
+            },
+          );
+          // User feedback: Explain why operation failed
+          ctx.addMessage('⚠️ Cannot unstack: Stack not found or has no cards');
+        }
+      } catch (error) {
+        console.error(
+          '[BoardMessageBus] Unstack operation failed - User attempted to extract card from stack but operation failed.',
+          {
+            stackId: msg.stackId,
+            targetPosition: msg.pos,
+            error:
+              error instanceof Error
+                ? { message: error.message, stack: error.stack }
+                : error,
+          },
+        );
+        // User feedback: Generic error message for exceptions
+        ctx.addMessage('❌ Failed to unstack card. Please try again.');
+      }
     });
 
     this.registry.register('objects-selected', (msg, ctx) => {

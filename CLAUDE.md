@@ -361,6 +361,21 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
     2. Explain why suppression is necessary
     3. Wait for explicit approval before proceeding
   - If you add a suppression comment without asking first, you have failed
+- **CRITICAL - AVOID TYPEOF CHECKS**: Do NOT use `typeof` or string comparisons for type validation as the default solution
+  - **NEVER** use `typeof x === 'string'`, `typeof x === 'number'`, `typeof x === 'boolean'`, etc. without explicit justification
+  - **NEVER** use string comparisons for property names like `'propertyName' in obj` as a type guard pattern
+  - **Trust the type system**: If TypeScript types indicate a value should exist and be of a certain type, trust it
+  - If data could genuinely be missing/corrupt, that's a data integrity issue - log it, handle it properly, don't silently default
+  - Better solutions:
+    - Proper TypeScript type assertions when you know the type
+    - Type guards for legitimate runtime checks at system boundaries (user input, external APIs, deserialization)
+    - Validation libraries (Zod, io-ts) for complex validation needs
+    - Fix the root cause: ensure data is always in the correct state
+  - **WHEN typeof IS ACCEPTABLE**:
+    - At system boundaries (parsing user input, external API responses)
+    - When using proper validation libraries that abstract the typeof checks
+    - When the User explicitly requests runtime type checking
+  - If you use typeof for internal type validation, you have failed
 
 ### Container Deployment
 - **Docker support**: Multi-stage Dockerfiles for production builds

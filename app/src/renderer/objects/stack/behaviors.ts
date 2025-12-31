@@ -57,10 +57,10 @@ export const StackBehaviors: ObjectBehaviors = {
     let borderColor = STACK_BORDER_COLOR_NORMAL;
     let borderWidth = 2;
     if (ctx.isSelected) {
-      borderColor = STACK_BORDER_COLOR_SELECTED; // Red for selected
+      borderColor = STACK_BORDER_COLOR_SELECTED; // For selected state
       borderWidth = 4;
     } else if (ctx.isStackTarget) {
-      borderColor = STACK_BORDER_COLOR_TARGET; // Green for drop target
+      borderColor = STACK_BORDER_COLOR_TARGET; // For drop target state
       borderWidth = 4;
     }
 

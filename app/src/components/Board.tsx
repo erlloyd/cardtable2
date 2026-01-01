@@ -106,6 +106,8 @@ function Board({
     setIsCameraActive,
     isWaitingForCoords,
     setIsWaitingForCoords,
+    cursorStyle,
+    setCursorStyle,
     interactionMode,
     setInteractionMode,
     isMultiSelectMode,
@@ -142,6 +144,7 @@ function Board({
         setIsCameraActive,
         setIsWaitingForCoords,
         setAwarenessHz,
+        setCursorStyle,
         addMessage,
         flushCallbacks: flushCallbacksRef,
         selectionSettledCallbacks: selectionSettledCallbacksRef,
@@ -164,6 +167,7 @@ function Board({
     setIsCameraActive,
     setIsWaitingForCoords,
     setAwarenessHz,
+    setCursorStyle,
     addMessage,
   ]);
 
@@ -194,6 +198,13 @@ function Board({
     isCanvasInitialized,
     addMessage,
   );
+
+  // Apply cursor style to canvas
+  useEffect(() => {
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = cursorStyle;
+    }
+  }, [cursorStyle]);
 
   // Test API
   useTestAPI(

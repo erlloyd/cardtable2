@@ -447,7 +447,7 @@ export class VisualManager {
     obj: TableObject,
     isSelected: boolean,
     isStackTarget: boolean,
-  ): Graphics {
+  ): Container {
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(obj, {
       isSelected,

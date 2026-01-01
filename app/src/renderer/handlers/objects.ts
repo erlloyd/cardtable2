@@ -5,7 +5,7 @@
  * Creates and manages PixiJS visuals for TableObjects.
  */
 
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, Text } from 'pixi.js';
 import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { getBehaviors } from '../objects';
@@ -430,7 +430,7 @@ function createBaseShapeGraphic(
   objectId: string,
   obj: TableObject,
   isSelected: boolean,
-): Graphics {
+): Container {
   const behaviors = getBehaviors(obj._kind);
   const cameraScale = context.coordConverter.getCameraScale();
 

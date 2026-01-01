@@ -468,6 +468,21 @@ export function handlePointerMove(
     const hitResult = context.sceneManager.hitTest(worldPos.x, worldPos.y);
     const newHoveredId = hitResult ? hitResult.id : null;
 
+    // Check if hovering over unstack handle
+    let isOverUnstackHandle = false;
+    if (hitResult) {
+      const selectedCount = context.selection.getSelectedCount();
+      isOverUnstackHandle =
+        selectedCount <= 1 &&
+        isPointInUnstackHandle(worldPos.x, worldPos.y, hitResult.object);
+    }
+
+    // Send cursor style message
+    context.postResponse({
+      type: 'cursor-style',
+      style: isOverUnstackHandle ? 'pointer' : 'default',
+    });
+
     // Update hover state if changed
     const prevId = context.hover.getHoveredObjectId();
     if (context.hover.setHoveredObject(newHoveredId)) {

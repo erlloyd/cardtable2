@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { Graphics, Container } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
@@ -20,9 +20,13 @@ import {
   STACK_BADGE_FONT_SIZE,
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
+import { renderStackPopIcon } from '../../graphics/stackPop';
 
 export const StackBehaviors: ObjectBehaviors = {
-  render(obj: TableObject, ctx: RenderContext): Graphics {
+  render(obj: TableObject, ctx: RenderContext): Container {
+    // Use Container instead of Graphics to support children (text, icons)
+    // Required for PixiJS v8 compatibility
+    const container = new Container();
     const graphic = new Graphics();
     const color = getStackColor(obj);
     const cardCount = getCardCount(obj);
@@ -91,6 +95,9 @@ export const StackBehaviors: ObjectBehaviors = {
       });
     }
 
+    // Add graphic to container first (as base layer)
+    container.addChild(graphic);
+
     // Draw count badge and unstack handle for stacks with 2+ cards
     // Skip decorative elements in minimal mode (e.g., ghost previews)
     if (cardCount >= 2 && !ctx.minimal) {
@@ -123,7 +130,7 @@ export const StackBehaviors: ObjectBehaviors = {
       });
       text.anchor.set(0.5, 0.5);
       text.position.set(badgeX, badgeY);
-      graphic.addChild(text);
+      container.addChild(text);
 
       // Unstack handle (upper-right corner, flush with card borders)
       const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2; // Right edge
@@ -137,20 +144,18 @@ export const StackBehaviors: ObjectBehaviors = {
       );
       graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
 
-      // Handle icon (unicode arrow, uses ctx.createText for automatic zoom-aware resolution)
-      const handleIcon = ctx.createText({
-        text: '⬆', // Upward arrow unicode character
-        style: {
-          fontSize: 14,
-          fill: STACK_BADGE_TEXT_COLOR,
-        },
+      // Handle icon - stack-pop (see renderer/graphics/stackPop/)
+      const iconGraphic = new Graphics();
+      renderStackPopIcon(iconGraphic, {
+        color: STACK_BADGE_TEXT_COLOR,
+        strokeWidth: 1.5,
+        x: handleX,
+        y: handleY,
       });
-      handleIcon.anchor.set(0.5, 0.5);
-      handleIcon.position.set(handleX, handleY);
-      graphic.addChild(handleIcon);
+      container.addChild(iconGraphic);
     }
 
-    return graphic;
+    return container;
   },
 
   getBounds(obj: TableObject) {

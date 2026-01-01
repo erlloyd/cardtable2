@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { Graphics, Container } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
@@ -8,7 +8,8 @@ import {
 import { getMatColor, getMatSize } from './utils';
 
 export const MatBehaviors: ObjectBehaviors = {
-  render(obj: TableObject, ctx: RenderContext): Graphics {
+  render(obj: TableObject, ctx: RenderContext): Container {
+    const container = new Container();
     const graphic = new Graphics();
     const color = getMatColor(obj);
     const radius = getMatSize(obj);
@@ -22,7 +23,8 @@ export const MatBehaviors: ObjectBehaviors = {
         : MAT_BORDER_COLOR_NORMAL,
     });
 
-    return graphic;
+    container.addChild(graphic);
+    return container;
   },
 
   getBounds(obj: TableObject) {

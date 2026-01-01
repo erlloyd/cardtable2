@@ -1,4 +1,4 @@
-import type { Graphics, Text, TextOptions } from 'pixi.js';
+import type { Text, TextOptions, Container } from 'pixi.js';
 import type { TableObject, PointerEventData } from '@cardtable2/shared';
 import type { BBox } from '../SceneManager';
 
@@ -32,7 +32,12 @@ export interface ObjectCapabilities {
 }
 
 // Behavior interfaces
-export type RenderBehavior = (obj: TableObject, ctx: RenderContext) => Graphics;
+// Note: Always returns Container (PixiJS v8 requirement for addChild() operations)
+// Even simple Graphics should be wrapped in a Container for consistency
+export type RenderBehavior = (
+  obj: TableObject,
+  ctx: RenderContext,
+) => Container;
 export type BoundsBehavior = (obj: TableObject) => Omit<BBox, 'id'>;
 export type ShadowBehavior = (obj: TableObject) => ShadowConfig;
 

@@ -35,6 +35,7 @@ export interface BoardHandlerContext {
   setIsCameraActive: (active: boolean) => void;
   setIsWaitingForCoords: (waiting: boolean) => void;
   setAwarenessHz: (hz: number) => void;
+  setCursorStyle: (style: 'default' | 'pointer' | 'grab' | 'grabbing') => void;
   addMessage: (msg: string) => void;
 
   // Refs
@@ -325,6 +326,10 @@ export class BoardMessageBus {
 
     this.registry.register('echo-response', (msg, ctx) => {
       ctx.addMessage(`Echo: ${msg.data}`);
+    });
+
+    this.registry.register('cursor-style', (msg, ctx) => {
+      ctx.setCursorStyle(msg.style);
     });
 
     this.registry.register('error', (msg, ctx) => {

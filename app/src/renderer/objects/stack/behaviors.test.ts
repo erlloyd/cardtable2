@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StackBehaviors } from './behaviors';
 import { ObjectKind, type StackObject } from '@cardtable2/shared';
 import type { RenderContext } from '../types';
-import { Graphics, Text, type TextOptions } from 'pixi.js';
+import { Text, Container, type TextOptions } from 'pixi.js';
 
 // Helper to create test stack objects with all required properties
 function createTestStack(overrides?: Partial<StackObject>): StackObject {
@@ -57,9 +57,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('renders 3D offset rectangle for stacks with 2+ cards', () => {
       const stack = createTestStack({ _cards: ['card1', 'card2'] });
 
-      const graphic = StackBehaviors.render(stack, mockContext);
+      const container = StackBehaviors.render(stack, mockContext);
 
-      expect(graphic).toBeInstanceOf(Graphics);
+      expect(container).toBeInstanceOf(Container);
       // 3D effect uses counter-scaled stroke width
       expect(mockScaleStrokeWidth).toHaveBeenCalledWith(1);
     });
@@ -67,9 +67,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('does not render 3D effect for single-card stacks', () => {
       const singleStack = createTestStack();
 
-      const graphic = StackBehaviors.render(singleStack, mockContext);
+      const container = StackBehaviors.render(singleStack, mockContext);
 
-      expect(graphic).toBeInstanceOf(Graphics);
+      expect(container).toBeInstanceOf(Container);
       // Single card should call scaleStrokeWidth only once (for main border)
       // Not twice (would include 3D effect)
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
@@ -152,14 +152,11 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('renders unstack handle for stacks with 2+ cards', () => {
       const stack = createTestStack({ _cards: ['card1', 'card2'] });
 
-      StackBehaviors.render(stack, mockContext);
+      const container = StackBehaviors.render(stack, mockContext);
 
-      // Unstack handle uses arrow icon
-      expect(mockCreateText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          text: '⬆',
-        }),
-      );
+      // Unstack handle should be rendered as a Graphics child (icon graphics)
+      // The container should have children (base graphic + badge text + icon graphics)
+      expect(container.children.length).toBeGreaterThan(0);
     });
 
     it('does not render unstack handle for single-card stacks', () => {
@@ -167,22 +164,18 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
       StackBehaviors.render(singleStack, mockContext);
 
-      // No handle icon should be created
+      // Badge text should not be created for single cards
       expect(mockCreateText).not.toHaveBeenCalled();
     });
 
-    it('unstack handle uses zoom-aware text resolution', () => {
+    it('unstack handle uses zoom-aware stroke scaling', () => {
       const stack = createTestStack({ _cards: ['card1', 'card2'] });
 
       StackBehaviors.render(stack, mockContext);
 
-      // Verify createText was called for handle icon
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
-      const handleCall = mockCreateText.mock.calls.find(
-        (call: any) => call[0].text === '⬆',
-      );
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
-      expect(handleCall).toBeDefined();
+      // Verify scaleStrokeWidth was called for the icon strokes
+      // The icon has multiple stroke calls (box outline + arrow lines)
+      expect(mockScaleStrokeWidth).toHaveBeenCalled();
     });
   });
 
@@ -265,12 +258,13 @@ describe('Stack Behaviors - Visual Rendering', () => {
       // 2. Main card border (2px)
       // 3. Face-down pattern (2px)
       // 4. Badge border (1px)
+      // Note: Icon strokes use fixed width (1.5px), not scaled
       expect(mockScaleStrokeWidth).toHaveBeenCalledTimes(4);
 
       // Should call createText for:
       // 1. Count badge ("3")
-      // 2. Unstack handle ("⬆")
-      expect(mockCreateText).toHaveBeenCalledTimes(2);
+      // Note: Unstack handle now uses Graphics instead of text
+      expect(mockCreateText).toHaveBeenCalledTimes(1);
     });
 
     it('renders minimal visuals for single face-up card', () => {

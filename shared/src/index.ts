@@ -242,6 +242,10 @@ export type RendererToMainMessage =
       type: 'unstack-card'; // Unstack operation: extract top card from stack
       stackId: string; // Source stack ID
       pos: Position; // Position for new single-card stack
+    }
+  | {
+      type: 'cursor-style'; // Request cursor style change
+      style: 'default' | 'pointer' | 'grab' | 'grabbing';
     };
 
 // ============================================================================

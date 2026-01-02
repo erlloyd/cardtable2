@@ -33,6 +33,10 @@ export interface UseBoardStateResult {
   isWaitingForCoords: boolean;
   setIsWaitingForCoords: (waiting: boolean) => void;
 
+  // Cursor style
+  cursorStyle: 'default' | 'pointer' | 'grab' | 'grabbing';
+  setCursorStyle: (style: 'default' | 'pointer' | 'grab' | 'grabbing') => void;
+
   // Interaction modes
   interactionMode: 'pan' | 'select';
   setInteractionMode: (mode: 'pan' | 'select') => void;
@@ -90,6 +94,11 @@ export function useBoardState(
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isWaitingForCoords, setIsWaitingForCoords] = useState(false);
 
+  // Cursor style
+  const [cursorStyle, setCursorStyle] = useState<
+    'default' | 'pointer' | 'grab' | 'grabbing'
+  >('default');
+
   // Interaction modes (internal state)
   const [internalInteractionMode, setInternalInteractionMode] = useState<
     'pan' | 'select'
@@ -134,6 +143,8 @@ export function useBoardState(
     setIsCameraActive,
     isWaitingForCoords,
     setIsWaitingForCoords,
+    cursorStyle,
+    setCursorStyle,
     interactionMode,
     setInteractionMode,
     isMultiSelectMode,

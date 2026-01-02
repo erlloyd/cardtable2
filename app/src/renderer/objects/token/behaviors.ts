@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { Graphics, Container } from 'pixi.js';
 import type { TableObject } from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
@@ -8,7 +8,8 @@ import {
 import { getTokenColor, getTokenSize } from './utils';
 
 export const TokenBehaviors: ObjectBehaviors = {
-  render(obj: TableObject, ctx: RenderContext): Graphics {
+  render(obj: TableObject, ctx: RenderContext): Container {
+    const container = new Container();
     const graphic = new Graphics();
     const color = getTokenColor(obj);
     const radius = getTokenSize(obj);
@@ -35,7 +36,8 @@ export const TokenBehaviors: ObjectBehaviors = {
       graphic.stroke({ width: 2, color: 0xffffff, alpha: 0.5 });
     }
 
-    return graphic;
+    container.addChild(graphic);
+    return container;
   },
 
   getBounds(obj: TableObject) {

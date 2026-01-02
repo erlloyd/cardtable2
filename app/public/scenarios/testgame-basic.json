@@ -1,0 +1,45 @@
+{
+  "schema": "ct-scenario@1",
+  "id": "testgame-basic",
+  "name": "Test Game - Basic Setup",
+  "version": "1.0.0",
+  "packs": ["testgame-core"],
+  "decks": {
+    "player-deck": {
+      "cardSets": ["starter-deck"],
+      "shuffle": true
+    },
+    "encounter-deck": {
+      "cards": [
+        { "code": "01025", "count": 2 },
+        { "code": "01026", "count": 2 },
+        { "code": "01027", "count": 1 }
+      ],
+      "shuffle": true
+    }
+  },
+  "layout": {
+    "objects": [
+      {
+        "type": "stack",
+        "id": "player-deck-stack",
+        "deck": "player-deck",
+        "pos": { "x": -200, "y": 0 },
+        "faceUp": false
+      },
+      {
+        "type": "stack",
+        "id": "encounter-deck-stack",
+        "deck": "encounter-deck",
+        "pos": { "x": 200, "y": 0 },
+        "faceUp": false
+      },
+      {
+        "type": "token",
+        "ref": "first-player",
+        "label": "First Player",
+        "pos": { "x": 0, "y": -150 }
+      }
+    ]
+  }
+}

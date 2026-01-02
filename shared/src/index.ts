@@ -3,6 +3,9 @@
 // Example: Common types that will be shared between app and server
 export const CARDTABLE_VERSION = '2.0.0';
 
+// Content System Types (Asset Packs, Scenarios, Cards, etc.)
+export * from './content-types';
+
 // Object types on the table
 // Note: Every card or group of cards is a 'stack' (even a single card is a stack of 1)
 // Object kind enum for type-safe comparisons
@@ -39,15 +42,6 @@ export function isValidPosition(
   return (
     Number.isFinite(pos.x) && Number.isFinite(pos.y) && Number.isFinite(pos.r)
   );
-}
-
-// Placeholder for Set JSON types (from MVP plan)
-export interface SetJson {
-  schema: 'ct-set@1';
-  id: string;
-  name: string;
-  version: string;
-  // TODO: Add full type definitions based on MVP plan
 }
 
 // Placeholder for Y.Doc object types

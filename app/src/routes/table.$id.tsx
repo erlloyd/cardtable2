@@ -11,16 +11,29 @@ import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
+import { loadCompleteScenario } from '../content';
+import type { GamesIndex } from '../types/game';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
 
+// Search params validation
+type TableSearch = {
+  gameId?: string;
+};
+
 export const Route = createFileRoute('/table/$id')({
   component: Table,
+  validateSearch: (search: Record<string, unknown>): TableSearch => {
+    return {
+      gameId: search.gameId as string | undefined,
+    };
+  },
 });
 
 function Table() {
   const { id } = Route.useParams();
+  const { gameId } = Route.useSearch();
   const navigate = useNavigate();
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
@@ -33,11 +46,73 @@ function Table() {
   );
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
     registerDefaultActions();
   }, []);
+
+  // Load game content if gameId is provided
+  useEffect(() => {
+    if (!gameId || !store || !isStoreReady) {
+      return;
+    }
+
+    // Only load content if the table is empty
+    if (store.getAllObjects().size > 0) {
+      console.log('[Table] Table already has objects, skipping content load');
+      return;
+    }
+
+    const loadContent = async () => {
+      setContentLoading(true);
+      setContentError(null);
+
+      try {
+        console.log(`[Table] Loading game: ${gameId}`);
+
+        // Load games index
+        const response = await fetch('/gamesIndex.json');
+        if (!response.ok) {
+          throw new Error('Failed to load games index');
+        }
+        const gamesIndex = (await response.json()) as GamesIndex;
+
+        // Find the game
+        const game = gamesIndex.games.find((g) => g.id === gameId);
+        if (!game) {
+          throw new Error(`Game not found: ${gameId}`);
+        }
+
+        console.log(`[Table] Loading scenario from: ${game.manifestUrl}`);
+
+        // Load the complete scenario
+        const content = await loadCompleteScenario(game.manifestUrl);
+
+        console.log(
+          `[Table] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
+        );
+
+        // Add all objects to the store
+        for (const [objId, obj] of content.objects) {
+          store.setObject(objId, obj);
+        }
+
+        console.log('[Table] Content loaded successfully');
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to load content';
+        console.error('[Table] Content loading error:', err);
+        setContentError(errorMessage);
+      } finally {
+        setContentLoading(false);
+      }
+    };
+
+    void loadContent();
+  }, [gameId, store, isStoreReady]);
 
   // Track selection state for action context (M3.6-T4)
   // Now stores {id, yMap} pairs directly - zero allocations
@@ -104,7 +179,13 @@ function Table() {
   return (
     <div className="table">
       <Suspense fallback={<div>Loading board...</div>}>
-        {store && isStoreReady ? (
+        {!store || !isStoreReady ? (
+          <div>Initializing table state...</div>
+        ) : contentLoading ? (
+          <div>Loading game content...</div>
+        ) : contentError ? (
+          <div>Error loading content: {contentError}</div>
+        ) : (
           <Board
             tableId={id}
             store={store}
@@ -120,8 +201,6 @@ function Table() {
             actionContext={actionContext}
             onActionExecuted={commandPalette.recordAction}
           />
-        ) : (
-          <div>Initializing table state...</div>
         )}
       </Suspense>
 

@@ -1,0 +1,111 @@
+{
+  "schema": "ct-assets@1",
+  "id": "testgame-core",
+  "name": "Test Game - Core Pack",
+  "version": "1.0.0",
+  "baseUrl": "https://cerebrodatastorage.blob.core.windows.net/cerebro-cards/official/",
+  "cardTypes": {
+    "player": {
+      "back": "https://card-table.app/images/standard/card_back_marvelchampions.png",
+      "size": "standard"
+    }
+  },
+  "cards": {
+    "01020": {
+      "type": "player",
+      "face": "01020.jpg"
+    },
+    "01021": {
+      "type": "player",
+      "face": "01021.jpg"
+    },
+    "01022": {
+      "type": "player",
+      "face": "01022.jpg"
+    },
+    "01023": {
+      "type": "player",
+      "face": "01023.jpg"
+    },
+    "01024": {
+      "type": "player",
+      "face": "01024.jpg"
+    },
+    "01025": {
+      "type": "player",
+      "face": "01025.jpg"
+    },
+    "01026": {
+      "type": "player",
+      "face": "01026.jpg"
+    },
+    "01027": {
+      "type": "player",
+      "face": "01027.jpg"
+    },
+    "01028": {
+      "type": "player",
+      "face": "01028.jpg"
+    },
+    "01029": {
+      "type": "player",
+      "face": "01029.jpg"
+    },
+    "01030": {
+      "type": "player",
+      "face": "01030.jpg"
+    },
+    "01031": {
+      "type": "player",
+      "face": "01031.jpg"
+    },
+    "01032": {
+      "type": "player",
+      "face": "01032.jpg"
+    },
+    "01033": {
+      "type": "player",
+      "face": "01033.jpg"
+    },
+    "01034": {
+      "type": "player",
+      "face": "01034.jpg"
+    },
+    "01035": {
+      "type": "player",
+      "face": "01035.jpg"
+    },
+    "01036": {
+      "type": "player",
+      "face": "01036.jpg"
+    }
+  },
+  "cardSets": {
+    "starter-deck": ["01020", "01021", "01022", "01023", "01024"],
+    "all-cards": [
+      "01020",
+      "01021",
+      "01022",
+      "01023",
+      "01024",
+      "01025",
+      "01026",
+      "01027",
+      "01028",
+      "01029",
+      "01030",
+      "01031",
+      "01032",
+      "01033",
+      "01034",
+      "01035",
+      "01036"
+    ]
+  },
+  "tokens": {
+    "first-player": {
+      "image": "https://card-table.app/images/table/first_player_token_marvelchampions.png",
+      "size": "medium"
+    }
+  }
+}

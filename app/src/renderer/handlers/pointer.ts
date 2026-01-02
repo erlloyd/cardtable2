@@ -21,6 +21,11 @@ import {
 import { getCardCount } from '../objects/stack/utils';
 
 /**
+ * Track last sent cursor style to avoid sending redundant messages
+ */
+let lastCursorStyle: 'default' | 'pointer' | 'grab' | 'grabbing' = 'default';
+
+/**
  * Helper: Check if a world position is within the unstack handle region of a stack
  *
  * Returns true if the stack has 2+ cards and the position is within the unstack handle bounds.
@@ -477,11 +482,15 @@ export function handlePointerMove(
         isPointInUnstackHandle(worldPos.x, worldPos.y, hitResult.object);
     }
 
-    // Send cursor style message
-    context.postResponse({
-      type: 'cursor-style',
-      style: isOverUnstackHandle ? 'pointer' : 'default',
-    });
+    // Send cursor style message only if it changed
+    const newCursorStyle = isOverUnstackHandle ? 'pointer' : 'default';
+    if (newCursorStyle !== lastCursorStyle) {
+      lastCursorStyle = newCursorStyle;
+      context.postResponse({
+        type: 'cursor-style',
+        style: newCursorStyle,
+      });
+    }
 
     // Update hover state if changed
     const prevId = context.hover.getHoveredObjectId();

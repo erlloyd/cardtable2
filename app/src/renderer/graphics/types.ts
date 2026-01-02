@@ -19,7 +19,7 @@ import type { Graphics } from 'pixi.js';
 export interface SvgGraphicOptions {
   /** Color to use for strokes/fills (PixiJS color number) */
   color: number;
-  /** Stroke width (fixed, will scale with zoom) */
+  /** Stroke width in pixels (not counter-scaled with zoom) */
   strokeWidth?: number;
   /** X offset for positioning */
   x?: number;

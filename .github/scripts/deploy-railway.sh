@@ -107,6 +107,36 @@ EOF
     echo "✅ PORT=80 set successfully!"
   fi
 
+  # Set NODE_ENV environment variable for the service
+  echo "Setting NODE_ENV=production environment variable..."
+  NODE_ENV_MUTATION=$(cat <<EOF
+mutation {
+  variableUpsert(
+    input: {
+      projectId: "$RAILWAY_PROJECT_ID"
+      environmentId: "$RAILWAY_ENVIRONMENT_ID"
+      serviceId: "$SERVICE_ID"
+      name: "NODE_ENV"
+      value: "production"
+    }
+  )
+}
+EOF
+  )
+
+  NODE_ENV_RESPONSE=$(curl -s -X POST "$RAILWAY_API" \
+    -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":$(echo "$NODE_ENV_MUTATION" | jq -Rs .)}")
+
+  # Check for errors
+  if echo "$NODE_ENV_RESPONSE" | jq -e '.errors' > /dev/null 2>&1; then
+    echo "Warning: Failed to set NODE_ENV variable:"
+    echo "$NODE_ENV_RESPONSE" | jq '.errors'
+  else
+    echo "✅ NODE_ENV=production set successfully!"
+  fi
+
   REDEPLOY_MUTATION=$(cat <<EOF
 mutation {
   serviceInstanceRedeploy(
@@ -234,6 +264,36 @@ EOF
     echo "$PORT_RESPONSE" | jq '.errors'
   else
     echo "✅ PORT=80 set successfully!"
+  fi
+
+  # Set NODE_ENV environment variable for the service
+  echo "Setting NODE_ENV=production environment variable..."
+  NODE_ENV_MUTATION=$(cat <<EOF
+mutation {
+  variableUpsert(
+    input: {
+      projectId: "$RAILWAY_PROJECT_ID"
+      environmentId: "$RAILWAY_ENVIRONMENT_ID"
+      serviceId: "$SERVICE_ID"
+      name: "NODE_ENV"
+      value: "production"
+    }
+  )
+}
+EOF
+  )
+
+  NODE_ENV_RESPONSE=$(curl -s -X POST "$RAILWAY_API" \
+    -H "Authorization: Bearer $RAILWAY_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":$(echo "$NODE_ENV_MUTATION" | jq -Rs .)}")
+
+  # Check for errors
+  if echo "$NODE_ENV_RESPONSE" | jq -e '.errors' > /dev/null 2>&1; then
+    echo "Warning: Failed to set NODE_ENV variable:"
+    echo "$NODE_ENV_RESPONSE" | jq '.errors'
+  else
+    echo "✅ NODE_ENV=production set successfully!"
   fi
 
   # Create public domain for the new service

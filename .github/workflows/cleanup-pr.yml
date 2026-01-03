@@ -3,6 +3,12 @@ name: PR Cleanup
 on:
   pull_request:
     types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to clean up'
+        required: true
+        type: number
 
 permissions:
   contents: read
@@ -10,7 +16,7 @@ permissions:
 jobs:
   cleanup-railway:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +26,7 @@ jobs:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_PR_ENVIRONMENT_ID }}
-          SERVICE_NAME: cardtable2-server-pr-${{ github.event.pull_request.number }}
+          SERVICE_NAME: cardtable2-server-pr-${{ github.event_name == 'workflow_dispatch' && inputs.pr_number || github.event.pull_request.number }}
         run: .github/scripts/delete-railway-service.sh
 
       - name: Delete Railway app service
@@ -28,5 +34,5 @@ jobs:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_PR_ENVIRONMENT_ID }}
-          SERVICE_NAME: cardtable2-app-pr-${{ github.event.pull_request.number }}
+          SERVICE_NAME: cardtable2-app-pr-${{ github.event_name == 'workflow_dispatch' && inputs.pr_number || github.event.pull_request.number }}
         run: .github/scripts/delete-railway-service.sh

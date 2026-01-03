@@ -1,0 +1,219 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://card-table.app/schemas/ct-assets-v1.schema.json",
+  "title": "CardTable Assets Pack Schema v1",
+  "description": "Defines game content including cards, tokens, counters, mats, and card sets",
+  "type": "object",
+  "required": ["schema", "id", "name", "version"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ct-assets@1",
+      "description": "Schema version identifier"
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique pack identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable pack name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (e.g., 1.0.0)"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Optional base URL for resolving relative asset paths (must be absolute URL or start with /)"
+    },
+    "cardTypes": {
+      "type": "object",
+      "description": "Card type definitions with shared properties",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "back": {
+            "type": "string",
+            "description": "Default card back image URL for this type"
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": ["standard", "bridge", "tarot", "mini", "jumbo"],
+                "description": "Standard card size"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "Custom size [width, height] in pixels"
+              }
+            ],
+            "description": "Default size for all cards of this type (defaults to 'standard': 180x252px)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cards": {
+      "type": "object",
+      "description": "Card catalog - each key is a card code",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "face"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Card type (must reference a cardType if cardTypes defined)"
+          },
+          "face": {
+            "type": "string",
+            "description": "Card face image URL (absolute or relative to baseUrl)"
+          },
+          "back": {
+            "type": "string",
+            "description": "Optional card back image URL (overrides type default)"
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": ["standard", "bridge", "tarot", "mini", "jumbo"],
+                "description": "Standard card size"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "Custom size [width, height] in pixels"
+              }
+            ],
+            "description": "Card size (defaults to 'standard' if omitted: 180x252px)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cardSets": {
+      "type": "object",
+      "description": "Named card sets (reusable groups of cards) - each key is a card set code",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "Card code"
+        },
+        "minItems": 1
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "description": "Token definitions",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["image"],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "Token image URL"
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": ["small", "medium", "large"],
+                "description": "Standard token size"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "Custom size [width, height] in pixels"
+              }
+            ],
+            "description": "Token size (defaults to 'medium' if omitted: 64x64px)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "counters": {
+      "type": "object",
+      "description": "Counter definitions",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["label", "min", "max", "start"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Counter display label"
+          },
+          "min": {
+            "type": "number",
+            "description": "Minimum value"
+          },
+          "max": {
+            "type": "number",
+            "description": "Maximum value"
+          },
+          "start": {
+            "type": "number",
+            "description": "Initial value"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "mats": {
+      "type": "object",
+      "description": "Mat definitions",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["image"],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "Mat image URL"
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": ["small", "medium", "large", "playmat"],
+                "description": "Standard mat size"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "Custom size [width, height] in pixels"
+              }
+            ],
+            "description": "Mat size (defaults to 'playmat' if omitted: 1920x1080px)"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

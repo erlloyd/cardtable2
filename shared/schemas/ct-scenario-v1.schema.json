@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://card-table.app/schemas/ct-scenario-v1.schema.json",
+  "title": "CardTable Scenario Schema v1",
+  "description": "Defines a game scenario with initial layout and configuration",
+  "type": "object",
+  "required": ["schema", "id", "name", "version", "packs"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "ct-scenario@1",
+      "description": "Schema version identifier"
+    },
+    "id": {
+      "type": "string",
+      "description": "Unique scenario identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable scenario name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (e.g., 1.0.0)"
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Pack id to load"
+      },
+      "minItems": 1,
+      "description": "Asset packs required for this scenario"
+    },
+    "decks": {
+      "type": "object",
+      "description": "Named deck definitions for this scenario",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "cardSets": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Card set code from asset packs"
+            },
+            "minItems": 1,
+            "description": "Card sets to include in this deck"
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["code", "count"],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Card code"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Number of copies"
+                }
+              },
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "description": "Individual cards to include in this deck"
+          },
+          "shuffle": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to shuffle the deck"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "layout": {
+      "type": "object",
+      "required": ["objects"],
+      "properties": {
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["mat", "stack", "token", "counter", "zone"],
+                "description": "Object type"
+              },
+              "id": {
+                "type": "string",
+                "description": "Unique instance ID (required for stack)"
+              },
+              "ref": {
+                "type": "string",
+                "description": "Reference to asset catalog code (required for mat, token, counter, zone)"
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label for this object"
+              },
+              "pos": {
+                "type": "object",
+                "required": ["x", "y"],
+                "properties": {
+                  "x": {
+                    "type": "number",
+                    "description": "X position"
+                  },
+                  "y": {
+                    "type": "number",
+                    "description": "Y position"
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Object position"
+              },
+              "z": {
+                "type": "number",
+                "description": "Z-order (typically negative for mats)"
+              },
+              "faceUp": {
+                "type": "boolean",
+                "description": "Whether stack is face-up (for type=stack)"
+              },
+              "deck": {
+                "type": "string",
+                "description": "Deck reference (for type=stack)"
+              }
+            },
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "stack"
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["id", "pos"]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "enum": ["mat", "token", "counter", "zone"]
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["ref", "pos"]
+                }
+              }
+            ]
+          },
+          "description": "Layout objects to instantiate"
+        }
+      },
+      "description": "Initial table layout"
+    }
+  },
+  "additionalProperties": false
+}

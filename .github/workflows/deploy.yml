@@ -109,6 +109,7 @@ jobs:
       - name: Build app
         env:
           VITE_WS_URL: wss://cardtable2-server-production.up.railway.app
+          VITE_BE_URL: https://cardtable2-server-production.up.railway.app
         run: pnpm --filter @cardtable2/app build
 
       - name: Setup Pages

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { AssetPack, Scenario, MergedContent } from '@cardtable2/shared';
+import type {
+  AssetPack,
+  Scenario,
+  MergedContent,
+  CardSize,
+} from '@cardtable2/shared';
 import {
   loadAssetPack,
   loadAssetPacks,
@@ -90,7 +95,7 @@ const mockScenario: Scenario = {
   packs: ['test-pack-1', 'test-pack-2'],
   decks: {
     playerDeck: {
-      cardSet: 'heroes',
+      cardSets: ['heroes'],
       shuffle: true,
     },
   },
@@ -308,12 +313,12 @@ describe('mergeAssetPacks', () => {
 
     expect(merged.packs).toHaveLength(2);
     expect(merged.cardTypes).toEqual({
-      hero: mockAssetPack1.cardTypes.hero,
-      villain: mockAssetPack2.cardTypes.villain,
+      hero: mockAssetPack1.cardTypes!.hero,
+      villain: mockAssetPack2.cardTypes!.villain,
     });
-    expect(merged.cards['01001']).toEqual(mockAssetPack2.cards['01001']); // Pack 2 wins
-    expect(merged.cards['01002']).toEqual(mockAssetPack1.cards['01002']);
-    expect(merged.cards['02001']).toEqual(mockAssetPack2.cards['02001']);
+    expect(merged.cards['01001']).toEqual(mockAssetPack2.cards!['01001']); // Pack 2 wins
+    expect(merged.cards['01002']).toEqual(mockAssetPack1.cards!['01002']);
+    expect(merged.cards['02001']).toEqual(mockAssetPack2.cards!['02001']);
     expect(merged.tokens).toEqual(mockAssetPack1.tokens);
     expect(merged.counters).toEqual(mockAssetPack2.counters);
   });
@@ -406,8 +411,8 @@ describe('resolveAssetUrl', () => {
 describe('resolveCard', () => {
   const content: MergedContent = {
     packs: [mockAssetPack1],
-    cardTypes: mockAssetPack1.cardTypes,
-    cards: mockAssetPack1.cards,
+    cardTypes: mockAssetPack1.cardTypes ?? {},
+    cards: mockAssetPack1.cards ?? {},
     cardSets: {},
     tokens: {},
     counters: {},
@@ -517,8 +522,8 @@ describe('resolveAllCards', () => {
   it('should resolve all cards in content', () => {
     const content: MergedContent = {
       packs: [mockAssetPack1],
-      cardTypes: mockAssetPack1.cardTypes,
-      cards: mockAssetPack1.cards,
+      cardTypes: mockAssetPack1.cardTypes ?? {},
+      cards: mockAssetPack1.cards ?? {},
       cardSets: {},
       tokens: {},
       counters: {},
@@ -582,7 +587,7 @@ describe('getCardDimensions', () => {
 
   it('should default to standard for unknown size', () => {
     // Test with an unknown size (bypassing type safety to test error handling)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+     
     expect(getCardDimensions('unknown' as CardSize)).toEqual([180, 252]);
   });
 });

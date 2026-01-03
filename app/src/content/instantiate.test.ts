@@ -4,8 +4,13 @@ import type {
   MergedContent,
   DeckDefinition,
   AssetPack,
+  LayoutObject,
 } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  type StackObject,
+  type TokenObject,
+} from '@cardtable2/shared';
 import {
   expandDeck,
   namespaceCardCode,
@@ -97,10 +102,10 @@ const mockContent: MergedContent = {
     ...mockPack1.cards,
     ...mockPack2.cards,
   },
-  cardSets: mockPack1.cardSets,
-  tokens: mockPack1.tokens,
-  counters: mockPack1.counters,
-  mats: mockPack1.mats,
+  cardSets: mockPack1.cardSets ?? {},
+  tokens: mockPack1.tokens ?? {},
+  counters: mockPack1.counters ?? {},
+  mats: mockPack1.mats ?? {},
 };
 
 // ============================================================================
@@ -372,7 +377,7 @@ describe('instantiateScenario', () => {
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const stack = objects.get('deck1')!;
+    const stack = objects.get('deck1')! as StackObject;
 
     expect(stack._kind).toBe(ObjectKind.Stack);
     expect(stack._pos).toEqual({ x: 100, y: 200, r: 0 });
@@ -403,7 +408,7 @@ describe('instantiateScenario', () => {
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const token = objects.get('test:token:damage')!;
+    const token = objects.get('test:token:damage')! as TokenObject;
 
     expect(token._kind).toBe(ObjectKind.Token);
     expect(token._pos).toEqual({ x: 300, y: 400, r: 0 });
@@ -500,15 +505,6 @@ describe('instantiateScenario', () => {
   });
 
   it('should instantiate zone', () => {
-    const contentWithZones: MergedContent = {
-      ...mockContent,
-      zones: {
-        discard: {
-          rect: [100, 200, 300, 400],
-        },
-      },
-    };
-
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -528,7 +524,7 @@ describe('instantiateScenario', () => {
       },
     };
 
-    const objects = instantiateScenario(scenario, contentWithZones);
+    const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
     const zone = objects.get('test:zone:discard')!;
@@ -583,7 +579,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for stack missing id', () => {
     // Testing error handling for invalid object (bypassing type safety)
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+     
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -600,7 +596,7 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Stack object missing required id',
@@ -609,7 +605,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for token missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+     
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -626,7 +622,7 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Token object missing required ref',
@@ -635,7 +631,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for mat missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+     
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -652,7 +648,7 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Mat object missing required ref',
@@ -661,7 +657,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for counter missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+     
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -678,7 +674,7 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Counter object missing required ref',
@@ -687,7 +683,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for zone missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+     
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -704,7 +700,7 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Zone object missing required ref',
@@ -760,7 +756,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for unknown object type', () => {
     // Testing error handling for invalid object (bypassing type safety)
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+     
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -772,11 +768,11 @@ describe('instantiateScenario', () => {
           {
             type: 'unknown',
             pos: { x: 100, y: 200 },
-          } as LayoutObject,
+          } as unknown as LayoutObject,
         ],
       },
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
+     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Unknown object type: unknown',

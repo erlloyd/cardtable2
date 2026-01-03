@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { Application, Graphics, Assets, Sprite, type Texture } from 'pixi.js';
+import { getBackendUrl } from '../utils/backend';
 
 export const Route = createFileRoute('/pixitest')({
   component: PixiTest,
@@ -110,8 +111,9 @@ function PixiTest() {
       // Aggressive caching (1 year + ETags) minimizes bandwidth usage
       try {
         console.log('[PixiTest] Loading Azure card face via backend proxy...');
+        const backendUrl = getBackendUrl();
         const texture: Texture = await Assets.load(
-          'http://localhost:3001/api/card-image/cerebro-cards/official/01030.jpg',
+          `${backendUrl}/api/card-image/cerebro-cards/official/01030.jpg`,
         );
         console.log(
           '[PixiTest] Azure image loaded:',

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { YjsStore } from '../store/YjsStore';
+import { getWSUrl } from '../utils/backend';
 
 interface UseTableStoreOptions {
   tableId: string;
@@ -50,9 +51,7 @@ export function useTableStore({
     // WebSocket server URL (M5-T1)
     // In development: connect to server using current hostname (works for mobile on LAN)
     // In production: use env var or leave undefined for offline mode
-    const wsUrl: string =
-      (import.meta.env.VITE_WS_URL as string | undefined) ||
-      `ws://${window.location.hostname}:3001`;
+    const wsUrl = getWSUrl();
 
     const store = new YjsStore(tableId, wsUrl);
     storeRef.current = store;

@@ -184,6 +184,7 @@ jobs:
       - name: Build app
         env:
           VITE_WS_URL: wss://${{ steps.server_domain.outputs.domain }}
+          VITE_BE_URL: https://${{ steps.server_domain.outputs.domain }}
         run: pnpm --filter @cardtable2/app run build
 
       - name: Set up Docker Buildx

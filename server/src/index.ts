@@ -34,17 +34,44 @@ app.use(
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
 
-      // Check if origin matches any allowed pattern
-      const isAllowed = allowedOrigins.some((allowed) =>
-        typeof allowed === 'string' ? allowed === origin : allowed.test(origin),
+      console.log(`[CORS] Checking origin: ${origin}`);
+      console.log(`[CORS] NODE_ENV: ${NODE_ENV}`);
+      console.log(
+        `[CORS] Allowed patterns:`,
+        allowedOrigins.map((o) =>
+          typeof o === 'string' ? o : `regex: ${o.source}`,
+        ),
       );
+
+      // Check if origin matches any allowed pattern
+      const isAllowed = allowedOrigins.some((allowed) => {
+        if (typeof allowed === 'string') {
+          const matches = allowed === origin;
+          if (matches) {
+            console.log(`[CORS] 🎯 MATCH: string "${allowed}"`);
+          } else {
+            console.log(`[CORS] ❌ NO MATCH: string "${allowed}"`);
+          }
+          return matches;
+        } else {
+          const matches = allowed.test(origin);
+          if (matches) {
+            console.log(`[CORS] 🎯 MATCH: regex /${allowed.source}/`);
+          } else {
+            console.log(`[CORS] ❌ NO MATCH: regex /${allowed.source}/`);
+          }
+          return matches;
+        }
+      });
+
+      console.log(`[CORS] Final result: isAllowed=${isAllowed}`);
 
       if (isAllowed) {
         // Echo back the exact origin that matched our validation
-        console.log(`[CORS] Allowed origin: ${origin}`);
+        console.log(`[CORS] ✅ Allowed origin: ${origin}`);
         callback(null, origin);
       } else {
-        console.warn(`[CORS] Blocked origin: ${origin}`);
+        console.warn(`[CORS] ❌ Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },

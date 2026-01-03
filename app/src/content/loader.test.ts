@@ -587,7 +587,7 @@ describe('getCardDimensions', () => {
 
   it('should default to standard for unknown size', () => {
     // Test with an unknown size (bypassing type safety to test error handling)
-     
+
     expect(getCardDimensions('unknown' as CardSize)).toEqual([180, 252]);
   });
 });

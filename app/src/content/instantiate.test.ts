@@ -579,7 +579,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for stack missing id', () => {
     // Testing error handling for invalid object (bypassing type safety)
-     
+
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -596,7 +596,6 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Stack object missing required id',
@@ -605,7 +604,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for token missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-     
+
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -622,7 +621,6 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Token object missing required ref',
@@ -631,7 +629,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for mat missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-     
+
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -648,7 +646,6 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Mat object missing required ref',
@@ -657,7 +654,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for counter missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-     
+
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -674,7 +671,6 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Counter object missing required ref',
@@ -683,7 +679,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for zone missing ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
-     
+
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -700,7 +696,6 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Zone object missing required ref',
@@ -756,7 +751,7 @@ describe('instantiateScenario', () => {
 
   it('should throw error for unknown object type', () => {
     // Testing error handling for invalid object (bypassing type safety)
-     
+
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -772,7 +767,6 @@ describe('instantiateScenario', () => {
         ],
       },
     };
-     
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
       'Unknown object type: unknown',

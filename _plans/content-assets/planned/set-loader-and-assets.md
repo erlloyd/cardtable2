@@ -46,53 +46,71 @@ Implement the content loading system for game sets, including JSON validation, a
 }
 ```
 
-## Tasks
+## Status
+**Partially Complete** - Initial content loading system implemented (2026-01-03, PR #50)
 
-### M4-T1: JSON Schema + Types
-**Objective:** Create JSON schema definition and TypeScript types for set format validation.
+## Completed Work
 
-**Dependencies:** M3 complete
+### Content Type System (shared/src/content-types.ts)
+- ✅ AssetPack type (ct-assets@1): cards, tokens, counters, mats, card types
+- ✅ Scenario type (ct-scenario@1): layout, decks, pack references
+- ✅ Card type inheritance (shared back/size from cardType)
+- ✅ Standard size enums with custom override support
+- ✅ MergedContent and ResolvedCard types for runtime
+
+### Content Loader (app/src/content/)
+- ✅ loadAssetPack/loadScenario: Fetch and validate JSON from URLs
+- ✅ mergeAssetPacks: Merge multiple packs (last-wins strategy)
+- ✅ resolveCard: Apply type inheritance and URL resolution
+- ✅ expandDeck: Expand cardSets and individual cards with counts
+- ✅ instantiateScenario: Create TableObjects from layout definitions
+- ✅ loadCompleteScenario: High-level API for full scenario loading
+
+### Game Loading Integration
+- ✅ Updated GameSelect to pass gameId via URL search params
+- ✅ Updated Table route to load scenario when gameId present
+- ✅ Auto-loads content on first table open (skips if table has objects)
+- ✅ Loading/error states with user feedback
+
+### Test Content
+- ✅ testgame-core.json: 17 cards, 2 card sets, 1 token
+- ✅ testgame-basic.json: Scenario with 2 decks
+- ✅ Updated gamesIndex.json
+
+## Remaining Work
+
+### M4-T1: JSON Schema + Formal Validation
+**Objective:** Add formal JSON Schema validation for content files.
 
 **Spec:**
-- JSON Schema v1 definition (`set-v1.schema.json`)
-- TypeScript types generated/aligned with schema
-- Validation function with detailed error messages
-- Support for all content types (cards, tokens, counters, mats, zones)
+- JSON Schema v1 definition files (`ct-assets@1.schema.json`, `ct-scenario@1.schema.json`)
+- Runtime validation function with detailed error messages
+- Schema validation on load (development mode)
+
+**Note:** Current implementation has TypeScript types but no runtime schema validation.
 
 **Deliverables:**
-- `set-v1.schema.json` schema file
-- `types.ts` with Set type definitions
-- `validateSetJson()` function
+- JSON Schema files
+- `validateAssetPack()` and `validateScenario()` functions
 - Error reporting utilities
 
 **Test Plan:**
 - Unit: valid fixtures pass validation
 - Unit: invalid fixtures produce expected errors
-- Unit: all content types properly typed
 
 ### M4-T2: Namespacing & Instantiation
-**Objective:** Load sets with proper namespacing and instantiate layout objects.
+**Status:** ✅ **Complete** (mostly)
 
-**Dependencies:** M4-T1
+**Completed:**
+- ✅ Namespace pattern: `<packId>/<cardCode>`
+- ✅ Multi-pack merging (last-wins strategy)
+- ✅ Layout instantiation to Y.Doc via `instantiateScenario()`
+- ✅ Deterministic `_sortKey` generation
+- ✅ Z-order handling for mats
 
-**Spec:**
-- Namespace pattern: `<setId>/<localId>`
-- Multi-set union: merge catalogs, concatenate layouts
-- Materialize `layout.objects` into Y.Doc
-- Deterministic `_sortKey` generation
-- Z-order handling for mats
-
-**Deliverables:**
-- Set loading and merging logic
-- Namespace utilities
-- Layout instantiation to Y.Doc
-- Sort key generation algorithm
-
-**Test Plan:**
-- Unit: verify counts, IDs, and positions
-- Unit: multi-set loading produces correct union
-- E2E: instantiated objects persist across reloads
-- Unit: deterministic sort key generation
+**Remaining:**
+- Additional testing for edge cases
+- Performance profiling for large scenarios
 
 ### M4-T3: Asset Loader & LRU
 **Objective:** Implement efficient texture loading with LRU cache management.

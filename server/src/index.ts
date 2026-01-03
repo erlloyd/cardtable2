@@ -95,10 +95,10 @@ app.get('/api/card-image/*splat', async (req, res) => {
     });
 
     console.log(`[Proxy] Serving ${imagePath} (${imageBuffer.length} bytes)`);
-    res.send(imageBuffer);
+    return res.send(imageBuffer);
   } catch (error) {
     console.error(`[Proxy] Error fetching ${imagePath}:`, error);
-    res.status(500).send('Proxy error');
+    return res.status(500).send('Proxy error');
   }
 });
 

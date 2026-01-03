@@ -58,9 +58,20 @@ app.get('/health', (_req, res) => {
 // Card image proxy with aggressive caching to minimize Railway bandwidth
 // Images are proxied from Azure Blob Storage which doesn't provide CORS headers
 // ETags + immutable caching means clients only download each image once
-app.get('/api/card-image/*splat', async (req, res) => {
-  // Get the full path (req.path preserves slashes, req.params.splat converts to commas)
+app.get('/api/card-image/*', async (req, res) => {
+  // Get the full requested image path from req.path (includes wildcard segment with slashes intact)
   const imagePath = req.path.replace('/api/card-image/', '');
+
+  // Validate path to prevent traversal attacks and unexpected characters
+  // Allow only alphanumerics, slashes, hyphens, underscores, and dots
+  const isValidPath =
+    /^[a-zA-Z0-9\-/._]+$/.test(imagePath) && !imagePath.includes('..');
+
+  if (!isValidPath) {
+    console.warn(`[Proxy] Invalid image path: ${imagePath}`);
+    return res.status(400).send('Invalid image path');
+  }
+
   const azureUrl = `https://cerebrodatastorage.blob.core.windows.net/${imagePath}`;
 
   try {
@@ -70,8 +81,11 @@ app.get('/api/card-image/*splat', async (req, res) => {
     const response = await fetch(azureUrl);
 
     if (!response.ok) {
-      console.error(`[Proxy] Failed to fetch ${imagePath}: ${response.status}`);
-      return res.status(response.status).send('Image not found');
+      // Return consistent 404 to avoid leaking Azure storage structure
+      console.error(
+        `[Proxy] Failed to fetch ${imagePath}: Azure returned ${response.status}`,
+      );
+      return res.status(404).send('Image not found');
     }
 
     // Get image data

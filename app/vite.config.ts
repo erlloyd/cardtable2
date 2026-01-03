@@ -19,13 +19,6 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
-    proxy: {
-      '/azure-proxy': {
-        target: 'https://cerebrodatastorage.blob.core.windows.net',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/azure-proxy/, ''),
-      },
-    },
   },
   build: {
     outDir: 'dist',

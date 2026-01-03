@@ -3,7 +3,7 @@
   "id": "testgame-core",
   "name": "Test Game - Core Pack",
   "version": "1.0.0",
-  "baseUrl": "https://cerebrodatastorage.blob.core.windows.net/cerebro-cards/official/",
+  "baseUrl": "/api/card-image/cerebro-cards/official/",
   "cardTypes": {
     "player": {
       "back": "https://card-table.app/images/standard/card_back_marvelchampions.png",

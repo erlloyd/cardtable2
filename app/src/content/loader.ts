@@ -5,6 +5,7 @@ import type {
   ResolvedCard,
   CardSize,
 } from '@cardtable2/shared';
+import { getBackendUrl } from '@/utils/backend';
 
 // ============================================================================
 // Asset Pack Loading
@@ -143,12 +144,18 @@ export function mergeAssetPacks(packs: AssetPack[]): MergedContent {
  * If the URL is already absolute, return it as-is
  */
 export function resolveAssetUrl(url: string, baseUrl?: string): string {
-  // If URL is already absolute, return it
-  if (
-    url.startsWith('http://') ||
-    url.startsWith('https://') ||
-    url.startsWith('/')
-  ) {
+  // If URL is already absolute (http/https), return it
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+
+  // If URL is root-relative and starts with /api/, prepend backend URL
+  if (url.startsWith('/api/')) {
+    return `${getBackendUrl()}${url}`;
+  }
+
+  // If URL is already root-relative (but not API), return it
+  if (url.startsWith('/')) {
     return url;
   }
 
@@ -163,7 +170,14 @@ export function resolveAssetUrl(url: string, baseUrl?: string): string {
   // Add leading slash to url if missing
   const path = url.startsWith('/') ? url : `/${url}`;
 
-  return `${base}${path}`;
+  const resolved = `${base}${path}`;
+
+  // If resolved URL is an API path, prepend backend URL
+  if (resolved.startsWith('/api/')) {
+    return `${getBackendUrl()}${resolved}`;
+  }
+
+  return resolved;
 }
 
 // ============================================================================

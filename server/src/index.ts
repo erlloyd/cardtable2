@@ -25,7 +25,7 @@ const allowedOrigins =
     : [
         'https://beta.card-table.app',
         'https://card-table.app',
-        /^https:\/\/cardtable2-pr-\d+-app\.up\.railway\.app$/, // PR previews
+        /^https:\/\/cardtable2-app-pr-\d+-prs\.up\.railway\.app$/, // PR previews
       ];
 
 app.use(
@@ -34,13 +34,15 @@ app.use(
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
 
-      // Check if origin is allowed
+      // Check if origin matches any allowed pattern
       const isAllowed = allowedOrigins.some((allowed) =>
         typeof allowed === 'string' ? allowed === origin : allowed.test(origin),
       );
 
       if (isAllowed) {
-        callback(null, true);
+        // Echo back the exact origin that matched our validation
+        console.log(`[CORS] Allowed origin: ${origin}`);
+        callback(null, origin);
       } else {
         console.warn(`[CORS] Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));

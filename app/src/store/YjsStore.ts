@@ -58,6 +58,9 @@ export class YjsStore {
   // Typed access to Y.Doc maps (M3.6-T2: now uses TypedMap for type-safe property access)
   public objects: Y.Map<TableObjectYMap>;
 
+  // Metadata map for table-level state (game ID, settings, etc.)
+  public metadata: Y.Map<unknown>;
+
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
@@ -87,6 +90,9 @@ export class YjsStore {
 
     // Get or create objects map
     this.objects = this.doc.getMap('objects');
+
+    // Get or create metadata map
+    this.metadata = this.doc.getMap('metadata');
 
     // Initialize awareness (M3-T4)
     this.awareness = new Awareness(this.doc);

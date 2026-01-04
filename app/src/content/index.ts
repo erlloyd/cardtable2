@@ -125,3 +125,63 @@ export async function loadScenarioMetadata(
 ): Promise<Scenario> {
   return loadScenario(scenarioUrl);
 }
+
+/**
+ * Load all asset packs for a game
+ *
+ * Loads all asset packs referenced by the game's default scenario manifest,
+ * but does NOT instantiate any scenario objects. This provides access to
+ * all cards, tokens, and other assets for manual object creation.
+ *
+ * @param gameId - The game ID from gamesIndex.json
+ * @returns Merged content from all packs
+ *
+ * @example
+ * ```typescript
+ * const content = await loadGameAssetPacks('testgame');
+ * // Content has all cards/tokens but no scenario objects
+ * const card = resolveCard('01001', content);
+ * ```
+ */
+export async function loadGameAssetPacks(
+  gameId: string,
+): Promise<MergedContent> {
+  // Load games index to find the game
+  const response = await fetch('/gamesIndex.json');
+  if (!response.ok) {
+    throw new Error('Failed to load games index');
+  }
+
+  const gamesIndex = (await response.json()) as {
+    games: Array<{ id: string; manifestUrl: string }>;
+  };
+  const game = gamesIndex.games.find((g) => g.id === gameId);
+
+  if (!game) {
+    throw new Error(`Game not found: ${gameId}`);
+  }
+
+  // Load the scenario to get pack list (but don't instantiate)
+  const scenario = await loadScenario(game.manifestUrl);
+
+  // Resolve pack URLs
+  const packUrls = scenario.packs.map((packId) => {
+    // If packId looks like a URL, use it directly
+    if (
+      packId.startsWith('http://') ||
+      packId.startsWith('https://') ||
+      packId.startsWith('/')
+    ) {
+      return packId;
+    }
+    // Otherwise, construct URL from packId
+    // Default to /packs/<packId>.json
+    return `/packs/${packId}.json`;
+  });
+
+  // Load all packs in parallel
+  const packs = await loadAssetPacks(packUrls);
+
+  // Merge and return
+  return mergeAssetPacks(packs);
+}

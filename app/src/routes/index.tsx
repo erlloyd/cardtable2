@@ -62,7 +62,7 @@ function GameSelect() {
     void navigate({
       to: '/table/$id',
       params: { id: tableId },
-      search: { gameId: selectedGame.id },
+      state: { gameId: selectedGame.id } as Record<string, unknown>,
     });
   };
 

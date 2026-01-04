@@ -58,9 +58,9 @@ app.get('/health', (_req, res) => {
 // Card image proxy with aggressive caching to minimize Railway bandwidth
 // Images are proxied from Azure Blob Storage which doesn't provide CORS headers
 // ETags + immutable caching means clients only download each image once
-app.get('/api/card-image/*', async (req, res) => {
-  // Get the full requested image path from req.path (includes wildcard segment with slashes intact)
-  const imagePath = req.path.replace('/api/card-image/', '');
+app.get<{ path: string }>('/api/card-image/*path', async (req, res) => {
+  // Get the full requested image path from wildcard parameter
+  const imagePath = req.params.path;
 
   // Validate path to prevent traversal attacks and unexpected characters
   // Allow only alphanumerics, slashes, hyphens, underscores, and dots

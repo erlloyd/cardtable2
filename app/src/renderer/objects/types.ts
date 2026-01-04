@@ -1,6 +1,7 @@
 import type { Text, TextOptions, Container } from 'pixi.js';
 import type { TableObject, PointerEventData } from '@cardtable2/shared';
 import type { BBox } from '../SceneManager';
+import type { GameAssets } from '../../content';
 
 // Render context provides extra info during rendering
 export interface RenderContext {
@@ -12,6 +13,7 @@ export interface RenderContext {
   readonly cameraScale: number; // Current zoom level (1.0 = 100%, 2.0 = 200%). Use for manual counter-scaling or pass to scaleStrokeWidth helper
   readonly createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution (DO NOT create Text objects directly)
   readonly scaleStrokeWidth: (baseWidth: number) => number; // Helper that counter-scales stroke widths using sqrt(cameraScale) for visual consistency
+  readonly gameAssets?: GameAssets; // Game assets (cards, tokens, etc.) for texture loading - undefined during initial render before packs load
 }
 
 // Shadow configuration

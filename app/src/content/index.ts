@@ -5,7 +5,7 @@
  * Handles asset packs, scenarios, and table object creation.
  */
 
-import type { Scenario, MergedContent, TableObject } from '@cardtable2/shared';
+import type { Scenario, GameAssets, TableObject } from '@cardtable2/shared';
 import {
   loadAssetPack,
   loadAssetPacks,
@@ -23,7 +23,10 @@ import {
   instantiateScenario,
 } from './instantiate';
 
-// Re-export for convenience
+// Re-export types for convenience
+export type { GameAssets } from '@cardtable2/shared';
+
+// Re-export functions for convenience
 export {
   loadAssetPack,
   loadAssetPacks,
@@ -45,7 +48,7 @@ export {
 
 export interface LoadedContent {
   scenario: Scenario;
-  content: MergedContent;
+  content: GameAssets;
   objects: Map<string, TableObject>;
 }
 
@@ -143,9 +146,7 @@ export async function loadScenarioMetadata(
  * const card = resolveCard('01001', content);
  * ```
  */
-export async function loadGameAssetPacks(
-  gameId: string,
-): Promise<MergedContent> {
+export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
   // Load games index to find the game
   const response = await fetch('/gamesIndex.json');
   if (!response.ok) {

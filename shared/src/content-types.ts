@@ -113,10 +113,10 @@ export interface Scenario {
 }
 
 // ============================================================================
-// Merged Content (result of loading multiple packs)
+// Game Assets (merged from all loaded packs)
 // ============================================================================
 
-export interface MergedContent {
+export interface GameAssets {
   packs: AssetPack[]; // All loaded packs (in load order)
   cardTypes: Record<string, CardType>; // Merged card types
   cards: Record<string, Card>; // Merged cards

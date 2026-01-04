@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type {
   AssetPack,
   Scenario,
-  MergedContent,
+  GameAssets,
   CardSize,
 } from '@cardtable2/shared';
 import {
@@ -409,7 +409,7 @@ describe('resolveAssetUrl', () => {
 // ============================================================================
 
 describe('resolveCard', () => {
-  const content: MergedContent = {
+  const content: GameAssets = {
     packs: [mockAssetPack1],
     cardTypes: mockAssetPack1.cardTypes ?? {},
     cards: mockAssetPack1.cards ?? {},
@@ -444,7 +444,7 @@ describe('resolveCard', () => {
   });
 
   it('should throw error for missing card type', () => {
-    const invalidContent: MergedContent = {
+    const invalidContent: GameAssets = {
       ...content,
       cards: {
         invalid: {
@@ -460,7 +460,7 @@ describe('resolveCard', () => {
   });
 
   it('should throw error for missing back image', () => {
-    const invalidContent: MergedContent = {
+    const invalidContent: GameAssets = {
       ...content,
       cardTypes: {
         noback: {
@@ -482,7 +482,7 @@ describe('resolveCard', () => {
   });
 
   it('should use size from card if specified', () => {
-    const contentWithCustomSize: MergedContent = {
+    const contentWithCustomSize: GameAssets = {
       ...content,
       cards: {
         custom: {
@@ -498,7 +498,7 @@ describe('resolveCard', () => {
   });
 
   it('should use custom size array from card', () => {
-    const contentWithCustomSize: MergedContent = {
+    const contentWithCustomSize: GameAssets = {
       ...content,
       cards: {
         custom: {
@@ -520,7 +520,7 @@ describe('resolveCard', () => {
 
 describe('resolveAllCards', () => {
   it('should resolve all cards in content', () => {
-    const content: MergedContent = {
+    const content: GameAssets = {
       packs: [mockAssetPack1],
       cardTypes: mockAssetPack1.cardTypes ?? {},
       cards: mockAssetPack1.cards ?? {},
@@ -541,7 +541,7 @@ describe('resolveAllCards', () => {
   });
 
   it('should return empty map for no cards', () => {
-    const emptyContent: MergedContent = {
+    const emptyContent: GameAssets = {
       packs: [],
       cardTypes: {},
       cards: {},

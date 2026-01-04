@@ -1,7 +1,7 @@
 import type {
   AssetPack,
   Scenario,
-  MergedContent,
+  GameAssets,
   ResolvedCard,
   CardSize,
 } from '@cardtable2/shared';
@@ -99,8 +99,8 @@ export async function loadScenario(url: string): Promise<Scenario> {
  * Merge multiple asset packs into a single content collection
  * Later packs override earlier packs (last-wins strategy)
  */
-export function mergeAssetPacks(packs: AssetPack[]): MergedContent {
-  const merged: MergedContent = {
+export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
+  const merged: GameAssets = {
     packs,
     cardTypes: {},
     cards: {},
@@ -189,7 +189,7 @@ export function resolveAssetUrl(url: string, baseUrl?: string): string {
  */
 export function resolveCard(
   cardCode: string,
-  content: MergedContent,
+  content: GameAssets,
 ): ResolvedCard {
   const card = content.cards[cardCode];
   if (!card) {
@@ -229,7 +229,7 @@ export function resolveCard(
  * Resolve all cards in a content collection
  */
 export function resolveAllCards(
-  content: MergedContent,
+  content: GameAssets,
 ): Map<string, ResolvedCard> {
   const resolved = new Map<string, ResolvedCard>();
 

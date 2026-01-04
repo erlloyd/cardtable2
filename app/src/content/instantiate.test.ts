@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type {
   Scenario,
-  MergedContent,
+  GameAssets,
   DeckDefinition,
   AssetPack,
   LayoutObject,
@@ -92,7 +92,7 @@ const mockPack2: AssetPack = {
   },
 };
 
-const mockContent: MergedContent = {
+const mockContent: GameAssets = {
   packs: [mockPack1, mockPack2],
   cardTypes: {
     ...mockPack1.cardTypes,
@@ -200,7 +200,7 @@ describe('expandDeck', () => {
   });
 
   it('should handle multiple cardSets', () => {
-    const contentWithMultipleSets: MergedContent = {
+    const contentWithMultipleSets: GameAssets = {
       ...mockContent,
       cardSets: {
         setA: ['01001', '01002'],

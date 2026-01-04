@@ -1,6 +1,6 @@
 import type {
   Scenario,
-  MergedContent,
+  GameAssets,
   DeckDefinition,
   LayoutObject,
 } from '@cardtable2/shared';
@@ -22,7 +22,7 @@ import {
  */
 export function expandDeck(
   deckDef: DeckDefinition,
-  content: MergedContent,
+  content: GameAssets,
 ): string[] {
   const cards: string[] = [];
 
@@ -81,7 +81,7 @@ export function namespaceCardCode(packId: string, cardCode: string): string {
  */
 export function namespaceDeckCards(
   cards: string[],
-  content: MergedContent,
+  content: GameAssets,
 ): string[] {
   return cards.map((cardCode) => {
     // Find which pack defined this card
@@ -125,7 +125,7 @@ function createPosition(x: number, y: number, r: number = 0): Position {
 function instantiateStack(
   obj: LayoutObject,
   scenario: Scenario,
-  content: MergedContent,
+  content: GameAssets,
 ): StackObject {
   if (!obj.id) {
     throw new Error('Stack object missing required id');
@@ -161,7 +161,7 @@ function instantiateStack(
  */
 function instantiateToken(
   obj: LayoutObject,
-  _content: MergedContent,
+  _content: GameAssets,
 ): TokenObject {
   if (!obj.ref) {
     throw new Error('Token object missing required ref');
@@ -182,10 +182,7 @@ function instantiateToken(
 /**
  * Instantiate a mat object from a layout definition
  */
-function instantiateMat(
-  obj: LayoutObject,
-  _content: MergedContent,
-): TableObject {
+function instantiateMat(obj: LayoutObject, _content: GameAssets): TableObject {
   if (!obj.ref) {
     throw new Error('Mat object missing required ref');
   }
@@ -206,7 +203,7 @@ function instantiateMat(
  */
 function instantiateCounter(
   obj: LayoutObject,
-  content: MergedContent,
+  content: GameAssets,
 ): TableObject {
   if (!obj.ref) {
     throw new Error('Counter object missing required ref');
@@ -237,10 +234,7 @@ function instantiateCounter(
 /**
  * Instantiate a zone object from a layout definition
  */
-function instantiateZone(
-  obj: LayoutObject,
-  _content: MergedContent,
-): TableObject {
+function instantiateZone(obj: LayoutObject, _content: GameAssets): TableObject {
   if (!obj.ref) {
     throw new Error('Zone object missing required ref');
   }
@@ -262,7 +256,7 @@ function instantiateZone(
 function instantiateLayoutObject(
   obj: LayoutObject,
   scenario: Scenario,
-  content: MergedContent,
+  content: GameAssets,
 ): { id: string; object: TableObject } {
   let tableObject: TableObject;
 
@@ -302,7 +296,7 @@ function instantiateLayoutObject(
  */
 export function instantiateScenario(
   scenario: Scenario,
-  content: MergedContent,
+  content: GameAssets,
 ): Map<string, TableObject> {
   const objects = new Map<string, TableObject>();
 

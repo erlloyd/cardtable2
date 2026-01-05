@@ -67,10 +67,156 @@ function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
 }
 
 /**
+ * Helper: Render 3D background effect for multi-card stacks
+ *
+ * Adds a slightly offset background rectangle to give visual depth.
+ * Only rendered for stacks with 2+ cards in non-minimal mode.
+ */
+function render3DBackground(
+  container: Container,
+  cardCount: number,
+  ctx: RenderContext,
+): void {
+  if (cardCount < 2 || ctx.minimal) {
+    return;
+  }
+
+  const bg3d = new Graphics();
+  bg3d.rect(
+    -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
+    -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
+    STACK_WIDTH,
+    STACK_HEIGHT,
+  );
+  bg3d.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
+  bg3d.stroke({
+    width: ctx.scaleStrokeWidth(1),
+    color: 0x000000,
+    alpha: 0.3,
+  });
+  container.addChild(bg3d);
+}
+
+/**
+ * Helper: Render main card visual (image sprite or placeholder)
+ *
+ * Checks for cached texture and renders sprite if available.
+ * Falls back to placeholder graphic and starts async texture load.
+ */
+function renderMainCard(
+  container: Container,
+  obj: StackObject,
+  ctx: RenderContext,
+): void {
+  const color = getStackColor(obj);
+  const imageUrl = getCardImageUrl(obj, ctx);
+  const cachedTexture = imageUrl && ctx.textureLoader?.get(imageUrl);
+
+  if (cachedTexture) {
+    // Create sprite with card image
+    const sprite = new Sprite(cachedTexture);
+    sprite.width = STACK_WIDTH;
+    sprite.height = STACK_HEIGHT;
+    sprite.anchor.set(0.5, 0.5);
+    container.addChild(sprite);
+  } else {
+    // No cached texture - render placeholder graphic
+    const graphic = createPlaceholderGraphic(color, obj, ctx);
+    container.addChild(graphic);
+
+    // Start async texture load for next render (fire-and-forget)
+    if (imageUrl && ctx.textureLoader) {
+      ctx.textureLoader.load(imageUrl).catch((error) => {
+        console.error(
+          `[StackBehaviors] Failed to preload texture for ${imageUrl}:`,
+          error,
+        );
+      });
+    }
+  }
+}
+
+/**
+ * Helper: Render stack decorations (count badge and unstack handle)
+ *
+ * Only rendered for stacks with 2+ cards in non-minimal mode.
+ * Includes count badge at top-center and unstack handle at top-right.
+ */
+function renderStackDecorations(
+  container: Container,
+  cardCount: number,
+  ctx: RenderContext,
+): void {
+  if (cardCount < 2 || ctx.minimal) {
+    return;
+  }
+
+  // Create graphics for badge and handle backgrounds
+  const decorGraphic = new Graphics();
+
+  // Badge rounded square (top-center, half on/half off the card)
+  const badgeX = 0;
+  const badgeY = -STACK_HEIGHT / 2;
+
+  decorGraphic.roundRect(
+    badgeX - STACK_BADGE_SIZE / 2,
+    badgeY - STACK_BADGE_SIZE / 2,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_RADIUS,
+  );
+  decorGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+  decorGraphic.stroke({
+    width: ctx.scaleStrokeWidth(1),
+    color: 0xffffff,
+    alpha: 0.3,
+  });
+
+  // Badge text (count)
+  const text = ctx.createText({
+    text: cardCount.toString(),
+    style: {
+      fontSize: STACK_BADGE_FONT_SIZE,
+      fill: STACK_BADGE_TEXT_COLOR,
+      fontWeight: 'bold',
+    },
+  });
+  text.anchor.set(0.5, 0.5);
+  text.position.set(badgeX, badgeY);
+
+  // Unstack handle (upper-right corner, flush with card borders)
+  const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2;
+  const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2;
+
+  decorGraphic.rect(
+    handleX - STACK_BADGE_SIZE / 2,
+    handleY - STACK_BADGE_SIZE / 2,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_SIZE,
+  );
+  decorGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+
+  // Add decorative graphics to container
+  container.addChild(decorGraphic);
+  container.addChild(text);
+
+  // Handle icon - stack-pop
+  const iconGraphic = new Graphics();
+  renderStackPopIcon(iconGraphic, {
+    color: STACK_BADGE_TEXT_COLOR,
+    strokeWidth: 1.5,
+    x: handleX,
+    y: handleY,
+  });
+  container.addChild(iconGraphic);
+}
+
+/**
  * Helper: Create placeholder graphic for a stack (colored rectangle with decorations)
  *
  * Used when card textures are not available. Renders a colored rectangle
- * with borders, 3D effect for multi-card stacks, and face-down indicators.
+ * with borders and face-down indicators. The 3D effect for multi-card stacks
+ * is rendered separately in the main render function.
  */
 function createPlaceholderGraphic(
   color: number,
@@ -78,24 +224,6 @@ function createPlaceholderGraphic(
   ctx: RenderContext,
 ): Graphics {
   const graphic = new Graphics();
-  const cardCount = getCardCount(obj);
-
-  // Draw 3D effect (background rectangle) for stacks with 2+ cards
-  // Skip decorative elements in minimal mode (e.g., ghost previews)
-  if (cardCount >= 2 && !ctx.minimal) {
-    graphic.rect(
-      -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
-      -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
-      STACK_WIDTH,
-      STACK_HEIGHT,
-    );
-    graphic.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
-    graphic.stroke({
-      width: ctx.scaleStrokeWidth(1),
-      color: 0x000000,
-      alpha: 0.3,
-    });
-  }
 
   // Draw main card rectangle
   graphic.rect(-STACK_WIDTH / 2, -STACK_HEIGHT / 2, STACK_WIDTH, STACK_HEIGHT);
@@ -144,109 +272,18 @@ function createPlaceholderGraphic(
 
 export const StackBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Container {
-    // Use Container instead of Graphics to support children (text, icons)
-    // Required for PixiJS v8 compatibility
     const container = new Container();
     const stackObj = obj as StackObject;
-    const color = getStackColor(obj);
     const cardCount = getCardCount(obj);
 
-    // Try to get card image texture (synchronous, only if already cached)
-    const imageUrl = getCardImageUrl(stackObj, ctx);
-    const cachedTexture = imageUrl && ctx.textureLoader?.get(imageUrl);
+    // Layer 1: 3D background for multi-card stacks
+    render3DBackground(container, cardCount, ctx);
 
-    // If we have a cached texture, create sprite; otherwise render placeholder
-    if (cachedTexture) {
-      // Create sprite with card image
-      const sprite = new Sprite(cachedTexture);
+    // Layer 2: Main card (image sprite or placeholder)
+    renderMainCard(container, stackObj, ctx);
 
-      // Scale sprite to fit stack dimensions
-      sprite.width = STACK_WIDTH;
-      sprite.height = STACK_HEIGHT;
-
-      // Center sprite (PixiJS sprites are anchored at top-left by default)
-      sprite.anchor.set(0.5, 0.5);
-
-      container.addChild(sprite);
-    } else {
-      // No cached texture - render placeholder graphic
-      const graphic = createPlaceholderGraphic(color, stackObj, ctx);
-      container.addChild(graphic);
-
-      // Start async texture load for next render (fire-and-forget)
-      // This ensures textures are loaded for subsequent renders
-      if (imageUrl && ctx.textureLoader) {
-        ctx.textureLoader.load(imageUrl).catch((error) => {
-          console.error(
-            `[StackBehaviors] Failed to preload texture for ${imageUrl}:`,
-            error,
-          );
-        });
-      }
-    }
-
-    // Draw count badge and unstack handle for stacks with 2+ cards
-    // Skip decorative elements in minimal mode (e.g., ghost previews)
-    if (cardCount >= 2 && !ctx.minimal) {
-      // Create graphics for decorative elements (badge and handle)
-      const decorGraphic = new Graphics();
-
-      // Badge rounded square (top-center, half on/half off the card)
-      const badgeX = 0;
-      const badgeY = -STACK_HEIGHT / 2; // Position at top edge so half extends above
-
-      decorGraphic.roundRect(
-        badgeX - STACK_BADGE_SIZE / 2,
-        badgeY - STACK_BADGE_SIZE / 2,
-        STACK_BADGE_SIZE,
-        STACK_BADGE_SIZE,
-        STACK_BADGE_RADIUS,
-      );
-      decorGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
-      decorGraphic.stroke({
-        width: ctx.scaleStrokeWidth(1),
-        color: 0xffffff,
-        alpha: 0.3,
-      });
-
-      // Badge text (uses ctx.createText for automatic zoom-aware resolution)
-      const text = ctx.createText({
-        text: cardCount.toString(),
-        style: {
-          fontSize: STACK_BADGE_FONT_SIZE,
-          fill: STACK_BADGE_TEXT_COLOR,
-          fontWeight: 'bold',
-        },
-      });
-      text.anchor.set(0.5, 0.5);
-      text.position.set(badgeX, badgeY);
-
-      // Unstack handle (upper-right corner, flush with card borders)
-      const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2; // Right edge
-      const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2; // Top edge
-
-      decorGraphic.rect(
-        handleX - STACK_BADGE_SIZE / 2,
-        handleY - STACK_BADGE_SIZE / 2,
-        STACK_BADGE_SIZE,
-        STACK_BADGE_SIZE,
-      );
-      decorGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
-
-      // Add decorative graphics to container
-      container.addChild(decorGraphic);
-      container.addChild(text);
-
-      // Handle icon - stack-pop (see renderer/graphics/stackPop/)
-      const iconGraphic = new Graphics();
-      renderStackPopIcon(iconGraphic, {
-        color: STACK_BADGE_TEXT_COLOR,
-        strokeWidth: 1.5,
-        x: handleX,
-        y: handleY,
-      });
-      container.addChild(iconGraphic);
-    }
+    // Layer 3: Badge and unstack handle for multi-card stacks
+    renderStackDecorations(container, cardCount, ctx);
 
     return container;
   },

@@ -55,6 +55,11 @@ describe('GridSnapManager', () => {
       createText: vi.fn(
         (options: import('pixi.js').TextOptions) => new Text(options),
       ),
+      createKindLabel: vi.fn((text: string) => {
+        const label = new Text({ text });
+        label.anchor.set(0.5);
+        return label;
+      }),
     } as unknown as VisualManager;
   });
 

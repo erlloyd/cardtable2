@@ -380,11 +380,9 @@ function createObjectGraphics(
   const container = new Container();
 
   // Create base shape using shared method (no duplication!)
+  // Object behaviors handle their own text rendering via ctx.createKindLabel()
   const shapeGraphic = createBaseShapeGraphic(context, objectId, obj, false);
   container.addChild(shapeGraphic);
-
-  // Add text label showing object type
-  container.addChild(createKindLabel(obj._kind));
 
   return container;
 }
@@ -441,6 +439,7 @@ export function createRenderContext(
     cameraScale: overrides.cameraScale ?? cameraScale,
     createText:
       overrides.createText ?? context.visual.createText.bind(context.visual),
+    createKindLabel: overrides.createKindLabel ?? createKindLabel,
     scaleStrokeWidth:
       overrides.scaleStrokeWidth ?? createScaleStrokeWidth(cameraScale),
     gameAssets: overrides.gameAssets ?? context.gameAssets,

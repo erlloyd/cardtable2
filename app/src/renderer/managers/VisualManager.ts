@@ -128,8 +128,7 @@ export class VisualManager {
     );
     container.addChild(shapeGraphic);
 
-    // Add text label showing object type
-    container.addChild(this.createKindLabel(obj._kind));
+    // Object behaviors handle their own text rendering via ctx.createKindLabel()
 
     return container;
   }
@@ -437,8 +436,7 @@ export class VisualManager {
     );
     visual.addChild(shapeGraphic);
 
-    // Add text label showing object type
-    visual.addChild(this.createKindLabel(obj._kind));
+    // Object behaviors handle their own text rendering via ctx.createKindLabel()
 
     // Restore preserved position if requested (for transient states like drag/animation)
     if (preservePosition && preservedX !== undefined) {
@@ -476,6 +474,8 @@ export class VisualManager {
       minimal: overrides.minimal,
       cameraScale: overrides.cameraScale ?? this.cameraScale,
       createText: overrides.createText ?? this.createText.bind(this),
+      createKindLabel:
+        overrides.createKindLabel ?? this.createKindLabel.bind(this),
       scaleStrokeWidth:
         overrides.scaleStrokeWidth ??
         createScaleStrokeWidth(this.cameraScale, 'VisualManager'),
@@ -576,7 +576,7 @@ export class VisualManager {
    * Uses lower base resolution (2x vs 3x) for performance since labels
    * are larger and less critical for visual quality.
    */
-  private createKindLabel(kind: string): Text {
+  createKindLabel(kind: string): Text {
     // Validate text resolution multiplier
     if (
       !Number.isFinite(this.textResolutionMultiplier) ||

@@ -25,12 +25,27 @@ describe('Stack Behaviors - Visual Rendering', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockCreateText: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockCreateKindLabel: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockScaleStrokeWidth: any;
 
   beforeEach(() => {
     mockCreateText = vi.fn((options: TextOptions) => {
       const text = new Text(options);
       text.resolution = 6; // Simulated zoom-aware resolution
+      return text;
+    });
+
+    mockCreateKindLabel = vi.fn((textString: string) => {
+      const text = new Text({
+        text: textString,
+        style: {
+          fontSize: 24,
+          fill: 0xffffff,
+          stroke: { color: 0x000000, width: 2 },
+        },
+      });
+      text.anchor.set(0.5);
       return text;
     });
 
@@ -48,6 +63,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       isStackTarget: false,
       cameraScale: 4.0,
       createText: mockCreateText,
+      createKindLabel: mockCreateKindLabel,
       scaleStrokeWidth: mockScaleStrokeWidth,
     };
     /* eslint-enable @typescript-eslint/no-unsafe-assignment */
@@ -106,7 +122,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
       StackBehaviors.render(singleStack, mockContext);
 
-      // No badge text should be created for single cards
+      // Count badge text should not be created for single cards
+      // But card code text IS created for placeholders via createKindLabel
+      expect(mockCreateKindLabel).toHaveBeenCalledOnce();
+      expect(mockCreateKindLabel).toHaveBeenCalledWith('card1');
       expect(mockCreateText).not.toHaveBeenCalled();
     });
 
@@ -164,7 +183,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
       StackBehaviors.render(singleStack, mockContext);
 
-      // Badge text should not be created for single cards
+      // Unstack handle text should not be created for single cards
+      // But card code text IS created for placeholders via createKindLabel
+      expect(mockCreateKindLabel).toHaveBeenCalledOnce();
+      expect(mockCreateKindLabel).toHaveBeenCalledWith('card1');
       expect(mockCreateText).not.toHaveBeenCalled();
     });
 
@@ -261,10 +283,15 @@ describe('Stack Behaviors - Visual Rendering', () => {
       // Note: Icon strokes use fixed width (1.5px), not scaled
       expect(mockScaleStrokeWidth).toHaveBeenCalledTimes(4);
 
+      // Should call createKindLabel for:
+      // 1. Card code text ("card1") on placeholder
+      expect(mockCreateKindLabel).toHaveBeenCalledOnce();
+      expect(mockCreateKindLabel).toHaveBeenCalledWith('card1');
+
       // Should call createText for:
       // 1. Count badge ("3")
       // Note: Unstack handle now uses Graphics instead of text
-      expect(mockCreateText).toHaveBeenCalledTimes(1);
+      expect(mockCreateText).toHaveBeenCalledOnce();
     });
 
     it('renders minimal visuals for single face-up card', () => {
@@ -273,6 +300,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
+      mockCreateKindLabel.mockClear();
       /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
       StackBehaviors.render(minimalStack, mockContext);
@@ -280,8 +308,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
       // Should only call scaleStrokeWidth once (main border)
       expect(mockScaleStrokeWidth).toHaveBeenCalledTimes(1);
 
-      // Should not call createText (no badge or handle)
-      expect(mockCreateText).toHaveBeenCalledTimes(0);
+      // Card code text should be created for placeholder via createKindLabel
+      expect(mockCreateKindLabel).toHaveBeenCalledOnce();
+      expect(mockCreateKindLabel).toHaveBeenCalledWith('card1');
+      expect(mockCreateText).not.toHaveBeenCalled();
     });
   });
 

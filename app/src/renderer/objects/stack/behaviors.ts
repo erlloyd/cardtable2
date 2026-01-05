@@ -119,10 +119,43 @@ function renderMainCard(
     sprite.height = STACK_HEIGHT;
     sprite.anchor.set(0.5, 0.5);
     container.addChild(sprite);
+
+    // Add border for selection/drop target state
+    if (ctx.isSelected || ctx.isStackTarget) {
+      const borderGraphic = new Graphics();
+      borderGraphic.rect(
+        -STACK_WIDTH / 2,
+        -STACK_HEIGHT / 2,
+        STACK_WIDTH,
+        STACK_HEIGHT,
+      );
+
+      // Determine border color based on visual state (priority: selected > target)
+      const borderColor = ctx.isSelected
+        ? STACK_BORDER_COLOR_SELECTED
+        : STACK_BORDER_COLOR_TARGET;
+
+      borderGraphic.stroke({
+        width: ctx.scaleStrokeWidth(4),
+        color: borderColor,
+      });
+
+      container.addChild(borderGraphic);
+    }
   } else {
     // No cached texture - render placeholder graphic
     const graphic = createPlaceholderGraphic(color, obj, ctx);
     container.addChild(graphic);
+
+    // Add card code text (top card ID) on placeholder
+    // Skip decorative text in minimal mode (like badges and handles)
+    if (obj._cards && obj._cards.length > 0 && !ctx.minimal) {
+      const topCardCode = obj._cards[0];
+      const text = ctx.createKindLabel(topCardCode);
+      text.anchor.set(0.5, 0.5);
+      text.position.set(0, 0);
+      container.addChild(text);
+    }
 
     // Start async texture load for next render (fire-and-forget)
     if (imageUrl && ctx.textureLoader) {

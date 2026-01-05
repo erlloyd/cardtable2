@@ -13,6 +13,7 @@ export interface RenderContext {
   readonly minimal?: boolean; // When true, skip decorative elements (badges, 3D effects, handles). Used for ghost previews and simplified rendering.
   readonly cameraScale: number; // Current zoom level (1.0 = 100%, 2.0 = 200%). Use for manual counter-scaling or pass to scaleStrokeWidth helper
   readonly createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution (DO NOT create Text objects directly)
+  readonly createKindLabel: (text: string) => Text; // Helper that creates a text label with white text and black outline (standard style for object labels)
   readonly scaleStrokeWidth: (baseWidth: number) => number; // Helper that counter-scales stroke widths using sqrt(cameraScale) for visual consistency
   readonly gameAssets?: GameAssets | null; // Game assets (cards, tokens, etc.) for texture loading - undefined during initial render before packs load, null when explicitly unset
   readonly textureLoader?: TextureLoader; // Texture loader service for loading card/token images - optional for backward compatibility

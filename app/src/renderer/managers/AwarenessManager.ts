@@ -316,6 +316,7 @@ export class AwarenessManager {
           isStackTarget: false,
           cameraScale,
           createText: visual.createText.bind(visual),
+          createKindLabel: visual.createKindLabel.bind(visual),
           scaleStrokeWidth: createScaleStrokeWidth(
             cameraScale,
             'AwarenessManager',
@@ -343,6 +344,7 @@ export class AwarenessManager {
                 isStackTarget: false,
                 cameraScale,
                 createText: visual.createText.bind(visual),
+                createKindLabel: visual.createKindLabel.bind(visual),
                 scaleStrokeWidth: createScaleStrokeWidth(
                   cameraScale,
                   'AwarenessManager',

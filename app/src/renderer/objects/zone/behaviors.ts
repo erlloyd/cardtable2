@@ -26,6 +26,15 @@ export const ZoneBehaviors: ObjectBehaviors = {
     });
 
     container.addChild(graphic);
+
+    // Add kind label text (unless in minimal mode)
+    if (!ctx.minimal) {
+      const text = ctx.createKindLabel(obj._kind);
+      text.anchor.set(0.5);
+      text.position.set(0, 0);
+      container.addChild(text);
+    }
+
     return container;
   },
 

@@ -585,12 +585,14 @@ export function stackObjects(
 
   // Use single transaction for atomicity
   store.getDoc().transact(() => {
-    // Build new card array: target cards at bottom, source cards on top
-    const newCards = [...targetCards];
+    // Build new card array: source cards on top, target cards at bottom
+    // (index 0 is top of stack, so source goes first)
+    const newCards = [];
     for (const sourceData of sourceStacksData) {
       newCards.push(...sourceData.cards);
       stackedIds.push(sourceData.id);
     }
+    newCards.push(...targetCards);
 
     // Update target stack with merged cards
     targetYMap.set('_cards', newCards);

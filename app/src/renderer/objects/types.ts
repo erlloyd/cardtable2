@@ -6,6 +6,7 @@ import type { TextureLoader } from '../services/TextureLoader';
 
 // Render context provides extra info during rendering
 export interface RenderContext {
+  readonly objectId?: string; // ID of the object being rendered - used for triggering visual updates after async operations
   readonly isSelected: boolean; // Whether this object is in the current selection set
   readonly isHovered: boolean; // Whether the pointer is currently over this object
   readonly isDragging: boolean; // Whether this object is being actively dragged
@@ -17,6 +18,7 @@ export interface RenderContext {
   readonly scaleStrokeWidth: (baseWidth: number) => number; // Helper that counter-scales stroke widths using sqrt(cameraScale) for visual consistency
   readonly gameAssets?: GameAssets | null; // Game assets (cards, tokens, etc.) for texture loading - undefined during initial render before packs load, null when explicitly unset
   readonly textureLoader?: TextureLoader; // Texture loader service for loading card/token images - optional for backward compatibility
+  readonly onTextureLoaded?: (url: string) => void; // Callback invoked when a texture finishes loading - used to trigger visual updates
 }
 
 // Shadow configuration

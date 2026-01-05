@@ -112,6 +112,10 @@ function renderMainCard(
   const imageUrl = getCardImageUrl(obj, ctx);
   const cachedTexture = imageUrl && ctx.textureLoader?.get(imageUrl);
 
+  console.log(
+    `[TextureLoadDebug] renderMainCard objectId=${ctx.objectId}, imageUrl=${imageUrl}, hasCachedTexture=${!!cachedTexture}, hasTextureLoader=${!!ctx.textureLoader}, hasCallback=${!!ctx.onTextureLoaded}`,
+  );
+
   if (cachedTexture) {
     // Create sprite with card image
     const sprite = new Sprite(cachedTexture);
@@ -157,14 +161,28 @@ function renderMainCard(
       container.addChild(text);
     }
 
-    // Start async texture load for next render (fire-and-forget)
-    if (imageUrl && ctx.textureLoader) {
-      ctx.textureLoader.load(imageUrl).catch((error) => {
-        console.error(
-          `[StackBehaviors] Failed to preload texture for ${imageUrl}:`,
-          error,
-        );
-      });
+    // Start async texture load and trigger re-render when done
+    if (imageUrl && ctx.textureLoader && ctx.onTextureLoaded) {
+      console.log(
+        `[TextureLoadDebug] Starting texture load for ${imageUrl}, objectId=${ctx.objectId}`,
+      );
+
+      ctx.textureLoader
+        .load(imageUrl)
+        .then(() => {
+          // Texture is now cached - trigger re-render to show it
+          console.log(
+            `[TextureLoadDebug] Texture loaded successfully: ${imageUrl}, calling callback...`,
+          );
+          ctx.onTextureLoaded?.(imageUrl);
+          console.log('[TextureLoadDebug] Callback invoked');
+        })
+        .catch((error) => {
+          console.error(
+            `[TextureLoadDebug] Failed to load texture for ${imageUrl}:`,
+            error,
+          );
+        });
     }
   }
 }

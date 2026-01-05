@@ -10,6 +10,8 @@ import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
 import { getCounterSize } from '../objects/counter/utils';
 import type { SceneManager } from '../SceneManager';
+import type { SelectionManager } from './SelectionManager';
+import type { HoverManager } from './HoverManager';
 import { RenderMode } from '../IRendererAdapter';
 
 /**
@@ -77,9 +79,57 @@ export class VisualManager {
   /**
    * Set the game assets for texture loading.
    * Called when assets are loaded or updated.
+   *
+   * If sceneManager, selection, and hover are provided, automatically re-renders
+   * all objects so they can load their images (cards, tokens, etc.)
    */
-  setGameAssets(assets: GameAssets | null): void {
+  setGameAssets(
+    assets: GameAssets | null,
+    sceneManager?: SceneManager,
+    selection?: SelectionManager,
+    hover?: HoverManager,
+  ): void {
     this.gameAssets = assets;
+
+    // Re-render all objects if scene context is available
+    // (any object type might need images from gameAssets)
+    if (sceneManager && selection && hover && assets) {
+      console.log(
+        '[TextureLoadDebug] Updating all visuals with new gameAssets',
+      );
+      this.regenerateVisuals(sceneManager, selection, hover);
+    }
+  }
+
+  /**
+   * Regenerate all visuals that match the filter.
+   * Used when a global property changes (zoom, gameAssets, etc.)
+   *
+   * @param sceneManager - Scene manager for object lookup
+   * @param selection - Selection manager for determining selected state
+   * @param hover - Hover manager for determining hovered state
+   * @param filter - Optional filter to limit which objects to regenerate (default: all)
+   */
+  regenerateVisuals(
+    sceneManager: SceneManager,
+    selection: SelectionManager,
+    hover: HoverManager,
+    filter?: (obj: TableObject) => boolean,
+  ): void {
+    for (const [objectId, obj] of sceneManager.getAllObjects()) {
+      // Skip if doesn't match filter
+      if (filter && !filter(obj)) {
+        continue;
+      }
+
+      const isSelected = selection.isSelected(objectId);
+      const isHovered = hover.getHoveredObjectId() === objectId;
+
+      this.updateVisualForObjectChange(objectId, sceneManager, {
+        isSelected,
+        isHovered,
+      });
+    }
   }
 
   /**
@@ -115,16 +165,23 @@ export class VisualManager {
 
   /**
    * Create a visual representation for a TableObject.
+   * Note: This method is legacy and doesn't support texture loading callbacks.
+   * Use redrawVisual for full functionality.
    */
   createObjectVisual(objectId: string, obj: TableObject): Container {
     const container = new Container();
 
     // Create base shape using behaviors
-    const shapeGraphic = this.createBaseShapeGraphic(
-      objectId,
+    // Note: No sceneManager available, so texture loading won't trigger re-renders
+    const behaviors = getBehaviors(obj._kind);
+    const shapeGraphic = behaviors.render(
       obj,
-      false,
-      false,
+      this.buildRenderContext({
+        objectId,
+        isSelected: false,
+        isStackTarget: false,
+        // No onTextureLoaded callback - this method doesn't support it
+      }),
     );
     container.addChild(shapeGraphic);
 
@@ -433,6 +490,7 @@ export class VisualManager {
       obj,
       isSelected,
       isStackTarget,
+      sceneManager,
     );
     visual.addChild(shapeGraphic);
 
@@ -467,6 +525,7 @@ export class VisualManager {
     overrides: Partial<RenderContext> = {},
   ): RenderContext {
     const ctx = {
+      objectId: overrides.objectId,
       isSelected: overrides.isSelected ?? false,
       isHovered: overrides.isHovered ?? false,
       isDragging: overrides.isDragging ?? false,
@@ -481,6 +540,7 @@ export class VisualManager {
         createScaleStrokeWidth(this.cameraScale, 'VisualManager'),
       gameAssets: overrides.gameAssets ?? this.gameAssets,
       textureLoader: overrides.textureLoader ?? this.textureLoader ?? undefined,
+      onTextureLoaded: overrides.onTextureLoaded,
     };
 
     return ctx;
@@ -491,17 +551,32 @@ export class VisualManager {
    * Does NOT include text label or shadow.
    */
   private createBaseShapeGraphic(
-    _objectId: string,
+    objectId: string,
     obj: TableObject,
     isSelected: boolean,
     isStackTarget: boolean,
+    sceneManager: SceneManager,
   ): Container {
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(
       obj,
       this.buildRenderContext({
+        objectId,
         isSelected,
         isStackTarget,
+        onTextureLoaded: (url: string) => {
+          // Re-render this object when its texture finishes loading
+          console.log(
+            `[TextureLoadDebug] VisualManager callback fired for objectId=${objectId}, url=${url}`,
+          );
+          this.redrawVisual(objectId, sceneManager, {
+            isSelected,
+            isStackTarget,
+          });
+          console.log(
+            '[TextureLoadDebug] VisualManager redrawVisual completed',
+          );
+        },
       }),
     );
   }

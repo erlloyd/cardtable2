@@ -134,9 +134,24 @@ export abstract class RendererOrchestrator {
 
       // Handle set-game-assets here (needs to update orchestrator state)
       if (message.type === 'set-game-assets') {
+        console.log(
+          '[TextureLoadDebug] set-game-assets received, updating visuals',
+        );
         this.gameAssets = message.assets;
-        this.visual.setGameAssets(message.assets);
-        // Visual refresh will happen naturally when objects are next rendered
+
+        // Set assets and trigger re-render of affected objects (stacks need card images)
+        this.visual.setGameAssets(
+          message.assets,
+          this.sceneManager,
+          this.selection,
+          this.hover,
+        );
+
+        // Force a render to show the updated visuals
+        if (this.app) {
+          this.app.renderer.render(this.app.stage);
+        }
+
         return;
       }
 
@@ -468,49 +483,12 @@ export abstract class RendererOrchestrator {
       // Update text resolution multiplier for sharp text at high zoom
       this.visual.setTextResolutionMultiplier(zoomLevel);
 
-      // Track regeneration failures for reporting
-      const failedObjects: string[] = [];
-
-      // Iterate through ALL objects and redraw visuals to apply updated zoom settings
-      // This forces Text objects to regenerate at the appropriate resolution for current zoom
-      for (const [objectId] of this.sceneManager.getAllObjects()) {
-        try {
-          // Check if object is selected or hovered
-          const isSelected = this.selection.isSelected(objectId);
-          const isHovered = this.hover.getHoveredObjectId() === objectId;
-
-          // Redraw the visual to regenerate text with new resolution
-          this.visual.updateVisualForObjectChange(objectId, this.sceneManager, {
-            isHovered,
-            isSelected,
-            // Not dragging during zoom
-          });
-        } catch (error) {
-          // Track but don't stop - try to regenerate as many objects as possible
-          failedObjects.push(objectId);
-          console.error(
-            '[RendererOrchestrator] Failed to regenerate object visual at zoom',
-            {
-              objectId,
-              zoomLevel,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      }
-
-      // Report if any objects failed
-      if (failedObjects.length > 0) {
-        console.error(
-          '[RendererOrchestrator] Some objects failed to regenerate at new zoom level',
-          {
-            failedCount: failedObjects.length,
-            totalObjects: this.sceneManager.getAllObjects().size,
-            failedObjectIds: failedObjects.slice(0, 10), // First 10 for debugging
-            zoomLevel,
-          },
-        );
-      }
+      // Regenerate all visuals at new zoom level
+      this.visual.regenerateVisuals(
+        this.sceneManager,
+        this.selection,
+        this.hover,
+      );
 
       // Force an immediate render since ticker may not be running (autoStart: false)
       // This ensures visual updates are displayed immediately after zoom ends

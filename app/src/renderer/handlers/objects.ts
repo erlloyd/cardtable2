@@ -377,6 +377,9 @@ function createObjectGraphics(
   objectId: string,
   obj: TableObject,
 ): Container {
+  console.log(
+    `[TextureLoadDebug] createObjectGraphics called for objectId=${objectId}, kind=${obj._kind}`,
+  );
   const container = new Container();
 
   // Create base shape using shared method (no duplication!)
@@ -431,6 +434,7 @@ export function createRenderContext(
 ): RenderContext {
   const cameraScale = context.coordConverter.getCameraScale();
   return {
+    objectId: overrides.objectId,
     isSelected: overrides.isSelected ?? false,
     isHovered: overrides.isHovered ?? false,
     isDragging: overrides.isDragging ?? false,
@@ -444,6 +448,7 @@ export function createRenderContext(
       overrides.scaleStrokeWidth ?? createScaleStrokeWidth(cameraScale),
     gameAssets: overrides.gameAssets ?? context.gameAssets,
     textureLoader: overrides.textureLoader ?? context.textureLoader,
+    onTextureLoaded: overrides.onTextureLoaded,
   };
 }
 
@@ -460,14 +465,29 @@ function createBaseShapeGraphic(
 ): Container {
   const behaviors = getBehaviors(obj._kind);
 
-  return behaviors.render(
-    obj,
-    createRenderContext(context, {
-      isSelected,
-      isHovered: context.hover.getHoveredObjectId() === objectId,
-      isDragging: context.drag.getDraggedObjectId() === objectId,
-    }),
+  const renderContext = createRenderContext(context, {
+    objectId,
+    isSelected,
+    isHovered: context.hover.getHoveredObjectId() === objectId,
+    isDragging: context.drag.getDraggedObjectId() === objectId,
+    onTextureLoaded: (url: string) => {
+      // Re-render this object when its texture finishes loading
+      console.log(
+        `[TextureLoadDebug] onTextureLoaded callback fired for objectId=${objectId}, url=${url}`,
+      );
+      context.visual.updateVisualForObjectChange(
+        objectId,
+        context.sceneManager,
+      );
+      console.log('[TextureLoadDebug] updateVisualForObjectChange completed');
+    },
+  });
+
+  console.log(
+    `[TextureLoadDebug] createBaseShapeGraphic for objectId=${objectId}, hasCallback=${!!renderContext.onTextureLoaded}, hasTextureLoader=${!!renderContext.textureLoader}, hasGameAssets=${!!renderContext.gameAssets}`,
   );
+
+  return behaviors.render(obj, renderContext);
 }
 
 /**

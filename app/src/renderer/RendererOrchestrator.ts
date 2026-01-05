@@ -10,6 +10,7 @@ import type {
   MainToRendererMessage,
   RendererToMainMessage,
   InteractionMode,
+  GameAssets,
 } from '@cardtable2/shared';
 import type { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
@@ -28,6 +29,7 @@ import {
 } from './managers';
 import { RendererMessageBus } from './RendererMessageBus';
 import type { RendererContext } from './RendererContext';
+import { TextureLoader } from './services/TextureLoader';
 import { debounce } from '../utils/debounce';
 
 /**
@@ -64,12 +66,16 @@ export abstract class RendererOrchestrator {
   private visual: VisualManager = new VisualManager();
   private gridSnap: GridSnapManager = new GridSnapManager();
 
+  // Services
+  private textureLoader: TextureLoader = new TextureLoader();
+
   // Message bus
   private messageBus: RendererMessageBus | null = null;
 
   // State
   private interactionMode: InteractionMode = 'pan';
   private gridSnapEnabled: boolean = false;
+  private gameAssets: GameAssets | null = null;
 
   // Zoom tracking for scene regeneration
   private lastRegeneratedZoom: number = 1.0;
@@ -123,6 +129,14 @@ export abstract class RendererOrchestrator {
         if (!message.enabled) {
           this.gridSnap.clearGhosts();
         }
+        return;
+      }
+
+      // Handle set-game-assets here (needs to update orchestrator state)
+      if (message.type === 'set-game-assets') {
+        this.gameAssets = message.assets;
+        this.visual.setGameAssets(message.assets);
+        // Visual refresh will happen naturally when objects are next rendered
         return;
       }
 
@@ -299,6 +313,7 @@ export abstract class RendererOrchestrator {
     // Initialize managers with app and containers
     this.camera.initialize(this.app, this.worldContainer);
     this.visual.initialize(this.app, this.renderMode);
+    this.visual.setTextureLoader(this.textureLoader);
     this.awareness.initialize(this.app.stage);
     this.gridSnap.initialize(this.app.stage);
     this.animation.initialize(this.app, this.visual.getAllVisuals());
@@ -334,11 +349,17 @@ export abstract class RendererOrchestrator {
       gridSnap: this.gridSnap,
       sceneManager: this.sceneManager,
 
+      // Services
+      textureLoader: this.textureLoader,
+
       // Communication
       postResponse: this.postResponse.bind(this),
 
       // Debounced functions
       debouncedZoomEnd: this.debouncedZoomEnd,
+
+      // Game content
+      gameAssets: this.gameAssets,
 
       // Mutable state
       interactionMode: this.interactionMode,

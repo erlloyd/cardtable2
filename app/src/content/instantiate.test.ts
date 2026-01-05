@@ -223,12 +223,12 @@ describe('expandDeck', () => {
 // ============================================================================
 
 describe('namespaceCardCode', () => {
-  it('should create namespaced card code', () => {
-    expect(namespaceCardCode('pack1', '01001')).toBe('pack1/01001');
+  it('should return plain card code (namespacing disabled)', () => {
+    expect(namespaceCardCode('pack1', '01001')).toBe('01001');
   });
 
-  it('should handle different pack IDs', () => {
-    expect(namespaceCardCode('core', 'ABC123')).toBe('core/ABC123');
+  it('should return plain card code regardless of pack ID', () => {
+    expect(namespaceCardCode('core', 'ABC123')).toBe('ABC123');
   });
 });
 
@@ -237,36 +237,36 @@ describe('namespaceCardCode', () => {
 // ============================================================================
 
 describe('namespaceDeckCards', () => {
-  it('should namespace all cards in deck', () => {
+  it('should return plain card codes (namespacing disabled)', () => {
     const cards = ['01001', '01002', '02001'];
 
-    const namespaced = namespaceDeckCards(cards, mockContent);
+    const result = namespaceDeckCards(cards, mockContent);
 
-    expect(namespaced).toEqual(['pack1/01001', 'pack1/01002', 'pack2/02001']);
+    expect(result).toEqual(['01001', '01002', '02001']);
   });
 
-  it('should throw error for card not found in any pack', () => {
+  it('should not validate cards (no-op behavior)', () => {
     const cards = ['99999'];
 
-    expect(() => namespaceDeckCards(cards, mockContent)).toThrow(
-      'Card 99999 not found in any loaded pack',
-    );
+    // Should not throw - namespacing is disabled
+    const result = namespaceDeckCards(cards, mockContent);
+    expect(result).toEqual(['99999']);
   });
 
   it('should handle empty card list', () => {
     const cards: string[] = [];
 
-    const namespaced = namespaceDeckCards(cards, mockContent);
+    const result = namespaceDeckCards(cards, mockContent);
 
-    expect(namespaced).toEqual([]);
+    expect(result).toEqual([]);
   });
 
   it('should handle duplicate cards', () => {
     const cards = ['01001', '01001', '01002'];
 
-    const namespaced = namespaceDeckCards(cards, mockContent);
+    const result = namespaceDeckCards(cards, mockContent);
 
-    expect(namespaced).toEqual(['pack1/01001', 'pack1/01001', 'pack1/01002']);
+    expect(result).toEqual(['01001', '01001', '01002']);
   });
 });
 
@@ -381,7 +381,7 @@ describe('instantiateScenario', () => {
 
     expect(stack._kind).toBe(ObjectKind.Stack);
     expect(stack._pos).toEqual({ x: 100, y: 200, r: 0 });
-    expect(stack._cards).toEqual(['pack1/01001', 'pack1/01001', 'pack1/01002']);
+    expect(stack._cards).toEqual(['01001', '01001', '01002']);
     expect(stack._faceUp).toBe(false);
   });
 

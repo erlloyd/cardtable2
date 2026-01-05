@@ -2,6 +2,7 @@ import type { Application, Container } from 'pixi.js';
 import type {
   RendererToMainMessage,
   InteractionMode,
+  GameAssets,
 } from '@cardtable2/shared';
 import type { RenderMode } from './IRendererAdapter';
 import type {
@@ -18,6 +19,7 @@ import type {
   GridSnapManager,
 } from './managers';
 import type { SceneManager } from './SceneManager';
+import type { TextureLoader } from './services/TextureLoader';
 
 /**
  * Context passed to all message handlers
@@ -64,6 +66,9 @@ export interface RendererContext {
   gridSnap: GridSnapManager;
   sceneManager: SceneManager;
 
+  // Services
+  textureLoader: TextureLoader;
+
   // Communication
   postResponse: (message: RendererToMainMessage) => void;
 
@@ -73,4 +78,5 @@ export interface RendererContext {
   // Mutable state (handlers can update)
   interactionMode: InteractionMode;
   gridSnapEnabled: boolean;
+  gameAssets: GameAssets | null;
 }

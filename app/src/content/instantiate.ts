@@ -71,26 +71,29 @@ function shuffleArray<T>(array: T[]): void {
 /**
  * Create a namespaced card code: <packId>/<cardCode>
  * This allows cards from different packs to coexist without collision
+ *
+ * NOTE: Currently disabled (no-op) - we use plain card codes since gameId
+ * in Y.Doc metadata disambiguates which game's assets to use.
+ * May be re-enabled later if needed for multi-game scenarios.
  */
-export function namespaceCardCode(packId: string, cardCode: string): string {
-  return `${packId}/${cardCode}`;
+export function namespaceCardCode(_packId: string, cardCode: string): string {
+  // No-op: Return plain card code
+  return cardCode;
 }
 
 /**
  * Namespace all cards in a deck based on which pack defined them
+ *
+ * NOTE: Currently disabled (no-op) - we use plain card codes since gameId
+ * in Y.Doc metadata disambiguates which game's assets to use.
+ * May be re-enabled later if needed for multi-game scenarios.
  */
 export function namespaceDeckCards(
   cards: string[],
-  content: GameAssets,
+  _content: GameAssets,
 ): string[] {
-  return cards.map((cardCode) => {
-    // Find which pack defined this card
-    const pack = content.packs.find((p) => p.cards?.[cardCode]);
-    if (!pack) {
-      throw new Error(`Card ${cardCode} not found in any loaded pack`);
-    }
-    return namespaceCardCode(pack.id, cardCode);
-  });
+  // No-op: Return plain card codes
+  return cards;
 }
 
 // ============================================================================

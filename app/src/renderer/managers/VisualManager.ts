@@ -1,8 +1,10 @@
 import { Application, Container, Graphics, BlurFilter, Text } from 'pixi.js';
-import type { TableObject } from '@cardtable2/shared';
+import type { TableObject, GameAssets } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
+import type { RenderContext } from '../objects/types';
 import { createScaleStrokeWidth } from '../handlers/objects';
+import type { TextureLoader } from '../services/TextureLoader';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
@@ -33,6 +35,8 @@ export class VisualManager {
   private app: Application | null = null;
   private renderMode: RenderMode = RenderMode.Worker;
   private cameraScale: number = 1.0;
+  private gameAssets: GameAssets | null = null;
+  private textureLoader: TextureLoader | null = null;
 
   // Animation state
   private hoverAnimationActive = false;
@@ -68,6 +72,22 @@ export class VisualManager {
       return; // Don't update with invalid value
     }
     this.cameraScale = scale;
+  }
+
+  /**
+   * Set the game assets for texture loading.
+   * Called when assets are loaded or updated.
+   */
+  setGameAssets(assets: GameAssets | null): void {
+    this.gameAssets = assets;
+  }
+
+  /**
+   * Set the texture loader service.
+   * Called during initialization.
+   */
+  setTextureLoader(loader: TextureLoader): void {
+    this.textureLoader = loader;
   }
 
   /**
@@ -442,6 +462,34 @@ export class VisualManager {
    * Create base shape graphic for an object based on its kind.
    * Does NOT include text label or shadow.
    */
+  /**
+   * Helper: Build RenderContext from VisualManager's internal state
+   */
+  private buildRenderContext(
+    overrides: Partial<RenderContext> = {},
+  ): RenderContext {
+    const ctx = {
+      isSelected: overrides.isSelected ?? false,
+      isHovered: overrides.isHovered ?? false,
+      isDragging: overrides.isDragging ?? false,
+      isStackTarget: overrides.isStackTarget ?? false,
+      minimal: overrides.minimal,
+      cameraScale: overrides.cameraScale ?? this.cameraScale,
+      createText: overrides.createText ?? this.createText.bind(this),
+      scaleStrokeWidth:
+        overrides.scaleStrokeWidth ??
+        createScaleStrokeWidth(this.cameraScale, 'VisualManager'),
+      gameAssets: overrides.gameAssets ?? this.gameAssets,
+      textureLoader: overrides.textureLoader ?? this.textureLoader ?? undefined,
+    };
+
+    return ctx;
+  }
+
+  /**
+   * Create base shape graphic for an object based on its kind.
+   * Does NOT include text label or shadow.
+   */
   private createBaseShapeGraphic(
     _objectId: string,
     obj: TableObject,
@@ -449,18 +497,13 @@ export class VisualManager {
     isStackTarget: boolean,
   ): Container {
     const behaviors = getBehaviors(obj._kind);
-    return behaviors.render(obj, {
-      isSelected,
-      isHovered: false, // Hover state handled by shadow, not render
-      isDragging: false, // Drag state handled by shadow, not render
-      isStackTarget,
-      cameraScale: this.cameraScale,
-      createText: this.createText.bind(this),
-      scaleStrokeWidth: createScaleStrokeWidth(
-        this.cameraScale,
-        'VisualManager',
-      ),
-    });
+    return behaviors.render(
+      obj,
+      this.buildRenderContext({
+        isSelected,
+        isStackTarget,
+      }),
+    );
   }
 
   /**

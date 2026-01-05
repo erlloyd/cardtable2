@@ -15,7 +15,7 @@ import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
-import { loadGameAssetPacks } from '../content';
+import { loadGameAssetPacks, type GameAssets } from '../content';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -41,6 +41,7 @@ function Table() {
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false);
   const [packsLoading, setPacksLoading] = useState(false);
   const [packsError, setPacksError] = useState<string | null>(null);
+  const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
@@ -86,12 +87,8 @@ function Table() {
       setPacksError(null);
 
       try {
-        console.log(`[Table] Loading asset packs for game: ${gameId}`);
-        const content = await loadGameAssetPacks(gameId);
-        console.log(
-          `[Table] Loaded ${Object.keys(content.cards).length} cards from ${content.packs.length} pack(s)`,
-        );
-        // TODO: Store content for texture loading
+        const assets = await loadGameAssetPacks(gameId);
+        setGameAssets(assets);
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'Failed to load asset packs';
@@ -191,6 +188,7 @@ function Table() {
             onGridSnapEnabledChange={setGridSnapEnabled}
             actionContext={actionContext}
             onActionExecuted={commandPalette.recordAction}
+            gameAssets={gameAssets}
           />
         )}
       </Suspense>

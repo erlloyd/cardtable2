@@ -111,6 +111,7 @@ export class GridSnapManager {
               cameraScale,
               'GridSnapManager',
             ),
+            gameAssets: null, // Ghosts don't need game assets (minimal mode)
           });
 
           // Make it semi-transparent

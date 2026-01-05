@@ -132,6 +132,31 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
     }
   }
 
+  // Resolve all card URLs (apply baseUrl and prepend backend URL for /api/ paths)
+  for (const cardCode of Object.keys(merged.cards)) {
+    const card = merged.cards[cardCode];
+    const pack = packs.find((p) => p.cards?.[cardCode]);
+    const baseUrl = pack?.baseUrl;
+
+    // Resolve face URL
+    if (card.face) {
+      card.face = resolveAssetUrl(card.face, baseUrl);
+    }
+
+    // Resolve back URL if present
+    if (card.back) {
+      card.back = resolveAssetUrl(card.back, baseUrl);
+    }
+  }
+
+  // Resolve cardType back URLs
+  for (const cardType of Object.values(merged.cardTypes)) {
+    if (cardType.back) {
+      // CardType backs are usually full URLs, but resolve anyway for consistency
+      cardType.back = resolveAssetUrl(cardType.back);
+    }
+  }
+
   return merged;
 }
 

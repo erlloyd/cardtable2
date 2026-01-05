@@ -136,6 +136,10 @@ export type MainToRendererMessage =
   | { type: 'test-animation' }
   | { type: 'set-interaction-mode'; mode: InteractionMode }
   | { type: 'set-grid-snap-enabled'; enabled: boolean }
+  | {
+      type: 'set-game-assets';
+      assets: import('./content-types').GameAssets | null;
+    }
   | { type: 'pointer-down'; event: PointerEventData }
   | { type: 'pointer-move'; event: PointerEventData }
   | { type: 'pointer-up'; event: PointerEventData }

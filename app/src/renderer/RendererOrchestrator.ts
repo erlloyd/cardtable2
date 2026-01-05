@@ -134,9 +134,6 @@ export abstract class RendererOrchestrator {
 
       // Handle set-game-assets here (needs to update orchestrator state)
       if (message.type === 'set-game-assets') {
-        console.log(
-          '[TextureLoadDebug] set-game-assets received, updating visuals',
-        );
         this.gameAssets = message.assets;
 
         // Set assets and trigger re-render of affected objects (stacks need card images)

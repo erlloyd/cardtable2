@@ -94,9 +94,6 @@ export class VisualManager {
     // Re-render all objects if scene context is available
     // (any object type might need images from gameAssets)
     if (sceneManager && selection && hover && assets) {
-      console.log(
-        '[TextureLoadDebug] Updating all visuals with new gameAssets',
-      );
       this.regenerateVisuals(sceneManager, selection, hover);
     }
   }
@@ -564,18 +561,12 @@ export class VisualManager {
         objectId,
         isSelected,
         isStackTarget,
-        onTextureLoaded: (url: string) => {
+        onTextureLoaded: (_url: string) => {
           // Re-render this object when its texture finishes loading
-          console.log(
-            `[TextureLoadDebug] VisualManager callback fired for objectId=${objectId}, url=${url}`,
-          );
           this.redrawVisual(objectId, sceneManager, {
             isSelected,
             isStackTarget,
           });
-          console.log(
-            '[TextureLoadDebug] VisualManager redrawVisual completed',
-          );
         },
       }),
     );

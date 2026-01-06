@@ -39,7 +39,15 @@ function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
   const card = ctx.gameAssets.cards[topCardId];
 
   if (!card) {
-    console.warn(`[StackBehaviors] Card ${topCardId} not found in gameAssets`);
+    console.error(
+      `[StackBehaviors] Card lookup failed - Card ID "${topCardId}" not found in gameAssets`,
+      {
+        cardId: topCardId,
+        stackObjectId: ctx.objectId,
+        availableCards: Object.keys(ctx.gameAssets.cards).length,
+        sampleCardIds: Object.keys(ctx.gameAssets.cards).slice(0, 5),
+      },
+    );
     return null;
   }
 
@@ -59,8 +67,15 @@ function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
       return cardType.back;
     }
 
-    console.warn(
-      `[StackBehaviors] No back image found for card ${topCardId} (type: ${card.type})`,
+    console.error(
+      `[StackBehaviors] Missing back image - Card "${topCardId}" (type: "${card.type}") has no back image defined`,
+      {
+        cardId: topCardId,
+        cardType: card.type,
+        hasCardBack: !!card.back,
+        hasTypeBack: !!cardType?.back,
+        stackObjectId: ctx.objectId,
+      },
     );
     return null;
   }
@@ -166,9 +181,19 @@ function renderMainCard(
           ctx.onTextureLoaded?.(imageUrl);
         })
         .catch((error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          const errorType =
+            error instanceof Error ? error.constructor.name : typeof error;
           console.error(
-            `[StackBehaviors] Failed to load texture for ${imageUrl}:`,
-            error,
+            `[StackBehaviors] Texture load failed - Image will show placeholder`,
+            {
+              imageUrl,
+              errorMessage,
+              errorType,
+              stackObjectId: ctx.objectId,
+              cardId: obj._cards?.[0],
+            },
           );
         });
     }

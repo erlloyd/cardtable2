@@ -134,19 +134,44 @@ export abstract class RendererOrchestrator {
 
       // Handle set-game-assets here (needs to update orchestrator state)
       if (message.type === 'set-game-assets') {
-        this.gameAssets = message.assets;
+        try {
+          this.gameAssets = message.assets;
 
-        // Set assets and trigger re-render of affected objects (stacks need card images)
-        this.visual.setGameAssets(
-          message.assets,
-          this.sceneManager,
-          this.selection,
-          this.hover,
-        );
+          // Set assets and trigger re-render of affected objects (stacks need card images)
+          this.visual.setGameAssets(
+            message.assets,
+            this.sceneManager,
+            this.selection,
+            this.hover,
+          );
 
-        // Force a render to show the updated visuals
-        if (this.app) {
-          this.app.renderer.render(this.app.stage);
+          // Force a render to show the updated visuals
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+
+          console.log(
+            '[RendererOrchestrator] Game assets updated successfully',
+            {
+              hasAssets: !!message.assets,
+              cardCount: message.assets?.cards
+                ? Object.keys(message.assets.cards).length
+                : 0,
+            },
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          console.error('[RendererOrchestrator] Failed to set game assets', {
+            error,
+            errorMessage,
+            hasAssets: !!message.assets,
+          });
+          this.postResponse({
+            type: 'error',
+            error: `Failed to update game assets: ${errorMessage}`,
+            context: 'set-game-assets',
+          });
         }
 
         return;

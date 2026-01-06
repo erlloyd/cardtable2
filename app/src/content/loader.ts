@@ -15,18 +15,33 @@ import { getBackendUrl } from '@/utils/backend';
  * Load an asset pack from a URL
  */
 export async function loadAssetPack(url: string): Promise<AssetPack> {
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error loading asset pack from ${url}: ${message}`);
+  }
+
   if (!response.ok) {
     throw new Error(
-      `Failed to load asset pack from ${url}: ${response.statusText}`,
+      `Failed to load asset pack: HTTP ${response.status} ${response.statusText} (${url})`,
     );
   }
 
-  const data: unknown = await response.json();
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON in asset pack from ${url}: ${message}`);
+  }
 
   // Type guard validation
   if (typeof data !== 'object' || data === null) {
-    throw new Error(`Invalid asset pack: expected object, got ${typeof data}`);
+    throw new Error(
+      `Invalid asset pack from ${url}: expected object, got ${typeof data}`,
+    );
   }
 
   const obj = data as Record<string, unknown>;
@@ -34,12 +49,14 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
   // Basic validation
   if (obj.schema !== 'ct-assets@1') {
     throw new Error(
-      `Invalid schema: expected "ct-assets@1", got "${String(obj.schema)}"`,
+      `Invalid schema in asset pack from ${url}: expected "ct-assets@1", got "${String(obj.schema)}"`,
     );
   }
 
   if (!obj.id || !obj.name || !obj.version) {
-    throw new Error(`Missing required fields: id, name, or version`);
+    throw new Error(
+      `Missing required fields in asset pack from ${url}: id, name, or version`,
+    );
   }
 
   return data as AssetPack;

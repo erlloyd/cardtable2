@@ -88,11 +88,26 @@ app.get<{ path: string[] | string }>(
       const response = await fetch(azureUrl);
 
       if (!response.ok) {
-        // Return consistent 404 to avoid leaking Azure storage structure
-        console.error(
-          `[Proxy] Failed to fetch ${imagePath}: Azure returned ${response.status}`,
-        );
-        return res.status(404).send('Image not found');
+        // Log the actual Azure status for debugging
+        console.error(`[Proxy] Azure request failed for ${imagePath}`, {
+          azureStatus: response.status,
+          azureStatusText: response.statusText,
+          path: imagePath,
+        });
+
+        // Return appropriate status based on Azure response
+        if (response.status === 404) {
+          return res.status(404).send('Image not found');
+        } else if (response.status === 403) {
+          // Authentication issue - return 500 to hide config details
+          return res.status(500).send('Configuration error');
+        } else if (response.status >= 500 || response.status === 503) {
+          // Server error - client should retry
+          return res.status(503).send('Service temporarily unavailable');
+        } else {
+          // Other client errors
+          return res.status(500).send('Proxy error');
+        }
       }
 
       // Get image data
@@ -118,7 +133,26 @@ app.get<{ path: string[] | string }>(
       console.log(`[Proxy] Serving ${imagePath} (${imageBuffer.length} bytes)`);
       return res.send(imageBuffer);
     } catch (error) {
-      console.error(`[Proxy] Error fetching ${imagePath}:`, error);
+      // Classify error type for appropriate handling
+      const errorType =
+        error instanceof Error ? error.constructor.name : typeof error;
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      console.error(`[Proxy] Unexpected error fetching ${imagePath}`, {
+        path: imagePath,
+        errorType,
+        errorMessage,
+        error,
+      });
+
+      // Check if it's a network error (fetch failed)
+      if (error && typeof error === 'object' && 'code' in error) {
+        // Network error - service unavailable
+        return res.status(503).send('Service temporarily unavailable');
+      }
+
+      // Other unexpected errors
       return res.status(500).send('Proxy error');
     }
   },

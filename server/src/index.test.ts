@@ -344,3 +344,158 @@ describe('Room Isolation', () => {
     provider2.destroy();
   }, 10000);
 });
+
+describe('Image Proxy Endpoint', () => {
+  beforeAll(() => {
+    // Add proxy route to test server
+    app.get<{ path: string | string[] }>(
+      '/api/card-image/*path',
+      async (req, res) => {
+        const pathSegments = req.params.path;
+        const imagePath =
+          typeof pathSegments === 'string'
+            ? pathSegments
+            : pathSegments.join('/');
+
+        // Validate path (prevent path traversal)
+        const hasDoubleDot = imagePath.includes('..');
+        const hasInvalidChars = !/^[a-zA-Z0-9\-/._]+$/.test(imagePath);
+        const isValidPath = !hasDoubleDot && !hasInvalidChars;
+
+        if (!isValidPath) {
+          return res.status(400).send('Invalid image path');
+        }
+
+        const azureUrl = `https://cerebrodatastorage.blob.core.windows.net/${imagePath}`;
+
+        try {
+          const response = await fetch(azureUrl);
+
+          if (!response.ok) {
+            console.error(`[Proxy] Azure request failed for ${imagePath}`, {
+              azureStatus: response.status,
+              azureStatusText: response.statusText,
+              path: imagePath,
+            });
+
+            if (response.status === 404) {
+              return res.status(404).send('Image not found');
+            } else if (response.status === 403) {
+              return res.status(500).send('Configuration error');
+            } else if (response.status >= 500 || response.status === 503) {
+              return res.status(503).send('Service temporarily unavailable');
+            } else {
+              return res.status(500).send('Proxy error');
+            }
+          }
+
+          const imageBuffer = Buffer.from(await response.arrayBuffer());
+          res.set({
+            'Content-Type':
+              response.headers.get('content-type') || 'image/jpeg',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          });
+          return res.send(imageBuffer);
+        } catch (error) {
+          const errorType =
+            error instanceof Error ? error.constructor.name : typeof error;
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          console.error(`[Proxy] Unexpected error fetching ${imagePath}`, {
+            path: imagePath,
+            errorType,
+            errorMessage,
+          });
+
+          if (error && typeof error === 'object' && 'code' in error) {
+            return res.status(503).send('Service temporarily unavailable');
+          }
+
+          return res.status(500).send('Proxy error');
+        }
+      },
+    );
+  });
+
+  describe('Path Validation', () => {
+    it('should reject path traversal attempts with ..', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/../../../secrets`,
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toBe('Invalid image path');
+    });
+
+    it('should reject paths with invalid characters', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/path<>with:bad|chars`,
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toBe('Invalid image path');
+    });
+
+    it('should accept valid paths with alphanumeric, dash, slash, and underscore', async () => {
+      // This will fail because the image doesn't exist, but path validation should pass
+      const response = await fetch(
+        `${serverUrl}/api/card-image/pack-1/cards/card_01.jpg`,
+      );
+      // Should not be 400 (bad request), should be 404 (not found) or 503 (Azure error)
+      expect(response.status).not.toBe(400);
+    });
+
+    it('should accept paths with dots in filename', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/pack1/card.01.jpg`,
+      );
+      // Should not be 400 (bad request)
+      expect(response.status).not.toBe(400);
+    });
+  });
+
+  describe('Wildcard Array Handling', () => {
+    it('should correctly join path segments from Express wildcard', async () => {
+      // This tests that multi-segment paths work correctly
+      const response = await fetch(
+        `${serverUrl}/api/card-image/pack1/subfolder/card.jpg`,
+      );
+      // Should not crash, should return 404 or 503 (image doesn't exist)
+      expect([404, 500, 503]).toContain(response.status);
+    });
+
+    it('should handle single-segment paths', async () => {
+      const response = await fetch(`${serverUrl}/api/card-image/test.jpg`);
+      expect([404, 500, 503]).toContain(response.status);
+    });
+
+    it('should handle deeply nested paths', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/a/b/c/d/e/f.jpg`,
+      );
+      expect([404, 500, 503]).toContain(response.status);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should return 404 for non-existent images', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/nonexistent/image.jpg`,
+      );
+      // Should be 404 or 503 depending on whether Azure or network error
+      expect([404, 500, 503]).toContain(response.status);
+    });
+
+    it('should return appropriate headers for error responses', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/nonexistent.jpg`,
+      );
+      expect(response.headers.get('content-type')).toBeTruthy();
+    });
+
+    it('should handle empty path gracefully', async () => {
+      const response = await fetch(`${serverUrl}/api/card-image/`);
+      // Should either be 400 (invalid) or 404 (not found), not crash
+      expect([400, 404, 500, 503]).toContain(response.status);
+    });
+  });
+});

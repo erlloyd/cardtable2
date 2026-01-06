@@ -22,12 +22,9 @@ function createTestStack(overrides?: Partial<StackObject>): StackObject {
 
 describe('Stack Behaviors - Visual Rendering', () => {
   let mockContext: RenderContext;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockCreateText: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockCreateKindLabel: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockScaleStrokeWidth: any;
+  let mockCreateText: ReturnType<typeof vi.fn>;
+  let mockCreateKindLabel: ReturnType<typeof vi.fn>;
+  let mockScaleStrokeWidth: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockCreateText = vi.fn((options: TextOptions) => {
@@ -55,7 +52,6 @@ describe('Stack Behaviors - Visual Rendering', () => {
       return Math.max(0.5, baseWidth / 2);
     });
 
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment */
     mockContext = {
       isSelected: false,
       isHovered: false,
@@ -66,7 +62,6 @@ describe('Stack Behaviors - Visual Rendering', () => {
       createKindLabel: mockCreateKindLabel,
       scaleStrokeWidth: mockScaleStrokeWidth,
     };
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment */
   });
 
   describe('3D Effect Rendering', () => {
@@ -88,7 +83,6 @@ describe('Stack Behaviors - Visual Rendering', () => {
       expect(container).toBeInstanceOf(Container);
       // Single card should call scaleStrokeWidth only once (for main border)
       // Not twice (would include 3D effect)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       const strokeCalls = mockScaleStrokeWidth.mock.calls.length;
       expect(strokeCalls).toBe(1); // Only main card border
     });
@@ -138,11 +132,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
       expect(mockCreateText).toHaveBeenCalled();
 
       // Verify it was called with text options
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       const call = mockCreateText.mock.calls[0];
       expect(call[0]).toHaveProperty('text');
       expect(call[0]).toHaveProperty('style');
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     });
 
     it('count badge displays correct count for large stacks', () => {
@@ -243,12 +235,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
       StackBehaviors.render(faceUpStack, mockContext);
 
       // Only one stroke call (main border), not two (would include face-down lines)
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
       const strokeCalls = mockScaleStrokeWidth.mock.calls.filter(
-        (call: any) => call[0] === 2,
+        (call) => call[0] === 2,
       );
       expect(strokeCalls.length).toBe(1); // Only main border
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any */
     });
 
     it('face-down pattern strokes counter-scale with zoom', () => {
@@ -268,10 +258,8 @@ describe('Stack Behaviors - Visual Rendering', () => {
         _faceUp: false,
       });
 
-      /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
-      /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
       StackBehaviors.render(complexStack, mockContext);
 
@@ -297,11 +285,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('renders minimal visuals for single face-up card', () => {
       const minimalStack = createTestStack({ _faceUp: true });
 
-      /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
       mockCreateKindLabel.mockClear();
-      /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
       StackBehaviors.render(minimalStack, mockContext);
 
@@ -343,6 +329,258 @@ describe('Stack Behaviors - Visual Rendering', () => {
         shape: 'rect',
         borderRadius: 12,
       });
+    });
+  });
+
+  describe('Image Loading', () => {
+    let mockTextureLoader: {
+      load: ReturnType<typeof vi.fn>;
+      get: ReturnType<typeof vi.fn>;
+      has: ReturnType<typeof vi.fn>;
+    };
+    let mockTexture: { width: number; height: number };
+    let mockOnTextureLoaded: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      mockTexture = { width: 300, height: 420 };
+      mockTextureLoader = {
+        load: vi.fn().mockResolvedValue(mockTexture),
+        get: vi.fn(),
+        has: vi.fn(),
+      };
+      mockOnTextureLoaded = vi.fn();
+
+      mockContext = {
+        objectId: 'stack-1',
+        isSelected: false,
+        isHovered: false,
+        isDragging: false,
+        isStackTarget: false,
+        cameraScale: 1,
+        createText: mockCreateText,
+        createKindLabel: mockCreateKindLabel,
+        scaleStrokeWidth: mockScaleStrokeWidth,
+        gameAssets: {
+          packs: [],
+          cards: {
+            'card-1': {
+              face: '/api/card-image/pack1/card-1-face.jpg',
+              back: '/api/card-image/pack1/card-1-back.jpg',
+              code: 'card-1',
+              name: 'Test Card',
+              type: 'player',
+            },
+          },
+          cardTypes: {
+            player: {
+              name: 'Player Card',
+              back: '/api/card-image/pack1/player-back.jpg',
+            },
+          },
+          cardSets: {},
+          tokens: {},
+          counters: {},
+          mats: {},
+        },
+        textureLoader: mockTextureLoader,
+        onTextureLoaded: mockOnTextureLoaded,
+      };
+    });
+
+    it('should render sprite when texture is cached (face-up)', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockTextureLoader.get.mockReturnValue(mockTexture);
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).toHaveBeenCalledWith(
+        '/api/card-image/pack1/card-1-face.jpg',
+      );
+      expect(mockTextureLoader.load).not.toHaveBeenCalled(); // Should use cached texture
+    });
+
+    it('should render sprite when texture is cached (face-down with card back)', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
+      mockTextureLoader.get.mockReturnValue(mockTexture);
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).toHaveBeenCalledWith(
+        '/api/card-image/pack1/card-1-back.jpg',
+      );
+    });
+
+    it('should render sprite when texture is cached (face-down with type back)', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
+      // Remove card-specific back to test type fallback
+      mockContext.gameAssets!.cards['card-1'].back = undefined;
+      mockTextureLoader.get.mockReturnValue(mockTexture);
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).toHaveBeenCalledWith(
+        '/api/card-image/pack1/player-back.jpg',
+      );
+    });
+
+    it('should render placeholder when texture not cached', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockTextureLoader.get.mockReturnValue(undefined); // Not cached
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).toHaveBeenCalledWith(
+        '/api/card-image/pack1/card-1-face.jpg',
+      );
+      // Visual should still be created with placeholder graphics
+      expect(visual.children.length).toBeGreaterThan(0);
+    });
+
+    it('should trigger async load when texture not cached', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockTextureLoader.get.mockReturnValue(undefined);
+
+      // Act
+      StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(mockTextureLoader.load).toHaveBeenCalledWith(
+        '/api/card-image/pack1/card-1-face.jpg',
+      );
+    });
+
+    it('should call onTextureLoaded callback when texture loads', async () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockTextureLoader.get.mockReturnValue(undefined);
+
+      // Act
+      StackBehaviors.render(stack, mockContext);
+
+      // Wait for async texture load to complete
+      await vi.waitFor(() => {
+        expect(mockOnTextureLoaded).toHaveBeenCalledWith(
+          '/api/card-image/pack1/card-1-face.jpg',
+        );
+      });
+    });
+
+    it('should handle missing gameAssets gracefully', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockContext.gameAssets = undefined;
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert - Should render placeholder without crashing
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).not.toHaveBeenCalled();
+      expect(mockTextureLoader.load).not.toHaveBeenCalled();
+    });
+
+    it('should handle missing card definition gracefully', () => {
+      // Arrange
+      const stack = createTestStack({
+        _cards: ['unknown-card'],
+        _faceUp: true,
+      });
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert - Should render placeholder without crashing
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).not.toHaveBeenCalled();
+      expect(mockTextureLoader.load).not.toHaveBeenCalled();
+    });
+
+    it('should handle texture load failure gracefully', async () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockTextureLoader.get.mockReturnValue(undefined);
+      mockTextureLoader.load.mockRejectedValue(new Error('Network error'));
+
+      // Act
+      StackBehaviors.render(stack, mockContext);
+
+      // Wait for async operation
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Assert - Should not call onTextureLoaded on error
+      expect(mockOnTextureLoaded).not.toHaveBeenCalled();
+    });
+
+    it('should not trigger load if no textureLoader provided', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockContext.textureLoader = undefined;
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.load).not.toHaveBeenCalled();
+    });
+
+    it('should not trigger load if no onTextureLoaded callback provided', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      mockContext.onTextureLoaded = undefined;
+      mockTextureLoader.get.mockReturnValue(undefined);
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.load).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty cards array', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: [], _faceUp: true });
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert - Should render placeholder without crashing
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).not.toHaveBeenCalled();
+    });
+
+    it('should handle missing back image gracefully', () => {
+      // Arrange
+      const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
+      // Remove both card back and type back
+      mockContext.gameAssets!.cards['card-1'].back = undefined;
+      delete mockContext.gameAssets!.cardTypes.player;
+
+      // Act
+      const visual = StackBehaviors.render(stack, mockContext);
+
+      // Assert - Should render placeholder
+      expect(visual).toBeInstanceOf(Container);
+      expect(mockTextureLoader.get).not.toHaveBeenCalled();
+      expect(mockTextureLoader.load).not.toHaveBeenCalled();
     });
   });
 

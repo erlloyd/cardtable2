@@ -148,9 +148,18 @@ export async function loadScenarioMetadata(
  */
 export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
   // Load games index to find the game
-  const response = await fetch('/gamesIndex.json');
+  let response;
+  try {
+    response = await fetch('/gamesIndex.json');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error loading games index: ${message}`);
+  }
+
   if (!response.ok) {
-    throw new Error('Failed to load games index');
+    throw new Error(
+      `Failed to load games index: HTTP ${response.status} ${response.statusText}`,
+    );
   }
 
   const gamesIndex = (await response.json()) as {
@@ -159,11 +168,22 @@ export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
   const game = gamesIndex.games.find((g) => g.id === gameId);
 
   if (!game) {
-    throw new Error(`Game not found: ${gameId}`);
+    const availableGames = gamesIndex.games.map((g) => g.id).join(', ');
+    throw new Error(
+      `Game "${gameId}" not found. Available games: ${availableGames}`,
+    );
   }
 
   // Load the scenario to get pack list (but don't instantiate)
-  const scenario = await loadScenario(game.manifestUrl);
+  let scenario;
+  try {
+    scenario = await loadScenario(game.manifestUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load scenario for game "${gameId}" from ${game.manifestUrl}: ${message}`,
+    );
+  }
 
   // Resolve pack URLs
   const packUrls = scenario.packs.map((packId) => {
@@ -181,7 +201,15 @@ export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
   });
 
   // Load all packs in parallel
-  const packs = await loadAssetPacks(packUrls);
+  let packs;
+  try {
+    packs = await loadAssetPacks(packUrls);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load asset packs for game "${gameId}": ${message}`,
+    );
+  }
 
   // Merge and return
   return mergeAssetPacks(packs);

@@ -310,8 +310,8 @@ export function registerDefaultActions(): void {
     description: 'Load the first scenario for the current game',
     isAvailable: (ctx) => {
       // Only available when nothing selected and gameId exists
-      const gameId = ctx.store.metadata.get('gameId');
-      return ctx.selection.count === 0 && typeof gameId === 'string';
+      const gameId = ctx.store.metadata.get('gameId') as string | undefined;
+      return ctx.selection.count === 0 && gameId !== undefined;
     },
     execute: async (ctx) => {
       try {

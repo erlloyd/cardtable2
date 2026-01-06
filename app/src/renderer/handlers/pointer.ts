@@ -194,6 +194,14 @@ export function handlePointerMove(
 
     // Handle single-pointer pan/drag (M2-T3 + M2-T5 object dragging)
     if (context.gestures.getPointerCount() === 1) {
+      // If waiting for unstack response, skip all slop/interaction checks
+      // This prevents starting pan or other interactions while the unstack operation completes
+      // (Main-thread mode issue: objects-added is async, DOM events keep coming)
+      const isWaitingForUnstack = context.drag.getUnstackSourceId() !== null;
+      if (isWaitingForUnstack) {
+        return;
+      }
+
       const exceedsDragSlop = context.gestures.exceedsDragSlop(event.pointerId);
       const isDragging = context.drag.isDragging();
       const isRectangleSelecting = context.rectangleSelect.isSelecting();
@@ -230,14 +238,8 @@ export function handlePointerMove(
               });
             }
 
-            // Send unstack message immediately - Yjs will create real stack
-            context.postResponse({
-              type: 'unstack-card',
-              stackId: draggedId,
-              pos: { x: worldPos.x, y: worldPos.y, r: 0 },
-            });
-
-            // Mark that we're waiting for the new stack to arrive (with 2s timeout)
+            // CRITICAL: Mark that we're waiting BEFORE sending unstack-card
+            // In main-thread mode, the unstack response can arrive synchronously!
             context.drag.setWaitingForUnstackResponse(draggedId, () => {
               // Timeout callback: notify main thread of failure
               context.postResponse({
@@ -247,9 +249,20 @@ export function handlePointerMove(
               });
             });
 
-            // Don't start dragging yet - wait for objects-added
-            // Clear the drag preparation so we don't try to drag the source stack
-            context.drag.clear();
+            // Send unstack message immediately - Yjs will create real stack
+            context.postResponse({
+              type: 'unstack-card',
+              stackId: draggedId,
+              pos: { x: worldPos.x, y: worldPos.y, r: 0 },
+            });
+
+            // In main-thread mode, objects-added may have already been processed
+            // synchronously. Only clear if we're not already dragging the new stack.
+            if (!context.drag.isDragging()) {
+              // Don't start dragging yet - wait for objects-added
+              // Clear the drag preparation so we don't try to drag the source stack
+              context.drag.clear();
+            }
             return;
           }
 

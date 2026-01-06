@@ -1,4 +1,8 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  useNavigate,
+  useLocation,
+} from '@tanstack/react-router';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTableStore } from '../hooks/useTableStore';
 import { CommandPalette } from '../components/CommandPalette';
@@ -11,29 +15,18 @@ import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
-import { loadCompleteScenario } from '../content';
-import type { GamesIndex } from '../types/game';
+import { loadGameAssetPacks, type GameAssets } from '../content';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
 
-// Search params validation
-type TableSearch = {
-  gameId?: string;
-};
-
 export const Route = createFileRoute('/table/$id')({
   component: Table,
-  validateSearch: (search: Record<string, unknown>): TableSearch => {
-    return {
-      gameId: search.gameId as string | undefined,
-    };
-  },
 });
 
 function Table() {
   const { id } = Route.useParams();
-  const { gameId } = Route.useSearch();
+  const location = useLocation();
   const navigate = useNavigate();
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
@@ -46,73 +39,73 @@ function Table() {
   );
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false);
-  const [contentLoading, setContentLoading] = useState(false);
-  const [contentError, setContentError] = useState<string | null>(null);
+  const [packsLoading, setPacksLoading] = useState(false);
+  const [packsError, setPacksError] = useState<string | null>(null);
+  const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
     registerDefaultActions();
   }, []);
 
-  // Load game content if gameId is provided
+  // Store gameId in Y.Doc metadata from location state (new table only)
   useEffect(() => {
-    if (!gameId || !store || !isStoreReady) {
+    if (!store || !isStoreReady) {
       return;
     }
 
-    // Only load content if the table is empty
-    if (store.getAllObjects().size > 0) {
-      console.log('[Table] Table already has objects, skipping content load');
+    const gameIdFromState =
+      typeof location.state === 'object' &&
+      location.state !== null &&
+      'gameId' in location.state &&
+      typeof location.state.gameId === 'string'
+        ? location.state.gameId
+        : undefined;
+    const storedGameId = store.metadata.get('gameId') as string | undefined;
+
+    // New table: store gameId from navigation state
+    if (gameIdFromState && !storedGameId) {
+      console.log(`[Table] Storing gameId in metadata: ${gameIdFromState}`);
+      store.metadata.set('gameId', gameIdFromState);
+    }
+  }, [location.state, store, isStoreReady]);
+
+  // Load asset packs for the current game (runs on mount and refresh)
+  // Note: Dependencies are [store, isStoreReady] only - we intentionally do NOT
+  // depend on store.metadata because gameId is set once on mount and never changes
+  // during the session. Depending on metadata would cause unnecessary reloads when
+  // other metadata properties change. The effect only needs to run once when the
+  // store becomes ready.
+  useEffect(() => {
+    if (!store || !isStoreReady) {
       return;
     }
 
-    const loadContent = async () => {
-      setContentLoading(true);
-      setContentError(null);
+    const gameId = store.metadata.get('gameId') as string | undefined;
+    if (!gameId) {
+      console.log('[Table] No gameId in metadata, skipping pack loading');
+      return;
+    }
+
+    const loadPacks = async () => {
+      setPacksLoading(true);
+      setPacksError(null);
 
       try {
-        console.log(`[Table] Loading game: ${gameId}`);
-
-        // Load games index
-        const response = await fetch('/gamesIndex.json');
-        if (!response.ok) {
-          throw new Error('Failed to load games index');
-        }
-        const gamesIndex = (await response.json()) as GamesIndex;
-
-        // Find the game
-        const game = gamesIndex.games.find((g) => g.id === gameId);
-        if (!game) {
-          throw new Error(`Game not found: ${gameId}`);
-        }
-
-        console.log(`[Table] Loading scenario from: ${game.manifestUrl}`);
-
-        // Load the complete scenario
-        const content = await loadCompleteScenario(game.manifestUrl);
-
-        console.log(
-          `[Table] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
-        );
-
-        // Add all objects to the store
-        for (const [objId, obj] of content.objects) {
-          store.setObject(objId, obj);
-        }
-
-        console.log('[Table] Content loaded successfully');
+        const assets = await loadGameAssetPacks(gameId);
+        setGameAssets(assets);
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : 'Failed to load content';
-        console.error('[Table] Content loading error:', err);
-        setContentError(errorMessage);
+          err instanceof Error ? err.message : 'Failed to load asset packs';
+        console.error('[Table] Pack loading error:', err);
+        setPacksError(errorMessage);
       } finally {
-        setContentLoading(false);
+        setPacksLoading(false);
       }
     };
 
-    void loadContent();
-  }, [gameId, store, isStoreReady]);
+    void loadPacks();
+  }, [store, isStoreReady]);
 
   // Track selection state for action context (M3.6-T4)
   // Now stores {id, yMap} pairs directly - zero allocations
@@ -181,10 +174,10 @@ function Table() {
       <Suspense fallback={<div>Loading board...</div>}>
         {!store || !isStoreReady ? (
           <div>Initializing table state...</div>
-        ) : contentLoading ? (
-          <div>Loading game content...</div>
-        ) : contentError ? (
-          <div>Error loading content: {contentError}</div>
+        ) : packsLoading ? (
+          <div>Loading asset packs...</div>
+        ) : packsError ? (
+          <div>Error loading packs: {packsError}</div>
         ) : (
           <Board
             tableId={id}
@@ -200,6 +193,7 @@ function Table() {
             onGridSnapEnabledChange={setGridSnapEnabled}
             actionContext={actionContext}
             onActionExecuted={commandPalette.recordAction}
+            gameAssets={gameAssets}
           />
         )}
       </Suspense>

@@ -5,6 +5,7 @@ import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
+import { loadCompleteScenario, findGameInIndex } from '../content';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -296,6 +297,95 @@ export function registerDefaultActions(): void {
     execute: (ctx) => {
       if (ctx.onGridSnapEnabledChange && ctx.gridSnapEnabled !== undefined) {
         ctx.onGridSnapEnabledChange(!ctx.gridSnapEnabled);
+      }
+    },
+  });
+
+  // Global action: Load Scenario
+  registry.register({
+    id: 'load-scenario',
+    label: 'Load Scenario',
+    icon: '📦',
+    category: 'Global Actions',
+    description: 'Load the first scenario for the current game',
+    isAvailable: (ctx) => {
+      // Only available when nothing selected and gameId exists
+      const gameId = ctx.store.metadata.get('gameId') as string | undefined;
+      return ctx.selection.count === 0 && gameId !== undefined;
+    },
+    execute: async (ctx) => {
+      try {
+        const gameId = ctx.store.metadata.get('gameId') as string;
+
+        console.log(`[Load Scenario] Loading scenario for game: ${gameId}`);
+
+        // Find the game in the index
+        const game = await findGameInIndex(gameId);
+
+        console.log(
+          `[Load Scenario] Loading scenario from: ${game.manifestUrl}`,
+        );
+
+        // Load the complete scenario
+        const content = await loadCompleteScenario(game.manifestUrl);
+
+        console.log(
+          `[Load Scenario] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
+        );
+
+        // Add all objects to the store
+        for (const [objId, obj] of content.objects) {
+          ctx.store.setObject(objId, obj);
+        }
+
+        console.log('[Load Scenario] Scenario loaded successfully');
+      } catch (error) {
+        console.error('[Load Scenario] Failed to load scenario:', error);
+        alert(
+          `Failed to load scenario: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    },
+  });
+
+  // Global action: Reset Table
+  registry.register({
+    id: 'reset-table',
+    label: 'Reset Table',
+    icon: '🔄',
+    category: 'Global Actions',
+    description: 'Clear all objects from the table',
+    isAvailable: (ctx) => {
+      // Only available when nothing selected AND there are objects
+      return ctx.selection.count === 0 && ctx.store.objects.size > 0;
+    },
+    execute: (ctx) => {
+      ctx.store.clearAllObjects();
+      console.log('[Reset Table] Cleared all objects');
+    },
+  });
+
+  // Global action: Close Table
+  registry.register({
+    id: 'close-table',
+    label: 'Close Table',
+    icon: '🚪',
+    category: 'Global Actions',
+    description: 'Close the table and return to game selection',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 && ctx.navigate !== undefined,
+    execute: (ctx) => {
+      if (ctx.navigate) {
+        // TODO: Replace with React UI component (Headless UI Dialog)
+        // For now using browser confirm dialog for simplicity
+        // Future: Create a ConfirmDialog component and pass confirm function via ActionContext
+        const confirmed = window.confirm(
+          'Are you sure you want to close this table? Your progress is automatically saved.',
+        );
+        if (confirmed) {
+          console.log('[Close Table] Navigating to game selection');
+          ctx.navigate('/');
+        }
       }
     },
   });

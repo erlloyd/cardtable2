@@ -2,8 +2,8 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from '@y/websocket-server/utils';
-import { createHash } from 'crypto';
 import cors from 'cors';
+import { createProxyHandler } from './proxyHandler.js';
 
 // Server entry point for Railway deployment
 const app = express();
@@ -58,63 +58,14 @@ app.get('/health', (_req, res) => {
 // Card image proxy with aggressive caching to minimize Railway bandwidth
 // Images are proxied from Azure Blob Storage which doesn't provide CORS headers
 // ETags + immutable caching means clients only download each image once
-app.get('/api/card-image/*', async (req, res) => {
-  // Get the full requested image path from req.path (includes wildcard segment with slashes intact)
-  const imagePath = req.path.replace('/api/card-image/', '');
-
-  // Validate path to prevent traversal attacks and unexpected characters
-  // Allow only alphanumerics, slashes, hyphens, underscores, and dots
-  const isValidPath =
-    /^[a-zA-Z0-9\-/._]+$/.test(imagePath) && !imagePath.includes('..');
-
-  if (!isValidPath) {
-    console.warn(`[Proxy] Invalid image path: ${imagePath}`);
-    return res.status(400).send('Invalid image path');
-  }
-
-  const azureUrl = `https://cerebrodatastorage.blob.core.windows.net/${imagePath}`;
-
-  try {
-    console.log(`[Proxy] Fetching image: ${imagePath}`);
-
-    // Fetch from Azure
-    const response = await fetch(azureUrl);
-
-    if (!response.ok) {
-      // Return consistent 404 to avoid leaking Azure storage structure
-      console.error(
-        `[Proxy] Failed to fetch ${imagePath}: Azure returned ${response.status}`,
-      );
-      return res.status(404).send('Image not found');
-    }
-
-    // Get image data
-    const imageBuffer = Buffer.from(await response.arrayBuffer());
-
-    // Generate ETag from content hash
-    const etag = `"${createHash('md5').update(imageBuffer).digest('hex')}"`;
-
-    // Check if client already has this version
-    if (req.headers['if-none-match'] === etag) {
-      console.log(`[Proxy] Cache hit for ${imagePath} (304 Not Modified)`);
-      return res.status(304).end();
-    }
-
-    // Set aggressive caching headers
-    // Images are immutable - once a card ID is assigned, the image never changes
-    res.set({
-      'Content-Type': response.headers.get('content-type') || 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
-      ETag: etag,
-    });
-
-    console.log(`[Proxy] Serving ${imagePath} (${imageBuffer.length} bytes)`);
-    return res.send(imageBuffer);
-  } catch (error) {
-    console.error(`[Proxy] Error fetching ${imagePath}:`, error);
-    return res.status(500).send('Proxy error');
-  }
-});
+// Express 5 wildcard syntax: /*path (wildcard must have a name in path-to-regexp v8)
+app.get<{ path: string[] | string }>(
+  '/api/card-image/*path',
+  createProxyHandler({
+    enableETag: true,
+    enableLogging: true,
+  }),
+);
 
 // WebSocket upgrade handling with y-websocket integration (M5-T1)
 server.on('upgrade', (request, socket, head) => {

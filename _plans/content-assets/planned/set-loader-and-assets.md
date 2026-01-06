@@ -112,27 +112,68 @@ Implement the content loading system for game sets, including JSON validation, a
 - Additional testing for edge cases
 - Performance profiling for large scenarios
 
-### M4-T3: Asset Loader & LRU
-**Objective:** Implement efficient texture loading with LRU cache management.
+### M4-T3: Asset Loader (Simplified)
+**Objective:** Implement on-demand texture loading with extensible API for future enhancements.
 
 **Dependencies:** M4-T2
 
-**Spec:**
-- `requestTexture(url)` / `releaseTexture(handle)` API
-- Use `createImageBitmap` when available
-- LRU eviction when cache full
-- Proper texture destruction on eviction
-- Reference counting for shared textures
+**Design Decisions:**
+- **gameId Storage**: Store in Y.Doc metadata map (`metadata.set('gameId', 'testgame')`)
+- **gameId Transfer**: Use TanStack Router location state (not URL params, not sessionStorage)
+- **Loading Strategy**: On-demand (Option B) - load textures as objects are rendered
+- **Caching**: Rely on PixiJS internal texture cache and browser HTTP cache
+- **Offline Support**: Deferred to future (background preloading + IndexedDB)
+
+**Use Cases:**
+1. **New Table**: GameSelect → store gameId in Y.Doc → load all asset packs → (wait for user to select scenario)
+2. **Browser Refresh**: Y.Doc reconnects → read gameId from metadata → load all asset packs → (table already has objects or waiting for scenario)
+3. **Load Scenario Action**: User triggers global action → instantiate first scenario → textures load as objects render
+4. **Reset Table Action**: User triggers global action → clear all objects from Y.Doc
+5. **Close Table Action**: User triggers global action → navigate back to GameSelect screen
+
+**Spec (Phase 1 - Simple):**
+```typescript
+interface TextureLoader {
+  // Load texture for immediate use
+  requestTexture(url: string): Promise<Texture>;
+}
+```
+
+**Implementation:**
+- Simple fetch + `createImageBitmap` + PixiJS `Texture.from()`
+- No reference counting (PixiJS handles it)
+- No LRU eviction (browser memory pressure handles it)
+- No background preloading (add later)
+
+**Future Evolution Path:**
+1. Add `preloadTextures(urls: string[], priority?: 'high' | 'low')` for background loading
+2. Add priority queue (visible objects loaded first)
+3. Add IndexedDB persistence for offline play
+4. Add reference counting if memory issues arise
+5. Add LRU eviction if needed
 
 **Deliverables:**
-- Texture loader service
-- LRU cache implementation
-- Reference counting system
-- Memory management utilities
+
+**Pack & Scenario Management:**
+- Store gameId in Y.Doc metadata on table creation
+- Transfer gameId from GameSelect using TanStack Router location state
+- Auto-load all asset packs when table opens (new or refresh, based on gameId in metadata)
+- If pack loading fails: log error and leave table in current state (no toast UI yet)
+- Do NOT auto-instantiate scenarios (games have multiple scenarios)
+- Do NOT track scenarioId in metadata (deferred to future)
+
+**Global Actions:**
+- **"Load Scenario"**: Instantiates first scenario for current game (adds objects on top, no clearing)
+- **"Reset Table"**: Clears all objects from Y.Doc (no confirmation for now)
+- **"Close Table"**: Navigates back to GameSelect with confirmation prompt
+
+**Texture Loading:**
+- TextureLoader service with extensible API
+- Integration with renderer (call requestTexture during sprite creation)
+- Loading state handling (placeholders while textures load)
 
 **Test Plan:**
-- Unit: mock decode and verify request/release
-- Unit: LRU eviction behavior
-- Unit: texture destruction on eviction
-- Integration: memory usage stays within limits
-- Performance: texture loading doesn't block main thread
+- Unit: mock fetch and verify texture creation
+- Unit: handle failed image loads gracefully
+- Integration: textures load as objects appear on screen
+- Manual: verify browser refresh reloads textures correctly

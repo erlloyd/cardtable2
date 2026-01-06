@@ -8,6 +8,7 @@
 import { Container, Text } from 'pixi.js';
 import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
+import type { RenderContext } from '../objects/types';
 import { getBehaviors } from '../objects';
 import { Easing } from '../managers';
 
@@ -379,11 +380,9 @@ function createObjectGraphics(
   const container = new Container();
 
   // Create base shape using shared method (no duplication!)
+  // Object behaviors handle their own text rendering via ctx.createKindLabel()
   const shapeGraphic = createBaseShapeGraphic(context, objectId, obj, false);
   container.addChild(shapeGraphic);
-
-  // Add text label showing object type
-  container.addChild(createKindLabel(obj._kind));
 
   return container;
 }
@@ -421,6 +420,36 @@ export function createScaleStrokeWidth(
 }
 
 /**
+ * Helper: Create RenderContext from RendererContext with overrides
+ *
+ * Centralizes RenderContext creation so we only need to add new fields once.
+ * All managers should use this instead of building RenderContext manually.
+ */
+export function createRenderContext(
+  context: RendererContext,
+  overrides: Partial<RenderContext> = {},
+): RenderContext {
+  const cameraScale = context.coordConverter.getCameraScale();
+  return {
+    objectId: overrides.objectId,
+    isSelected: overrides.isSelected ?? false,
+    isHovered: overrides.isHovered ?? false,
+    isDragging: overrides.isDragging ?? false,
+    isStackTarget: overrides.isStackTarget ?? false,
+    minimal: overrides.minimal,
+    cameraScale: overrides.cameraScale ?? cameraScale,
+    createText:
+      overrides.createText ?? context.visual.createText.bind(context.visual),
+    createKindLabel: overrides.createKindLabel ?? createKindLabel,
+    scaleStrokeWidth:
+      overrides.scaleStrokeWidth ?? createScaleStrokeWidth(cameraScale),
+    gameAssets: overrides.gameAssets ?? context.gameAssets,
+    textureLoader: overrides.textureLoader ?? context.textureLoader,
+    onTextureLoaded: overrides.onTextureLoaded,
+  };
+}
+
+/**
  * Helper: Create base shape graphic for an object based on its kind
  *
  * Does NOT include text label or shadow.
@@ -432,17 +461,22 @@ function createBaseShapeGraphic(
   isSelected: boolean,
 ): Container {
   const behaviors = getBehaviors(obj._kind);
-  const cameraScale = context.coordConverter.getCameraScale();
 
-  return behaviors.render(obj, {
+  const renderContext = createRenderContext(context, {
+    objectId,
     isSelected,
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
-    isStackTarget: false, // Stack target state managed by VisualManager
-    cameraScale,
-    createText: context.visual.createText.bind(context.visual),
-    scaleStrokeWidth: createScaleStrokeWidth(cameraScale),
+    onTextureLoaded: (_url: string) => {
+      // Re-render this object when its texture finishes loading
+      context.visual.updateVisualForObjectChange(
+        objectId,
+        context.sceneManager,
+      );
+    },
   });
+
+  return behaviors.render(obj, renderContext);
 }
 
 /**

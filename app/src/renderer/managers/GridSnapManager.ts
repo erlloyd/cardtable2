@@ -107,10 +107,12 @@ export class GridSnapManager {
             minimal: true,
             cameraScale,
             createText: visual.createText.bind(visual),
+            createKindLabel: visual.createKindLabel.bind(visual),
             scaleStrokeWidth: createScaleStrokeWidth(
               cameraScale,
               'GridSnapManager',
             ),
+            gameAssets: null, // Ghosts don't need game assets (minimal mode)
           });
 
           // Make it semi-transparent

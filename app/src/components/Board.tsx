@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo } from 'react';
 import type { PointerEventData } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
+import type { GameAssets } from '../content';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 
 // Hooks
@@ -39,6 +40,7 @@ export interface BoardProps {
   onGridSnapEnabledChange?: (enabled: boolean) => void;
   actionContext?: ActionContext | null;
   onActionExecuted?: (actionId: string) => void;
+  gameAssets?: GameAssets | null;
 }
 
 function Board({
@@ -55,6 +57,7 @@ function Board({
   onGridSnapEnabledChange,
   actionContext,
   onActionExecuted,
+  gameAssets,
 }: BoardProps) {
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -241,6 +244,18 @@ function Board({
       enabled: gridSnapEnabled,
     });
   }, [gridSnapEnabled, isCanvasInitialized, renderer]);
+
+  // Send game assets to renderer
+  useEffect(() => {
+    if (!renderer || !isCanvasInitialized) {
+      return;
+    }
+
+    renderer.sendMessage({
+      type: 'set-game-assets',
+      assets: gameAssets ?? null,
+    });
+  }, [gameAssets, isCanvasInitialized, renderer]);
 
   // Handle context menu
   const handleCanvasContextMenu = (event: React.MouseEvent) => {

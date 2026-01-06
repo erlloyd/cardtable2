@@ -1588,6 +1588,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       expect(result).toEqual([sourceId]);
 
       // Verify target stack has merged cards in correct order
+      // Source cards on top (indices 0-1), target cards at bottom (indices 2-3)
       const targetObj = toTableObject(store.getObjectYMap(targetId)!);
       if (
         targetObj &&
@@ -1595,10 +1596,10 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         '_cards' in targetObj
       ) {
         expect(targetObj._cards).toEqual([
-          'target-1',
-          'target-2',
           'source-1',
           'source-2',
+          'target-1',
+          'target-2',
         ]);
       }
 
@@ -1641,7 +1642,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
 
       expect(result).toEqual([source1, source2, source3]);
 
-      // Verify target stack has all cards (target at bottom, sources on top)
+      // Verify target stack has all cards (sources on top, target at bottom)
       const targetObj = toTableObject(store.getObjectYMap(targetId)!);
       if (
         targetObj &&
@@ -1649,13 +1650,13 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         '_cards' in targetObj
       ) {
         expect(targetObj._cards).toEqual([
-          'target-1',
           'source1-1',
           'source1-2',
           'source2-1',
           'source3-1',
           'source3-2',
           'source3-3',
+          'target-1',
         ]);
       }
 
@@ -1692,7 +1693,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
 
       expect(result).toEqual([stack2, stack3]);
 
-      // Verify stack1 is the target and has merged cards
+      // Verify stack1 is the target and has merged cards (sources on top)
       const stack1Obj = toTableObject(store.getObjectYMap(stack1)!);
       if (
         stack1Obj &&
@@ -1700,10 +1701,10 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         '_cards' in stack1Obj
       ) {
         expect(stack1Obj._cards).toEqual([
-          'stack1-1',
-          'stack1-2',
           'stack2-1',
           'stack3-1',
+          'stack1-1',
+          'stack1-2',
         ]);
       }
 
@@ -1975,7 +1976,10 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       ) {
         const cards = (targetObj as { _cards: string[] })._cards;
         expect(cards.length).toBe(102);
-        expect(cards.slice(-2)).toEqual(['source-1', 'source-2']);
+        // Source cards should be on top (at beginning of array)
+        expect(cards.slice(0, 2)).toEqual(['source-1', 'source-2']);
+        // Last 2 target cards should be at the end
+        expect(cards.slice(-2)).toEqual(['card-98', 'card-99']);
       }
     });
   });

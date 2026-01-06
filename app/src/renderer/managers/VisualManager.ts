@@ -1,13 +1,17 @@
 import { Application, Container, Graphics, BlurFilter, Text } from 'pixi.js';
-import type { TableObject } from '@cardtable2/shared';
+import type { TableObject, GameAssets } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
+import type { RenderContext } from '../objects/types';
 import { createScaleStrokeWidth } from '../handlers/objects';
+import type { TextureLoader } from '../services/TextureLoader';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
 import { getCounterSize } from '../objects/counter/utils';
 import type { SceneManager } from '../SceneManager';
+import type { SelectionManager } from './SelectionManager';
+import type { HoverManager } from './HoverManager';
 import { RenderMode } from '../IRendererAdapter';
 
 /**
@@ -33,6 +37,8 @@ export class VisualManager {
   private app: Application | null = null;
   private renderMode: RenderMode = RenderMode.Worker;
   private cameraScale: number = 1.0;
+  private gameAssets: GameAssets | null = null;
+  private textureLoader: TextureLoader | null = null;
 
   // Animation state
   private hoverAnimationActive = false;
@@ -71,6 +77,67 @@ export class VisualManager {
   }
 
   /**
+   * Set the game assets for texture loading.
+   * Called when assets are loaded or updated.
+   *
+   * If sceneManager, selection, and hover are provided, automatically re-renders
+   * all objects so they can load their images (cards, tokens, etc.)
+   */
+  setGameAssets(
+    assets: GameAssets | null,
+    sceneManager?: SceneManager,
+    selection?: SelectionManager,
+    hover?: HoverManager,
+  ): void {
+    this.gameAssets = assets;
+
+    // Re-render all objects if scene context is available
+    // (any object type might need images from gameAssets)
+    if (sceneManager && selection && hover && assets) {
+      this.regenerateVisuals(sceneManager, selection, hover);
+    }
+  }
+
+  /**
+   * Regenerate all visuals that match the filter.
+   * Used when a global property changes (zoom, gameAssets, etc.)
+   *
+   * @param sceneManager - Scene manager for object lookup
+   * @param selection - Selection manager for determining selected state
+   * @param hover - Hover manager for determining hovered state
+   * @param filter - Optional filter to limit which objects to regenerate (default: all)
+   */
+  regenerateVisuals(
+    sceneManager: SceneManager,
+    selection: SelectionManager,
+    hover: HoverManager,
+    filter?: (obj: TableObject) => boolean,
+  ): void {
+    for (const [objectId, obj] of sceneManager.getAllObjects()) {
+      // Skip if doesn't match filter
+      if (filter && !filter(obj)) {
+        continue;
+      }
+
+      const isSelected = selection.isSelected(objectId);
+      const isHovered = hover.getHoveredObjectId() === objectId;
+
+      this.updateVisualForObjectChange(objectId, sceneManager, {
+        isSelected,
+        isHovered,
+      });
+    }
+  }
+
+  /**
+   * Set the texture loader service.
+   * Called during initialization.
+   */
+  setTextureLoader(loader: TextureLoader): void {
+    this.textureLoader = loader;
+  }
+
+  /**
    * Set text resolution multiplier for dynamic zoom quality.
    * Scales text resolution with zoom level to maintain sharpness (higher when
    * zoomed in, lower when zoomed out).
@@ -95,21 +162,27 @@ export class VisualManager {
 
   /**
    * Create a visual representation for a TableObject.
+   * Note: This method is legacy and doesn't support texture loading callbacks.
+   * Use redrawVisual for full functionality.
    */
   createObjectVisual(objectId: string, obj: TableObject): Container {
     const container = new Container();
 
     // Create base shape using behaviors
-    const shapeGraphic = this.createBaseShapeGraphic(
-      objectId,
+    // Note: No sceneManager available, so texture loading won't trigger re-renders
+    const behaviors = getBehaviors(obj._kind);
+    const shapeGraphic = behaviors.render(
       obj,
-      false,
-      false,
+      this.buildRenderContext({
+        objectId,
+        isSelected: false,
+        isStackTarget: false,
+        // No onTextureLoaded callback - this method doesn't support it
+      }),
     );
     container.addChild(shapeGraphic);
 
-    // Add text label showing object type
-    container.addChild(this.createKindLabel(obj._kind));
+    // Object behaviors handle their own text rendering via ctx.createKindLabel()
 
     return container;
   }
@@ -414,11 +487,11 @@ export class VisualManager {
       obj,
       isSelected,
       isStackTarget,
+      sceneManager,
     );
     visual.addChild(shapeGraphic);
 
-    // Add text label showing object type
-    visual.addChild(this.createKindLabel(obj._kind));
+    // Object behaviors handle their own text rendering via ctx.createKindLabel()
 
     // Restore preserved position if requested (for transient states like drag/animation)
     if (preservePosition && preservedX !== undefined) {
@@ -442,25 +515,61 @@ export class VisualManager {
    * Create base shape graphic for an object based on its kind.
    * Does NOT include text label or shadow.
    */
+  /**
+   * Helper: Build RenderContext from VisualManager's internal state
+   */
+  private buildRenderContext(
+    overrides: Partial<RenderContext> = {},
+  ): RenderContext {
+    const ctx = {
+      objectId: overrides.objectId,
+      isSelected: overrides.isSelected ?? false,
+      isHovered: overrides.isHovered ?? false,
+      isDragging: overrides.isDragging ?? false,
+      isStackTarget: overrides.isStackTarget ?? false,
+      minimal: overrides.minimal,
+      cameraScale: overrides.cameraScale ?? this.cameraScale,
+      createText: overrides.createText ?? this.createText.bind(this),
+      createKindLabel:
+        overrides.createKindLabel ?? this.createKindLabel.bind(this),
+      scaleStrokeWidth:
+        overrides.scaleStrokeWidth ??
+        createScaleStrokeWidth(this.cameraScale, 'VisualManager'),
+      gameAssets: overrides.gameAssets ?? this.gameAssets,
+      textureLoader: overrides.textureLoader ?? this.textureLoader ?? undefined,
+      onTextureLoaded: overrides.onTextureLoaded,
+    };
+
+    return ctx;
+  }
+
+  /**
+   * Create base shape graphic for an object based on its kind.
+   * Does NOT include text label or shadow.
+   */
   private createBaseShapeGraphic(
-    _objectId: string,
+    objectId: string,
     obj: TableObject,
     isSelected: boolean,
     isStackTarget: boolean,
+    sceneManager: SceneManager,
   ): Container {
     const behaviors = getBehaviors(obj._kind);
-    return behaviors.render(obj, {
-      isSelected,
-      isHovered: false, // Hover state handled by shadow, not render
-      isDragging: false, // Drag state handled by shadow, not render
-      isStackTarget,
-      cameraScale: this.cameraScale,
-      createText: this.createText.bind(this),
-      scaleStrokeWidth: createScaleStrokeWidth(
-        this.cameraScale,
-        'VisualManager',
-      ),
-    });
+    return behaviors.render(
+      obj,
+      this.buildRenderContext({
+        objectId,
+        isSelected,
+        isStackTarget,
+        onTextureLoaded: (_url: string) => {
+          // Re-render this object when its texture finishes loading
+          this.redrawVisual(objectId, sceneManager, {
+            isSelected,
+            isStackTarget,
+          });
+        },
+      }),
+    );
   }
 
   /**
@@ -528,12 +637,28 @@ export class VisualManager {
 
   /**
    * Create a text label showing the object's kind.
-   * Returns a centered Text object ready to be added to a container.
    *
-   * Uses lower base resolution (2x vs 3x) for performance since labels
-   * are larger and less critical for visual quality.
+   * This method is public to allow object behaviors to create consistent
+   * kind labels during rendering (e.g., "counter", "token", "zone").
+   * The RenderContext provides access to this method via visualManager.
+   *
+   * @param kind - The object kind to display (e.g., "counter", "token")
+   * @returns A centered PixiJS Text object ready to be added to a container
+   *
+   * @remarks
+   * - Uses lower base resolution (2x vs 3x) for performance since labels
+   *   are larger and less critical for visual quality than card text
+   * - Text is automatically centered (anchor 0.5) and positioned at y=0
+   * - Resolution is automatically scaled by textResolutionMultiplier
+   * - Style: Arial 24px, white fill, black stroke, center-aligned
+   *
+   * @example
+   * ```typescript
+   * const label = context.visualManager.createKindLabel('counter');
+   * container.addChild(label);
+   * ```
    */
-  private createKindLabel(kind: string): Text {
+  createKindLabel(kind: string): Text {
     // Validate text resolution multiplier
     if (
       !Number.isFinite(this.textResolutionMultiplier) ||

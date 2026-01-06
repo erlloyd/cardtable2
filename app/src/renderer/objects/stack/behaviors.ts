@@ -1,5 +1,5 @@
-import { Graphics, Container } from 'pixi.js';
-import type { TableObject } from '@cardtable2/shared';
+import { Graphics, Container, Sprite } from 'pixi.js';
+import type { TableObject, StackObject } from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
   STACK_WIDTH,
@@ -22,138 +22,345 @@ import {
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
 
-export const StackBehaviors: ObjectBehaviors = {
-  render(obj: TableObject, ctx: RenderContext): Container {
-    // Use Container instead of Graphics to support children (text, icons)
-    // Required for PixiJS v8 compatibility
-    const container = new Container();
-    const graphic = new Graphics();
-    const color = getStackColor(obj);
-    const cardCount = getCardCount(obj);
+/**
+ * Helper: Get the card image URL for the top card in a stack
+ *
+ * Returns the appropriate image URL (face or back) based on _faceUp state.
+ * Returns null if gameAssets is unavailable or card not found.
+ */
+function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
+  // Check if we have gameAssets and the object has cards
+  if (!ctx.gameAssets || !obj._cards || obj._cards.length === 0) {
+    return null;
+  }
 
-    // Draw 3D effect (background rectangle) for stacks with 2+ cards
-    // Skip decorative elements in minimal mode (e.g., ghost previews)
-    if (cardCount >= 2 && !ctx.minimal) {
-      graphic.rect(
-        -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
-        -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
+  // Get the top card ID (first in array)
+  const topCardId = obj._cards[0];
+  const card = ctx.gameAssets.cards[topCardId];
+
+  if (!card) {
+    console.error(
+      `[StackBehaviors] Card lookup failed - Card ID "${topCardId}" not found in gameAssets`,
+      {
+        cardId: topCardId,
+        stackObjectId: ctx.objectId,
+        availableCards: Object.keys(ctx.gameAssets.cards).length,
+        sampleCardIds: Object.keys(ctx.gameAssets.cards).slice(0, 5),
+      },
+    );
+    return null;
+  }
+
+  // Determine which image to show (face or back)
+  if (obj._faceUp) {
+    // Face up - show card face
+    if (card.face) {
+      return card.face;
+    }
+
+    console.error(
+      `[StackBehaviors] Missing face image - Card "${topCardId}" (type: "${card.type}") has no face image defined`,
+      {
+        cardId: topCardId,
+        cardType: card.type,
+        hasCardFace: !!card.face,
+        stackObjectId: ctx.objectId,
+      },
+    );
+    return null;
+  } else {
+    // Face down - show card back (from card override or card type default)
+    if (card.back) {
+      return card.back;
+    }
+
+    // Fall back to card type's back image
+    const cardType = ctx.gameAssets.cardTypes[card.type];
+    if (cardType?.back) {
+      return cardType.back;
+    }
+
+    console.error(
+      `[StackBehaviors] Missing back image - Card "${topCardId}" (type: "${card.type}") has no back image defined`,
+      {
+        cardId: topCardId,
+        cardType: card.type,
+        hasCardBack: !!card.back,
+        hasTypeBack: !!cardType?.back,
+        stackObjectId: ctx.objectId,
+      },
+    );
+    return null;
+  }
+}
+
+/**
+ * Helper: Render 3D background effect for multi-card stacks
+ *
+ * Adds a slightly offset background rectangle to give visual depth.
+ * Only rendered for stacks with 2+ cards in non-minimal mode.
+ */
+function render3DBackground(
+  container: Container,
+  cardCount: number,
+  ctx: RenderContext,
+): void {
+  if (cardCount < 2 || ctx.minimal) {
+    return;
+  }
+
+  const bg3d = new Graphics();
+  bg3d.rect(
+    -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
+    -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
+    STACK_WIDTH,
+    STACK_HEIGHT,
+  );
+  bg3d.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
+  bg3d.stroke({
+    width: ctx.scaleStrokeWidth(1),
+    color: 0x000000,
+    alpha: 0.3,
+  });
+  container.addChild(bg3d);
+}
+
+/**
+ * Helper: Render main card visual (image sprite or placeholder)
+ *
+ * Checks for cached texture and renders sprite if available.
+ * Falls back to placeholder graphic and starts async texture load.
+ */
+function renderMainCard(
+  container: Container,
+  obj: StackObject,
+  ctx: RenderContext,
+): void {
+  const color = getStackColor(obj);
+  const imageUrl = getCardImageUrl(obj, ctx);
+  const cachedTexture = imageUrl && ctx.textureLoader?.get(imageUrl);
+
+  if (cachedTexture) {
+    // Create sprite with card image
+    const sprite = new Sprite(cachedTexture);
+    sprite.width = STACK_WIDTH;
+    sprite.height = STACK_HEIGHT;
+    sprite.anchor.set(0.5, 0.5);
+    container.addChild(sprite);
+
+    // Add border for selection/drop target state
+    if (ctx.isSelected || ctx.isStackTarget) {
+      const borderGraphic = new Graphics();
+      borderGraphic.rect(
+        -STACK_WIDTH / 2,
+        -STACK_HEIGHT / 2,
         STACK_WIDTH,
         STACK_HEIGHT,
       );
-      graphic.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
-      graphic.stroke({
-        width: ctx.scaleStrokeWidth(1),
-        color: 0x000000,
-        alpha: 0.3,
+
+      // Determine border color based on visual state (priority: selected > target)
+      const borderColor = ctx.isSelected
+        ? STACK_BORDER_COLOR_SELECTED
+        : STACK_BORDER_COLOR_TARGET;
+
+      borderGraphic.stroke({
+        width: ctx.scaleStrokeWidth(4),
+        color: borderColor,
       });
+
+      container.addChild(borderGraphic);
+    }
+  } else {
+    // No cached texture - render placeholder graphic
+    const graphic = createPlaceholderGraphic(color, obj, ctx);
+    container.addChild(graphic);
+
+    // Add card code text (top card ID) on placeholder
+    // Skip decorative text in minimal mode (like badges and handles)
+    if (obj._cards && obj._cards.length > 0 && !ctx.minimal) {
+      const topCardCode = obj._cards[0];
+      const text = ctx.createKindLabel(topCardCode);
+      text.anchor.set(0.5, 0.5);
+      text.position.set(0, 0);
+      container.addChild(text);
     }
 
-    // Draw main card rectangle
+    // Start async texture load and trigger re-render when done
+    if (imageUrl && ctx.textureLoader && ctx.onTextureLoaded) {
+      ctx.textureLoader
+        .load(imageUrl)
+        .then(() => {
+          // Texture is now cached - trigger re-render to show it
+          ctx.onTextureLoaded?.(imageUrl);
+        })
+        .catch((error) => {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          const errorType =
+            error instanceof Error ? error.constructor.name : typeof error;
+          console.error(
+            `[StackBehaviors] Texture load failed - Image will show placeholder`,
+            {
+              imageUrl,
+              errorMessage,
+              errorType,
+              stackObjectId: ctx.objectId,
+              cardId: obj._cards?.[0],
+            },
+          );
+        });
+    }
+  }
+}
+
+/**
+ * Helper: Render stack decorations (count badge and unstack handle)
+ *
+ * Only rendered for stacks with 2+ cards in non-minimal mode.
+ * Includes count badge at top-center and unstack handle at top-right.
+ */
+function renderStackDecorations(
+  container: Container,
+  cardCount: number,
+  ctx: RenderContext,
+): void {
+  if (cardCount < 2 || ctx.minimal) {
+    return;
+  }
+
+  // Create graphics for badge and handle backgrounds
+  const decorGraphic = new Graphics();
+
+  // Badge rounded square (top-center, half on/half off the card)
+  const badgeX = 0;
+  const badgeY = -STACK_HEIGHT / 2;
+
+  decorGraphic.roundRect(
+    badgeX - STACK_BADGE_SIZE / 2,
+    badgeY - STACK_BADGE_SIZE / 2,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_RADIUS,
+  );
+  decorGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+  decorGraphic.stroke({
+    width: ctx.scaleStrokeWidth(1),
+    color: 0xffffff,
+    alpha: 0.3,
+  });
+
+  // Badge text (count)
+  const text = ctx.createText({
+    text: cardCount.toString(),
+    style: {
+      fontSize: STACK_BADGE_FONT_SIZE,
+      fill: STACK_BADGE_TEXT_COLOR,
+      fontWeight: 'bold',
+    },
+  });
+  text.anchor.set(0.5, 0.5);
+  text.position.set(badgeX, badgeY);
+
+  // Unstack handle (upper-right corner, flush with card borders)
+  const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2;
+  const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2;
+
+  decorGraphic.rect(
+    handleX - STACK_BADGE_SIZE / 2,
+    handleY - STACK_BADGE_SIZE / 2,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_SIZE,
+  );
+  decorGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+
+  // Add decorative graphics to container
+  container.addChild(decorGraphic);
+  container.addChild(text);
+
+  // Handle icon - stack-pop
+  const iconGraphic = new Graphics();
+  renderStackPopIcon(iconGraphic, {
+    color: STACK_BADGE_TEXT_COLOR,
+    strokeWidth: 1.5,
+    x: handleX,
+    y: handleY,
+  });
+  container.addChild(iconGraphic);
+}
+
+/**
+ * Helper: Create placeholder graphic for a stack (colored rectangle with decorations)
+ *
+ * Used when card textures are not available. Renders a colored rectangle
+ * with borders and face-down indicators. The 3D effect for multi-card stacks
+ * is rendered separately in the main render function.
+ */
+function createPlaceholderGraphic(
+  color: number,
+  obj: StackObject,
+  ctx: RenderContext,
+): Graphics {
+  const graphic = new Graphics();
+
+  // Draw main card rectangle
+  graphic.rect(-STACK_WIDTH / 2, -STACK_HEIGHT / 2, STACK_WIDTH, STACK_HEIGHT);
+  graphic.fill(color);
+
+  // Determine border color based on visual state (priority: selected > target > normal)
+  let borderColor = STACK_BORDER_COLOR_NORMAL;
+  let borderWidth = 2;
+  if (ctx.isSelected) {
+    borderColor = STACK_BORDER_COLOR_SELECTED;
+    borderWidth = 4;
+  } else if (ctx.isStackTarget) {
+    borderColor = STACK_BORDER_COLOR_TARGET;
+    borderWidth = 4;
+  }
+
+  graphic.stroke({
+    width: ctx.scaleStrokeWidth(borderWidth),
+    color: borderColor,
+  });
+
+  // Visual indicator for face-down state (diagonal lines)
+  if (obj._faceUp === false) {
     graphic.rect(
       -STACK_WIDTH / 2,
       -STACK_HEIGHT / 2,
       STACK_WIDTH,
       STACK_HEIGHT,
     );
-    graphic.fill(color);
+    graphic.fill({ color: 0x000000, alpha: 0.2 });
 
-    // Determine border color based on visual state (priority: selected > target > normal)
-    let borderColor = STACK_BORDER_COLOR_NORMAL;
-    let borderWidth = 2;
-    if (ctx.isSelected) {
-      borderColor = STACK_BORDER_COLOR_SELECTED; // For selected state
-      borderWidth = 4;
-    } else if (ctx.isStackTarget) {
-      borderColor = STACK_BORDER_COLOR_TARGET; // For drop target state
-      borderWidth = 4;
-    }
-
+    // Diagonal line pattern
+    graphic.moveTo(-STACK_WIDTH / 2, -STACK_HEIGHT / 2);
+    graphic.lineTo(STACK_WIDTH / 2, STACK_HEIGHT / 2);
+    graphic.moveTo(-STACK_WIDTH / 2, STACK_HEIGHT / 2);
+    graphic.lineTo(STACK_WIDTH / 2, -STACK_HEIGHT / 2);
     graphic.stroke({
-      width: ctx.scaleStrokeWidth(borderWidth),
-      color: borderColor,
+      width: ctx.scaleStrokeWidth(2),
+      color: 0xffffff,
+      alpha: 0.5,
     });
+  }
 
-    // Visual indicator for face-down state (diagonal lines)
-    if ('_faceUp' in obj && obj._faceUp === false) {
-      graphic.rect(
-        -STACK_WIDTH / 2,
-        -STACK_HEIGHT / 2,
-        STACK_WIDTH,
-        STACK_HEIGHT,
-      );
-      graphic.fill({ color: 0x000000, alpha: 0.2 });
+  return graphic;
+}
 
-      // Diagonal line pattern
-      graphic.moveTo(-STACK_WIDTH / 2, -STACK_HEIGHT / 2);
-      graphic.lineTo(STACK_WIDTH / 2, STACK_HEIGHT / 2);
-      graphic.moveTo(-STACK_WIDTH / 2, STACK_HEIGHT / 2);
-      graphic.lineTo(STACK_WIDTH / 2, -STACK_HEIGHT / 2);
-      graphic.stroke({
-        width: ctx.scaleStrokeWidth(2),
-        color: 0xffffff,
-        alpha: 0.5,
-      });
-    }
+export const StackBehaviors: ObjectBehaviors = {
+  render(obj: TableObject, ctx: RenderContext): Container {
+    const container = new Container();
+    const stackObj = obj as StackObject;
+    const cardCount = getCardCount(obj);
 
-    // Add graphic to container first (as base layer)
-    container.addChild(graphic);
+    // Layer 1: 3D background for multi-card stacks
+    render3DBackground(container, cardCount, ctx);
 
-    // Draw count badge and unstack handle for stacks with 2+ cards
-    // Skip decorative elements in minimal mode (e.g., ghost previews)
-    if (cardCount >= 2 && !ctx.minimal) {
-      // Badge rounded square (top-center, half on/half off the card)
-      const badgeX = 0;
-      const badgeY = -STACK_HEIGHT / 2; // Position at top edge so half extends above
+    // Layer 2: Main card (image sprite or placeholder)
+    renderMainCard(container, stackObj, ctx);
 
-      graphic.roundRect(
-        badgeX - STACK_BADGE_SIZE / 2,
-        badgeY - STACK_BADGE_SIZE / 2,
-        STACK_BADGE_SIZE,
-        STACK_BADGE_SIZE,
-        STACK_BADGE_RADIUS,
-      );
-      graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
-      graphic.stroke({
-        width: ctx.scaleStrokeWidth(1),
-        color: 0xffffff,
-        alpha: 0.3,
-      });
-
-      // Badge text (uses ctx.createText for automatic zoom-aware resolution)
-      const text = ctx.createText({
-        text: cardCount.toString(),
-        style: {
-          fontSize: STACK_BADGE_FONT_SIZE,
-          fill: STACK_BADGE_TEXT_COLOR,
-          fontWeight: 'bold',
-        },
-      });
-      text.anchor.set(0.5, 0.5);
-      text.position.set(badgeX, badgeY);
-      container.addChild(text);
-
-      // Unstack handle (upper-right corner, flush with card borders)
-      const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2; // Right edge
-      const handleY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE / 2; // Top edge
-
-      graphic.rect(
-        handleX - STACK_BADGE_SIZE / 2,
-        handleY - STACK_BADGE_SIZE / 2,
-        STACK_BADGE_SIZE,
-        STACK_BADGE_SIZE,
-      );
-      graphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
-
-      // Handle icon - stack-pop (see renderer/graphics/stackPop/)
-      const iconGraphic = new Graphics();
-      renderStackPopIcon(iconGraphic, {
-        color: STACK_BADGE_TEXT_COLOR,
-        strokeWidth: 1.5,
-        x: handleX,
-        y: handleY,
-      });
-      container.addChild(iconGraphic);
-    }
+    // Layer 3: Badge and unstack handle for multi-card stacks
+    renderStackDecorations(container, cardCount, ctx);
 
     return container;
   },

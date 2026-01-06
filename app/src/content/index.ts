@@ -5,7 +5,7 @@
  * Handles asset packs, scenarios, and table object creation.
  */
 
-import type { Scenario, MergedContent, TableObject } from '@cardtable2/shared';
+import type { Scenario, GameAssets, TableObject } from '@cardtable2/shared';
 import {
   loadAssetPack,
   loadAssetPacks,
@@ -23,7 +23,10 @@ import {
   instantiateScenario,
 } from './instantiate';
 
-// Re-export for convenience
+// Re-export types for convenience
+export type { GameAssets } from '@cardtable2/shared';
+
+// Re-export functions for convenience
 export {
   loadAssetPack,
   loadAssetPacks,
@@ -45,7 +48,7 @@ export {
 
 export interface LoadedContent {
   scenario: Scenario;
-  content: MergedContent;
+  content: GameAssets;
   objects: Map<string, TableObject>;
 }
 
@@ -124,4 +127,113 @@ export async function loadScenarioMetadata(
   scenarioUrl: string,
 ): Promise<Scenario> {
   return loadScenario(scenarioUrl);
+}
+
+/**
+ * Find a game in the games index by ID
+ *
+ * @param gameId - The game ID to look up
+ * @returns Game entry with id, name (optional), and manifestUrl
+ * @throws Error if games index cannot be loaded or game is not found
+ *
+ * @example
+ * ```typescript
+ * const game = await findGameInIndex('testgame');
+ * console.log(game.manifestUrl); // '/scenarios/testgame-basic.json'
+ * ```
+ */
+export async function findGameInIndex(
+  gameId: string,
+): Promise<{ id: string; name?: string; manifestUrl: string }> {
+  // Load games index
+  let response;
+  try {
+    response = await fetch('/gamesIndex.json');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error loading games index: ${message}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load games index: HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const gamesIndex = (await response.json()) as {
+    games: Array<{ id: string; name?: string; manifestUrl: string }>;
+  };
+
+  const game = gamesIndex.games.find((g) => g.id === gameId);
+
+  if (!game) {
+    const availableGames = gamesIndex.games.map((g) => g.id).join(', ');
+    throw new Error(
+      `Game "${gameId}" not found. Available games: ${availableGames}`,
+    );
+  }
+
+  return game;
+}
+
+/**
+ * Load all asset packs for a game
+ *
+ * Loads all asset packs referenced by the game's default scenario manifest,
+ * but does NOT instantiate any scenario objects. This provides access to
+ * all cards, tokens, and other assets for manual object creation.
+ *
+ * @param gameId - The game ID from gamesIndex.json
+ * @returns Merged content from all packs
+ *
+ * @example
+ * ```typescript
+ * const content = await loadGameAssetPacks('testgame');
+ * // Content has all cards/tokens but no scenario objects
+ * const card = resolveCard('01001', content);
+ * ```
+ */
+export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
+  // Find the game in the index
+  const game = await findGameInIndex(gameId);
+
+  // Load the scenario to get pack list (but don't instantiate)
+  let scenario;
+  try {
+    scenario = await loadScenario(game.manifestUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load scenario for game "${gameId}" from ${game.manifestUrl}: ${message}`,
+    );
+  }
+
+  // Resolve pack URLs
+  const packUrls = scenario.packs.map((packId) => {
+    // If packId looks like a URL, use it directly
+    if (
+      packId.startsWith('http://') ||
+      packId.startsWith('https://') ||
+      packId.startsWith('/')
+    ) {
+      return packId;
+    }
+    // Otherwise, construct URL from packId
+    // Default to /packs/<packId>.json
+    return `/packs/${packId}.json`;
+  });
+
+  // Load all packs in parallel
+  let packs;
+  try {
+    packs = await loadAssetPacks(packUrls);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load asset packs for game "${gameId}": ${message}`,
+    );
+  }
+
+  // Merge and return
+  return mergeAssetPacks(packs);
 }

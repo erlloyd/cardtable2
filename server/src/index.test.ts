@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from 'vitest';
 import { WebSocket } from 'ws';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
@@ -6,6 +14,7 @@ import express from 'express';
 import { createServer, Server as HttpServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from '@y/websocket-server/utils';
+import { createProxyHandler } from './proxyHandler.js';
 
 // Server instance for testing
 let app: express.Application;
@@ -343,4 +352,131 @@ describe('Room Isolation', () => {
     provider1.destroy();
     provider2.destroy();
   }, 10000);
+});
+
+describe('Image Proxy Endpoint', () => {
+  let originalFetch: typeof global.fetch;
+  let mockAzureFetch: ReturnType<typeof vi.fn>;
+
+  beforeAll(() => {
+    // Save original fetch and set up mock for Azure calls
+    originalFetch = global.fetch;
+
+    // Create mock that returns Promise<Response> to match fetch signature
+    const mockFetchImpl = (url: string): Promise<Response> => {
+      if (url.includes('cerebrodatastorage.blob.core.windows.net')) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as Response);
+      }
+      // For non-Azure URLs (like test server health checks), use original fetch
+      return originalFetch(url);
+    };
+
+    mockAzureFetch = vi.fn(mockFetchImpl);
+    global.fetch = mockAzureFetch as typeof global.fetch;
+
+    // Add proxy route to test server (no ETag, no logging for clean test output)
+    app.get<{ path: string | string[] }>(
+      '/api/card-image/*path',
+      createProxyHandler({
+        enableETag: false,
+        enableLogging: false,
+      }),
+    );
+  });
+
+  afterAll(() => {
+    // Restore original fetch
+    global.fetch = originalFetch;
+  });
+
+  beforeEach(() => {
+    // Reset mock between tests
+    mockAzureFetch.mockClear();
+  });
+
+  describe('Path Validation', () => {
+    it('should reject path traversal attempts with ..', async () => {
+      // URL-encode the dots to prevent fetch from normalizing the path
+      const response = await fetch(
+        `${serverUrl}/api/card-image/..%2F..%2F..%2Fsecrets`,
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toBe('Invalid image path');
+    });
+
+    it('should reject paths with invalid characters', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/path<>with:bad|chars`,
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toBe('Invalid image path');
+    });
+
+    it('should accept valid paths with alphanumeric, dash, slash, and underscore', async () => {
+      // This will fail because the image doesn't exist, but path validation should pass
+      const response = await fetch(
+        `${serverUrl}/api/card-image/pack-1/cards/card_01.jpg`,
+      );
+      // Should not be 400 (bad request), should be 404 (not found) or 503 (Azure error)
+      expect(response.status).not.toBe(400);
+    });
+
+    it('should accept paths with dots in filename', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/pack1/card.01.jpg`,
+      );
+      // Should not be 400 (bad request)
+      expect(response.status).not.toBe(400);
+    });
+  });
+
+  describe('Wildcard Array Handling', () => {
+    it('should correctly join path segments from Express wildcard', async () => {
+      // This tests that multi-segment paths work correctly
+      const response = await fetch(
+        `${serverUrl}/api/card-image/pack1/subfolder/card.jpg`,
+      );
+      // Should not crash, should return 404 or 503 (image doesn't exist)
+      expect([404, 500, 503]).toContain(response.status);
+    });
+
+    it('should handle single-segment paths', async () => {
+      const response = await fetch(`${serverUrl}/api/card-image/test.jpg`);
+      expect([404, 500, 503]).toContain(response.status);
+    });
+
+    it('should handle deeply nested paths', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/a/b/c/d/e/f.jpg`,
+      );
+      expect([404, 500, 503]).toContain(response.status);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should return 404 for non-existent images', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/nonexistent/image.jpg`,
+      );
+      // Should be 404 or 503 depending on whether Azure or network error
+      expect([404, 500, 503]).toContain(response.status);
+    });
+
+    it('should return appropriate headers for error responses', async () => {
+      const response = await fetch(
+        `${serverUrl}/api/card-image/nonexistent.jpg`,
+      );
+      expect(response.headers.get('content-type')).toBeTruthy();
+    });
+
+    it('should handle empty path gracefully', async () => {
+      const response = await fetch(`${serverUrl}/api/card-image/`);
+      // Should either be 400 (invalid) or 404 (not found), not crash
+      expect([400, 404, 500, 503]).toContain(response.status);
+    });
+  });
 });

@@ -10,6 +10,7 @@ import type {
   MainToRendererMessage,
   RendererToMainMessage,
   InteractionMode,
+  GameAssets,
 } from '@cardtable2/shared';
 import type { RenderMode } from './IRendererAdapter';
 import { SceneManager } from './SceneManager';
@@ -28,6 +29,7 @@ import {
 } from './managers';
 import { RendererMessageBus } from './RendererMessageBus';
 import type { RendererContext } from './RendererContext';
+import { TextureLoader } from './services/TextureLoader';
 import { debounce } from '../utils/debounce';
 
 /**
@@ -64,12 +66,16 @@ export abstract class RendererOrchestrator {
   private visual: VisualManager = new VisualManager();
   private gridSnap: GridSnapManager = new GridSnapManager();
 
+  // Services
+  private textureLoader: TextureLoader = new TextureLoader();
+
   // Message bus
   private messageBus: RendererMessageBus | null = null;
 
   // State
   private interactionMode: InteractionMode = 'pan';
   private gridSnapEnabled: boolean = false;
+  private gameAssets: GameAssets | null = null;
 
   // Zoom tracking for scene regeneration
   private lastRegeneratedZoom: number = 1.0;
@@ -123,6 +129,51 @@ export abstract class RendererOrchestrator {
         if (!message.enabled) {
           this.gridSnap.clearGhosts();
         }
+        return;
+      }
+
+      // Handle set-game-assets here (needs to update orchestrator state)
+      if (message.type === 'set-game-assets') {
+        try {
+          this.gameAssets = message.assets;
+
+          // Set assets and trigger re-render of affected objects (stacks need card images)
+          this.visual.setGameAssets(
+            message.assets,
+            this.sceneManager,
+            this.selection,
+            this.hover,
+          );
+
+          // Force a render to show the updated visuals
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
+
+          console.log(
+            '[RendererOrchestrator] Game assets updated successfully',
+            {
+              hasAssets: !!message.assets,
+              cardCount: message.assets?.cards
+                ? Object.keys(message.assets.cards).length
+                : 0,
+            },
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          console.error('[RendererOrchestrator] Failed to set game assets', {
+            error,
+            errorMessage,
+            hasAssets: !!message.assets,
+          });
+          this.postResponse({
+            type: 'error',
+            error: `Failed to update game assets: ${errorMessage}`,
+            context: 'set-game-assets',
+          });
+        }
+
         return;
       }
 
@@ -299,6 +350,7 @@ export abstract class RendererOrchestrator {
     // Initialize managers with app and containers
     this.camera.initialize(this.app, this.worldContainer);
     this.visual.initialize(this.app, this.renderMode);
+    this.visual.setTextureLoader(this.textureLoader);
     this.awareness.initialize(this.app.stage);
     this.gridSnap.initialize(this.app.stage);
     this.animation.initialize(this.app, this.visual.getAllVisuals());
@@ -334,11 +386,17 @@ export abstract class RendererOrchestrator {
       gridSnap: this.gridSnap,
       sceneManager: this.sceneManager,
 
+      // Services
+      textureLoader: this.textureLoader,
+
       // Communication
       postResponse: this.postResponse.bind(this),
 
       // Debounced functions
       debouncedZoomEnd: this.debouncedZoomEnd,
+
+      // Game content
+      gameAssets: this.gameAssets,
 
       // Mutable state
       interactionMode: this.interactionMode,
@@ -447,49 +505,12 @@ export abstract class RendererOrchestrator {
       // Update text resolution multiplier for sharp text at high zoom
       this.visual.setTextResolutionMultiplier(zoomLevel);
 
-      // Track regeneration failures for reporting
-      const failedObjects: string[] = [];
-
-      // Iterate through ALL objects and redraw visuals to apply updated zoom settings
-      // This forces Text objects to regenerate at the appropriate resolution for current zoom
-      for (const [objectId] of this.sceneManager.getAllObjects()) {
-        try {
-          // Check if object is selected or hovered
-          const isSelected = this.selection.isSelected(objectId);
-          const isHovered = this.hover.getHoveredObjectId() === objectId;
-
-          // Redraw the visual to regenerate text with new resolution
-          this.visual.updateVisualForObjectChange(objectId, this.sceneManager, {
-            isHovered,
-            isSelected,
-            // Not dragging during zoom
-          });
-        } catch (error) {
-          // Track but don't stop - try to regenerate as many objects as possible
-          failedObjects.push(objectId);
-          console.error(
-            '[RendererOrchestrator] Failed to regenerate object visual at zoom',
-            {
-              objectId,
-              zoomLevel,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
-        }
-      }
-
-      // Report if any objects failed
-      if (failedObjects.length > 0) {
-        console.error(
-          '[RendererOrchestrator] Some objects failed to regenerate at new zoom level',
-          {
-            failedCount: failedObjects.length,
-            totalObjects: this.sceneManager.getAllObjects().size,
-            failedObjectIds: failedObjects.slice(0, 10), // First 10 for debugging
-            zoomLevel,
-          },
-        );
-      }
+      // Regenerate all visuals at new zoom level
+      this.visual.regenerateVisuals(
+        this.sceneManager,
+        this.selection,
+        this.hover,
+      );
 
       // Force an immediate render since ticker may not be running (autoStart: false)
       // This ensures visual updates are displayed immediately after zoom ends

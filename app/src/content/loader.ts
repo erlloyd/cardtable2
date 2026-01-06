@@ -1,7 +1,7 @@
 import type {
   AssetPack,
   Scenario,
-  MergedContent,
+  GameAssets,
   ResolvedCard,
   CardSize,
 } from '@cardtable2/shared';
@@ -15,18 +15,33 @@ import { getBackendUrl } from '@/utils/backend';
  * Load an asset pack from a URL
  */
 export async function loadAssetPack(url: string): Promise<AssetPack> {
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error loading asset pack from ${url}: ${message}`);
+  }
+
   if (!response.ok) {
     throw new Error(
-      `Failed to load asset pack from ${url}: ${response.statusText}`,
+      `Failed to load asset pack: HTTP ${response.status} ${response.statusText} (${url})`,
     );
   }
 
-  const data: unknown = await response.json();
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON in asset pack from ${url}: ${message}`);
+  }
 
   // Type guard validation
   if (typeof data !== 'object' || data === null) {
-    throw new Error(`Invalid asset pack: expected object, got ${typeof data}`);
+    throw new Error(
+      `Invalid asset pack from ${url}: expected object, got ${typeof data}`,
+    );
   }
 
   const obj = data as Record<string, unknown>;
@@ -34,12 +49,14 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
   // Basic validation
   if (obj.schema !== 'ct-assets@1') {
     throw new Error(
-      `Invalid schema: expected "ct-assets@1", got "${String(obj.schema)}"`,
+      `Invalid schema in asset pack from ${url}: expected "ct-assets@1", got "${String(obj.schema)}"`,
     );
   }
 
   if (!obj.id || !obj.name || !obj.version) {
-    throw new Error(`Missing required fields: id, name, or version`);
+    throw new Error(
+      `Missing required fields in asset pack from ${url}: id, name, or version`,
+    );
   }
 
   return data as AssetPack;
@@ -99,8 +116,8 @@ export async function loadScenario(url: string): Promise<Scenario> {
  * Merge multiple asset packs into a single content collection
  * Later packs override earlier packs (last-wins strategy)
  */
-export function mergeAssetPacks(packs: AssetPack[]): MergedContent {
-  const merged: MergedContent = {
+export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
+  const merged: GameAssets = {
     packs,
     cardTypes: {},
     cards: {},
@@ -111,13 +128,33 @@ export function mergeAssetPacks(packs: AssetPack[]): MergedContent {
   };
 
   // Merge each pack in order (later packs override earlier ones)
+  // For cards and cardTypes, create new objects with resolved URLs (no mutation)
   for (const pack of packs) {
+    // Merge cardTypes with URL resolution
     if (pack.cardTypes) {
-      Object.assign(merged.cardTypes, pack.cardTypes);
+      for (const [typeCode, cardType] of Object.entries(pack.cardTypes)) {
+        merged.cardTypes[typeCode] = cardType.back
+          ? { ...cardType, back: resolveAssetUrl(cardType.back, pack.baseUrl) }
+          : cardType;
+      }
     }
+
+    // Merge cards with URL resolution
     if (pack.cards) {
-      Object.assign(merged.cards, pack.cards);
+      for (const [cardCode, card] of Object.entries(pack.cards)) {
+        merged.cards[cardCode] = {
+          ...card,
+          face: card.face
+            ? resolveAssetUrl(card.face, pack.baseUrl)
+            : card.face,
+          back: card.back
+            ? resolveAssetUrl(card.back, pack.baseUrl)
+            : card.back,
+        };
+      }
     }
+
+    // Other asset types don't need URL resolution
     if (pack.cardSets) {
       Object.assign(merged.cardSets, pack.cardSets);
     }
@@ -189,7 +226,7 @@ export function resolveAssetUrl(url: string, baseUrl?: string): string {
  */
 export function resolveCard(
   cardCode: string,
-  content: MergedContent,
+  content: GameAssets,
 ): ResolvedCard {
   const card = content.cards[cardCode];
   if (!card) {
@@ -229,7 +266,7 @@ export function resolveCard(
  * Resolve all cards in a content collection
  */
 export function resolveAllCards(
-  content: MergedContent,
+  content: GameAssets,
 ): Map<string, ResolvedCard> {
   const resolved = new Map<string, ResolvedCard>();
 

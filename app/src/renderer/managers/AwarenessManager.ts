@@ -316,11 +316,13 @@ export class AwarenessManager {
           isStackTarget: false,
           cameraScale,
           createText: visual.createText.bind(visual),
+          createKindLabel: visual.createKindLabel.bind(visual),
           scaleStrokeWidth: createScaleStrokeWidth(
             cameraScale,
             'AwarenessManager',
           ),
           minimal: true, // Render in minimal mode (skip decorative elements)
+          gameAssets: null, // Ghosts don't need game assets (minimal mode)
         });
         ghostGraphic.alpha = 0.5; // Semi-transparent
 
@@ -342,11 +344,13 @@ export class AwarenessManager {
                 isStackTarget: false,
                 cameraScale,
                 createText: visual.createText.bind(visual),
+                createKindLabel: visual.createKindLabel.bind(visual),
                 scaleStrokeWidth: createScaleStrokeWidth(
                   cameraScale,
                   'AwarenessManager',
                 ),
                 minimal: true, // Render in minimal mode (skip decorative elements)
+                gameAssets: null, // Ghosts don't need game assets (minimal mode)
               });
               secondaryGraphic.alpha = 0.5; // Semi-transparent
 

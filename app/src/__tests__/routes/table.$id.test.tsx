@@ -20,6 +20,7 @@ vi.mock('../../components/Board', () => ({
 vi.mock('../../store/YjsStore', () => ({
   YjsStore: class MockYjsStore {
     objects = new Y.Map();
+    metadata = new Y.Map();
     async waitForReady() {
       return Promise.resolve();
     }

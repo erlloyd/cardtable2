@@ -5,7 +5,7 @@ import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
-import { loadCompleteScenario } from '../content';
+import { loadCompleteScenario, findGameInIndex } from '../content';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -319,21 +319,8 @@ export function registerDefaultActions(): void {
 
         console.log(`[Load Scenario] Loading scenario for game: ${gameId}`);
 
-        // Load games index
-        const response = await fetch('/gamesIndex.json');
-        if (!response.ok) {
-          throw new Error('Failed to load games index');
-        }
-
-        const gamesIndex = (await response.json()) as {
-          games: Array<{ id: string; name: string; manifestUrl: string }>;
-        };
-
-        // Find the game
-        const game = gamesIndex.games.find((g) => g.id === gameId);
-        if (!game) {
-          throw new Error(`Game not found: ${gameId}`);
-        }
+        // Find the game in the index
+        const game = await findGameInIndex(gameId);
 
         console.log(
           `[Load Scenario] Loading scenario from: ${game.manifestUrl}`,

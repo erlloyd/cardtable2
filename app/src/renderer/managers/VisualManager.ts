@@ -637,10 +637,26 @@ export class VisualManager {
 
   /**
    * Create a text label showing the object's kind.
-   * Returns a centered Text object ready to be added to a container.
    *
-   * Uses lower base resolution (2x vs 3x) for performance since labels
-   * are larger and less critical for visual quality.
+   * This method is public to allow object behaviors to create consistent
+   * kind labels during rendering (e.g., "counter", "token", "zone").
+   * The RenderContext provides access to this method via visualManager.
+   *
+   * @param kind - The object kind to display (e.g., "counter", "token")
+   * @returns A centered PixiJS Text object ready to be added to a container
+   *
+   * @remarks
+   * - Uses lower base resolution (2x vs 3x) for performance since labels
+   *   are larger and less critical for visual quality than card text
+   * - Text is automatically centered (anchor 0.5) and positioned at y=0
+   * - Resolution is automatically scaled by textResolutionMultiplier
+   * - Style: Arial 24px, white fill, black stroke, center-aligned
+   *
+   * @example
+   * ```typescript
+   * const label = context.visualManager.createKindLabel('counter');
+   * container.addChild(label);
+   * ```
    */
   createKindLabel(kind: string): Text {
     // Validate text resolution multiplier

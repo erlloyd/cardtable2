@@ -128,13 +128,33 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
   };
 
   // Merge each pack in order (later packs override earlier ones)
+  // For cards and cardTypes, create new objects with resolved URLs (no mutation)
   for (const pack of packs) {
+    // Merge cardTypes with URL resolution
     if (pack.cardTypes) {
-      Object.assign(merged.cardTypes, pack.cardTypes);
+      for (const [typeCode, cardType] of Object.entries(pack.cardTypes)) {
+        merged.cardTypes[typeCode] = cardType.back
+          ? { ...cardType, back: resolveAssetUrl(cardType.back, pack.baseUrl) }
+          : cardType;
+      }
     }
+
+    // Merge cards with URL resolution
     if (pack.cards) {
-      Object.assign(merged.cards, pack.cards);
+      for (const [cardCode, card] of Object.entries(pack.cards)) {
+        merged.cards[cardCode] = {
+          ...card,
+          face: card.face
+            ? resolveAssetUrl(card.face, pack.baseUrl)
+            : card.face,
+          back: card.back
+            ? resolveAssetUrl(card.back, pack.baseUrl)
+            : card.back,
+        };
+      }
     }
+
+    // Other asset types don't need URL resolution
     if (pack.cardSets) {
       Object.assign(merged.cardSets, pack.cardSets);
     }
@@ -146,31 +166,6 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
     }
     if (pack.mats) {
       Object.assign(merged.mats, pack.mats);
-    }
-  }
-
-  // Resolve all card URLs (apply baseUrl and prepend backend URL for /api/ paths)
-  for (const cardCode of Object.keys(merged.cards)) {
-    const card = merged.cards[cardCode];
-    const pack = packs.find((p) => p.cards?.[cardCode]);
-    const baseUrl = pack?.baseUrl;
-
-    // Resolve face URL
-    if (card.face) {
-      card.face = resolveAssetUrl(card.face, baseUrl);
-    }
-
-    // Resolve back URL if present
-    if (card.back) {
-      card.back = resolveAssetUrl(card.back, baseUrl);
-    }
-  }
-
-  // Resolve cardType back URLs
-  for (const cardType of Object.values(merged.cardTypes)) {
-    if (cardType.back) {
-      // CardType backs are usually full URLs, but resolve anyway for consistency
-      cardType.back = resolveAssetUrl(cardType.back);
     }
   }
 

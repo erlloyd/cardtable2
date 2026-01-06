@@ -14,6 +14,7 @@ import express from 'express';
 import { createServer, Server as HttpServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from '@y/websocket-server/utils';
+import { createProxyHandler } from './proxyHandler.js';
 
 // Server instance for testing
 let app: express.Application;
@@ -377,74 +378,13 @@ describe('Image Proxy Endpoint', () => {
     mockAzureFetch = vi.fn(mockFetchImpl);
     global.fetch = mockAzureFetch as typeof global.fetch;
 
-    // Add proxy route to test server
+    // Add proxy route to test server (no ETag, no logging for clean test output)
     app.get<{ path: string | string[] }>(
       '/api/card-image/*path',
-      async (req, res) => {
-        const pathSegments = req.params.path;
-        const imagePath =
-          typeof pathSegments === 'string'
-            ? pathSegments
-            : pathSegments.join('/');
-
-        // Validate path (prevent path traversal)
-        const hasDoubleDot = imagePath.includes('..');
-        const hasInvalidChars = !/^[a-zA-Z0-9\-/._]+$/.test(imagePath);
-        const isValidPath = !hasDoubleDot && !hasInvalidChars;
-
-        if (!isValidPath) {
-          return res.status(400).send('Invalid image path');
-        }
-
-        const azureUrl = `https://cerebrodatastorage.blob.core.windows.net/${imagePath}`;
-
-        try {
-          const response = await fetch(azureUrl);
-
-          if (!response.ok) {
-            console.error(`[Proxy] Azure request failed for ${imagePath}`, {
-              azureStatus: response.status,
-              azureStatusText: response.statusText,
-              path: imagePath,
-            });
-
-            if (response.status === 404) {
-              return res.status(404).send('Image not found');
-            } else if (response.status === 403) {
-              return res.status(500).send('Configuration error');
-            } else if (response.status >= 500 || response.status === 503) {
-              return res.status(503).send('Service temporarily unavailable');
-            } else {
-              return res.status(500).send('Proxy error');
-            }
-          }
-
-          const imageBuffer = Buffer.from(await response.arrayBuffer());
-          res.set({
-            'Content-Type':
-              response.headers.get('content-type') || 'image/jpeg',
-            'Cache-Control': 'public, max-age=31536000, immutable',
-          });
-          return res.send(imageBuffer);
-        } catch (error) {
-          const errorType =
-            error instanceof Error ? error.constructor.name : typeof error;
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-
-          console.error(`[Proxy] Unexpected error fetching ${imagePath}`, {
-            path: imagePath,
-            errorType,
-            errorMessage,
-          });
-
-          if (error && typeof error === 'object' && 'code' in error) {
-            return res.status(503).send('Service temporarily unavailable');
-          }
-
-          return res.status(500).send('Proxy error');
-        }
-      },
+      createProxyHandler({
+        enableETag: false,
+        enableLogging: false,
+      }),
     );
   });
 

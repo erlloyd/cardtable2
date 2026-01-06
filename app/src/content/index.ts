@@ -130,6 +130,53 @@ export async function loadScenarioMetadata(
 }
 
 /**
+ * Find a game in the games index by ID
+ *
+ * @param gameId - The game ID to look up
+ * @returns Game entry with id, name (optional), and manifestUrl
+ * @throws Error if games index cannot be loaded or game is not found
+ *
+ * @example
+ * ```typescript
+ * const game = await findGameInIndex('testgame');
+ * console.log(game.manifestUrl); // '/scenarios/testgame-basic.json'
+ * ```
+ */
+export async function findGameInIndex(
+  gameId: string,
+): Promise<{ id: string; name?: string; manifestUrl: string }> {
+  // Load games index
+  let response;
+  try {
+    response = await fetch('/gamesIndex.json');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Network error loading games index: ${message}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to load games index: HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const gamesIndex = (await response.json()) as {
+    games: Array<{ id: string; name?: string; manifestUrl: string }>;
+  };
+
+  const game = gamesIndex.games.find((g) => g.id === gameId);
+
+  if (!game) {
+    const availableGames = gamesIndex.games.map((g) => g.id).join(', ');
+    throw new Error(
+      `Game "${gameId}" not found. Available games: ${availableGames}`,
+    );
+  }
+
+  return game;
+}
+
+/**
  * Load all asset packs for a game
  *
  * Loads all asset packs referenced by the game's default scenario manifest,
@@ -147,32 +194,8 @@ export async function loadScenarioMetadata(
  * ```
  */
 export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
-  // Load games index to find the game
-  let response;
-  try {
-    response = await fetch('/gamesIndex.json');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Network error loading games index: ${message}`);
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to load games index: HTTP ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const gamesIndex = (await response.json()) as {
-    games: Array<{ id: string; manifestUrl: string }>;
-  };
-  const game = gamesIndex.games.find((g) => g.id === gameId);
-
-  if (!game) {
-    const availableGames = gamesIndex.games.map((g) => g.id).join(', ');
-    throw new Error(
-      `Game "${gameId}" not found. Available games: ${availableGames}`,
-    );
-  }
+  // Find the game in the index
+  const game = await findGameInIndex(gameId);
 
   // Load the scenario to get pack list (but don't instantiate)
   let scenario;

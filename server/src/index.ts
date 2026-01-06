@@ -2,8 +2,8 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from '@y/websocket-server/utils';
-import { createHash } from 'crypto';
 import cors from 'cors';
+import { createProxyHandler } from './proxyHandler.js';
 
 // Server entry point for Railway deployment
 const app = express();
@@ -61,101 +61,10 @@ app.get('/health', (_req, res) => {
 // Express 5 wildcard syntax: /*path (wildcard must have a name in path-to-regexp v8)
 app.get<{ path: string[] | string }>(
   '/api/card-image/*path',
-  async (req, res) => {
-    // Get the full requested image path from wildcard parameter
-    // In Express 5 with path-to-regexp v8, wildcards return an array of segments
-    const pathSegments = req.params.path;
-    const imagePath = Array.isArray(pathSegments)
-      ? pathSegments.join('/')
-      : pathSegments;
-
-    // Validate path to prevent traversal attacks and unexpected characters
-    // Allow only alphanumerics, slashes, hyphens, underscores, and dots
-    const isValidPath =
-      /^[a-zA-Z0-9\-/._]+$/.test(imagePath) && !imagePath.includes('..');
-
-    if (!isValidPath) {
-      console.warn(`[Proxy] Invalid image path: ${imagePath}`);
-      return res.status(400).send('Invalid image path');
-    }
-
-    const azureUrl = `https://cerebrodatastorage.blob.core.windows.net/${imagePath}`;
-
-    try {
-      console.log(`[Proxy] Fetching image: ${imagePath}`);
-
-      // Fetch from Azure
-      const response = await fetch(azureUrl);
-
-      if (!response.ok) {
-        // Log the actual Azure status for debugging
-        console.error(`[Proxy] Azure request failed for ${imagePath}`, {
-          azureStatus: response.status,
-          azureStatusText: response.statusText,
-          path: imagePath,
-        });
-
-        // Return appropriate status based on Azure response
-        if (response.status === 404) {
-          return res.status(404).send('Image not found');
-        } else if (response.status === 403) {
-          // Authentication issue - return 500 to hide config details
-          return res.status(500).send('Configuration error');
-        } else if (response.status >= 500 || response.status === 503) {
-          // Server error - client should retry
-          return res.status(503).send('Service temporarily unavailable');
-        } else {
-          // Other client errors
-          return res.status(500).send('Proxy error');
-        }
-      }
-
-      // Get image data
-      const imageBuffer = Buffer.from(await response.arrayBuffer());
-
-      // Generate ETag from content hash
-      const etag = `"${createHash('md5').update(imageBuffer).digest('hex')}"`;
-
-      // Check if client already has this version
-      if (req.headers['if-none-match'] === etag) {
-        console.log(`[Proxy] Cache hit for ${imagePath} (304 Not Modified)`);
-        return res.status(304).end();
-      }
-
-      // Set aggressive caching headers
-      // Images are immutable - once a card ID is assigned, the image never changes
-      res.set({
-        'Content-Type': response.headers.get('content-type') || 'image/jpeg',
-        'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
-        ETag: etag,
-      });
-
-      console.log(`[Proxy] Serving ${imagePath} (${imageBuffer.length} bytes)`);
-      return res.send(imageBuffer);
-    } catch (error) {
-      // Classify error type for appropriate handling
-      const errorType =
-        error instanceof Error ? error.constructor.name : typeof error;
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-
-      console.error(`[Proxy] Unexpected error fetching ${imagePath}`, {
-        path: imagePath,
-        errorType,
-        errorMessage,
-        error,
-      });
-
-      // Check if it's a network error (fetch failed)
-      if (error && typeof error === 'object' && 'code' in error) {
-        // Network error - service unavailable
-        return res.status(503).send('Service temporarily unavailable');
-      }
-
-      // Other unexpected errors
-      return res.status(500).send('Proxy error');
-    }
-  },
+  createProxyHandler({
+    enableETag: true,
+    enableLogging: true,
+  }),
 );
 
 // WebSocket upgrade handling with y-websocket integration (M5-T1)

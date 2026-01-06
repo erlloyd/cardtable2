@@ -312,13 +312,33 @@ describe('mergeAssetPacks', () => {
     const merged = mergeAssetPacks([mockAssetPack1, mockAssetPack2]);
 
     expect(merged.packs).toHaveLength(2);
+    // CardTypes should have resolved back URLs
     expect(merged.cardTypes).toEqual({
-      hero: mockAssetPack1.cardTypes!.hero,
-      villain: mockAssetPack2.cardTypes!.villain,
+      hero: {
+        ...mockAssetPack1.cardTypes!.hero,
+        back: 'https://example.com/pack1/hero_back.jpg',
+      },
+      villain: {
+        ...mockAssetPack2.cardTypes!.villain,
+        back: 'https://example.com/pack2/villain_back.jpg',
+      },
     });
-    expect(merged.cards['01001']).toEqual(mockAssetPack2.cards!['01001']); // Pack 2 wins
-    expect(merged.cards['01002']).toEqual(mockAssetPack1.cards!['01002']);
-    expect(merged.cards['02001']).toEqual(mockAssetPack2.cards!['02001']);
+    // Cards should have resolved URLs with baseUrl applied
+    expect(merged.cards['01001']).toEqual({
+      type: 'hero',
+      face: 'https://example.com/pack2/01001_alt.jpg',
+      back: undefined, // No back specified, so undefined
+    }); // Pack 2 wins
+    expect(merged.cards['01002']).toEqual({
+      type: 'hero',
+      face: 'https://example.com/pack1/01002.jpg',
+      back: 'https://example.com/pack1/custom_back.jpg',
+    });
+    expect(merged.cards['02001']).toEqual({
+      type: 'villain',
+      face: 'https://example.com/pack2/02001.jpg',
+      back: undefined,
+    });
     expect(merged.tokens).toEqual(mockAssetPack1.tokens);
     expect(merged.counters).toEqual(mockAssetPack2.counters);
   });
@@ -334,7 +354,19 @@ describe('mergeAssetPacks', () => {
 
     const merged = mergeAssetPacks([minimalPack, mockAssetPack1]);
 
-    expect(merged.cards).toEqual(mockAssetPack1.cards);
+    // Cards should have resolved URLs
+    expect(merged.cards).toEqual({
+      '01001': {
+        type: 'hero',
+        face: 'https://example.com/pack1/01001.jpg',
+        back: undefined,
+      },
+      '01002': {
+        type: 'hero',
+        face: 'https://example.com/pack1/01002.jpg',
+        back: 'https://example.com/pack1/custom_back.jpg',
+      },
+    });
     expect(merged.tokens).toEqual(mockAssetPack1.tokens);
   });
 

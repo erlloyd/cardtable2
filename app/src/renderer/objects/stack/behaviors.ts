@@ -54,7 +54,20 @@ function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
   // Determine which image to show (face or back)
   if (obj._faceUp) {
     // Face up - show card face
-    return card.face;
+    if (card.face) {
+      return card.face;
+    }
+
+    console.error(
+      `[StackBehaviors] Missing face image - Card "${topCardId}" (type: "${card.type}") has no face image defined`,
+      {
+        cardId: topCardId,
+        cardType: card.type,
+        hasCardFace: !!card.face,
+        stackObjectId: ctx.objectId,
+      },
+    );
+    return null;
   } else {
     // Face down - show card back (from card override or card type default)
     if (card.back) {

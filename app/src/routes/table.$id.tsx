@@ -71,6 +71,11 @@ function Table() {
   }, [location.state, store, isStoreReady]);
 
   // Load asset packs for the current game (runs on mount and refresh)
+  // Note: Dependencies are [store, isStoreReady] only - we intentionally do NOT
+  // depend on store.metadata because gameId is set once on mount and never changes
+  // during the session. Depending on metadata would cause unnecessary reloads when
+  // other metadata properties change. The effect only needs to run once when the
+  // store becomes ready.
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;

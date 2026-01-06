@@ -1,4 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from 'vitest';
 import { WebSocket } from 'ws';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
@@ -346,7 +354,29 @@ describe('Room Isolation', () => {
 });
 
 describe('Image Proxy Endpoint', () => {
+  let originalFetch: typeof global.fetch;
+  let mockAzureFetch: ReturnType<typeof vi.fn>;
+
   beforeAll(() => {
+    // Save original fetch and set up mock for Azure calls
+    originalFetch = global.fetch;
+
+    // Create mock that returns Promise<Response> to match fetch signature
+    const mockFetchImpl = (url: string): Promise<Response> => {
+      if (url.includes('cerebrodatastorage.blob.core.windows.net')) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as Response);
+      }
+      // For non-Azure URLs (like test server health checks), use original fetch
+      return originalFetch(url);
+    };
+
+    mockAzureFetch = vi.fn(mockFetchImpl);
+    global.fetch = mockAzureFetch as typeof global.fetch;
+
     // Add proxy route to test server
     app.get<{ path: string | string[] }>(
       '/api/card-image/*path',
@@ -418,10 +448,21 @@ describe('Image Proxy Endpoint', () => {
     );
   });
 
+  afterAll(() => {
+    // Restore original fetch
+    global.fetch = originalFetch;
+  });
+
+  beforeEach(() => {
+    // Reset mock between tests
+    mockAzureFetch.mockClear();
+  });
+
   describe('Path Validation', () => {
     it('should reject path traversal attempts with ..', async () => {
+      // URL-encode the dots to prevent fetch from normalizing the path
       const response = await fetch(
-        `${serverUrl}/api/card-image/../../../secrets`,
+        `${serverUrl}/api/card-image/..%2F..%2F..%2Fsecrets`,
       );
       expect(response.status).toBe(400);
       expect(await response.text()).toBe('Invalid image path');

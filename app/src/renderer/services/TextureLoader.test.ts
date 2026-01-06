@@ -3,11 +3,14 @@ import { Texture } from 'pixi.js';
 import { TextureLoader } from './TextureLoader';
 
 // Mock PixiJS modules - Texture must be a vi.fn() constructor for mockImplementation
+interface MockTextureInstance {
+  destroy: ReturnType<typeof vi.fn>;
+}
+
 vi.mock('pixi.js', () => ({
-  Texture: vi.fn(function (this: { destroy: ReturnType<typeof vi.fn> }) {
+  Texture: vi.fn(function (this: MockTextureInstance) {
     this.destroy = vi.fn();
   }),
-  ImageSource: vi.fn(),
 }));
 
 // Mock createImageBitmap (available in browsers but not in Node test environment)
@@ -18,9 +21,7 @@ describe('TextureLoader', () => {
 
   beforeEach(() => {
     // Restore original Texture constructor mock (in case tests modify it)
-    (Texture as ReturnType<typeof vi.fn>).mockImplementation(function (this: {
-      destroy: ReturnType<typeof vi.fn>;
-    }) {
+    vi.mocked(Texture).mockImplementation(function (this: MockTextureInstance) {
       this.destroy = vi.fn();
     });
 
@@ -255,9 +256,9 @@ describe('TextureLoader', () => {
       const url = 'http://example.com/image.jpg';
       const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
       const mockDestroy = vi.fn();
-      (Texture as ReturnType<typeof vi.fn>).mockImplementation(function (this: {
-        destroy: ReturnType<typeof vi.fn>;
-      }) {
+      vi.mocked(Texture).mockImplementation(function (
+        this: MockTextureInstance,
+      ) {
         this.destroy = mockDestroy;
       });
       global.fetch = vi.fn().mockResolvedValue({

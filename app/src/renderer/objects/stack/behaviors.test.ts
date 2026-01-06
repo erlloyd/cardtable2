@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { StackBehaviors } from './behaviors';
 import { ObjectKind, type StackObject } from '@cardtable2/shared';
 import type { RenderContext } from '../types';
 import { Text, Container, type TextOptions } from 'pixi.js';
+import type { TextureLoader } from '../../services/TextureLoader';
 
 // Helper to create test stack objects with all required properties
 function createTestStack(overrides?: Partial<StackObject>): StackObject {
@@ -22,9 +23,9 @@ function createTestStack(overrides?: Partial<StackObject>): StackObject {
 
 describe('Stack Behaviors - Visual Rendering', () => {
   let mockContext: RenderContext;
-  let mockCreateText: ReturnType<typeof vi.fn>;
-  let mockCreateKindLabel: ReturnType<typeof vi.fn>;
-  let mockScaleStrokeWidth: ReturnType<typeof vi.fn>;
+  let mockCreateText: Mock<(options: TextOptions) => Text>;
+  let mockCreateKindLabel: Mock<(text: string) => Text>;
+  let mockScaleStrokeWidth: Mock<(baseWidth: number) => number>;
 
   beforeEach(() => {
     mockCreateText = vi.fn((options: TextOptions) => {
@@ -61,7 +62,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       createText: mockCreateText,
       createKindLabel: mockCreateKindLabel,
       scaleStrokeWidth: mockScaleStrokeWidth,
-    };
+    } as RenderContext;
   });
 
   describe('3D Effect Rendering', () => {
@@ -236,7 +237,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
       // Only one stroke call (main border), not two (would include face-down lines)
       const strokeCalls = mockScaleStrokeWidth.mock.calls.filter(
-        (call) => call[0] === 2,
+        (call: [number]) => call[0] === 2,
       );
       expect(strokeCalls.length).toBe(1); // Only main border
     });
@@ -334,12 +335,12 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
   describe('Image Loading', () => {
     let mockTextureLoader: {
-      load: ReturnType<typeof vi.fn>;
-      get: ReturnType<typeof vi.fn>;
-      has: ReturnType<typeof vi.fn>;
+      load: Mock<(url: string) => Promise<{ width: number; height: number }>>;
+      get: Mock<(url: string) => { width: number; height: number } | undefined>;
+      has: Mock<(url: string) => boolean>;
     };
     let mockTexture: { width: number; height: number };
-    let mockOnTextureLoaded: ReturnType<typeof vi.fn>;
+    let mockOnTextureLoaded: Mock<(url: string) => void>;
 
     beforeEach(() => {
       mockTexture = { width: 300, height: 420 };
@@ -366,14 +367,11 @@ describe('Stack Behaviors - Visual Rendering', () => {
             'card-1': {
               face: '/api/card-image/pack1/card-1-face.jpg',
               back: '/api/card-image/pack1/card-1-back.jpg',
-              code: 'card-1',
-              name: 'Test Card',
               type: 'player',
             },
           },
           cardTypes: {
             player: {
-              name: 'Player Card',
               back: '/api/card-image/pack1/player-back.jpg',
             },
           },
@@ -382,9 +380,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
           counters: {},
           mats: {},
         },
-        textureLoader: mockTextureLoader,
+        textureLoader: mockTextureLoader as unknown as TextureLoader,
         onTextureLoaded: mockOnTextureLoaded,
-      };
+      } as RenderContext;
     });
 
     it('should render sprite when texture is cached (face-up)', () => {
@@ -421,12 +419,23 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('should render sprite when texture is cached (face-down with type back)', () => {
       // Arrange
       const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
-      // Remove card-specific back to test type fallback
-      mockContext.gameAssets!.cards['card-1'].back = undefined;
+      // Create new context with card back removed to test type fallback
+      const contextWithoutCardBack = {
+        ...mockContext,
+        gameAssets: {
+          ...mockContext.gameAssets!,
+          cards: {
+            'card-1': {
+              face: '/api/card-image/pack1/card-1-face.jpg',
+              type: 'player',
+            },
+          },
+        },
+      } as RenderContext;
       mockTextureLoader.get.mockReturnValue(mockTexture);
 
       // Act
-      const visual = StackBehaviors.render(stack, mockContext);
+      const visual = StackBehaviors.render(stack, contextWithoutCardBack);
 
       // Assert
       expect(visual).toBeInstanceOf(Container);
@@ -485,10 +494,13 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('should handle missing gameAssets gracefully', () => {
       // Arrange
       const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
-      mockContext.gameAssets = undefined;
+      const contextWithoutAssets = {
+        ...mockContext,
+        gameAssets: undefined,
+      } as RenderContext;
 
       // Act
-      const visual = StackBehaviors.render(stack, mockContext);
+      const visual = StackBehaviors.render(stack, contextWithoutAssets);
 
       // Assert - Should render placeholder without crashing
       expect(visual).toBeInstanceOf(Container);
@@ -531,10 +543,13 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('should not trigger load if no textureLoader provided', () => {
       // Arrange
       const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
-      mockContext.textureLoader = undefined;
+      const contextWithoutLoader = {
+        ...mockContext,
+        textureLoader: undefined,
+      } as RenderContext;
 
       // Act
-      const visual = StackBehaviors.render(stack, mockContext);
+      const visual = StackBehaviors.render(stack, contextWithoutLoader);
 
       // Assert
       expect(visual).toBeInstanceOf(Container);
@@ -544,11 +559,14 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('should not trigger load if no onTextureLoaded callback provided', () => {
       // Arrange
       const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
-      mockContext.onTextureLoaded = undefined;
+      const contextWithoutCallback = {
+        ...mockContext,
+        onTextureLoaded: undefined,
+      } as RenderContext;
       mockTextureLoader.get.mockReturnValue(undefined);
 
       // Act
-      const visual = StackBehaviors.render(stack, mockContext);
+      const visual = StackBehaviors.render(stack, contextWithoutCallback);
 
       // Assert
       expect(visual).toBeInstanceOf(Container);
@@ -570,12 +588,23 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('should handle missing back image gracefully', () => {
       // Arrange
       const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
-      // Remove both card back and type back
-      mockContext.gameAssets!.cards['card-1'].back = undefined;
-      delete mockContext.gameAssets!.cardTypes.player;
+      // Create context without back images
+      const contextWithoutBacks = {
+        ...mockContext,
+        gameAssets: {
+          ...mockContext.gameAssets!,
+          cards: {
+            'card-1': {
+              face: '/api/card-image/pack1/card-1-face.jpg',
+              type: 'player',
+            },
+          },
+          cardTypes: {},
+        },
+      } as RenderContext;
 
       // Act
-      const visual = StackBehaviors.render(stack, mockContext);
+      const visual = StackBehaviors.render(stack, contextWithoutBacks);
 
       // Assert - Should render placeholder
       expect(visual).toBeInstanceOf(Container);

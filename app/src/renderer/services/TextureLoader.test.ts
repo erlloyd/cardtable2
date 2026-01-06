@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Texture } from 'pixi.js';
+import { mock } from 'vitest-mock-extended';
+import { Texture, ImageSource } from 'pixi.js';
 import { TextureLoader } from './TextureLoader';
 
-// Mock PixiJS modules - Texture must be a vi.fn() constructor for mockImplementation
-interface MockTextureInstance {
-  destroy: ReturnType<typeof vi.fn>;
-}
-
+// Mock PixiJS constructors - each call returns a fully auto-mocked instance
 vi.mock('pixi.js', () => ({
-  Texture: vi.fn(function (this: MockTextureInstance) {
-    this.destroy = vi.fn();
+  Texture: vi.fn(function () {
+    return mock<Texture>();
+  }),
+  ImageSource: vi.fn(function () {
+    return mock<ImageSource>();
   }),
 }));
 
@@ -20,11 +20,6 @@ describe('TextureLoader', () => {
   let loader: TextureLoader;
 
   beforeEach(() => {
-    // Restore original Texture constructor mock (in case tests modify it)
-    vi.mocked(Texture).mockImplementation(function (this: MockTextureInstance) {
-      this.destroy = vi.fn();
-    });
-
     loader = new TextureLoader();
     vi.clearAllMocks();
     global.fetch = vi.fn();
@@ -255,12 +250,6 @@ describe('TextureLoader', () => {
       // Arrange
       const url = 'http://example.com/image.jpg';
       const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
-      const mockDestroy = vi.fn();
-      vi.mocked(Texture).mockImplementation(function (
-        this: MockTextureInstance,
-      ) {
-        this.destroy = mockDestroy;
-      });
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         blob: () => Promise.resolve(mockBlob),
@@ -268,11 +257,16 @@ describe('TextureLoader', () => {
 
       await loader.load(url);
 
+      // Get the mocked texture instance that was created
+      const mockTextureConstructor = vi.mocked(Texture);
+      const mockTextureInstance = mockTextureConstructor.mock.results[0]
+        .value as ReturnType<typeof mock<Texture>>;
+
       // Act
       loader.clear();
 
       // Assert
-      expect(mockDestroy).toHaveBeenCalledWith(true); // true = destroy base texture too
+      expect(mockTextureInstance.destroy).toHaveBeenCalledWith(true); // true = destroy base texture too
     });
 
     it('should work correctly after clear', async () => {

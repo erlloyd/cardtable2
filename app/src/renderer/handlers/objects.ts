@@ -303,6 +303,27 @@ function updateObjectVisual(
     });
   }
 
+  // Detect shuffle: same cards, different order
+  const hasCards = '_cards' in obj && Array.isArray(obj._cards);
+  const prevHasCards =
+    prevObj && '_cards' in prevObj && Array.isArray(prevObj._cards);
+
+  if (hasCards && prevHasCards) {
+    const currentCards = (obj as { _cards: string[] })._cards;
+    const prevCards = (prevObj as { _cards: string[] })._cards;
+
+    // Check if cards were shuffled (same set, different order)
+    const isShuffle =
+      currentCards.length === prevCards.length &&
+      currentCards.length >= 2 &&
+      currentCards.every((card) => prevCards.includes(card)) &&
+      currentCards.some((card, idx) => card !== prevCards[idx]);
+
+    if (isShuffle) {
+      context.animation.animateShuffle(id);
+    }
+  }
+
   // Animate rotation changes for smooth exhaust/ready
   const currentRotation = visual.rotation; // Current rotation in radians
   const targetRotation = (obj._pos.r * Math.PI) / 180; // Target rotation in radians

@@ -258,6 +258,119 @@ export class AnimationManager {
   }
 
   /**
+   * Animate a shuffle effect (wobble + scale pulse)
+   *
+   * Performs a 4-stage shuffle animation that creates visible "shuffling" motion:
+   * 1. Wobble left + scale up
+   * 2. Wobble right + scale up more
+   * 3. Wobble left (smaller) + scale down slightly
+   * 4. Return to rest
+   *
+   * Total duration: ~360ms with 4 rapid wobbles
+   *
+   * @param visualId - ID of the visual to shuffle
+   * @param duration - Total duration in ms (default: 360ms)
+   * @param onComplete - Optional callback to execute when shuffle completes
+   */
+  animateShuffle(
+    visualId: string,
+    duration = 360,
+    onComplete?: () => void,
+  ): void {
+    const stageDuration = duration / 4; // Each stage gets 1/4 of total time
+    const degToRad = Math.PI / 180;
+
+    // Get current visual rotation for smooth starting point
+    const allVisuals = this.objectVisuals;
+    const visual = allVisuals.get(visualId);
+    const startRotation = visual ? visual.rotation : 0;
+
+    // Stage 1: Wobble left + scale up
+    this.animate({
+      visualId,
+      type: 'rotation',
+      from: startRotation,
+      to: startRotation + -8 * degToRad,
+      duration: stageDuration,
+      easing: Easing.easeIn,
+      stage: 'shuffle-1-rot',
+      onComplete: () => {
+        // Stage 2: Wobble right
+        this.animate({
+          visualId,
+          type: 'rotation',
+          from: startRotation + -8 * degToRad,
+          to: startRotation + 10 * degToRad,
+          duration: stageDuration,
+          easing: Easing.linear,
+          stage: 'shuffle-2-rot',
+          onComplete: () => {
+            // Stage 3: Wobble left (smaller)
+            this.animate({
+              visualId,
+              type: 'rotation',
+              from: startRotation + 10 * degToRad,
+              to: startRotation + -5 * degToRad,
+              duration: stageDuration,
+              easing: Easing.linear,
+              stage: 'shuffle-3-rot',
+              onComplete: () => {
+                // Stage 4: Return to rest
+                this.animate({
+                  visualId,
+                  type: 'rotation',
+                  from: startRotation + -5 * degToRad,
+                  to: startRotation,
+                  duration: stageDuration,
+                  easing: Easing.easeOut,
+                  stage: 'shuffle-4-rot',
+                  onComplete,
+                });
+                this.animate({
+                  visualId,
+                  type: 'scale',
+                  from: 1.03,
+                  to: 1.0,
+                  duration: stageDuration,
+                  easing: Easing.easeOut,
+                  stage: 'shuffle-4-scale',
+                });
+              },
+            });
+            this.animate({
+              visualId,
+              type: 'scale',
+              from: 1.05,
+              to: 1.03,
+              duration: stageDuration,
+              easing: Easing.linear,
+              stage: 'shuffle-3-scale',
+            });
+          },
+        });
+        this.animate({
+          visualId,
+          type: 'scale',
+          from: 1.04,
+          to: 1.05,
+          duration: stageDuration,
+          easing: Easing.linear,
+          stage: 'shuffle-2-scale',
+        });
+      },
+    });
+    this.animate({
+      visualId,
+      type: 'scale',
+      from: 1.0,
+      to: 1.04,
+      duration: stageDuration,
+      easing: Easing.easeIn,
+      stage: 'shuffle-1-scale',
+    });
+  }
+
+  /**
    * Start the ticker for animation updates
    */
   private startTicker(): void {

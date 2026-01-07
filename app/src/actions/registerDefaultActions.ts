@@ -1,6 +1,11 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS, VIEW_ACTIONS } from './types';
-import { flipCards, exhaustCards, resetToTestScene } from '../store/YjsActions';
+import {
+  flipCards,
+  exhaustCards,
+  resetToTestScene,
+  shuffleStack,
+} from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
@@ -63,14 +68,47 @@ export function registerDefaultActions(): void {
 
   // Object action: Stack operations (only for stacks)
   registry.register({
-    id: 'shuffle-deck',
-    label: 'Shuffle Deck',
+    id: 'shuffle-stack',
+    label: (ctx) =>
+      ctx.selection.count === 1
+        ? 'Shuffle Stack'
+        : `Shuffle ${ctx.selection.count} Stacks`,
     shortLabel: 'Shuffle',
-    icon: '🎲',
+    icon: '🔀',
+    shortcut: 'S',
     category: CARD_ACTIONS,
-    description: 'Shuffle all cards in the selected deck',
-    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
-    execute: () => console.log('Shuffle deck'),
+    description: 'Randomly shuffle all cards in selected stack(s)',
+    isAvailable: (ctx) => {
+      if (!ctx.selection.hasStacks || ctx.selection.count === 0) {
+        return false;
+      }
+
+      // Multiple stacks: always allow shuffle (even single-card stacks)
+      if (ctx.selection.count > 1) {
+        return true;
+      }
+
+      // Single stack: must have 2+ cards
+      const stackId = ctx.selection.ids[0];
+      const yMap = ctx.store.getObjectYMap(stackId);
+      if (!yMap) return false;
+
+      const cards = yMap.get('_cards');
+      return Array.isArray(cards) && cards.length >= 2;
+    },
+    execute: (ctx) => {
+      let shuffledCount = 0;
+
+      // Shuffle all selected stacks
+      for (const stackId of ctx.selection.ids) {
+        const success = shuffleStack(ctx.store, stackId);
+        if (success) {
+          shuffledCount++;
+        }
+      }
+
+      console.log(`Shuffled ${shuffledCount} stack(s)`);
+    },
   });
 
   registry.register({

@@ -267,6 +267,37 @@ function updateObjectVisual(
     (obj as { _faceUp: boolean })._faceUp !==
       (prevObj as { _faceUp: boolean })._faceUp;
 
+  // Detect shuffle BEFORE visual update to prevent destroying ghost rectangles
+  // Skip shuffle detection if flip is occurring (flip has its own animation)
+  const hasCards = '_cards' in obj && Array.isArray(obj._cards);
+  const prevHasCards =
+    prevObj && '_cards' in prevObj && Array.isArray(prevObj._cards);
+
+  let isShuffle = false;
+  if (hasCards && prevHasCards && !faceUpChanged) {
+    const currentCards = (obj as { _cards: string[] })._cards;
+    const prevCards = (prevObj as { _cards: string[] })._cards;
+
+    // Check if cards were shuffled (same set, different order)
+    isShuffle =
+      currentCards.length === prevCards.length &&
+      currentCards.length >= 2 &&
+      currentCards.every((card) => prevCards.includes(card)) &&
+      currentCards.some((card, idx) => card !== prevCards[idx]);
+
+    console.log('[SHUFFLE] Shuffle detection:', {
+      id,
+      isShuffle,
+      faceUpChanged,
+      currentCards: currentCards.slice(0, 3),
+      prevCards: prevCards.slice(0, 3),
+      lengthMatch: currentCards.length === prevCards.length,
+      hasTwoPlus: currentCards.length >= 2,
+      sameSet: currentCards.every((card) => prevCards.includes(card)),
+      differentOrder: currentCards.some((card, idx) => card !== prevCards[idx]),
+    });
+  }
+
   if (faceUpChanged) {
     // Animate flip: compress → update visual → expand
     const flipOnMidpoint = () => {
@@ -292,8 +323,36 @@ function updateObjectVisual(
     };
 
     context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
+  } else if (isShuffle) {
+    // Start shuffle animation WITHOUT updating visual first
+    // The animation will manage the visual entirely
+    console.log('[SHUFFLE] Starting shuffle animation without visual update', {
+      id,
+    });
+    context.animation.animateShuffle(id, undefined, () => {
+      // After shuffle completes, update visual to show new card order
+      console.log(
+        '[SHUFFLE] Animation complete, updating visual to show new card',
+        { id },
+      );
+      context.visual.updateVisualForObjectChange(id, context.sceneManager, {
+        isHovered,
+        isDragging,
+        isSelected,
+        preservePosition: isDragging,
+      });
+    });
   } else {
-    // No flip - just update visual immediately
+    // Skip visual update during shuffle animation to avoid destroying ghost rectangles
+    const isShuffling = context.animation.isShuffling(id);
+    if (isShuffling) {
+      console.log('[SHUFFLE] Skipping visual update during shuffle animation', {
+        id,
+      });
+      return;
+    }
+
+    // No flip or shuffle - just update visual immediately
     context.visual.updateVisualForObjectChange(id, context.sceneManager, {
       isHovered,
       isDragging,
@@ -301,27 +360,6 @@ function updateObjectVisual(
       preservePosition: isDragging, // Preserve position during drag to avoid flashing
       // No need to set preserveScale - defaults to false for normal scale
     });
-  }
-
-  // Detect shuffle: same cards, different order
-  const hasCards = '_cards' in obj && Array.isArray(obj._cards);
-  const prevHasCards =
-    prevObj && '_cards' in prevObj && Array.isArray(prevObj._cards);
-
-  if (hasCards && prevHasCards) {
-    const currentCards = (obj as { _cards: string[] })._cards;
-    const prevCards = (prevObj as { _cards: string[] })._cards;
-
-    // Check if cards were shuffled (same set, different order)
-    const isShuffle =
-      currentCards.length === prevCards.length &&
-      currentCards.length >= 2 &&
-      currentCards.every((card) => prevCards.includes(card)) &&
-      currentCards.some((card, idx) => card !== prevCards[idx]);
-
-    if (isShuffle) {
-      context.animation.animateShuffle(id);
-    }
   }
 
   // Animate rotation changes for smooth exhaust/ready
@@ -488,7 +526,26 @@ function createBaseShapeGraphic(
     isSelected,
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
-    onTextureLoaded: (_url: string) => {
+    onTextureLoaded: (url: string) => {
+      console.log('[SHUFFLE] onTextureLoaded callback fired:', {
+        objectId,
+        url,
+      });
+
+      // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
+      const isShuffling = context.animation.isShuffling(objectId);
+      if (isShuffling) {
+        console.log(
+          '[SHUFFLE] Skipping texture load re-render during shuffle animation',
+          { objectId },
+        );
+        return;
+      }
+
+      console.log('[SHUFFLE] Proceeding with texture load re-render', {
+        objectId,
+      });
+
       // Re-render this object when its texture finishes loading
       context.visual.updateVisualForObjectChange(
         objectId,

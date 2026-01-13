@@ -1,4 +1,6 @@
-import type { Application, Container } from 'pixi.js';
+import type { Application } from 'pixi.js';
+import { Container } from 'pixi.js';
+import { getShuffleAnimation } from '../animations/shuffle';
 
 /**
  * Animation type - what property to animate
@@ -23,6 +25,7 @@ export interface Animation {
   easing?: (t: number) => number; // easing function (0-1 input/output)
   onComplete?: () => void;
   stage?: string; // Optional stage identifier for multi-stage animations (e.g., "flip-compress", "flip-expand")
+  childLabel?: string; // Optional child label to animate specific child instead of root container (e.g., "background-3d")
 }
 
 /**
@@ -71,6 +74,21 @@ const animationUpdaters: Record<AnimationType, AnimationUpdater> = {
     const to = anim.to as { x: number; y: number };
     visual.x = from.x + (to.x - from.x) * progress;
     visual.y = from.y + (to.y - from.y) * progress;
+
+    // Debug shuffle position updates (only log at start, middle, end)
+    if (
+      anim.stage?.includes('shuffle') &&
+      (progress === 0 || Math.abs(progress - 0.5) < 0.05 || progress === 1)
+    ) {
+      console.log('[SHUFFLE] Position update:', {
+        label: visual.label,
+        stage: anim.stage,
+        progress: progress.toFixed(2),
+        x: visual.x.toFixed(1),
+        y: visual.y.toFixed(1),
+        uid: visual.uid,
+      });
+    }
   },
   alpha: (visual, anim, progress) => {
     const from = anim.from as number;
@@ -106,6 +124,7 @@ export class AnimationManager {
   private activeAnimations: Map<string, ActiveAnimation> = new Map();
   private tickerCallback: (() => void) | null = null;
   private isTickerActive = false;
+  private loggedFailures = new Set<string>(); // Track which animations we've logged failures for
 
   /**
    * Initialize the animation manager with PixiJS app and visual references
@@ -138,6 +157,17 @@ export class AnimationManager {
     const animKey = config.stage
       ? `${config.visualId}:${config.type}:${config.stage}`
       : `${config.visualId}:${config.type}`;
+
+    // Debug shuffle animations
+    if (animKey.includes('shuffle')) {
+      console.log('[SHUFFLE] Registering shuffle animation:', {
+        animKey,
+        visualId: config.visualId,
+        type: config.type,
+        stage: config.stage,
+        childLabel: config.childLabel,
+      });
+    }
 
     // Add animation
     this.activeAnimations.set(animKey, {
@@ -207,6 +237,26 @@ export class AnimationManager {
   }
 
   /**
+   * Check if a shuffle animation is currently running for a visual
+   */
+  isShuffling(visualId: string): boolean {
+    const activeKeys = Array.from(this.activeAnimations.keys());
+    const shuffleKeys = activeKeys.filter(
+      (key) => key.startsWith(`${visualId}:`) && key.includes('shuffle'),
+    );
+    const isShuffling = shuffleKeys.length > 0;
+
+    console.log('[SHUFFLE] isShuffling check:', {
+      visualId,
+      isShuffling,
+      shuffleKeys,
+      allActiveKeys: activeKeys,
+    });
+
+    return isShuffling;
+  }
+
+  /**
    * Animate a flip effect (horizontal squash and stretch)
    *
    * Performs a two-stage flip animation:
@@ -258,116 +308,24 @@ export class AnimationManager {
   }
 
   /**
-   * Animate a shuffle effect (wobble + scale pulse)
+   * Animate a shuffle effect
    *
-   * Performs a 4-stage shuffle animation that creates visible "shuffling" motion:
-   * 1. Wobble left + scale up
-   * 2. Wobble right + scale up more
-   * 3. Wobble left (smaller) + scale down slightly
-   * 4. Return to rest
+   * Uses the currently configured shuffle animation variant.
+   * See app/src/renderer/animations/shuffle/index.ts to change the animation style.
    *
-   * Total duration: ~360ms with 4 rapid wobbles
+   * Available variants: wobble (default), spin, burst
    *
    * @param visualId - ID of the visual to shuffle
-   * @param duration - Total duration in ms (default: 360ms)
+   * @param duration - Total duration in ms (default varies by animation)
    * @param onComplete - Optional callback to execute when shuffle completes
    */
   animateShuffle(
     visualId: string,
-    duration = 360,
+    duration?: number,
     onComplete?: () => void,
   ): void {
-    const stageDuration = duration / 4; // Each stage gets 1/4 of total time
-    const degToRad = Math.PI / 180;
-
-    // Get current visual rotation for smooth starting point
-    const allVisuals = this.objectVisuals;
-    const visual = allVisuals.get(visualId);
-    const startRotation = visual ? visual.rotation : 0;
-
-    // Stage 1: Wobble left + scale up
-    this.animate({
-      visualId,
-      type: 'rotation',
-      from: startRotation,
-      to: startRotation + -8 * degToRad,
-      duration: stageDuration,
-      easing: Easing.easeIn,
-      stage: 'shuffle-1-rot',
-      onComplete: () => {
-        // Stage 2: Wobble right
-        this.animate({
-          visualId,
-          type: 'rotation',
-          from: startRotation + -8 * degToRad,
-          to: startRotation + 10 * degToRad,
-          duration: stageDuration,
-          easing: Easing.linear,
-          stage: 'shuffle-2-rot',
-          onComplete: () => {
-            // Stage 3: Wobble left (smaller)
-            this.animate({
-              visualId,
-              type: 'rotation',
-              from: startRotation + 10 * degToRad,
-              to: startRotation + -5 * degToRad,
-              duration: stageDuration,
-              easing: Easing.linear,
-              stage: 'shuffle-3-rot',
-              onComplete: () => {
-                // Stage 4: Return to rest
-                this.animate({
-                  visualId,
-                  type: 'rotation',
-                  from: startRotation + -5 * degToRad,
-                  to: startRotation,
-                  duration: stageDuration,
-                  easing: Easing.easeOut,
-                  stage: 'shuffle-4-rot',
-                  onComplete,
-                });
-                this.animate({
-                  visualId,
-                  type: 'scale',
-                  from: 1.03,
-                  to: 1.0,
-                  duration: stageDuration,
-                  easing: Easing.easeOut,
-                  stage: 'shuffle-4-scale',
-                });
-              },
-            });
-            this.animate({
-              visualId,
-              type: 'scale',
-              from: 1.05,
-              to: 1.03,
-              duration: stageDuration,
-              easing: Easing.linear,
-              stage: 'shuffle-3-scale',
-            });
-          },
-        });
-        this.animate({
-          visualId,
-          type: 'scale',
-          from: 1.04,
-          to: 1.05,
-          duration: stageDuration,
-          easing: Easing.linear,
-          stage: 'shuffle-2-scale',
-        });
-      },
-    });
-    this.animate({
-      visualId,
-      type: 'scale',
-      from: 1.0,
-      to: 1.04,
-      duration: stageDuration,
-      easing: Easing.easeIn,
-      stage: 'shuffle-1-scale',
-    });
+    const shuffleAnimation = getShuffleAnimation();
+    shuffleAnimation(this, visualId, this.objectVisuals, duration, onComplete);
   }
 
   /**
@@ -396,6 +354,16 @@ export class AnimationManager {
           if (!visual) {
             completedAnimations.push(key);
             continue;
+          }
+
+          // Debug: Log container UID for shuffle animations to track if container changes
+          if (key.includes('shuffle') && anim.childLabel) {
+            console.log('[SHUFFLE] Ticker looking up visual:', {
+              key,
+              visualId: anim.visualId,
+              visualUID: visual.uid,
+              childLabel: anim.childLabel,
+            });
           }
 
           // Calculate progress (0 to 1)
@@ -427,7 +395,19 @@ export class AnimationManager {
 
         // Remove completed animations AFTER callbacks (which may add new animations)
         for (const key of completedAnimations) {
+          // Debug shuffle animation completion
+          if (key.includes('shuffle')) {
+            console.log('[SHUFFLE] Removing completed shuffle animation:', {
+              key,
+              remainingKeys: Array.from(this.activeAnimations.keys()),
+            });
+          }
           this.activeAnimations.delete(key);
+        }
+
+        // Clear logged failures when all animations complete (allow re-logging on next shuffle)
+        if (this.activeAnimations.size === 0) {
+          this.loggedFailures.clear();
         }
 
         // Always render to show animation updates
@@ -474,9 +454,56 @@ export class AnimationManager {
     anim: Animation,
     progress: number,
   ): void {
+    // If childLabel is specified, animate the child instead of the root container
+    let target: Container = visual;
+    if (anim.childLabel) {
+      // Use deep=true to search recursively through grandchildren
+      const child = visual.getChildByLabel(anim.childLabel, true);
+
+      // Debug: Log lookup attempt for shuffle animations
+      if (anim.stage?.includes('shuffle')) {
+        console.log('[SHUFFLE] Child lookup attempt:', {
+          childLabel: anim.childLabel,
+          stage: anim.stage,
+          visualUID: visual.uid,
+          found: !!child,
+          childUID: child?.uid,
+          isContainer: child instanceof Container,
+          visualChildCount: visual.children.length,
+        });
+      }
+
+      if (child && child instanceof Container) {
+        target = child;
+      } else {
+        // Child not found or not a Container - skip this animation frame
+        // Only log once per animation to avoid spam
+        const animKey = anim.stage
+          ? `${anim.childLabel}:${anim.stage}`
+          : anim.childLabel;
+        if (
+          anim.stage?.includes('shuffle') &&
+          !this.loggedFailures.has(animKey)
+        ) {
+          this.loggedFailures.add(animKey);
+          console.log('[SHUFFLE] Child lookup FAILED - showing all children:', {
+            childLabel: anim.childLabel,
+            stage: anim.stage,
+            visualUID: visual.uid,
+            visualChildren: visual.children.map((c) => ({
+              label: c.label,
+              uid: c.uid,
+              type: c.constructor.name,
+            })),
+          });
+        }
+        return;
+      }
+    }
+
     const updater = animationUpdaters[anim.type];
     if (updater) {
-      updater(visual, anim, progress);
+      updater(target, anim, progress);
     }
   }
 

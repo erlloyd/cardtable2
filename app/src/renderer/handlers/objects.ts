@@ -284,18 +284,6 @@ function updateObjectVisual(
       currentCards.length >= 2 &&
       currentCards.every((card) => prevCards.includes(card)) &&
       currentCards.some((card, idx) => card !== prevCards[idx]);
-
-    console.log('[SHUFFLE] Shuffle detection:', {
-      id,
-      isShuffle,
-      faceUpChanged,
-      currentCards: currentCards.slice(0, 3),
-      prevCards: prevCards.slice(0, 3),
-      lengthMatch: currentCards.length === prevCards.length,
-      hasTwoPlus: currentCards.length >= 2,
-      sameSet: currentCards.every((card) => prevCards.includes(card)),
-      differentOrder: currentCards.some((card, idx) => card !== prevCards[idx]),
-    });
   }
 
   if (faceUpChanged) {
@@ -326,15 +314,8 @@ function updateObjectVisual(
   } else if (isShuffle) {
     // Start shuffle animation WITHOUT updating visual first
     // The animation will manage the visual entirely
-    console.log('[SHUFFLE] Starting shuffle animation without visual update', {
-      id,
-    });
     context.animation.animateShuffle(id, undefined, () => {
       // After shuffle completes, update visual to show new card order
-      console.log(
-        '[SHUFFLE] Animation complete, updating visual to show new card',
-        { id },
-      );
       context.visual.updateVisualForObjectChange(id, context.sceneManager, {
         isHovered,
         isDragging,
@@ -346,9 +327,6 @@ function updateObjectVisual(
     // Skip visual update during shuffle animation to avoid destroying ghost rectangles
     const isShuffling = context.animation.isShuffling(id);
     if (isShuffling) {
-      console.log('[SHUFFLE] Skipping visual update during shuffle animation', {
-        id,
-      });
       return;
     }
 
@@ -526,25 +504,12 @@ function createBaseShapeGraphic(
     isSelected,
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
-    onTextureLoaded: (url: string) => {
-      console.log('[SHUFFLE] onTextureLoaded callback fired:', {
-        objectId,
-        url,
-      });
-
+    onTextureLoaded: (_url: string) => {
       // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
       const isShuffling = context.animation.isShuffling(objectId);
       if (isShuffling) {
-        console.log(
-          '[SHUFFLE] Skipping texture load re-render during shuffle animation',
-          { objectId },
-        );
         return;
       }
-
-      console.log('[SHUFFLE] Proceeding with texture load re-render', {
-        objectId,
-      });
 
       // Re-render this object when its texture finishes loading
       context.visual.updateVisualForObjectChange(

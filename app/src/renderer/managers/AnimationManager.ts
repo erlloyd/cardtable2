@@ -74,21 +74,6 @@ const animationUpdaters: Record<AnimationType, AnimationUpdater> = {
     const to = anim.to as { x: number; y: number };
     visual.x = from.x + (to.x - from.x) * progress;
     visual.y = from.y + (to.y - from.y) * progress;
-
-    // Debug shuffle position updates (only log at start, middle, end)
-    if (
-      anim.stage?.includes('shuffle') &&
-      (progress === 0 || Math.abs(progress - 0.5) < 0.05 || progress === 1)
-    ) {
-      console.log('[SHUFFLE] Position update:', {
-        label: visual.label,
-        stage: anim.stage,
-        progress: progress.toFixed(2),
-        x: visual.x.toFixed(1),
-        y: visual.y.toFixed(1),
-        uid: visual.uid,
-      });
-    }
   },
   alpha: (visual, anim, progress) => {
     const from = anim.from as number;
@@ -124,7 +109,6 @@ export class AnimationManager {
   private activeAnimations: Map<string, ActiveAnimation> = new Map();
   private tickerCallback: (() => void) | null = null;
   private isTickerActive = false;
-  private loggedFailures = new Set<string>(); // Track which animations we've logged failures for
 
   /**
    * Initialize the animation manager with PixiJS app and visual references
@@ -157,17 +141,6 @@ export class AnimationManager {
     const animKey = config.stage
       ? `${config.visualId}:${config.type}:${config.stage}`
       : `${config.visualId}:${config.type}`;
-
-    // Debug shuffle animations
-    if (animKey.includes('shuffle')) {
-      console.log('[SHUFFLE] Registering shuffle animation:', {
-        animKey,
-        visualId: config.visualId,
-        type: config.type,
-        stage: config.stage,
-        childLabel: config.childLabel,
-      });
-    }
 
     // Add animation
     this.activeAnimations.set(animKey, {
@@ -244,16 +217,7 @@ export class AnimationManager {
     const shuffleKeys = activeKeys.filter(
       (key) => key.startsWith(`${visualId}:`) && key.includes('shuffle'),
     );
-    const isShuffling = shuffleKeys.length > 0;
-
-    console.log('[SHUFFLE] isShuffling check:', {
-      visualId,
-      isShuffling,
-      shuffleKeys,
-      allActiveKeys: activeKeys,
-    });
-
-    return isShuffling;
+    return shuffleKeys.length > 0;
   }
 
   /**
@@ -356,16 +320,6 @@ export class AnimationManager {
             continue;
           }
 
-          // Debug: Log container UID for shuffle animations to track if container changes
-          if (key.includes('shuffle') && anim.childLabel) {
-            console.log('[SHUFFLE] Ticker looking up visual:', {
-              key,
-              visualId: anim.visualId,
-              visualUID: visual.uid,
-              childLabel: anim.childLabel,
-            });
-          }
-
           // Calculate progress (0 to 1)
           const elapsed = now - anim.startTime;
           let progress = Math.min(elapsed / anim.duration, 1);
@@ -395,19 +349,7 @@ export class AnimationManager {
 
         // Remove completed animations AFTER callbacks (which may add new animations)
         for (const key of completedAnimations) {
-          // Debug shuffle animation completion
-          if (key.includes('shuffle')) {
-            console.log('[SHUFFLE] Removing completed shuffle animation:', {
-              key,
-              remainingKeys: Array.from(this.activeAnimations.keys()),
-            });
-          }
           this.activeAnimations.delete(key);
-        }
-
-        // Clear logged failures when all animations complete (allow re-logging on next shuffle)
-        if (this.activeAnimations.size === 0) {
-          this.loggedFailures.clear();
         }
 
         // Always render to show animation updates
@@ -460,43 +402,10 @@ export class AnimationManager {
       // Use deep=true to search recursively through grandchildren
       const child = visual.getChildByLabel(anim.childLabel, true);
 
-      // Debug: Log lookup attempt for shuffle animations
-      if (anim.stage?.includes('shuffle')) {
-        console.log('[SHUFFLE] Child lookup attempt:', {
-          childLabel: anim.childLabel,
-          stage: anim.stage,
-          visualUID: visual.uid,
-          found: !!child,
-          childUID: child?.uid,
-          isContainer: child instanceof Container,
-          visualChildCount: visual.children.length,
-        });
-      }
-
       if (child && child instanceof Container) {
         target = child;
       } else {
         // Child not found or not a Container - skip this animation frame
-        // Only log once per animation to avoid spam
-        const animKey = anim.stage
-          ? `${anim.childLabel}:${anim.stage}`
-          : anim.childLabel;
-        if (
-          anim.stage?.includes('shuffle') &&
-          !this.loggedFailures.has(animKey)
-        ) {
-          this.loggedFailures.add(animKey);
-          console.log('[SHUFFLE] Child lookup FAILED - showing all children:', {
-            childLabel: anim.childLabel,
-            stage: anim.stage,
-            visualUID: visual.uid,
-            visualChildren: visual.children.map((c) => ({
-              label: c.label,
-              uid: c.uid,
-              type: c.constructor.name,
-            })),
-          });
-        }
         return;
       }
     }

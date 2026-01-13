@@ -40,11 +40,6 @@ export function animateShuffleBurstBackground(
   duration = 400,
   onComplete?: () => void,
 ): void {
-  console.log('[SHUFFLE] animateShuffleBurstBackground starting:', {
-    visualId,
-    duration,
-  });
-
   const stageDuration = duration / 4;
 
   // Verify the visual exists and has the background-3d child
@@ -53,58 +48,21 @@ export function animateShuffleBurstBackground(
   const background = container?.getChildByLabel('background-3d', true);
 
   if (!background || !container) {
-    console.log('[SHUFFLE] Skipping animation - no background or container');
     // No background (single card stack or minimal mode) - skip animation
     onComplete?.();
     return;
   }
 
-  // Debug: Check initial children
-  console.log('[SHUFFLE] Before adding ghosts:', {
-    visualId,
-    containerUID: container.uid,
-    childrenCount: container.children.length,
-    childrenLabels: container.children.map((c) => c.label || '(no label)'),
-  });
-
   // Create temporary ghost rectangles for extra shuffle effect
   const ghost1 = createGhostRectangle('shuffle-ghost-1', 0.6);
   const ghost2 = createGhostRectangle('shuffle-ghost-2', 0.5);
 
-  console.log('[SHUFFLE] Created ghosts:', {
-    ghost1UID: ghost1.uid,
-    ghost1Label: ghost1.label,
-    ghost2UID: ghost2.uid,
-    ghost2Label: ghost2.label,
-  });
-
   container.addChild(ghost1);
   container.addChild(ghost2);
-
-  // Debug: Check children after adding
-  console.log('[SHUFFLE] After adding ghosts:', {
-    childrenCount: container.children.length,
-    childrenLabels: container.children.map((c) => c.label || '(no label)'),
-    childrenUIDs: container.children.map((c) => c.uid),
-  });
 
   // Verify ghosts were added successfully (defensive check for race conditions)
   const verifyGhost1 = container.getChildByLabel('shuffle-ghost-1', true);
   const verifyGhost2 = container.getChildByLabel('shuffle-ghost-2', true);
-
-  console.log('[SHUFFLE] Verification results:', {
-    verifyGhost1Found: !!verifyGhost1,
-    verifyGhost1UID: verifyGhost1?.uid,
-    verifyGhost2Found: !!verifyGhost2,
-    verifyGhost2UID: verifyGhost2?.uid,
-  });
-
-  if (!verifyGhost1 || !verifyGhost2) {
-    console.warn(
-      '[SHUFFLE] Failed to add ghost rectangles, skipping ghost animations',
-      { verifyGhost1: !!verifyGhost1, verifyGhost2: !!verifyGhost2 },
-    );
-  }
 
   // The background container itself is at position (0, 0)
   // (The offset is baked into the rectangle's drawing coordinates)

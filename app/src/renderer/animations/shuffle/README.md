@@ -15,9 +15,11 @@ export const ACTIVE_SHUFFLE_ANIMATION: ShuffleAnimationType = 'wobble'; // Chang
 **Currently Active:** `burst-background-wobble` (see `index.ts:ACTIVE_SHUFFLE_ANIMATION`)
 
 ### 1. `wobble`
+
 **File:** `wobble.ts`
 
 Simple wobble + scale pulse animation.
+
 - **Duration:** 360ms
 - **Feel:** Subtle shake that indicates shuffling is happening
 - **Visual:** Stack wobbles left/right with scale pulse
@@ -25,9 +27,11 @@ Simple wobble + scale pulse animation.
 - **Cons:** Doesn't convey individual cards moving
 
 ### 2. `spin`
+
 **File:** `spin.ts`
 
 Face card spins rapidly (5 full rotations) while wobbling.
+
 - **Duration:** 400ms
 - **Feel:** Dynamic spinning motion
 - **Visual:** Card rotates 1800° (5 × 360°) during shuffle
@@ -35,9 +39,11 @@ Face card spins rapidly (5 full rotations) while wobbling.
 - **Cons:** Can be disorienting, doesn't show individual cards
 
 ### 3. `burst`
+
 **File:** `burst.ts`
 
 Cards "burst out" and back in with motion blur effect.
+
 - **Duration:** 450ms
 - **Feel:** Cards scattering and regathering
 - **Visual:** Rapid position changes with alpha/scale creating motion blur
@@ -76,32 +82,38 @@ The `burst` animation is a simplified version using position + alpha. A more adv
 Here are more animation concepts that could be implemented:
 
 ### Riffle Shuffle
+
 - Split the visual into two halves
 - Interleave them back together
 - Mimics real-world riffle shuffle technique
 
 ### Spread and Gather
+
 - Cards fan out horizontally in an arc
 - Brief pause
 - Cards snap back together
 - Creates a "checking the cards" feel
 
 ### Casino Dealer
+
 - Quick horizontal slides (left-right-left)
 - Slight vertical bounce
 - Professional, fast-paced feel
 
 ### Blur Burst
+
 - Rapid rotation with scale changes
 - Add motion blur via alpha stepping
 - Creates a "speed" impression
 
 ### Fountain Shuffle
+
 - Cards arc upward and downward
 - Like a fountain of cards
 - Requires vertical position animation
 
 ### Shake and Settle
+
 - Violent shaking (high frequency, small amplitude)
 - Gradually settles down
 - Like shaking a bag of cards

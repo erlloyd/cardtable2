@@ -9,6 +9,7 @@ export interface TestAPI {
     visualId?: string,
     animationType?: string,
   ) => Promise<boolean>;
+  waitForAnimationsComplete: (timeout?: number) => Promise<void>;
 }
 
 /**
@@ -96,6 +97,49 @@ export function useTestAPI(
     [renderer, isCanvasInitialized, animationStateCallbacks],
   );
 
+  // Wait for all animations to complete
+  const waitForAnimationsComplete = useCallback(
+    (timeout = 5000): Promise<void> => {
+      return new Promise<void>((resolve, reject) => {
+        const startTime = Date.now();
+        const pollInterval = 50; // Check every 50ms
+
+        const poll = async () => {
+          const isAnimating = await checkAnimationState();
+
+          if (!isAnimating) {
+            console.log('[useTestAPI] All animations complete');
+            resolve();
+            return;
+          }
+
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= timeout) {
+            console.warn(
+              '[useTestAPI] waitForAnimationsComplete timed out after',
+              elapsed,
+              'ms',
+            );
+            reject(
+              new Error(
+                `Animations did not complete within ${timeout}ms timeout`,
+              ),
+            );
+            return;
+          }
+
+          // Continue polling
+          setTimeout(() => {
+            void poll();
+          }, pollInterval);
+        };
+
+        void poll();
+      });
+    },
+    [checkAnimationState],
+  );
+
   // Expose test API in dev mode only
   useEffect(() => {
     if (import.meta.env.DEV && showDebugUI) {
@@ -103,6 +147,7 @@ export function useTestAPI(
         waitForRenderer,
         waitForSelectionSettled,
         checkAnimationState,
+        waitForAnimationsComplete,
       };
       return () => {
         delete window.__TEST_BOARD__;
@@ -113,11 +158,13 @@ export function useTestAPI(
     waitForRenderer,
     waitForSelectionSettled,
     checkAnimationState,
+    waitForAnimationsComplete,
   ]);
 
   return {
     waitForRenderer,
     waitForSelectionSettled,
     checkAnimationState,
+    waitForAnimationsComplete,
   };
 }

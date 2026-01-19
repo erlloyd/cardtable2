@@ -22,6 +22,7 @@ declare global {
         visualId?: string,
         animationType?: string,
       ) => Promise<boolean>;
+      waitForAnimationsComplete: (timeout?: number) => Promise<void>;
     };
   }
 }

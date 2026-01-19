@@ -247,6 +247,13 @@ export class AnimationManager {
   }
 
   /**
+   * Check if any animations are currently active
+   */
+  hasActiveAnimations(): boolean {
+    return this.activeAnimations.size > 0;
+  }
+
+  /**
    * Animate a flip effect (horizontal squash and stretch)
    *
    * Performs a two-stage flip animation:

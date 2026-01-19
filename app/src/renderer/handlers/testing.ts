@@ -182,8 +182,9 @@ export function handleCheckAnimationState(
     // Check any animation on specific visual
     isAnimating = context.animation.isAnimating(visualId);
   } else {
-    // Check if ANY animation is running (check ticker)
-    isAnimating = context.app.ticker.started;
+    // Check if ANY animation is running (check AnimationManager, not ticker)
+    // The ticker can remain started for hover animations even when target animations complete
+    isAnimating = context.animation.hasActiveAnimations();
   }
 
   console.log('[RendererCore] Animation state check:', {

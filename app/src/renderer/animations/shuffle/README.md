@@ -12,14 +12,16 @@ export const ACTIVE_SHUFFLE_ANIMATION: ShuffleAnimationType = 'wobble'; // Chang
 
 ## Available Animations
 
-### 1. `wobble` (Default)
+**Currently Active:** `burst-background-wobble` (see `index.ts:ACTIVE_SHUFFLE_ANIMATION`)
+
+### 1. `wobble`
 **File:** `wobble.ts`
 
 Simple wobble + scale pulse animation.
 - **Duration:** 360ms
 - **Feel:** Subtle shake that indicates shuffling is happening
 - **Visual:** Stack wobbles left/right with scale pulse
-- **Pros:** Lightweight, doesn't obscure the card
+- **Pros:** Lightweight, doesn't obscure the card, fallback for errors
 - **Cons:** Doesn't convey individual cards moving
 
 ### 2. `spin`

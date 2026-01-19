@@ -10,9 +10,9 @@
  * 1. Wobble left + start spinning (0° → 360° × 2)
  * 2. Wobble right + continue spinning (720° → 1080°)
  * 3. Wobble left + slow spin (1080° → 1440°)
- * 4. Return to rest + final spin (1440° → 1800° → 0°)
+ * 4. Return to rest (1440° → startRotation)
  *
- * Total: 5 full rotations (1800°) over ~400ms
+ * Total: ~4.5 rotations (1620°) over ~400ms - completes 90% of spin cycle then returns to original rotation
  */
 
 import type { AnimationManager } from '../../managers/AnimationManager';

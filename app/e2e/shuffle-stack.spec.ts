@@ -87,7 +87,8 @@ test.describe('Shuffle Stack E2E', () => {
   test('should shuffle single stack via keyboard shortcut S', async ({
     page,
   }) => {
-    // Find a stack with 2+ cards (stack index 1 has 2 cards, index 2 has 3 cards)
+    // Find a stack with 5+ cards for reliable order-change detection (99.2% probability)
+    // Test scene creates stacks with [1, 2, 3, 5, 1] cards - we want the 5-card stack
     const stackData = await page.evaluate(() => {
       const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
       const canvas = document.querySelector('canvas');
@@ -99,10 +100,10 @@ test.describe('Shuffle Stack E2E', () => {
 
       const objects = Array.from(__TEST_STORE__.getAllObjects().entries());
 
-      // Find a stack with 2+ cards
+      // Find a stack with 5+ cards (99.2% probability of order change)
       const multiCardStack = objects.find(
         ([, obj]) =>
-          obj._kind === 'stack' && obj._cards && obj._cards.length >= 2,
+          obj._kind === 'stack' && obj._cards && obj._cards.length >= 5,
       );
 
       if (!multiCardStack) return null;
@@ -121,66 +122,76 @@ test.describe('Shuffle Stack E2E', () => {
     });
 
     if (!stackData) {
-      throw new Error('Failed to find multi-card stack');
+      throw new Error('Failed to find stack with 5+ cards');
     }
 
     const stackPos: StackPosition = stackData.stackPos;
     const stackId: string = stackData.stackId;
     const originalCards: string[] = stackData.originalCards;
 
-    // Select the stack
-    await page.mouse.click(stackPos.x, stackPos.y);
+    // Retry shuffle until order changes (handles 0.8% statistical edge case)
+    const maxRetries = 5;
+    let result;
+    let orderChanged = false;
 
-    // Wait for selection to settle
-    await page.evaluate(async () => {
-      await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
-    });
+    for (let retry = 0; retry < maxRetries && !orderChanged; retry++) {
+      // Select the stack
+      await page.mouse.click(stackPos.x, stackPos.y);
 
-    // Press 'S' to shuffle
-    await page.keyboard.press('s');
+      // Wait for selection to settle
+      await page.evaluate(async () => {
+        await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
+      });
 
-    // Wait for renderer to process shuffle
-    await page.evaluate(async () => {
-      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
-    });
+      // Press 'S' to shuffle
+      await page.keyboard.press('s');
 
-    // Wait for animation to complete
-    await page.evaluate(async () => {
-      await (globalThis as any).__TEST_BOARD__.waitForAnimationsComplete();
-    });
+      // Wait for renderer to process shuffle
+      await page.evaluate(async () => {
+        await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+      });
 
-    // Verify: cards should be shuffled (same set, different order)
-    const result = await page.evaluate(
-      (data: { stackId: string; originalCards: string[] }) => {
-        const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
-        const stackYMap = __TEST_STORE__.getObjectYMap(data.stackId);
-        const cards = stackYMap ? stackYMap.get('_cards') : null;
+      // Wait for animation to complete
+      await page.evaluate(async () => {
+        await (globalThis as any).__TEST_BOARD__.waitForAnimationsComplete();
+      });
 
-        // Check if cards are the same set
-        const sameSet =
-          cards &&
-          cards.length === data.originalCards.length &&
-          cards.every((card: string) => data.originalCards.includes(card));
+      // Verify: cards should be shuffled (same set, different order)
+      result = await page.evaluate(
+        (data: { stackId: string; originalCards: string[] }) => {
+          const __TEST_STORE__ = (globalThis as any)
+            .__TEST_STORE__ as TestStore;
+          const stackYMap = __TEST_STORE__.getObjectYMap(data.stackId);
+          const cards = stackYMap ? stackYMap.get('_cards') : null;
 
-        // Check if order changed
-        const orderChanged = cards?.some(
-          (card: string, idx: number) => card !== data.originalCards[idx],
-        );
+          // Check if cards are the same set
+          const sameSet =
+            cards &&
+            cards.length === data.originalCards.length &&
+            cards.every((card: string) => data.originalCards.includes(card));
 
-        return {
-          cardCount: cards?.length ?? 0,
-          sameSet,
-          orderChanged,
-          cards,
-        };
-      },
-      { stackId, originalCards },
-    );
+          // Check if order changed
+          const orderChanged = cards?.some(
+            (card: string, idx: number) => card !== data.originalCards[idx],
+          );
+
+          return {
+            cardCount: cards?.length ?? 0,
+            sameSet,
+            orderChanged,
+            cards,
+          };
+        },
+        { stackId, originalCards },
+      );
+
+      orderChanged = result.orderChanged;
+    }
 
     expect(result.sameSet).toBe(true);
     expect(result.cardCount).toBe(originalCards.length);
-    // Order should have changed (statistically very likely)
-    expect(result.orderChanged).toBe(true);
+    // Order should have changed after retries
+    expect(orderChanged).toBe(true);
   });
 
   test('should play shuffle animation', async ({ page }) => {

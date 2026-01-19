@@ -2369,7 +2369,7 @@ describe('shuffleStack', () => {
     const originalObj = toTableObject(store.getObjectYMap(stackId)!);
     const originalCards =
       originalObj && originalObj._kind === ObjectKind.Stack
-        ? [...(originalObj as import('@cardtable2/shared').StackObject)._cards]
+        ? [...(originalObj as StackObject)._cards]
         : [];
 
     // Shuffle
@@ -2390,7 +2390,7 @@ describe('shuffleStack', () => {
 
     // Verify: Stack-specific properties and cards
     if (shuffledObj && shuffledObj._kind === ObjectKind.Stack) {
-      const stackObj = shuffledObj as import('@cardtable2/shared').StackObject;
+      const stackObj = shuffledObj as StackObject;
       expect(stackObj._faceUp).toBe(false);
       const shuffledCards = stackObj._cards;
       expect(shuffledCards.length).toBe(3);

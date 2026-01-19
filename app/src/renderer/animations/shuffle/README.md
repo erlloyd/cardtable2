@@ -50,6 +50,42 @@ Cards "burst out" and back in with motion blur effect.
 - **Pros:** Suggests cards moving around
 - **Cons:** Simplified version (see "Future Enhancements")
 
+### 4. `burst-ghost`
+
+**File:** `burst-ghost.ts`
+
+Variant of `burst` that emphasizes motion with ghosted card visuals.
+
+- **Duration:** 450ms
+- **Feel:** Lively scatter with trailing impressions of card motion
+- **Visual:** Cards appear to leave faint "ghost" copies as they move
+- **Pros:** Stronger sense of speed and direction
+- **Cons:** Slightly busier visual, can be more distracting
+
+### 5. `burst-background`
+
+**File:** `burst-background.ts`
+
+Background-focused burst effect to highlight shuffling without moving the main card as much.
+
+- **Duration:** 450ms
+- **Feel:** Energetic shuffle implied through background motion
+- **Visual:** Emphasizes background/stack movement rather than individual cards
+- **Pros:** Keeps primary card more readable while still conveying action
+- **Cons:** Motion may feel less literal than moving cards
+
+### 6. `burst-background-wobble`
+
+**File:** `burst-background-wobble.ts`
+
+Combines the background burst effect with a wobble on the card stack.
+
+- **Duration:** 450ms
+- **Feel:** High-energy shuffle with both background and stack motion
+- **Visual:** Background burst plus subtle stack wobble/scale for added impact
+- **Pros:** Most dynamic of the burst variants, matches current default setting
+- **Cons:** Heavier visual motion, may be too intense for some users
+
 ## Testing Workflow
 
 1. Change `ACTIVE_SHUFFLE_ANIMATION` in `index.ts`

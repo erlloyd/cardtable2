@@ -8,6 +8,9 @@
  * - 'wobble': Simple wobble + scale (original)
  * - 'spin': Face card spins rapidly (CardTable v1 style)
  * - 'burst': Cards burst out and in with motion blur effect
+ * - 'burst-ghost': Burst with fading "ghost" trails
+ * - 'burst-background': Background-focused burst effect
+ * - 'burst-background-wobble': Background burst combined with wobble
  *
  * To add more variants:
  * 1. Create a new file in this directory (e.g., riffle.ts)

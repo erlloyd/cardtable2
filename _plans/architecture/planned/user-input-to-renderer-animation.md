@@ -10,14 +10,14 @@ We have a brittle "detection" approach for triggering renderer animations in res
 3. **Store sync**: Board receives `objects-updated` message
 4. **Renderer receives update**: Gets new object state
 5. **Detection logic**: Renderer compares old vs new state to "guess" what happened
-   - Flip detection: Check if `_faceUp` changed (line 260-294 in `objects.ts`)
-   - Shuffle detection: Check if cards same set but different order (line 306-338 in `objects.ts`)
+   - Flip detection: Check if `_faceUp` changed (in `handleObjectsUpdated` in `objects.ts`)
+   - Shuffle detection: Check if cards same set but different order (in `handleObjectsUpdated` in `objects.ts`)
 6. **Animation triggers**: If detection passes, play animation
 
 ### Problems with Detection
 
 1. **Fragile logic**: Shuffle was triggering on flip because flip also reorders internal card representation
-   - Quick fix: Skip shuffle detection when `faceUpChanged` (line 312)
+   - Quick fix: Skip shuffle detection when `faceUpChanged` (in shuffle detection logic)
    - But this is a band-aid on a fundamental architecture issue
 
 2. **Ambiguous state changes**: Hard to distinguish intentional actions from incidental state changes
@@ -177,7 +177,7 @@ For now, using detection with `!faceUpChanged` check to avoid flip/shuffle colli
 
 ## Related Files
 
-- `app/src/renderer/handlers/objects.ts` - Detection logic (lines 260-338)
+- `app/src/renderer/handlers/objects.ts` - Detection logic (see `handleObjectsUpdated` function)
 - `app/src/actions/registerDefaultActions.ts` - Shuffle action
 - `app/src/store/YjsActions.ts` - Store mutations
 - `shared/src/index.ts` - Message types

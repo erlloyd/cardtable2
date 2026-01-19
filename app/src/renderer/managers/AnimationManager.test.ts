@@ -85,8 +85,10 @@ describe('AnimationManager', () => {
       expect(mockApp.ticker.add).toHaveBeenCalledTimes(1);
     });
 
-    it('warns if visual not found', () => {
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('logs error if visual not found', () => {
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
       animationManager.animate({
         visualId: 'nonexistent',
@@ -97,7 +99,8 @@ describe('AnimationManager', () => {
       });
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Visual nonexistent not found'),
+        expect.stringContaining('Visual not found'),
+        expect.any(Object),
       );
       consoleSpy.mockRestore();
     });

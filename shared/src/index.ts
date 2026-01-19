@@ -125,6 +125,11 @@ export type MainToRendererMessage =
   | { type: 'echo'; data: string }
   | { type: 'flush'; pendingOperations?: number } // For E2E tests: wait for renderer to process all pending updates
   | {
+      type: 'check-animation-state'; // For E2E tests: query animation state
+      visualId?: string; // Optional: check specific visual (if omitted, checks any animations)
+      animationType?: string; // Optional: check specific animation type
+    }
+  | {
       type: 'init';
       canvas: OffscreenCanvas | HTMLCanvasElement;
       width: number;
@@ -176,6 +181,12 @@ export type RendererToMainMessage =
   | { type: 'ready' }
   | { type: 'initialized' }
   | { type: 'flushed' } // Response to flush: all pending updates processed
+  | {
+      type: 'animation-state'; // Response to check-animation-state
+      isAnimating: boolean;
+      visualId?: string;
+      animationType?: string;
+    }
   | { type: 'error'; error: string; context?: string }
   | { type: 'warning'; message: string }
   | { type: 'animation-complete' }

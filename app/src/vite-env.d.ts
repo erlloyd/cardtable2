@@ -18,6 +18,10 @@ declare global {
     __TEST_BOARD__?: {
       waitForRenderer: () => Promise<void>;
       waitForSelectionSettled: () => Promise<void>;
+      checkAnimationState: (
+        visualId?: string,
+        animationType?: string,
+      ) => Promise<boolean>;
     };
   }
 }

@@ -5,6 +5,10 @@ import type { MainToRendererMessage } from '@cardtable2/shared';
 export interface TestAPI {
   waitForRenderer: () => Promise<void>;
   waitForSelectionSettled: () => Promise<void>;
+  checkAnimationState: (
+    visualId?: string,
+    animationType?: string,
+  ) => Promise<boolean>;
 }
 
 /**
@@ -21,6 +25,7 @@ export interface TestAPI {
  * @param showDebugUI - Whether debug UI is enabled
  * @param flushCallbacks - Ref to flush callbacks array
  * @param selectionSettledCallbacks - Ref to selection settled callbacks array
+ * @param animationStateCallbacks - Ref to animation state callbacks array
  * @returns Test API functions
  */
 export function useTestAPI(
@@ -29,6 +34,9 @@ export function useTestAPI(
   showDebugUI: boolean,
   flushCallbacks: React.MutableRefObject<Array<() => void>>,
   selectionSettledCallbacks: React.MutableRefObject<Array<() => void>>,
+  animationStateCallbacks: React.MutableRefObject<
+    Array<(isAnimating: boolean) => void>
+  >,
 ): TestAPI {
   // Wait for renderer to process all pending messages
   const waitForRenderer = useCallback((): Promise<void> => {
@@ -60,21 +68,56 @@ export function useTestAPI(
     });
   }, [selectionSettledCallbacks]);
 
+  // Check if animations are running
+  const checkAnimationState = useCallback(
+    (visualId?: string, animationType?: string): Promise<boolean> => {
+      return new Promise<boolean>((resolve) => {
+        if (!renderer || !isCanvasInitialized) {
+          resolve(false);
+          return;
+        }
+
+        // Register callback for 'animation-state' response
+        animationStateCallbacks.current.push(resolve);
+
+        // Send check-animation-state message
+        console.log('[useTestAPI] checkAnimationState() called', {
+          visualId,
+          animationType,
+        });
+        const message: MainToRendererMessage = {
+          type: 'check-animation-state',
+          visualId,
+          animationType,
+        };
+        renderer.sendMessage(message);
+      });
+    },
+    [renderer, isCanvasInitialized, animationStateCallbacks],
+  );
+
   // Expose test API in dev mode only
   useEffect(() => {
     if (import.meta.env.DEV && showDebugUI) {
       window.__TEST_BOARD__ = {
         waitForRenderer,
         waitForSelectionSettled,
+        checkAnimationState,
       };
       return () => {
         delete window.__TEST_BOARD__;
       };
     }
-  }, [showDebugUI, waitForRenderer, waitForSelectionSettled]);
+  }, [
+    showDebugUI,
+    waitForRenderer,
+    waitForSelectionSettled,
+    checkAnimationState,
+  ]);
 
   return {
     waitForRenderer,
     waitForSelectionSettled,
+    checkAnimationState,
   };
 }

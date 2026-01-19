@@ -217,20 +217,31 @@ test.describe('Shuffle Stack E2E', () => {
       await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
     });
 
+    // Check animation state before shuffle
+    const isAnimatingBefore = await page.evaluate(async () => {
+      return await (globalThis as any).__TEST_BOARD__.checkAnimationState();
+    });
+    expect(isAnimatingBefore).toBe(false);
+
     await page.keyboard.press('s');
 
     // Check animation is running immediately after shuffle
-    const isAnimating = await page.evaluate(() => {
-      // For worker mode, we can't directly check animation state, but we can verify shuffle occurred
-      return true; // Simplified check - in real implementation would check AnimationManager
+    // Note: Need small delay to let shuffle animation start
+    await page.waitForTimeout(50);
+    const isAnimatingDuring = await page.evaluate(async () => {
+      return await (globalThis as any).__TEST_BOARD__.checkAnimationState();
     });
+    expect(isAnimatingDuring).toBe(true);
 
-    expect(isAnimating).toBe(true);
-
-    // Wait for animation to complete
+    // Wait for animation to complete (~400ms shuffle duration)
     await page.waitForTimeout(500);
 
     // Animation should be done
+    const isAnimatingAfter = await page.evaluate(async () => {
+      return await (globalThis as any).__TEST_BOARD__.checkAnimationState();
+    });
+    expect(isAnimatingAfter).toBe(false);
+
     await page.evaluate(async () => {
       await (globalThis as any).__TEST_BOARD__.waitForRenderer();
     });

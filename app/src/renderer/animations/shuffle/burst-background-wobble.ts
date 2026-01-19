@@ -1,23 +1,19 @@
 /**
- * Burst Background Shuffle Animation
+ * Burst Background + Wobble Shuffle Animation
  *
- * Animates ONLY the gray 3D background rectangles (depth effect) while the
- * main card stays completely still. This creates a visual of the cards underneath
- * "shuffling around" without moving the face card.
+ * Combines two effects:
+ * 1. Face card wobbles (rotates back and forth with scale pulse)
+ * 2. Background rectangles burst out and back (including ghost rectangles)
  *
- * Uses the new child animation system to target the 'background-3d' child
- * specifically, leaving the 'card-face' untouched.
+ * This creates a dynamic shuffle effect where the card itself shakes while
+ * the background "cards" appear to scatter and return.
  *
- * Animation stages:
- * 1. Background bursts out left-up
- * 2. Background bursts out right-down
- * 3. Background bursts out right-up
- * 4. Background returns to original offset
+ * Animation stages (400ms total):
+ * - Face card: 4-stage wobble (left, right, left, center) with scale pulse
+ * - Background: 4-stage burst (left-up, right-down, right-up, center)
+ * - Ghosts: Independent burst patterns for visual variety
  *
- * Total: ~400ms with rapid background "card scatter" effect
- *
- * Note: This animation only works on stacks with 2+ cards (single cards have no
- * background-3d child to animate).
+ * Total: ~400ms
  */
 
 import type { AnimationManager } from '../../managers/AnimationManager';
@@ -33,7 +29,7 @@ import {
   STACK_3D_ALPHA,
 } from '../../objects/stack/constants';
 
-export function animateShuffleBurstBackground(
+export function animateShuffleBurstBackgroundWobble(
   animationManager: AnimationManager,
   visualId: string,
   objectVisuals: Map<string, Container>,
@@ -42,17 +38,145 @@ export function animateShuffleBurstBackground(
 ): void {
   const stageDuration = duration / 4;
 
-  // Verify the visual exists and has the background-3d child
+  // Verify the visual exists
   const container = objectVisuals.get(visualId);
-  // Use deep=true to search recursively through grandchildren
-  const background = container?.getChildByLabel('background-3d', true);
-
-  if (!background || !container) {
-    // No background (single card stack or minimal mode) - skip animation
+  if (!container) {
     onComplete?.();
     return;
   }
 
+  // Check for background-3d child (may not exist for single cards)
+  const background = container.getChildByLabel('background-3d', true);
+  const hasBackground = !!background;
+
+  // ===== PART 1: WOBBLE FACE CARD =====
+  // Animate the face card rotation and scale (wobble effect)
+  animateWobble(
+    animationManager,
+    visualId,
+    container,
+    stageDuration,
+    onComplete,
+  );
+
+  // ===== PART 2: BURST BACKGROUND (only if background exists) =====
+  if (hasBackground) {
+    animateBackgroundBurst(
+      animationManager,
+      visualId,
+      container,
+      stageDuration,
+    );
+  }
+}
+
+/**
+ * Animate the face card wobble (rotation + scale pulse)
+ */
+function animateWobble(
+  animationManager: AnimationManager,
+  visualId: string,
+  visual: Container,
+  stageDuration: number,
+  onComplete?: () => void,
+): void {
+  const degToRad = Math.PI / 180;
+  const startRotation = visual.rotation;
+
+  // Stage 1: Wobble left + scale up
+  animationManager.animate({
+    visualId,
+    type: 'rotation',
+    from: startRotation,
+    to: startRotation + -8 * degToRad,
+    duration: stageDuration,
+    easing: Easing.easeIn,
+    stage: 'shuffle-wobble-1-rot',
+    onComplete: () => {
+      // Stage 2: Wobble right
+      animationManager.animate({
+        visualId,
+        type: 'rotation',
+        from: startRotation + -8 * degToRad,
+        to: startRotation + 10 * degToRad,
+        duration: stageDuration,
+        easing: Easing.linear,
+        stage: 'shuffle-wobble-2-rot',
+        onComplete: () => {
+          // Stage 3: Wobble left (smaller)
+          animationManager.animate({
+            visualId,
+            type: 'rotation',
+            from: startRotation + 10 * degToRad,
+            to: startRotation + -5 * degToRad,
+            duration: stageDuration,
+            easing: Easing.linear,
+            stage: 'shuffle-wobble-3-rot',
+            onComplete: () => {
+              // Stage 4: Return to rest
+              animationManager.animate({
+                visualId,
+                type: 'rotation',
+                from: startRotation + -5 * degToRad,
+                to: startRotation,
+                duration: stageDuration,
+                easing: Easing.easeOut,
+                stage: 'shuffle-wobble-4-rot',
+                onComplete,
+              });
+              animationManager.animate({
+                visualId,
+                type: 'scale',
+                from: 1.03,
+                to: 1.0,
+                duration: stageDuration,
+                easing: Easing.easeOut,
+                stage: 'shuffle-wobble-4-scale',
+              });
+            },
+          });
+          animationManager.animate({
+            visualId,
+            type: 'scale',
+            from: 1.05,
+            to: 1.03,
+            duration: stageDuration,
+            easing: Easing.linear,
+            stage: 'shuffle-wobble-3-scale',
+          });
+        },
+      });
+      animationManager.animate({
+        visualId,
+        type: 'scale',
+        from: 1.04,
+        to: 1.05,
+        duration: stageDuration,
+        easing: Easing.linear,
+        stage: 'shuffle-wobble-2-scale',
+      });
+    },
+  });
+  animationManager.animate({
+    visualId,
+    type: 'scale',
+    from: 1.0,
+    to: 1.04,
+    duration: stageDuration,
+    easing: Easing.easeIn,
+    stage: 'shuffle-wobble-1-scale',
+  });
+}
+
+/**
+ * Animate the background rectangles burst effect
+ */
+function animateBackgroundBurst(
+  animationManager: AnimationManager,
+  visualId: string,
+  container: Container,
+  stageDuration: number,
+): void {
   // Create temporary ghost rectangles for extra shuffle effect
   const ghost1 = createGhostRectangle('shuffle-ghost-1', 0.6);
   const ghost2 = createGhostRectangle('shuffle-ghost-2', 0.5);
@@ -65,15 +189,11 @@ export function animateShuffleBurstBackground(
   const verifyGhost1 = container.getChildByLabel('shuffle-ghost-1', true);
   const verifyGhost2 = container.getChildByLabel('shuffle-ghost-2', true);
 
-  // The background container itself is at position (0, 0)
-  // (The offset is baked into the rectangle's drawing coordinates)
   const startX = 0;
   const startY = 0;
+  const burstDistance = 25;
 
-  // Burst distances (how far to move the background container)
-  const burstDistance = 25; // How far backgrounds "fly"
-
-  // Animate Ghost 1: Opposite pattern (right-down → left-up → left-down → center)
+  // Animate Ghost 1
   if (verifyGhost1) {
     animateGhost1(
       animationManager,
@@ -85,7 +205,7 @@ export function animateShuffleBurstBackground(
     );
   }
 
-  // Animate Ghost 2: Different pattern (up → down → left → center)
+  // Animate Ghost 2
   if (verifyGhost2) {
     animateGhost2(
       animationManager,
@@ -100,7 +220,7 @@ export function animateShuffleBurstBackground(
   // Stage 1: Burst left-up (main background)
   animationManager.animate({
     visualId,
-    childLabel: 'background-3d', // Target specific child!
+    childLabel: 'background-3d',
     type: 'position',
     from: { x: startX, y: startY },
     to: { x: startX - burstDistance, y: startY - burstDistance },
@@ -133,7 +253,7 @@ export function animateShuffleBurstBackground(
             easing: Easing.linear,
             stage: 'shuffle-bg-3',
             onComplete: () => {
-              // Stage 4: Return to original position (0, 0)
+              // Stage 4: Return to original position
               animationManager.animate({
                 visualId,
                 childLabel: 'background-3d',
@@ -150,7 +270,6 @@ export function animateShuffleBurstBackground(
                   // Clean up temporary ghost rectangles
                   container.removeChild(ghost1);
                   container.removeChild(ghost2);
-                  onComplete?.();
                 },
               });
             },

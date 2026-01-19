@@ -23,6 +23,7 @@ import { animateShuffleSpin } from './spin';
 import { animateShuffleBurst } from './burst';
 import { animateShuffleBurstGhost } from './burst-ghost';
 import { animateShuffleBurstBackground } from './burst-background';
+import { animateShuffleBurstBackgroundWobble } from './burst-background-wobble';
 
 /**
  * Shuffle animation function signature
@@ -43,7 +44,8 @@ export type ShuffleAnimationType =
   | 'spin'
   | 'burst'
   | 'burst-ghost'
-  | 'burst-background';
+  | 'burst-background'
+  | 'burst-background-wobble';
 
 /**
  * Map of animation type to implementation function
@@ -57,15 +59,16 @@ export const SHUFFLE_ANIMATIONS: Record<
   burst: animateShuffleBurst,
   'burst-ghost': animateShuffleBurstGhost,
   'burst-background': animateShuffleBurstBackground,
+  'burst-background-wobble': animateShuffleBurstBackgroundWobble,
 };
 
 /**
  * CHANGE THIS to test different shuffle animations!
  *
- * Options: 'wobble' | 'spin' | 'burst' | 'burst-ghost' | 'burst-background'
+ * Options: 'wobble' | 'spin' | 'burst' | 'burst-ghost' | 'burst-background' | 'burst-background-wobble'
  */
 export const ACTIVE_SHUFFLE_ANIMATION: ShuffleAnimationType =
-  'burst-background';
+  'burst-background-wobble';
 
 /**
  * Get the currently active shuffle animation function

@@ -24,6 +24,7 @@ import { animateShuffleBurst } from './burst';
 import { animateShuffleBurstGhost } from './burst-ghost';
 import { animateShuffleBurstBackground } from './burst-background';
 import { animateShuffleBurstBackgroundWobble } from './burst-background-wobble';
+import { SHUFFLE_ANIM_NOT_FOUND } from '../../../constants/errorIds';
 
 /**
  * Shuffle animation function signature
@@ -74,5 +75,21 @@ export const ACTIVE_SHUFFLE_ANIMATION: ShuffleAnimationType =
  * Get the currently active shuffle animation function
  */
 export function getShuffleAnimation(): ShuffleAnimationFn {
-  return SHUFFLE_ANIMATIONS[ACTIVE_SHUFFLE_ANIMATION];
+  const animation = SHUFFLE_ANIMATIONS[ACTIVE_SHUFFLE_ANIMATION];
+
+  if (!animation) {
+    console.error(
+      '[ShuffleAnimations] Active animation not found - falling back to wobble',
+      {
+        errorId: SHUFFLE_ANIM_NOT_FOUND,
+        requestedAnimation: ACTIVE_SHUFFLE_ANIMATION,
+        availableAnimations: Object.keys(SHUFFLE_ANIMATIONS),
+      },
+    );
+
+    // Fallback to wobble (original, simplest animation)
+    return SHUFFLE_ANIMATIONS.wobble;
+  }
+
+  return animation;
 }

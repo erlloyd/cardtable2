@@ -717,14 +717,14 @@ export function unstackCard(
 export function shuffleStack(store: YjsStore, stackId: string): boolean {
   const yMap = store.getObjectYMap(stackId);
   if (!yMap) {
-    console.warn(`[shuffleStack] Stack ${stackId} not found`);
+    console.error(`[shuffleStack] Stack ${stackId} not found`);
     return false;
   }
 
   // Verify it's a stack
   const kind = yMap.get('_kind');
   if (kind !== ObjectKind.Stack) {
-    console.warn(
+    console.error(
       `[shuffleStack] Object ${stackId} is not a stack (kind: ${kind})`,
     );
     return false;
@@ -733,7 +733,7 @@ export function shuffleStack(store: YjsStore, stackId: string): boolean {
   // Get cards array
   const cards = yMap.get('_cards') as string[];
   if (!cards || cards.length < 2) {
-    console.warn(
+    console.error(
       `[shuffleStack] Stack ${stackId} has insufficient cards (${cards?.length ?? 0})`,
     );
     return false;

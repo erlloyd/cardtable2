@@ -28,6 +28,7 @@ import {
   STACK_3D_COLOR,
   STACK_3D_ALPHA,
 } from '../../objects/stack/constants';
+import { SHUFFLE_GHOST_CREATE_FAILED } from '../../../constants/errorIds';
 
 export function animateShuffleBurstBackgroundWobble(
   animationManager: AnimationManager,
@@ -177,24 +178,52 @@ function animateBackgroundBurst(
   container: Container,
   stageDuration: number,
 ): void {
-  // Create temporary ghost rectangles for extra shuffle effect
-  const ghost1 = createGhostRectangle('shuffle-ghost-1', 0.6);
-  const ghost2 = createGhostRectangle('shuffle-ghost-2', 0.5);
+  // Create and verify ghost rectangles
+  let ghost1: Container | null = null;
+  let ghost2: Container | null = null;
 
-  // Add ghosts at the beginning so they render behind the card
-  container.addChildAt(ghost1, 0);
-  container.addChildAt(ghost2, 0);
+  try {
+    ghost1 = createGhostRectangle('shuffle-ghost-1', 0.6);
+    ghost2 = createGhostRectangle('shuffle-ghost-2', 0.5);
 
-  // Verify ghosts were added successfully (defensive check for race conditions)
-  const verifyGhost1 = container.getChildByLabel('shuffle-ghost-1', true);
-  const verifyGhost2 = container.getChildByLabel('shuffle-ghost-2', true);
+    // Add ghosts at the beginning so they render behind the card
+    container.addChildAt(ghost1, 0);
+    container.addChildAt(ghost2, 0);
+
+    // Verify
+    const verify1 = container.getChildByLabel('shuffle-ghost-1', true);
+    const verify2 = container.getChildByLabel('shuffle-ghost-2', true);
+
+    if (!verify1 || !verify2) {
+      throw new Error('Ghost rectangle verification failed');
+    }
+  } catch (error) {
+    console.error(
+      '[ShuffleBurstBackgroundWobble] Failed to create ghost rectangles',
+      {
+        errorId: SHUFFLE_GHOST_CREATE_FAILED,
+        visualId,
+        error: error instanceof Error ? error.message : String(error),
+        ghost1Added: !!container.getChildByLabel('shuffle-ghost-1', true),
+        ghost2Added: !!container.getChildByLabel('shuffle-ghost-2', true),
+      },
+    );
+
+    // Clean up any partially created ghosts
+    if (ghost1) container.removeChild(ghost1);
+    if (ghost2) container.removeChild(ghost2);
+
+    // Continue with animation (ghosts are optional enhancement)
+    ghost1 = null;
+    ghost2 = null;
+  }
 
   const startX = 0;
   const startY = 0;
   const burstDistance = 25;
 
-  // Animate Ghost 1
-  if (verifyGhost1) {
+  // Animate Ghost 1 (if successfully created)
+  if (ghost1) {
     animateGhost1(
       animationManager,
       visualId,
@@ -205,8 +234,8 @@ function animateBackgroundBurst(
     );
   }
 
-  // Animate Ghost 2
-  if (verifyGhost2) {
+  // Animate Ghost 2 (if successfully created)
+  if (ghost2) {
     animateGhost2(
       animationManager,
       visualId,
@@ -267,9 +296,9 @@ function animateBackgroundBurst(
                 easing: Easing.easeIn,
                 stage: 'shuffle-bg-4',
                 onComplete: () => {
-                  // Clean up temporary ghost rectangles
-                  container.removeChild(ghost1);
-                  container.removeChild(ghost2);
+                  // Clean up temporary ghost rectangles (if they were created)
+                  if (ghost1) container.removeChild(ghost1);
+                  if (ghost2) container.removeChild(ghost2);
                 },
               });
             },

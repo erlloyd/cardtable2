@@ -1,6 +1,15 @@
 import type { Application } from 'pixi.js';
 import { Container } from 'pixi.js';
 import { getShuffleAnimation } from '../animations/shuffle';
+import {
+  ANIM_NOT_INIT,
+  ANIM_VISUAL_NOT_FOUND,
+  ANIM_TICKER_CRITICAL,
+  ANIM_UPDATE_FAILED,
+  ANIM_CHILD_NOT_FOUND,
+  ANIM_CHILD_WRONG_TYPE,
+  ANIM_TIMEOUT,
+} from '../../constants/errorIds';
 
 /**
  * Animation type - what property to animate
@@ -124,15 +133,32 @@ export class AnimationManager {
    */
   animate(config: Animation): void {
     if (!this.app) {
-      console.warn('[AnimationManager] Not initialized');
+      console.error(
+        '[AnimationManager] Not initialized - animation cannot start',
+        {
+          errorId: ANIM_NOT_INIT,
+          visualId: config.visualId,
+          type: config.type,
+        },
+      );
+      // Call callback to prevent broken animation chains
+      config.onComplete?.();
       return;
     }
 
     const visual = this.objectVisuals.get(config.visualId);
     if (!visual) {
-      console.warn(
-        `[AnimationManager] Visual ${config.visualId} not found, skipping animation`,
+      console.error(
+        `[AnimationManager] Visual not found - animation cannot start`,
+        {
+          errorId: ANIM_VISUAL_NOT_FOUND,
+          visualId: config.visualId,
+          type: config.type,
+          availableVisuals: Array.from(this.objectVisuals.keys()),
+        },
       );
+      // Call callback to prevent broken animation chains
+      config.onComplete?.();
       return;
     }
 
@@ -314,26 +340,78 @@ export class AnimationManager {
 
         // Update all active animations
         for (const [key, anim] of this.activeAnimations) {
-          const visual = this.objectVisuals.get(anim.visualId);
-          if (!visual) {
-            completedAnimations.push(key);
-            continue;
-          }
+          try {
+            const visual = this.objectVisuals.get(anim.visualId);
+            if (!visual) {
+              // Visual disappeared during animation - mark as complete
+              console.warn(
+                `[AnimationManager] Visual ${anim.visualId} disappeared during animation`,
+                {
+                  animationType: anim.type,
+                  stage: anim.stage,
+                },
+              );
+              completedAnimations.push(key);
+              continue;
+            }
 
-          // Calculate progress (0 to 1)
-          const elapsed = now - anim.startTime;
-          let progress = Math.min(elapsed / anim.duration, 1);
+            // Calculate progress (0 to 1)
+            const elapsed = now - anim.startTime;
+            const maxDuration = (anim.duration ?? 0) * 10; // Timeout at 10x expected duration
 
-          // Apply easing if provided
-          if (anim.easing) {
-            progress = anim.easing(progress);
-          }
+            // Check for animation timeout
+            if (elapsed >= maxDuration && maxDuration > 0) {
+              console.error(
+                '[AnimationManager] Animation exceeded maximum duration',
+                {
+                  errorId: ANIM_TIMEOUT,
+                  visualId: anim.visualId,
+                  type: anim.type,
+                  expectedDuration: anim.duration,
+                  actualElapsed: elapsed,
+                  maxDuration,
+                },
+              );
+              completedAnimations.push(key);
+              continue;
+            }
 
-          // Update the property based on type
-          this.updateVisualProperty(visual, anim, progress);
+            let progress = Math.min(elapsed / (anim.duration ?? 1), 1);
 
-          // Mark as complete if done
-          if (elapsed >= anim.duration) {
+            // Apply easing if provided
+            if (anim.easing) {
+              progress = anim.easing(progress);
+
+              // Validate easing output
+              if (!Number.isFinite(progress)) {
+                throw new Error(
+                  `Easing function returned invalid progress: ${progress}`,
+                );
+              }
+            }
+
+            // Update the property based on type
+            this.updateVisualProperty(visual, anim, progress);
+
+            // Mark as complete if done
+            if (elapsed >= anim.duration) {
+              completedAnimations.push(key);
+            }
+          } catch (animError) {
+            // Log specific animation failure but continue with others
+            console.error('[AnimationManager] Animation update failed', {
+              errorId: ANIM_UPDATE_FAILED,
+              visualId: anim.visualId,
+              type: anim.type,
+              stage: anim.stage,
+              error:
+                animError instanceof Error
+                  ? animError.message
+                  : String(animError),
+              stack: animError instanceof Error ? animError.stack : undefined,
+            });
+
+            // Mark this animation as complete to remove it
             completedAnimations.push(key);
           }
         }
@@ -343,7 +421,22 @@ export class AnimationManager {
         for (const key of completedAnimations) {
           const anim = this.activeAnimations.get(key);
           if (anim?.onComplete) {
-            anim.onComplete();
+            try {
+              anim.onComplete();
+            } catch (callbackError) {
+              console.error(
+                '[AnimationManager] Animation completion callback failed',
+                {
+                  errorId: ANIM_UPDATE_FAILED,
+                  visualId: anim.visualId,
+                  type: anim.type,
+                  error:
+                    callbackError instanceof Error
+                      ? callbackError.message
+                      : String(callbackError),
+                },
+              );
+            }
           }
         }
 
@@ -360,7 +453,17 @@ export class AnimationManager {
           this.stopTicker();
         }
       } catch (error) {
-        console.error('[AnimationManager] Ticker error:', error);
+        // Only critical errors that prevent ticker from functioning should reach here
+        console.error(
+          '[AnimationManager] Critical ticker error - stopping all animations',
+          {
+            errorId: ANIM_TICKER_CRITICAL,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            activeAnimationCount: this.activeAnimations.size,
+          },
+        );
+
         // Stop ticker and clear animations to prevent infinite errors
         this.stopTicker();
         this.activeAnimations.clear();
@@ -402,18 +505,54 @@ export class AnimationManager {
       // Use deep=true to search recursively through grandchildren
       const child = visual.getChildByLabel(anim.childLabel, true);
 
-      if (child && child instanceof Container) {
-        target = child;
-      } else {
-        // Child not found or not a Container - skip this animation frame
+      if (!child) {
+        console.error('[AnimationManager] Animation child not found', {
+          errorId: ANIM_CHILD_NOT_FOUND,
+          visualId: anim.visualId,
+          childLabel: anim.childLabel,
+          type: anim.type,
+          stage: anim.stage,
+          availableChildren: this.getChildLabels(visual),
+        });
         return;
       }
+
+      if (!(child instanceof Container)) {
+        // Safe to access constructor here since child exists (checked above)
+        const childType = (child as { constructor: { name: string } })
+          .constructor.name;
+        console.error('[AnimationManager] Animation child is not a Container', {
+          errorId: ANIM_CHILD_WRONG_TYPE,
+          visualId: anim.visualId,
+          childLabel: anim.childLabel,
+          actualType: childType,
+          expectedType: 'Container',
+        });
+        return;
+      }
+
+      target = child;
     }
 
     const updater = animationUpdaters[anim.type];
     if (updater) {
       updater(target, anim, progress);
     }
+  }
+
+  /**
+   * Get all child labels in a container (for debugging)
+   */
+  private getChildLabels(container: Container): string[] {
+    const labels: string[] = [];
+    const traverse = (c: Container) => {
+      if (c.label) labels.push(c.label);
+      c.children.forEach((child) => {
+        if (child instanceof Container) traverse(child);
+      });
+    };
+    traverse(container);
+    return labels;
   }
 
   /**

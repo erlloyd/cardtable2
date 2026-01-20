@@ -52,7 +52,7 @@ export class AwarenessManager {
 
   /**
    * Update remote awareness states and render cursors/drag ghosts.
-   * @returns Current awareness update rate (Hz) if changed significantly
+   * @returns Object with render flag and Hz if changed significantly
    */
   updateRemoteAwareness(
     states: Array<{ clientId: number; state: AwarenessState }>,
@@ -61,11 +61,12 @@ export class AwarenessManager {
     worldContainer: Container,
     cameraScale: number,
     visual: VisualManager,
-  ): { hz: number } | null {
-    if (!this.awarenessContainer) return null;
+  ): { shouldRender: boolean; hz?: number } {
+    if (!this.awarenessContainer) return { shouldRender: false };
 
     const now = Date.now();
     const activeClientIds = new Set<number>();
+    let shouldRender = false;
 
     // Track awareness update rate (M5-T1)
     let hzChanged: { hz: number } | null = null;
@@ -105,6 +106,7 @@ export class AwarenessManager {
           lastUpdate: now,
         };
         this.remoteAwareness.set(clientId, awarenessData);
+        shouldRender = true; // New actor added
       } else {
         // Store previous position for lerp
         if (state.cursor) {
@@ -123,11 +125,13 @@ export class AwarenessManager {
           worldContainer,
           cameraScale,
         );
+        shouldRender = true; // Cursor moved
       } else if (awarenessData.cursor) {
         // Remove cursor visual if cursor data is gone
         this.awarenessContainer.removeChild(awarenessData.cursor);
         awarenessData.cursor.destroy();
         awarenessData.cursor = undefined;
+        shouldRender = true; // Cursor removed
       }
 
       // Render drag ghost if present
@@ -151,6 +155,7 @@ export class AwarenessManager {
             visual.hideObject(secondaryId);
           }
         }
+        shouldRender = true; // Drag ghost updated
       } else if (awarenessData.dragGhost) {
         // Drag ended - show the underlying objects again
         if (awarenessData.draggedObjectIds) {
@@ -164,6 +169,7 @@ export class AwarenessManager {
         awarenessData.dragGhost.destroy();
         awarenessData.dragGhost = undefined;
         awarenessData.draggedObjectIds = undefined;
+        shouldRender = true; // Drag ended
       }
     }
 
@@ -187,10 +193,11 @@ export class AwarenessManager {
           data.dragGhost.destroy();
         }
         this.remoteAwareness.delete(clientId);
+        shouldRender = true; // Actor removed
       }
     }
 
-    return hzChanged;
+    return { shouldRender, hz: hzChanged?.hz };
   }
 
   /**

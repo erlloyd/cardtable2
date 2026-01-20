@@ -567,6 +567,11 @@ export class VisualManager {
             isSelected,
             isStackTarget,
           });
+
+          // Trigger a render to display the newly loaded texture
+          if (this.app) {
+            this.app.renderer.render(this.app.stage);
+          }
         },
       }),
     );

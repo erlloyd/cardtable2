@@ -19,7 +19,7 @@ export function handleAwarenessUpdate(
 ): void {
   // M3-T4: Handle remote awareness updates
   // Delegate to AwarenessManager
-  const hzChanged = context.awareness.updateRemoteAwareness(
+  const result = context.awareness.updateRemoteAwareness(
     message.states,
     context.selection.getActorId(),
     context.sceneManager,
@@ -28,14 +28,16 @@ export function handleAwarenessUpdate(
     context.visual,
   );
 
-  // Render to show awareness changes
-  context.app.renderer.render(context.app.stage);
+  // Only render if visuals actually changed
+  if (result.shouldRender) {
+    context.app.renderer.render(context.app.stage);
+  }
 
   // Report Hz to UI if changed significantly
-  if (hzChanged) {
+  if (result.hz !== undefined) {
     context.postResponse({
       type: 'awareness-update-rate',
-      hz: hzChanged.hz,
+      hz: result.hz,
     });
   }
 }

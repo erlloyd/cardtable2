@@ -183,9 +183,16 @@ function renderMainCard(
     graphic.label = 'card-face'; // Labeled child for animation targeting
     container.addChild(graphic);
 
-    // Add card code text (top card ID) on placeholder
+    // Only show card code text if loading has failed or is taking too long
     // Skip decorative text in minimal mode (like badges and handles)
-    if (obj._cards && obj._cards.length > 0 && !ctx.minimal) {
+    const shouldShowFallback =
+      imageUrl && ctx.textureLoader?.shouldShowFallback(imageUrl);
+    if (
+      obj._cards &&
+      obj._cards.length > 0 &&
+      !ctx.minimal &&
+      shouldShowFallback
+    ) {
       const topCardCode = obj._cards[0];
       const text = ctx.createKindLabel(topCardCode);
       text.anchor.set(0.5, 0.5);
@@ -195,13 +202,26 @@ function renderMainCard(
 
     // Start async texture load and trigger re-render when done
     if (imageUrl && ctx.textureLoader && ctx.onTextureLoaded) {
+      // Set a timeout to trigger re-render after 5 seconds (to show fallback text)
+      const slowLoadTimeout = setTimeout(() => {
+        // After 5 seconds, trigger re-render to show fallback text
+        ctx.onTextureLoaded?.(imageUrl);
+      }, 5000);
+
       ctx.textureLoader
         .load(imageUrl)
         .then(() => {
+          // Clear timeout since load succeeded
+          clearTimeout(slowLoadTimeout);
           // Texture is now cached - trigger re-render to show it
           ctx.onTextureLoaded?.(imageUrl);
         })
         .catch((error) => {
+          // Clear timeout since we're handling the failure
+          clearTimeout(slowLoadTimeout);
+          // Trigger re-render to show fallback text
+          ctx.onTextureLoaded?.(imageUrl);
+
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           const errorType =

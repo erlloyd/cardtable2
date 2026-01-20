@@ -114,6 +114,32 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('does not render count badge for single-card stacks', () => {
       const singleStack = createTestStack();
+      // Mock gameAssets and textureLoader so fallback text is shown
+      const gameAssets: RenderContext['gameAssets'] = {
+        cards: {
+          card1: {
+            type: 'player',
+            face: '/api/card-image/pack1/card1-face.jpg',
+          },
+        },
+        cardTypes: {
+          player: { back: '/api/card-image/pack1/player-back.jpg' },
+        },
+        cardSets: {},
+        tokens: {},
+        counters: {},
+        mats: {},
+      };
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: vi.fn(),
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => true),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => false),
+      };
+      mockContext.gameAssets = gameAssets;
+      mockContext.textureLoader = textureLoader;
 
       StackBehaviors.render(singleStack, mockContext);
 
@@ -173,6 +199,32 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('does not render unstack handle for single-card stacks', () => {
       const singleStack = createTestStack();
+      // Mock gameAssets and textureLoader so fallback text is shown
+      const gameAssets: RenderContext['gameAssets'] = {
+        cards: {
+          card1: {
+            type: 'player',
+            face: '/api/card-image/pack1/card1-face.jpg',
+          },
+        },
+        cardTypes: {
+          player: { back: '/api/card-image/pack1/player-back.jpg' },
+        },
+        cardSets: {},
+        tokens: {},
+        counters: {},
+        mats: {},
+      };
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: vi.fn(),
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => true),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => false),
+      };
+      mockContext.gameAssets = gameAssets;
+      mockContext.textureLoader = textureLoader;
 
       StackBehaviors.render(singleStack, mockContext);
 
@@ -258,6 +310,32 @@ describe('Stack Behaviors - Visual Rendering', () => {
         _cards: ['card1', 'card2', 'card3'],
         _faceUp: false,
       });
+      // Mock gameAssets and textureLoader so fallback text is shown
+      const gameAssets: RenderContext['gameAssets'] = {
+        cards: {
+          card1: {
+            type: 'player',
+            face: '/api/card-image/pack1/card1-face.jpg',
+          },
+        },
+        cardTypes: {
+          player: { back: '/api/card-image/pack1/player-back.jpg' },
+        },
+        cardSets: {},
+        tokens: {},
+        counters: {},
+        mats: {},
+      };
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: vi.fn(),
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => true),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => false),
+      };
+      mockContext.gameAssets = gameAssets;
+      mockContext.textureLoader = textureLoader;
 
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
@@ -285,6 +363,32 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('renders minimal visuals for single face-up card', () => {
       const minimalStack = createTestStack({ _faceUp: true });
+      // Mock gameAssets and textureLoader so fallback text is shown
+      const gameAssets: RenderContext['gameAssets'] = {
+        cards: {
+          card1: {
+            type: 'player',
+            face: '/api/card-image/pack1/card1-face.jpg',
+          },
+        },
+        cardTypes: {
+          player: { back: '/api/card-image/pack1/player-back.jpg' },
+        },
+        cardSets: {},
+        tokens: {},
+        counters: {},
+        mats: {},
+      };
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: vi.fn(),
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => true),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => false),
+      };
+      mockContext.gameAssets = gameAssets;
+      mockContext.textureLoader = textureLoader;
 
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
@@ -348,6 +452,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
         load: vi.fn().mockResolvedValue(mockTexture),
         get: vi.fn(),
         has: vi.fn(),
+        shouldShowFallback: vi.fn(() => false),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => false),
       };
       mockOnTextureLoaded = vi.fn();
 
@@ -536,8 +643,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
       // Wait for async operation
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Assert - Should not call onTextureLoaded on error
-      expect(mockOnTextureLoaded).not.toHaveBeenCalled();
+      // Assert - Should call onTextureLoaded on error to trigger re-render with fallback text
+      expect(mockOnTextureLoaded).toHaveBeenCalledWith(
+        '/api/card-image/pack1/card-1-face.jpg',
+      );
     });
 
     it('should not trigger load if no textureLoader provided', () => {

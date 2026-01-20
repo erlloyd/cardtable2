@@ -19,6 +19,11 @@ import { Texture, ImageSource } from 'pixi.js';
 export class TextureLoader {
   private cache: Map<string, Texture> = new Map();
   private loading: Map<string, Promise<Texture>> = new Map();
+  private loadingStartTimes: Map<string, number> = new Map(); // Track when each URL started loading
+  private failedUrls: Set<string> = new Set(); // Track which URLs failed to load
+
+  // Threshold for considering a load "slow" (5 seconds)
+  private readonly SLOW_LOAD_THRESHOLD_MS = 5000;
 
   /**
    * Load a texture from a URL.
@@ -45,13 +50,22 @@ export class TextureLoader {
     }
 
     // Start new load
+    const startTime = Date.now();
+    this.loadingStartTimes.set(url, startTime);
+    this.failedUrls.delete(url); // Clear any previous failure
+
     const promise = this.loadInternal(url);
     this.loading.set(url, promise);
 
     try {
       const texture = await promise;
       this.cache.set(url, texture);
+      this.loadingStartTimes.delete(url); // Clean up tracking
       return texture;
+    } catch (error) {
+      this.failedUrls.add(url); // Mark as failed
+      this.loadingStartTimes.delete(url); // Clean up tracking
+      throw error;
     } finally {
       this.loading.delete(url);
     }
@@ -96,6 +110,8 @@ export class TextureLoader {
     }
     this.cache.clear();
     this.loading.clear();
+    this.loadingStartTimes.clear();
+    this.failedUrls.clear();
   }
 
   /**
@@ -119,5 +135,32 @@ export class TextureLoader {
    */
   get size(): number {
     return this.cache.size;
+  }
+
+  /**
+   * Check if a URL is currently loading and has been loading for a long time.
+   * Returns true if the URL has been loading for more than SLOW_LOAD_THRESHOLD_MS.
+   */
+  isSlowLoading(url: string): boolean {
+    const startTime = this.loadingStartTimes.get(url);
+    if (!startTime) return false;
+
+    const elapsed = Date.now() - startTime;
+    return elapsed > this.SLOW_LOAD_THRESHOLD_MS;
+  }
+
+  /**
+   * Check if a URL has failed to load.
+   */
+  hasFailed(url: string): boolean {
+    return this.failedUrls.has(url);
+  }
+
+  /**
+   * Check if we should show fallback content for a URL.
+   * Returns true if the URL has failed OR is taking too long to load.
+   */
+  shouldShowFallback(url: string): boolean {
+    return this.hasFailed(url) || this.isSlowLoading(url);
   }
 }

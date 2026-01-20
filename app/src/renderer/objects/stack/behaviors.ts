@@ -109,20 +109,25 @@ function render3DBackground(
     return;
   }
 
-  const bg3d = new Graphics();
-  bg3d.rect(
+  // Wrap Graphics in a Container with label set via constructor
+  const bg3dContainer = new Container({ label: 'background-3d' });
+
+  const bg3dGraphic = new Graphics();
+  bg3dGraphic.rect(
     -STACK_WIDTH / 2 + STACK_3D_OFFSET_X,
     -STACK_HEIGHT / 2 + STACK_3D_OFFSET_Y,
     STACK_WIDTH,
     STACK_HEIGHT,
   );
-  bg3d.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
-  bg3d.stroke({
+  bg3dGraphic.fill({ color: STACK_3D_COLOR, alpha: STACK_3D_ALPHA });
+  bg3dGraphic.stroke({
     width: ctx.scaleStrokeWidth(1),
     color: 0x000000,
     alpha: 0.3,
   });
-  container.addChild(bg3d);
+
+  bg3dContainer.addChild(bg3dGraphic);
+  container.addChild(bg3dContainer);
 }
 
 /**
@@ -143,6 +148,7 @@ function renderMainCard(
   if (cachedTexture) {
     // Create sprite with card image
     const sprite = new Sprite(cachedTexture);
+    sprite.label = 'card-face'; // Labeled child for animation targeting
     sprite.width = STACK_WIDTH;
     sprite.height = STACK_HEIGHT;
     sprite.anchor.set(0.5, 0.5);
@@ -151,6 +157,7 @@ function renderMainCard(
     // Add border for selection/drop target state
     if (ctx.isSelected || ctx.isStackTarget) {
       const borderGraphic = new Graphics();
+      borderGraphic.label = 'card-border'; // Labeled child
       borderGraphic.rect(
         -STACK_WIDTH / 2,
         -STACK_HEIGHT / 2,
@@ -173,6 +180,7 @@ function renderMainCard(
   } else {
     // No cached texture - render placeholder graphic
     const graphic = createPlaceholderGraphic(color, obj, ctx);
+    graphic.label = 'card-face'; // Labeled child for animation targeting
     container.addChild(graphic);
 
     // Add card code text (top card ID) on placeholder
@@ -230,6 +238,7 @@ function renderStackDecorations(
 
   // Create graphics for badge and handle backgrounds
   const decorGraphic = new Graphics();
+  decorGraphic.label = 'decorations'; // Labeled child for animation targeting
 
   // Badge rounded square (top-center, half on/half off the card)
   const badgeX = 0;
@@ -258,6 +267,7 @@ function renderStackDecorations(
       fontWeight: 'bold',
     },
   });
+  text.label = 'badge-text'; // Labeled child
   text.anchor.set(0.5, 0.5);
   text.position.set(badgeX, badgeY);
 
@@ -279,6 +289,7 @@ function renderStackDecorations(
 
   // Handle icon - stack-pop
   const iconGraphic = new Graphics();
+  iconGraphic.label = 'handle-icon'; // Labeled child
   renderStackPopIcon(iconGraphic, {
     color: STACK_BADGE_TEXT_COLOR,
     strokeWidth: 1.5,

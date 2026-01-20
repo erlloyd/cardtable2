@@ -41,6 +41,9 @@ export interface BoardHandlerContext {
   // Refs
   flushCallbacks: React.MutableRefObject<Array<() => void>>;
   selectionSettledCallbacks: React.MutableRefObject<Array<() => void>>;
+  animationStateCallbacks: React.MutableRefObject<
+    Array<(isAnimating: boolean) => void>
+  >;
   throttledCursorUpdate: React.MutableRefObject<
     ThrottledFunction<(x: number, y: number) => void>
   >;
@@ -318,6 +321,17 @@ export class BoardMessageBus {
       const callbacks = ctx.flushCallbacks.current;
       ctx.flushCallbacks.current = [];
       callbacks.forEach((cb) => cb());
+    });
+
+    this.registry.register('animation-state', (msg, ctx) => {
+      console.log('[BoardMessageBus] Received "animation-state" message:', {
+        isAnimating: msg.isAnimating,
+        visualId: msg.visualId,
+        animationType: msg.animationType,
+      });
+      const callbacks = ctx.animationStateCallbacks.current;
+      ctx.animationStateCallbacks.current = [];
+      callbacks.forEach((cb) => cb(msg.isAnimating));
     });
 
     this.registry.register('pong', (msg, ctx) => {

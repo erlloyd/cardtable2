@@ -701,6 +701,64 @@ export function unstackCard(
 }
 
 /**
+ * Shuffle stack - randomize card order using Fisher-Yates algorithm
+ *
+ * Randomly shuffles the cards array in a stack. The shuffle is performed
+ * atomically in a Yjs transaction to ensure consistency in multiplayer.
+ *
+ * @param store - YjsStore instance
+ * @param stackId - ID of the stack to shuffle
+ * @returns true if shuffle succeeded, false if stack not found or invalid
+ *
+ * @example
+ * // Shuffle a deck
+ * const success = shuffleStack(store, 'stack-123');
+ */
+export function shuffleStack(store: YjsStore, stackId: string): boolean {
+  const yMap = store.getObjectYMap(stackId);
+  if (!yMap) {
+    console.error(`[shuffleStack] Stack ${stackId} not found`);
+    return false;
+  }
+
+  // Verify it's a stack
+  const kind = yMap.get('_kind');
+  if (kind !== ObjectKind.Stack) {
+    console.error(
+      `[shuffleStack] Object ${stackId} is not a stack (kind: ${kind})`,
+    );
+    return false;
+  }
+
+  // Get cards array
+  const cards = yMap.get('_cards') as string[];
+  if (!cards || cards.length < 2) {
+    console.error(
+      `[shuffleStack] Stack ${stackId} has insufficient cards (${cards?.length ?? 0})`,
+    );
+    return false;
+  }
+
+  // Use single transaction for atomicity
+  store.getDoc().transact(() => {
+    // Fisher-Yates shuffle (in-place)
+    const shuffled = [...cards]; // Copy to avoid mutating
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // Update cards array
+    yMap.set('_cards', shuffled);
+  });
+
+  console.log(
+    `[shuffleStack] Shuffled stack ${stackId} (${cards.length} cards)`,
+  );
+  return true;
+}
+
+/**
  * Reset the table to a test scene with various object types.
  * Useful for development and testing.
  *

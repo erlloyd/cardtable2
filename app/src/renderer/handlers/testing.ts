@@ -156,3 +156,47 @@ export function handleTestAnimation(
   );
   console.log('[RendererCore] Animation running...');
 }
+
+/**
+ * Handle check-animation-state message
+ *
+ * E2E Test API: Query whether animations are currently running.
+ * Can check for any animations, or specific visual+type combinations.
+ */
+export function handleCheckAnimationState(
+  message: Extract<MainToRendererMessage, { type: 'check-animation-state' }>,
+  context: RendererContext,
+): void {
+  const { visualId, animationType } = message;
+
+  let isAnimating: boolean;
+
+  if (visualId && animationType) {
+    // Check specific visual + animation type
+    // Note: animationType from message is string, cast to AnimationType if needed
+    isAnimating = context.animation.isAnimating(
+      visualId,
+      animationType as 'rotation' | 'scale' | 'alpha' | 'position' | 'scaleX',
+    );
+  } else if (visualId) {
+    // Check any animation on specific visual
+    isAnimating = context.animation.isAnimating(visualId);
+  } else {
+    // Check if ANY animation is running (check AnimationManager, not ticker)
+    // The ticker can remain started for hover animations even when target animations complete
+    isAnimating = context.animation.hasActiveAnimations();
+  }
+
+  console.log('[RendererCore] Animation state check:', {
+    visualId,
+    animationType,
+    isAnimating,
+  });
+
+  context.postResponse({
+    type: 'animation-state',
+    isAnimating,
+    visualId,
+    animationType,
+  });
+}

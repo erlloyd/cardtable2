@@ -89,6 +89,10 @@ export class RendererMessageBus {
     // Testing
     this.registry.register('flush', testing.handleFlush);
     this.registry.register('test-animation', testing.handleTestAnimation);
+    this.registry.register(
+      'check-animation-state',
+      testing.handleCheckAnimationState,
+    );
 
     // Coordinates
     this.registry.register(

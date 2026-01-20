@@ -11,6 +11,13 @@ import type { RendererContext } from '../RendererContext';
 import type { RenderContext } from '../objects/types';
 import { getBehaviors } from '../objects';
 import { Easing } from '../managers';
+import {
+  SHUFFLE_DETECT_INVALID_ARRAY,
+  SHUFFLE_DETECT_FAILED,
+  FLIP_MIDPOINT_FAILED,
+  FLIP_COMPLETE_FAILED,
+  SHUFFLE_COMPLETE_FAILED,
+} from '../../constants/errorIds';
 
 /**
  * Handle sync-objects message
@@ -267,33 +274,118 @@ function updateObjectVisual(
     (obj as { _faceUp: boolean })._faceUp !==
       (prevObj as { _faceUp: boolean })._faceUp;
 
+  // Detect shuffle BEFORE visual update to prevent destroying ghost rectangles
+  // Skip shuffle detection if flip is occurring (flip has its own animation)
+  const hasCards = '_cards' in obj && Array.isArray(obj._cards);
+  const prevHasCards =
+    prevObj && '_cards' in prevObj && Array.isArray(prevObj._cards);
+
+  let isShuffle = false;
+  if (hasCards && prevHasCards && !faceUpChanged) {
+    try {
+      const currentCards = (obj as { _cards: string[] })._cards;
+      const prevCards = (prevObj as { _cards: string[] })._cards;
+
+      // Validate arrays
+      if (!Array.isArray(currentCards) || !Array.isArray(prevCards)) {
+        console.error(
+          '[ObjectsHandler] Invalid _cards arrays in shuffle detection',
+          {
+            errorId: SHUFFLE_DETECT_INVALID_ARRAY,
+            objectId: id,
+            currentType: typeof currentCards,
+            prevType: typeof prevCards,
+          },
+        );
+      } else {
+        // Check if cards were shuffled (same set, different order)
+        isShuffle =
+          currentCards.length === prevCards.length &&
+          currentCards.length >= 2 &&
+          currentCards.every((card) => prevCards.includes(card)) &&
+          currentCards.some((card, idx) => card !== prevCards[idx]);
+      }
+    } catch (error) {
+      console.error('[ObjectsHandler] Shuffle detection failed', {
+        errorId: SHUFFLE_DETECT_FAILED,
+        objectId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   if (faceUpChanged) {
     // Animate flip: compress → update visual → expand
     const flipOnMidpoint = () => {
-      // At midpoint (scaleX = 0), update the visual
-      context.visual.updateVisualForObjectChange(id, context.sceneManager, {
-        isHovered,
-        isDragging,
-        isSelected,
-        preservePosition: isDragging, // Preserve position during drag to avoid flashing
-        preserveScale: true, // Preserve scale during flip animation
-      });
+      try {
+        // At midpoint (scaleX = 0), update the visual
+        context.visual.updateVisualForObjectChange(id, context.sceneManager, {
+          isHovered,
+          isDragging,
+          isSelected,
+          preservePosition: isDragging, // Preserve position during drag to avoid flashing
+          preserveScale: true, // Preserve scale during flip animation
+        });
+      } catch (error) {
+        console.error('[ObjectsHandler] Flip midpoint callback failed', {
+          errorId: FLIP_MIDPOINT_FAILED,
+          objectId: id,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
     };
 
     const flipOnComplete = () => {
-      // After flip completes, do a final redraw to ensure correct state
-      context.visual.updateVisualForObjectChange(id, context.sceneManager, {
-        isHovered,
-        isDragging,
-        isSelected,
-        preservePosition: isDragging,
-        // No need to preserve scale after animation completes
-      });
+      try {
+        // After flip completes, do a final redraw to ensure correct state
+        context.visual.updateVisualForObjectChange(id, context.sceneManager, {
+          isHovered,
+          isDragging,
+          isSelected,
+          preservePosition: isDragging,
+          // No need to preserve scale after animation completes
+        });
+      } catch (error) {
+        console.error('[ObjectsHandler] Flip complete callback failed', {
+          errorId: FLIP_COMPLETE_FAILED,
+          objectId: id,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
     };
 
     context.animation.animateFlip(id, flipOnMidpoint, 150, flipOnComplete);
+  } else if (isShuffle) {
+    // Start shuffle animation WITHOUT updating visual first
+    // The animation will manage the visual entirely
+    context.animation.animateShuffle(id, undefined, () => {
+      try {
+        // After shuffle completes, update visual to show new card order
+        context.visual.updateVisualForObjectChange(id, context.sceneManager, {
+          isHovered,
+          isDragging,
+          isSelected,
+          preservePosition: isDragging,
+        });
+      } catch (error) {
+        console.error('[ObjectsHandler] Shuffle complete callback failed', {
+          errorId: SHUFFLE_COMPLETE_FAILED,
+          objectId: id,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    });
   } else {
-    // No flip - just update visual immediately
+    // Skip visual update during shuffle animation to avoid destroying ghost rectangles
+    const isShuffling = context.animation.isShuffling(id);
+    if (isShuffling) {
+      return;
+    }
+
+    // No flip or shuffle - just update visual immediately
     context.visual.updateVisualForObjectChange(id, context.sceneManager, {
       isHovered,
       isDragging,
@@ -468,6 +560,12 @@ function createBaseShapeGraphic(
     isHovered: context.hover.getHoveredObjectId() === objectId,
     isDragging: context.drag.getDraggedObjectId() === objectId,
     onTextureLoaded: (_url: string) => {
+      // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
+      const isShuffling = context.animation.isShuffling(objectId);
+      if (isShuffling) {
+        return;
+      }
+
       // Re-render this object when its texture finishes loading
       context.visual.updateVisualForObjectChange(
         objectId,

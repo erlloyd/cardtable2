@@ -92,6 +92,9 @@ function Board({
   // Callback refs
   const flushCallbacksRef = useRef<Array<() => void>>([]);
   const selectionSettledCallbacksRef = useRef<Array<() => void>>([]);
+  const animationStateCallbacksRef = useRef<
+    Array<(isAnimating: boolean) => void>
+  >([]);
 
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
@@ -151,6 +154,7 @@ function Board({
         addMessage,
         flushCallbacks: flushCallbacksRef,
         selectionSettledCallbacks: selectionSettledCallbacksRef,
+        animationStateCallbacks: animationStateCallbacksRef,
         throttledCursorUpdate,
         throttledDragStateUpdate,
       };
@@ -216,6 +220,7 @@ function Board({
     showDebugUI,
     flushCallbacksRef,
     selectionSettledCallbacksRef,
+    animationStateCallbacksRef,
   );
 
   // Debug handlers

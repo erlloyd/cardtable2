@@ -10,6 +10,7 @@ import {
   flipCards,
   stackObjects,
   unstackCard,
+  shuffleStack,
 } from './YjsActions';
 import {
   ObjectKind,
@@ -2227,6 +2228,202 @@ describe('YjsActions - unstackCard', () => {
         expect(newSortKey > sourceSortKey).toBe(true);
       }
     });
+  });
+});
+
+describe('shuffleStack', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-shuffle-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  it('should randomize card order in stack', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1', 'card-2', 'card-3', 'card-4', 'card-5'],
+    });
+
+    const originalCards = [
+      ...(store.getObjectYMap(stackId)!.get('_cards') as string[]),
+    ];
+
+    // Shuffle multiple times to ensure randomness
+    let shuffledCount = 0;
+    for (let i = 0; i < 10; i++) {
+      const success = shuffleStack(store, stackId);
+      expect(success).toBe(true);
+
+      const cards = store.getObjectYMap(stackId)!.get('_cards') as string[];
+
+      // Verify same cards exist
+      expect(cards.length).toBe(originalCards.length);
+      expect([...cards].sort()).toEqual([...originalCards].sort());
+
+      // Count how many times order changed
+      if (cards.some((card, idx) => card !== originalCards[idx])) {
+        shuffledCount++;
+      }
+    }
+
+    // Statistically, at least 8 of 10 shuffles should change order
+    expect(shuffledCount).toBeGreaterThanOrEqual(8);
+  });
+
+  it('should preserve all cards during shuffle', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-a', 'card-b', 'card-c'],
+    });
+
+    const originalCards = new Set(
+      store.getObjectYMap(stackId)!.get('_cards') as string[],
+    );
+    shuffleStack(store, stackId);
+    const shuffledCards = new Set(
+      store.getObjectYMap(stackId)!.get('_cards') as string[],
+    );
+
+    expect(shuffledCards).toEqual(originalCards);
+  });
+
+  it('should return false for non-existent stack', () => {
+    const success = shuffleStack(store, 'non-existent');
+    expect(success).toBe(false);
+  });
+
+  it('should return false for stack with fewer than 2 cards', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['single-card'],
+    });
+
+    const success = shuffleStack(store, stackId);
+    expect(success).toBe(false);
+  });
+
+  it('should return false for empty stack', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: [],
+    });
+
+    const success = shuffleStack(store, stackId);
+    expect(success).toBe(false);
+  });
+
+  it('should return false for non-stack objects', () => {
+    const tokenId = createObject(store, {
+      kind: ObjectKind.Token,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+
+    const success = shuffleStack(store, tokenId);
+    expect(success).toBe(false);
+  });
+
+  it('should use single Yjs transaction', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1', 'card-2', 'card-3'],
+    });
+
+    // Track Yjs updates
+    let updateCount = 0;
+    store.getDoc().on('update', () => updateCount++);
+
+    shuffleStack(store, stackId);
+
+    // Should trigger exactly one update (single transaction)
+    expect(updateCount).toBe(1);
+  });
+
+  it('should preserve all stack properties except _cards during shuffle', () => {
+    // Create stack with various properties
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 100, y: 200, r: 90 }, // Exhausted (rotated)
+      cards: ['card-1', 'card-2', 'card-3'],
+      faceUp: false,
+      locked: false,
+      meta: { deckName: 'Player 1', customProp: 'value' },
+    });
+
+    // Select the stack
+    const actorId = store.getActorId();
+    selectObjects(store, [stackId], actorId);
+
+    // Capture original state
+    const originalObj = toTableObject(store.getObjectYMap(stackId)!);
+    const originalCards =
+      originalObj && originalObj._kind === ObjectKind.Stack
+        ? [...(originalObj as StackObject)._cards]
+        : [];
+
+    // Shuffle
+    const success = shuffleStack(store, stackId);
+    expect(success).toBe(true);
+
+    // Verify: Only _cards changed, everything else preserved
+    const shuffledObj = toTableObject(store.getObjectYMap(stackId)!);
+
+    expect(shuffledObj?._pos).toEqual({ x: 100, y: 200, r: 90 });
+    expect(shuffledObj?._locked).toBe(false);
+    expect(shuffledObj?._selectedBy).toBe(actorId);
+    expect(shuffledObj?._meta).toEqual({
+      deckName: 'Player 1',
+      customProp: 'value',
+    });
+    expect(shuffledObj?._kind).toBe(ObjectKind.Stack);
+
+    // Verify: Stack-specific properties and cards
+    if (shuffledObj && shuffledObj._kind === ObjectKind.Stack) {
+      const stackObj = shuffledObj as StackObject;
+      expect(stackObj._faceUp).toBe(false);
+      const shuffledCards = stackObj._cards;
+      expect(shuffledCards.length).toBe(3);
+      expect(new Set(shuffledCards)).toEqual(new Set(originalCards));
+    }
+  });
+
+  it('should handle rapid consecutive shuffles', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1', 'card-2', 'card-3', 'card-4', 'card-5'],
+    });
+
+    // Rapidly shuffle 3 times
+    const result1 = shuffleStack(store, stackId);
+    const result2 = shuffleStack(store, stackId);
+    const result3 = shuffleStack(store, stackId);
+
+    // All should succeed
+    expect(result1).toBe(true);
+    expect(result2).toBe(true);
+    expect(result3).toBe(true);
+
+    // Verify: Cards are still valid (all present, no duplicates)
+    const cards = store.getObjectYMap(stackId)!.get('_cards') as string[];
+    expect(new Set(cards).size).toBe(5); // No duplicates
+    expect(cards.length).toBe(5); // All cards present
+    expect(cards).toContain('card-1');
+    expect(cards).toContain('card-2');
+    expect(cards).toContain('card-3');
+    expect(cards).toContain('card-4');
+    expect(cards).toContain('card-5');
   });
 });
 

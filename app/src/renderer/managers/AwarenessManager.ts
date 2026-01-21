@@ -4,6 +4,10 @@ import { getBehaviors } from '../objects';
 import { createScaleStrokeWidth } from '../handlers/objects';
 import type { SceneManager } from '../SceneManager';
 import type { VisualManager } from './VisualManager';
+import {
+  AWARENESS_GHOST_RENDER_FAILED,
+  AWARENESS_GHOST_OBJECT_MISSING,
+} from '../../constants/errorIds';
 
 /**
  * Awareness data for a remote actor.
@@ -309,69 +313,135 @@ export class AwarenessManager {
     // Create drag ghost visual if it doesn't exist
     if (!awarenessData.dragGhost) {
       const ghostContainer = new Container();
+      let hasRenderedPrimary = false;
 
       // Render the primary object
       const primaryObj = sceneManager.getObject(state.drag.primaryId);
 
       if (primaryObj) {
-        // Create a semi-transparent copy of the primary object
-        const behaviors = getBehaviors(primaryObj._kind);
-        const ghostGraphic = behaviors.render(primaryObj, {
-          isSelected: false,
-          isHovered: false,
-          isDragging: false,
-          isStackTarget: false,
-          cameraScale,
-          createText: visual.createText.bind(visual),
-          createKindLabel: visual.createKindLabel.bind(visual),
-          scaleStrokeWidth: createScaleStrokeWidth(
+        try {
+          // Create a semi-transparent copy of the primary object
+          const behaviors = getBehaviors(primaryObj._kind);
+          const ghostGraphic = behaviors.render(primaryObj, {
+            isSelected: false,
+            isHovered: false,
+            isDragging: false,
+            isStackTarget: false,
             cameraScale,
-            'AwarenessManager',
-          ),
-          minimal: true, // Render in minimal mode (skip decorative elements)
-          gameAssets: null, // Ghosts don't need game assets (minimal mode)
-        });
-        ghostGraphic.alpha = 0.5; // Semi-transparent
+            createText: visual.createText.bind(visual),
+            createKindLabel: visual.createKindLabel.bind(visual),
+            scaleStrokeWidth: createScaleStrokeWidth(
+              cameraScale,
+              'AwarenessManager',
+            ),
+            minimal: true, // Render in minimal mode (skip decorative elements)
+            gameAssets: null, // Ghosts don't need game assets (minimal mode)
+          });
+          ghostGraphic.alpha = 0.5; // Semi-transparent
 
-        ghostContainer.addChild(ghostGraphic);
+          ghostContainer.addChild(ghostGraphic);
+          hasRenderedPrimary = true;
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          const errorType =
+            error instanceof Error ? error.constructor.name : typeof error;
+          console.error(
+            `[AwarenessManager] Primary object rendering failed - falling back to generic rectangle`,
+            {
+              errorId: AWARENESS_GHOST_RENDER_FAILED,
+              primaryId: state.drag.primaryId,
+              objectKind: primaryObj._kind,
+              errorMessage,
+              errorType,
+            },
+          );
+          // Continue to fallback rendering below
+        }
 
         // Render secondary objects if we have offsets
-        if (state.drag.secondaryOffsets) {
+        if (hasRenderedPrimary && state.drag.secondaryOffsets) {
           for (const [secondaryObjId, offset] of Object.entries(
             state.drag.secondaryOffsets,
           )) {
             const secondaryObj = sceneManager.getObject(secondaryObjId);
 
             if (secondaryObj) {
-              const secondaryBehaviors = getBehaviors(secondaryObj._kind);
-              const secondaryGraphic = secondaryBehaviors.render(secondaryObj, {
-                isSelected: false,
-                isHovered: false,
-                isDragging: false,
-                isStackTarget: false,
-                cameraScale,
-                createText: visual.createText.bind(visual),
-                createKindLabel: visual.createKindLabel.bind(visual),
-                scaleStrokeWidth: createScaleStrokeWidth(
-                  cameraScale,
-                  'AwarenessManager',
-                ),
-                minimal: true, // Render in minimal mode (skip decorative elements)
-                gameAssets: null, // Ghosts don't need game assets (minimal mode)
-              });
-              secondaryGraphic.alpha = 0.5; // Semi-transparent
+              try {
+                const secondaryBehaviors = getBehaviors(secondaryObj._kind);
+                const secondaryGraphic = secondaryBehaviors.render(
+                  secondaryObj,
+                  {
+                    isSelected: false,
+                    isHovered: false,
+                    isDragging: false,
+                    isStackTarget: false,
+                    cameraScale,
+                    createText: visual.createText.bind(visual),
+                    createKindLabel: visual.createKindLabel.bind(visual),
+                    scaleStrokeWidth: createScaleStrokeWidth(
+                      cameraScale,
+                      'AwarenessManager',
+                    ),
+                    minimal: true, // Render in minimal mode (skip decorative elements)
+                    gameAssets: null, // Ghosts don't need game assets (minimal mode)
+                  },
+                );
+                secondaryGraphic.alpha = 0.5; // Semi-transparent
 
-              // Position relative to primary object
-              secondaryGraphic.x = offset.dx;
-              secondaryGraphic.y = offset.dy;
-              secondaryGraphic.rotation = (offset.dr * Math.PI) / 180;
+                // Position relative to primary object
+                secondaryGraphic.x = offset.dx;
+                secondaryGraphic.y = offset.dy;
+                secondaryGraphic.rotation = (offset.dr * Math.PI) / 180;
 
-              ghostContainer.addChild(secondaryGraphic);
+                ghostContainer.addChild(secondaryGraphic);
+              } catch (error) {
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                const errorType =
+                  error instanceof Error
+                    ? error.constructor.name
+                    : typeof error;
+                console.error(
+                  `[AwarenessManager] Secondary object rendering failed - skipping`,
+                  {
+                    errorId: AWARENESS_GHOST_RENDER_FAILED,
+                    secondaryId: secondaryObjId,
+                    primaryId: state.drag.primaryId,
+                    objectKind: secondaryObj._kind,
+                    errorMessage,
+                    errorType,
+                  },
+                );
+                // Continue with other secondary objects
+              }
+            } else {
+              console.warn(
+                `[AwarenessManager] Secondary object not found in scene`,
+                {
+                  errorId: AWARENESS_GHOST_OBJECT_MISSING,
+                  secondaryId: secondaryObjId,
+                  primaryId: state.drag.primaryId,
+                },
+              );
             }
           }
         }
-      } else {
-        // Fallback: render a generic rectangle if object not found
+      }
+
+      // Render fallback if primary object not found or rendering failed
+      if (!primaryObj || !hasRenderedPrimary) {
+        if (!primaryObj) {
+          console.warn(
+            `[AwarenessManager] Primary object not found in scene - rendering fallback`,
+            {
+              errorId: AWARENESS_GHOST_OBJECT_MISSING,
+              primaryId: state.drag.primaryId,
+            },
+          );
+        }
+
+        // Fallback: render a generic rectangle
         const fallback = new Graphics();
         fallback.rect(-50, -70, 100, 140); // Stack size
         fallback.fill(0x3b82f6);
@@ -379,20 +449,58 @@ export class AwarenessManager {
         ghostContainer.addChild(fallback);
       }
 
-      this.awarenessContainer.addChild(ghostContainer);
-      awarenessData.dragGhost = ghostContainer;
-      awarenessData.draggedObjectIds = Array.from(currentIds); // Track current IDs
+      try {
+        this.awarenessContainer.addChild(ghostContainer);
+        awarenessData.dragGhost = ghostContainer;
+        awarenessData.draggedObjectIds = Array.from(currentIds); // Track current IDs
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const errorType =
+          error instanceof Error ? error.constructor.name : typeof error;
+        console.error(
+          `[AwarenessManager] Failed to add ghost container to scene`,
+          {
+            errorId: AWARENESS_GHOST_RENDER_FAILED,
+            primaryId: state.drag.primaryId,
+            errorMessage,
+            errorType,
+          },
+        );
+        // Clean up the failed container
+        ghostContainer.destroy({ children: true });
+        return; // Skip position updates below
+      }
     }
 
-    // Convert world coordinates to screen coordinates
-    const screenX = worldContainer.position.x + state.drag.pos.x * cameraScale;
-    const screenY = worldContainer.position.y + state.drag.pos.y * cameraScale;
+    // Convert world coordinates to screen coordinates and update position
+    try {
+      const screenX =
+        worldContainer.position.x + state.drag.pos.x * cameraScale;
+      const screenY =
+        worldContainer.position.y + state.drag.pos.y * cameraScale;
 
-    // Apply position and scale
-    awarenessData.dragGhost.x = screenX;
-    awarenessData.dragGhost.y = screenY;
-    awarenessData.dragGhost.scale.set(cameraScale);
-    awarenessData.dragGhost.rotation = (state.drag.pos.r * Math.PI) / 180;
+      // Apply position and scale
+      awarenessData.dragGhost.x = screenX;
+      awarenessData.dragGhost.y = screenY;
+      awarenessData.dragGhost.scale.set(cameraScale);
+      awarenessData.dragGhost.rotation = (state.drag.pos.r * Math.PI) / 180;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorType =
+        error instanceof Error ? error.constructor.name : typeof error;
+      console.error(
+        `[AwarenessManager] Failed to update ghost position/transform`,
+        {
+          errorId: AWARENESS_GHOST_RENDER_FAILED,
+          primaryId: state.drag.primaryId,
+          errorMessage,
+          errorType,
+        },
+      );
+      // Ghost will remain at previous position - not fatal
+    }
   }
 
   /**

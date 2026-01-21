@@ -70,7 +70,19 @@ export class TextureLoader {
     } catch (error) {
       this.failedUrls.add(url); // Mark as failed
       this.loadingStartTimes.delete(url); // Clean up tracking
-      throw error;
+
+      // Wrap error with additional context instead of plain re-throw
+      // This preserves the stack trace while adding helpful context
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const wrappedError = new Error(
+        `TextureLoader failed to load ${url}: ${errorMessage}`,
+      );
+      if (error instanceof Error && error.stack) {
+        // Preserve original stack trace
+        wrappedError.stack = error.stack;
+      }
+      throw wrappedError;
     } finally {
       this.loading.delete(url);
     }

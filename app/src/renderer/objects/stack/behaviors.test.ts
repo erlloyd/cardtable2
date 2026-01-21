@@ -116,6 +116,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       const singleStack = createTestStack();
       // Mock gameAssets and textureLoader so fallback text is shown
       const gameAssets: RenderContext['gameAssets'] = {
+        packs: [],
         cards: {
           card1: {
             type: 'player',
@@ -138,10 +139,13 @@ describe('Stack Behaviors - Visual Rendering', () => {
         isSlowLoading: vi.fn(() => false),
         hasFailed: vi.fn(() => false),
       };
-      mockContext.gameAssets = gameAssets;
-      mockContext.textureLoader = textureLoader;
+      const contextWithAssets = {
+        ...mockContext,
+        gameAssets,
+        textureLoader: textureLoader as TextureLoader,
+      };
 
-      StackBehaviors.render(singleStack, mockContext);
+      StackBehaviors.render(singleStack, contextWithAssets);
 
       // Count badge text should not be created for single cards
       // But card code text IS created for placeholders via createKindLabel
@@ -201,6 +205,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       const singleStack = createTestStack();
       // Mock gameAssets and textureLoader so fallback text is shown
       const gameAssets: RenderContext['gameAssets'] = {
+        packs: [],
         cards: {
           card1: {
             type: 'player',
@@ -223,10 +228,13 @@ describe('Stack Behaviors - Visual Rendering', () => {
         isSlowLoading: vi.fn(() => false),
         hasFailed: vi.fn(() => false),
       };
-      mockContext.gameAssets = gameAssets;
-      mockContext.textureLoader = textureLoader;
+      const contextWithAssets = {
+        ...mockContext,
+        gameAssets,
+        textureLoader: textureLoader as TextureLoader,
+      };
 
-      StackBehaviors.render(singleStack, mockContext);
+      StackBehaviors.render(singleStack, contextWithAssets);
 
       // Unstack handle text should not be created for single cards
       // But card code text IS created for placeholders via createKindLabel
@@ -312,6 +320,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       });
       // Mock gameAssets and textureLoader so fallback text is shown
       const gameAssets: RenderContext['gameAssets'] = {
+        packs: [],
         cards: {
           card1: {
             type: 'player',
@@ -334,13 +343,16 @@ describe('Stack Behaviors - Visual Rendering', () => {
         isSlowLoading: vi.fn(() => false),
         hasFailed: vi.fn(() => false),
       };
-      mockContext.gameAssets = gameAssets;
-      mockContext.textureLoader = textureLoader;
+      const contextWithAssets = {
+        ...mockContext,
+        gameAssets,
+        textureLoader: textureLoader as TextureLoader,
+      };
 
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
 
-      StackBehaviors.render(complexStack, mockContext);
+      StackBehaviors.render(complexStack, contextWithAssets);
 
       // Should call scaleStrokeWidth for:
       // 1. 3D effect border (1px)
@@ -365,6 +377,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       const minimalStack = createTestStack({ _faceUp: true });
       // Mock gameAssets and textureLoader so fallback text is shown
       const gameAssets: RenderContext['gameAssets'] = {
+        packs: [],
         cards: {
           card1: {
             type: 'player',
@@ -387,14 +400,17 @@ describe('Stack Behaviors - Visual Rendering', () => {
         isSlowLoading: vi.fn(() => false),
         hasFailed: vi.fn(() => false),
       };
-      mockContext.gameAssets = gameAssets;
-      mockContext.textureLoader = textureLoader;
+      const contextWithAssets = {
+        ...mockContext,
+        gameAssets,
+        textureLoader: textureLoader as TextureLoader,
+      };
 
       mockScaleStrokeWidth.mockClear();
       mockCreateText.mockClear();
       mockCreateKindLabel.mockClear();
 
-      StackBehaviors.render(minimalStack, mockContext);
+      StackBehaviors.render(minimalStack, contextWithAssets);
 
       // Should only call scaleStrokeWidth once (main border)
       expect(mockScaleStrokeWidth).toHaveBeenCalledTimes(1);
@@ -442,6 +458,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
       load: Mock<(url: string) => Promise<{ width: number; height: number }>>;
       get: Mock<(url: string) => { width: number; height: number } | undefined>;
       has: Mock<(url: string) => boolean>;
+      shouldShowFallback: Mock<(url: string) => boolean>;
+      isSlowLoading: Mock<(url: string) => boolean>;
+      hasFailed: Mock<(url: string) => boolean>;
     };
     let mockTexture: { width: number; height: number };
     let mockOnTextureLoaded: Mock<(url: string) => void>;

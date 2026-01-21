@@ -1,4 +1,9 @@
 import { Texture, ImageSource } from 'pixi.js';
+import {
+  TEXTURE_FETCH_FAILED,
+  TEXTURE_DECODE_FAILED,
+  TEXTURE_CREATE_FAILED,
+} from '../../constants/errorIds';
 
 /**
  * TextureLoader - Service for loading textures from URLs
@@ -76,27 +81,76 @@ export class TextureLoader {
    * Fetches the image, decodes it to ImageBitmap, and creates a PixiJS Texture.
    */
   private async loadInternal(url: string): Promise<Texture> {
+    // Fetch the image
+    let response: Response;
     try {
-      // Fetch the image
-      const response = await fetch(url);
+      response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+        const error = new Error(
+          `Failed to fetch ${url}: ${response.statusText}`,
+        );
+        console.error(`[TextureLoader] Network fetch failed`, {
+          errorId: TEXTURE_FETCH_FAILED,
+          url,
+          status: response.status,
+          statusText: response.statusText,
+        });
+        throw error;
       }
+    } catch (error) {
+      // Network errors or fetch API failures
+      if (
+        error instanceof Error &&
+        !error.message.includes('Failed to fetch')
+      ) {
+        // Unexpected error during fetch (not our thrown error)
+        console.error(`[TextureLoader] Unexpected error during fetch`, {
+          errorId: TEXTURE_FETCH_FAILED,
+          url,
+          errorMessage: error.message,
+          errorType: error.constructor.name,
+        });
+      }
+      throw error;
+    }
 
-      // Decode to ImageBitmap (works in both Worker and Main thread)
-      const blob = await response.blob();
-      const imageBitmap = await createImageBitmap(blob);
+    // Decode to ImageBitmap (works in both Worker and Main thread)
+    let blob: Blob;
+    let imageBitmap: ImageBitmap;
 
-      // Create PixiJS Texture from ImageBitmap
+    try {
+      blob = await response.blob();
+      imageBitmap = await createImageBitmap(blob);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorType =
+        error instanceof Error ? error.constructor.name : typeof error;
+      console.error(`[TextureLoader] Failed to decode image bitmap`, {
+        errorId: TEXTURE_DECODE_FAILED,
+        url,
+        errorMessage,
+        errorType,
+      });
+      throw error;
+    }
+
+    // Create PixiJS Texture from ImageBitmap
+    try {
       const imageSource = new ImageSource({ resource: imageBitmap });
       const texture = new Texture({ source: imageSource });
-
       return texture;
     } catch (error) {
-      console.error(
-        `[TextureLoader] Failed to load texture from ${url}:`,
-        error,
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorType =
+        error instanceof Error ? error.constructor.name : typeof error;
+      console.error(`[TextureLoader] Failed to create PixiJS texture`, {
+        errorId: TEXTURE_CREATE_FAILED,
+        url,
+        errorMessage,
+        errorType,
+      });
       throw error;
     }
   }

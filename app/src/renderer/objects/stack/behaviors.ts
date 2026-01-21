@@ -21,6 +21,7 @@ import {
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
+import { TEXTURE_LOAD_FAILED } from '../../../constants/errorIds';
 
 /**
  * Helper: Get the card image URL for the top card in a stack
@@ -201,24 +202,16 @@ function renderMainCard(
     }
 
     // Start async texture load and trigger re-render when done
+    // Note: TextureLoader tracks slow loads internally via isSlowLoading()
+    // We rely on periodic re-renders (e.g., from user interaction) to check shouldShowFallback()
     if (imageUrl && ctx.textureLoader && ctx.onTextureLoaded) {
-      // Set a timeout to trigger re-render after 5 seconds (to show fallback text)
-      const slowLoadTimeout = setTimeout(() => {
-        // After 5 seconds, trigger re-render to show fallback text
-        ctx.onTextureLoaded?.(imageUrl);
-      }, 5000);
-
       ctx.textureLoader
         .load(imageUrl)
         .then(() => {
-          // Clear timeout since load succeeded
-          clearTimeout(slowLoadTimeout);
           // Texture is now cached - trigger re-render to show it
           ctx.onTextureLoaded?.(imageUrl);
         })
         .catch((error) => {
-          // Clear timeout since we're handling the failure
-          clearTimeout(slowLoadTimeout);
           // Trigger re-render to show fallback text
           ctx.onTextureLoaded?.(imageUrl);
 
@@ -229,6 +222,7 @@ function renderMainCard(
           console.error(
             `[StackBehaviors] Texture load failed - Image will show placeholder`,
             {
+              errorId: TEXTURE_LOAD_FAILED,
               imageUrl,
               errorMessage,
               errorType,

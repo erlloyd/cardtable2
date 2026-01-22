@@ -569,9 +569,10 @@ export class VisualManager {
           });
 
           // Trigger a render to display the newly loaded texture
-          // Use requestAnimationFrame to avoid interfering with in-progress pointer events
+          // Use queueMicrotask to defer until after current event handler completes
+          // This prevents interference with pointer event processing
           if (this.app) {
-            requestAnimationFrame(() => {
+            queueMicrotask(() => {
               if (this.app) {
                 this.app.renderer.render(this.app.stage);
               }

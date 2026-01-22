@@ -97,33 +97,30 @@ export class TextureLoader {
     let response: Response;
     try {
       response = await fetch(url);
-      if (!response.ok) {
-        const error = new Error(
-          `Failed to fetch ${url}: ${response.statusText}`,
-        );
-        console.error(`[TextureLoader] Network fetch failed`, {
-          errorId: TEXTURE_FETCH_FAILED,
-          url,
-          status: response.status,
-          statusText: response.statusText,
-        });
-        throw error;
-      }
     } catch (error) {
-      // Network errors or fetch API failures
-      if (
-        error instanceof Error &&
-        !error.message.includes('Failed to fetch')
-      ) {
-        // Unexpected error during fetch (not our thrown error)
-        console.error(`[TextureLoader] Unexpected error during fetch`, {
-          errorId: TEXTURE_FETCH_FAILED,
-          url,
-          errorMessage: error.message,
-          errorType: error.constructor.name,
-        });
-      }
+      // True network errors (DNS failure, connection refused, etc)
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorType =
+        error instanceof Error ? error.constructor.name : typeof error;
+      console.error(`[TextureLoader] Network error during fetch`, {
+        errorId: TEXTURE_FETCH_FAILED,
+        url,
+        errorMessage,
+        errorType,
+      });
       throw error;
+    }
+
+    // Check HTTP response status
+    if (!response.ok) {
+      console.error(`[TextureLoader] HTTP error response`, {
+        errorId: TEXTURE_FETCH_FAILED,
+        url,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
     }
 
     // Decode to ImageBitmap (works in both Worker and Main thread)

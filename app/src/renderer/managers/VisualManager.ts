@@ -569,8 +569,13 @@ export class VisualManager {
           });
 
           // Trigger a render to display the newly loaded texture
+          // Use requestAnimationFrame to avoid interfering with in-progress pointer events
           if (this.app) {
-            this.app.renderer.render(this.app.stage);
+            requestAnimationFrame(() => {
+              if (this.app) {
+                this.app.renderer.render(this.app.stage);
+              }
+            });
           }
         },
       }),

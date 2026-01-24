@@ -350,6 +350,225 @@ describe('TextureLoader', () => {
     });
   });
 
+  describe('Slow Loading Detection', () => {
+    it('should not mark URL as slow loading before 5 seconds', async () => {
+      // Arrange
+      vi.useFakeTimers();
+      const url = 'http://slow.example.com/image.jpg';
+      const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
+
+      // Create a promise that won't resolve immediately
+      let resolveLoad: (value: {
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }) => void;
+      const fetchPromise = new Promise<{
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }>((resolve) => {
+        resolveLoad = resolve;
+      });
+      global.fetch = vi.fn().mockReturnValue(fetchPromise);
+
+      // Act - Start load
+      const loadPromise = loader.load(url);
+
+      // Assert - Should not be slow initially
+      expect(loader.isSlowLoading(url)).toBe(false);
+      expect(loader.shouldShowFallback(url)).toBe(false);
+
+      // Advance time by 4.9 seconds
+      vi.advanceTimersByTime(4900);
+      expect(loader.isSlowLoading(url)).toBe(false);
+      expect(loader.shouldShowFallback(url)).toBe(false);
+
+      // Cleanup
+      resolveLoad!({ ok: true, blob: () => Promise.resolve(mockBlob) });
+      await loadPromise;
+      vi.useRealTimers();
+    });
+
+    it('should mark URL as slow loading after 5 seconds', async () => {
+      // Arrange
+      vi.useFakeTimers();
+      const url = 'http://slow.example.com/image.jpg';
+      const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
+
+      // Create a promise that won't resolve immediately
+      let resolveLoad: (value: {
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }) => void;
+      const fetchPromise = new Promise<{
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }>((resolve) => {
+        resolveLoad = resolve;
+      });
+      global.fetch = vi.fn().mockReturnValue(fetchPromise);
+
+      // Act - Start load
+      const loadPromise = loader.load(url);
+
+      // Advance time past 5 seconds
+      vi.advanceTimersByTime(5001);
+
+      // Assert
+      expect(loader.isSlowLoading(url)).toBe(true);
+      expect(loader.shouldShowFallback(url)).toBe(true);
+
+      // Cleanup
+      resolveLoad!({ ok: true, blob: () => Promise.resolve(mockBlob) });
+      await loadPromise;
+      vi.useRealTimers();
+    });
+
+    it('should clear slow loading state after successful load', async () => {
+      // Arrange
+      vi.useFakeTimers();
+      const url = 'http://slow.example.com/image.jpg';
+      const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
+
+      // Create a promise that resolves after we check
+      let resolveLoad: (value: {
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }) => void;
+      const fetchPromise = new Promise<{
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }>((resolve) => {
+        resolveLoad = resolve;
+      });
+      global.fetch = vi.fn().mockReturnValue(fetchPromise);
+
+      // Act - Start slow load
+      const loadPromise = loader.load(url);
+
+      // Advance time to make it "slow"
+      vi.advanceTimersByTime(5001);
+      expect(loader.isSlowLoading(url)).toBe(true);
+
+      // Resolve the load
+      resolveLoad!({ ok: true, blob: () => Promise.resolve(mockBlob) });
+      await loadPromise;
+
+      // Assert - Should no longer be slow loading
+      expect(loader.isSlowLoading(url)).toBe(false);
+      expect(loader.shouldShowFallback(url)).toBe(false);
+
+      vi.useRealTimers();
+    });
+
+    it('should mark URL as failed after load fails', async () => {
+      // Arrange
+      const url = 'http://example.com/missing.jpg';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        statusText: 'Not Found',
+      });
+
+      // Act
+      await expect(loader.load(url)).rejects.toThrow();
+
+      // Assert
+      expect(loader.hasFailed(url)).toBe(true);
+      expect(loader.shouldShowFallback(url)).toBe(true);
+    });
+
+    it('should clear failed state when retrying load', async () => {
+      // Arrange
+      const url = 'http://example.com/image.jpg';
+
+      // First attempt fails
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        statusText: 'Not Found',
+      });
+      await expect(loader.load(url)).rejects.toThrow();
+      expect(loader.hasFailed(url)).toBe(true);
+
+      // Act - Retry with success
+      const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        blob: () => Promise.resolve(mockBlob),
+      });
+      await loader.load(url);
+
+      // Assert - Should no longer be marked as failed
+      expect(loader.hasFailed(url)).toBe(false);
+      expect(loader.shouldShowFallback(url)).toBe(false);
+    });
+
+    it('should clear tracking state on clear()', async () => {
+      // Arrange
+      vi.useFakeTimers();
+      const url = 'http://slow.example.com/image.jpg';
+
+      // Start a slow load
+      let resolveLoad: (value: {
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }) => void;
+      const fetchPromise = new Promise<{
+        ok: boolean;
+        blob: () => Promise<Blob>;
+      }>((resolve) => {
+        resolveLoad = resolve;
+      });
+      global.fetch = vi.fn().mockReturnValue(fetchPromise);
+
+      const loadPromise = loader.load(url);
+      vi.advanceTimersByTime(5001);
+      expect(loader.isSlowLoading(url)).toBe(true);
+
+      // Act - Clear loader
+      loader.clear();
+
+      // Assert - Should no longer track as slow loading
+      expect(loader.isSlowLoading(url)).toBe(false);
+      expect(loader.hasFailed(url)).toBe(false);
+
+      // Cleanup
+      resolveLoad!({
+        ok: true,
+        blob: () => Promise.resolve(new Blob(['data'])),
+      });
+      await loadPromise.catch(() => {}); // Ignore error from cleared loader
+      vi.useRealTimers();
+    });
+
+    it('should handle failed URL being cleared and re-attempted', async () => {
+      // Arrange
+      const url = 'http://example.com/image.jpg';
+
+      // First attempt fails
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        statusText: 'Not Found',
+      });
+      await expect(loader.load(url)).rejects.toThrow();
+      expect(loader.hasFailed(url)).toBe(true);
+
+      // Act - Clear and try again with success
+      loader.clear();
+      expect(loader.hasFailed(url)).toBe(false);
+
+      const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        blob: () => Promise.resolve(mockBlob),
+      });
+      const texture = await loader.load(url);
+
+      // Assert
+      expect(texture).toBeDefined();
+      expect(loader.hasFailed(url)).toBe(false);
+      expect(loader.shouldShowFallback(url)).toBe(false);
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle empty URL', async () => {
       // Arrange

@@ -170,11 +170,26 @@ export function useCanvasLifecycle(
     const container = containerRef.current;
     if (!canvas || !container || !renderer || !isCanvasInitialized) return;
 
+    // Track last sent dimensions to avoid redundant resize messages
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let lastDpr = 0;
+
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const dpr = window.devicePixelRatio || 1;
-        const width = entry.contentRect.width * dpr;
-        const height = entry.contentRect.height * dpr;
+        const width = Math.round(entry.contentRect.width * dpr);
+        const height = Math.round(entry.contentRect.height * dpr);
+
+        // Only send resize message if dimensions actually changed
+        // This prevents ResizeObserver loops and redundant renders
+        if (width === lastWidth && height === lastHeight && dpr === lastDpr) {
+          continue;
+        }
+
+        lastWidth = width;
+        lastHeight = height;
+        lastDpr = dpr;
 
         // Send resize message to renderer
         const message: MainToRendererMessage = {

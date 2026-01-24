@@ -21,17 +21,38 @@ import {
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
+import {
+  TEXTURE_LOAD_FAILED,
+  CARD_IMAGE_NOT_FOUND,
+  CARD_IMAGE_NO_FACE,
+  CARD_IMAGE_NO_BACK,
+} from '../../../constants/errorIds';
+
+/**
+ * Result type for card image URL lookup
+ */
+type CardImageResult =
+  | { success: true; url: string }
+  | {
+      success: false;
+      reason: 'no-assets' | 'card-not-found' | 'no-face' | 'no-back';
+      cardId?: string;
+    };
 
 /**
  * Helper: Get the card image URL for the top card in a stack
  *
- * Returns the appropriate image URL (face or back) based on _faceUp state.
- * Returns null if gameAssets is unavailable or card not found.
+ * Returns a discriminated union indicating success with URL or failure with reason.
+ * This allows callers to distinguish between different error types and provide
+ * appropriate fallback UI.
  */
-function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
+function getCardImageUrl(
+  obj: StackObject,
+  ctx: RenderContext,
+): CardImageResult {
   // Check if we have gameAssets and the object has cards
   if (!ctx.gameAssets || !obj._cards || obj._cards.length === 0) {
-    return null;
+    return { success: false, reason: 'no-assets' };
   }
 
   // Get the top card ID (first in array)
@@ -42,47 +63,50 @@ function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
     console.error(
       `[StackBehaviors] Card lookup failed - Card ID "${topCardId}" not found in gameAssets`,
       {
+        errorId: CARD_IMAGE_NOT_FOUND,
         cardId: topCardId,
         stackObjectId: ctx.objectId,
         availableCards: Object.keys(ctx.gameAssets.cards).length,
         sampleCardIds: Object.keys(ctx.gameAssets.cards).slice(0, 5),
       },
     );
-    return null;
+    return { success: false, reason: 'card-not-found', cardId: topCardId };
   }
 
   // Determine which image to show (face or back)
   if (obj._faceUp) {
     // Face up - show card face
     if (card.face) {
-      return card.face;
+      return { success: true, url: card.face };
     }
 
     console.error(
       `[StackBehaviors] Missing face image - Card "${topCardId}" (type: "${card.type}") has no face image defined`,
       {
+        errorId: CARD_IMAGE_NO_FACE,
         cardId: topCardId,
         cardType: card.type,
         hasCardFace: !!card.face,
         stackObjectId: ctx.objectId,
       },
     );
-    return null;
+    return { success: false, reason: 'no-face', cardId: topCardId };
   } else {
     // Face down - show card back (from card override or card type default)
     if (card.back) {
-      return card.back;
+      return { success: true, url: card.back };
     }
 
     // Fall back to card type's back image
     const cardType = ctx.gameAssets.cardTypes[card.type];
     if (cardType?.back) {
-      return cardType.back;
+      return { success: true, url: cardType.back };
     }
 
     console.error(
       `[StackBehaviors] Missing back image - Card "${topCardId}" (type: "${card.type}") has no back image defined`,
       {
+        errorId: CARD_IMAGE_NO_BACK,
         cardId: topCardId,
         cardType: card.type,
         hasCardBack: !!card.back,
@@ -90,7 +114,7 @@ function getCardImageUrl(obj: StackObject, ctx: RenderContext): string | null {
         stackObjectId: ctx.objectId,
       },
     );
-    return null;
+    return { success: false, reason: 'no-back', cardId: topCardId };
   }
 }
 
@@ -142,7 +166,8 @@ function renderMainCard(
   ctx: RenderContext,
 ): void {
   const color = getStackColor(obj);
-  const imageUrl = getCardImageUrl(obj, ctx);
+  const imageResult = getCardImageUrl(obj, ctx);
+  const imageUrl = imageResult.success ? imageResult.url : null;
   const cachedTexture = imageUrl && ctx.textureLoader?.get(imageUrl);
 
   if (cachedTexture) {
@@ -183,9 +208,16 @@ function renderMainCard(
     graphic.label = 'card-face'; // Labeled child for animation targeting
     container.addChild(graphic);
 
-    // Add card code text (top card ID) on placeholder
+    // Only show card code text if loading has failed or is taking too long
     // Skip decorative text in minimal mode (like badges and handles)
-    if (obj._cards && obj._cards.length > 0 && !ctx.minimal) {
+    const shouldShowFallback =
+      imageUrl && ctx.textureLoader?.shouldShowFallback(imageUrl);
+    if (
+      obj._cards &&
+      obj._cards.length > 0 &&
+      !ctx.minimal &&
+      shouldShowFallback
+    ) {
       const topCardCode = obj._cards[0];
       const text = ctx.createKindLabel(topCardCode);
       text.anchor.set(0.5, 0.5);
@@ -194,6 +226,8 @@ function renderMainCard(
     }
 
     // Start async texture load and trigger re-render when done
+    // Note: TextureLoader tracks slow loads internally via isSlowLoading()
+    // We rely on periodic re-renders (e.g., from user interaction) to check shouldShowFallback()
     if (imageUrl && ctx.textureLoader && ctx.onTextureLoaded) {
       ctx.textureLoader
         .load(imageUrl)
@@ -202,6 +236,9 @@ function renderMainCard(
           ctx.onTextureLoaded?.(imageUrl);
         })
         .catch((error) => {
+          // Trigger re-render to show fallback text
+          ctx.onTextureLoaded?.(imageUrl);
+
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           const errorType =
@@ -209,6 +246,7 @@ function renderMainCard(
           console.error(
             `[StackBehaviors] Texture load failed - Image will show placeholder`,
             {
+              errorId: TEXTURE_LOAD_FAILED,
               imageUrl,
               errorMessage,
               errorType,

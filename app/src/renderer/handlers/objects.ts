@@ -5,11 +5,8 @@
  * Creates and manages PixiJS visuals for TableObjects.
  */
 
-import { Container, Text } from 'pixi.js';
 import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
-import type { RenderContext } from '../objects/types';
-import { getBehaviors } from '../objects';
 import { Easing } from '../managers';
 import {
   SHUFFLE_DETECT_INVALID_ARRAY,
@@ -36,7 +33,12 @@ export function handleSyncObjects(
   clearObjects(context);
 
   for (const { id, obj } of message.objects) {
-    addObjectVisual(context, id, obj);
+    context.visual.addObject(
+      id,
+      obj,
+      context.sceneManager,
+      context.worldContainer,
+    );
   }
 
   context.app.renderer.render(context.app.stage);
@@ -54,7 +56,12 @@ export function handleObjectsAdded(
   console.log(`[RendererCore] Adding ${message.objects.length} object(s)`);
 
   for (const { id, obj } of message.objects) {
-    addObjectVisual(context, id, obj);
+    context.visual.addObject(
+      id,
+      obj,
+      context.sceneManager,
+      context.worldContainer,
+    );
 
     // Check if this object is being remotely dragged - hide it immediately (only ghost should show)
     if (context.awareness.isObjectRemotelyDragged(id)) {
@@ -147,7 +154,33 @@ export function handleObjectsRemoved(
   console.log(`[RendererCore] Removing ${message.ids.length} object(s)`);
 
   for (const id of message.ids) {
-    removeObjectVisual(context, id);
+    // Remove visual via VisualManager
+    context.visual.removeObject(
+      id,
+      context.sceneManager,
+      context.worldContainer,
+    );
+
+    // Clear selection if this object was selected
+    if (context.selection.isSelected(id)) {
+      context.selection.clearSelection(id);
+
+      // Notify Board to clear screen coordinates for this deleted object
+      context.postResponse({
+        type: 'objects-unselected',
+        ids: [id],
+      });
+    }
+
+    // Clear hover if this object was hovered
+    if (context.hover.getHoveredObjectId() === id) {
+      context.hover.clearAll();
+    }
+
+    // Clear drag if this object was being dragged
+    if (context.drag.getDraggedObjectId() === id) {
+      context.drag.cancelObjectDrag();
+    }
   }
 
   // Render after removing
@@ -189,40 +222,6 @@ function clearObjects(context: RendererContext): void {
   context.selection.clearAll();
   context.hover.clearAll();
   context.drag.clear();
-}
-
-/**
- * Helper: Add a visual representation for a TableObject
- *
- * Creates PixiJS Container with Graphics and adds to scene.
- */
-function addObjectVisual(
-  context: RendererContext,
-  id: string,
-  obj: TableObject,
-): void {
-  // Skip if visual already exists
-  if (context.visual.getVisual(id) !== undefined) {
-    console.warn(`[RendererCore] Visual for object ${id} already exists`);
-    return;
-  }
-
-  // Add to scene manager for hit-testing
-  context.sceneManager.addObject(id, obj);
-
-  // Create visual representation
-  const visual = createObjectGraphics(context, id, obj);
-
-  // Position the visual
-  visual.x = obj._pos.x;
-  visual.y = obj._pos.y;
-  visual.rotation = (obj._pos.r * Math.PI) / 180; // Convert degrees to radians
-
-  // Store visual reference
-  context.visual.addVisual(id, visual);
-
-  // Add to world container
-  context.worldContainer.addChild(visual);
 }
 
 /**
@@ -423,63 +422,6 @@ function updateObjectVisual(
 }
 
 /**
- * Helper: Remove an object visual
- *
- * Removes visual from world container and cleans up references.
- */
-function removeObjectVisual(context: RendererContext, id: string): void {
-  const visual = context.visual.getVisual(id);
-  if (visual) {
-    context.worldContainer.removeChild(visual);
-    visual.destroy();
-  }
-
-  context.visual.removeVisual(id);
-  context.sceneManager.removeObject(id);
-
-  // Clear selection if this object was selected
-  if (context.selection.isSelected(id)) {
-    context.selection.clearSelection(id);
-
-    // Notify Board to clear screen coordinates for this deleted object
-    context.postResponse({
-      type: 'objects-unselected',
-      ids: [id],
-    });
-  }
-
-  // Clear hover if this object was hovered
-  if (context.hover.getHoveredObjectId() === id) {
-    context.hover.clearAll();
-  }
-
-  // Clear drag if this object was being dragged
-  if (context.drag.getDraggedObjectId() === id) {
-    context.drag.cancelObjectDrag();
-  }
-}
-
-/**
- * Helper: Create PixiJS Graphics for a TableObject
- *
- * Handles different object types (Stack, Token, Zone, etc.).
- */
-function createObjectGraphics(
-  context: RendererContext,
-  objectId: string,
-  obj: TableObject,
-): Container {
-  const container = new Container();
-
-  // Create base shape using shared method (no duplication!)
-  // Object behaviors handle their own text rendering via ctx.createKindLabel()
-  const shapeGraphic = createBaseShapeGraphic(context, objectId, obj, false);
-  container.addChild(shapeGraphic);
-
-  return container;
-}
-
-/**
  * Helper: Create scaleStrokeWidth function for RenderContext
  *
  * Creates a closure that counter-scales stroke widths using sqrt(cameraScale)
@@ -509,92 +451,4 @@ export function createScaleStrokeWidth(
     const zoomFactor = Math.max(1, Math.sqrt(cameraScale));
     return Math.max(0.5, baseWidth / zoomFactor);
   };
-}
-
-/**
- * Helper: Create RenderContext from RendererContext with overrides
- *
- * Centralizes RenderContext creation so we only need to add new fields once.
- * All managers should use this instead of building RenderContext manually.
- */
-export function createRenderContext(
-  context: RendererContext,
-  overrides: Partial<RenderContext> = {},
-): RenderContext {
-  const cameraScale = context.coordConverter.getCameraScale();
-  return {
-    objectId: overrides.objectId,
-    isSelected: overrides.isSelected ?? false,
-    isHovered: overrides.isHovered ?? false,
-    isDragging: overrides.isDragging ?? false,
-    isStackTarget: overrides.isStackTarget ?? false,
-    minimal: overrides.minimal,
-    cameraScale: overrides.cameraScale ?? cameraScale,
-    createText:
-      overrides.createText ?? context.visual.createText.bind(context.visual),
-    createKindLabel: overrides.createKindLabel ?? createKindLabel,
-    scaleStrokeWidth:
-      overrides.scaleStrokeWidth ?? createScaleStrokeWidth(cameraScale),
-    gameAssets: overrides.gameAssets ?? context.gameAssets,
-    textureLoader: overrides.textureLoader ?? context.textureLoader,
-    onTextureLoaded: overrides.onTextureLoaded,
-  };
-}
-
-/**
- * Helper: Create base shape graphic for an object based on its kind
- *
- * Does NOT include text label or shadow.
- */
-function createBaseShapeGraphic(
-  context: RendererContext,
-  objectId: string,
-  obj: TableObject,
-  isSelected: boolean,
-): Container {
-  const behaviors = getBehaviors(obj._kind);
-
-  const renderContext = createRenderContext(context, {
-    objectId,
-    isSelected,
-    isHovered: context.hover.getHoveredObjectId() === objectId,
-    isDragging: context.drag.getDraggedObjectId() === objectId,
-    onTextureLoaded: (_url: string) => {
-      // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
-      const isShuffling = context.animation.isShuffling(objectId);
-      if (isShuffling) {
-        return;
-      }
-
-      // Re-render this object when its texture finishes loading
-      context.visual.updateVisualForObjectChange(
-        objectId,
-        context.sceneManager,
-      );
-    },
-  });
-
-  return behaviors.render(obj, renderContext);
-}
-
-/**
- * Helper: Create a text label showing the object's kind
- *
- * Returns a centered Text object ready to be added to a container.
- */
-function createKindLabel(kind: string): Text {
-  const kindText = new Text({
-    text: kind,
-    style: {
-      fontFamily: 'Arial',
-      fontSize: 24,
-      fill: 0xffffff, // White text
-      stroke: { color: 0x000000, width: 2 }, // Black outline for readability
-      align: 'center',
-    },
-  });
-  kindText.anchor.set(0.5); // Center the text
-  kindText.y = 0; // Center vertically in the object
-
-  return kindText;
 }

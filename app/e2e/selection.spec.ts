@@ -848,6 +848,12 @@ test.describe('Selection Ownership E2E', () => {
       metaKey: true, // CMD modifier
     });
 
+    // Wait for pointerdown to be fully processed (selection + visual updates)
+    // before starting drag move events
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+
     for (let i = 1; i <= 5; i++) {
       const moveX = click2X + (dragDeltaX * i) / 5;
       const moveY = click2Y + (dragDeltaY * i) / 5;

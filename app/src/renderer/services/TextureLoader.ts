@@ -71,13 +71,15 @@ export class TextureLoader {
       this.failedUrls.add(url); // Mark as failed
       this.loadingStartTimes.delete(url); // Clean up tracking
 
-      // Wrap error with additional context and preserve original error via "cause"
+      // Wrap error with additional context and preserve original error
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      throw new Error(
+      const wrappedError = new Error(
         `TextureLoader failed to load ${url}: ${errorMessage}`,
-        { cause: error },
       );
+      // Manually attach cause for ES2020 compatibility (Error.cause added in ES2022)
+      (wrappedError as Error & { cause?: unknown }).cause = error;
+      throw wrappedError;
     } finally {
       this.loading.delete(url);
     }

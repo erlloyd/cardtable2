@@ -496,6 +496,13 @@ export class AnimationManager {
     this.app.ticker.remove(this.tickerCallback);
     this.tickerCallback = null;
     this.isTickerActive = false;
+
+    // CRITICAL: Only stop the ticker if there are no other listeners
+    // Other managers (like VisualManager) may have active animations
+    // Check listener count: if count <= 1, it's just the Application's auto-render listener
+    if (this.app.ticker.started && this.app.ticker.count <= 1) {
+      this.app.ticker.stop();
+    }
   }
 
   /**

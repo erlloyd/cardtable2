@@ -92,6 +92,28 @@ pnpm run validate
 pnpm run format
 ```
 
+## Verification Requirements
+
+**CRITICAL - ALWAYS VERIFY BEFORE STATING FACTS:**
+
+1. **Background Tasks**: Before claiming how many tasks are running or their status, ALWAYS run `/tasks` or check the actual task list
+2. **File Contents**: Before claiming what's in a file, ALWAYS read it first
+3. **Command Output**: Before claiming what a command will output, ALWAYS run it first
+4. **Test Results**: Before claiming tests pass, ALWAYS run them first
+5. **Code Behavior**: Before claiming how code behaves, ALWAYS trace through it or test it
+
+**Never say:**
+- "There is only one X" without checking
+- "This will do Y" without verifying
+- "The file contains Z" without reading it
+- "X should work" without testing it
+
+**Always say:**
+- "Let me check..." then verify
+- "Let me run..." then execute
+- "Let me read..." then examine
+- If you make a claim and are proven wrong, immediately acknowledge the error and correct it
+
 ## Key Design Decisions
 
 ### Data Model

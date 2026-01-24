@@ -351,6 +351,7 @@ export abstract class RendererOrchestrator {
     this.camera.initialize(this.app, this.worldContainer);
     this.visual.initialize(this.app, this.renderMode);
     this.visual.setTextureLoader(this.textureLoader);
+    this.visual.setAnimationManager(this.animation);
     this.awareness.initialize(this.app.stage);
     this.gridSnap.initialize(this.app.stage);
     this.animation.initialize(this.app, this.visual.getAllVisuals());

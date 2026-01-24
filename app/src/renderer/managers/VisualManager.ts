@@ -39,6 +39,8 @@ export class VisualManager {
   private cameraScale: number = 1.0;
   private gameAssets: GameAssets | null = null;
   private textureLoader: TextureLoader | null = null;
+  private animationManager: { isShuffling: (id: string) => boolean } | null =
+    null;
 
   // Animation state
   private hoverAnimationActive = false;
@@ -138,6 +140,14 @@ export class VisualManager {
   }
 
   /**
+   * Set the animation manager for shuffle detection.
+   * Called during initialization.
+   */
+  setAnimationManager(manager: { isShuffling: (id: string) => boolean }): void {
+    this.animationManager = manager;
+  }
+
+  /**
    * Set text resolution multiplier for dynamic zoom quality.
    * Scales text resolution with zoom level to maintain sharpness (higher when
    * zoomed in, lower when zoomed out).
@@ -218,6 +228,81 @@ export class VisualManager {
    */
   getAllVisuals(): Map<string, Container & { targetScale?: number }> {
     return this.objectVisuals;
+  }
+
+  /**
+   * Add a new object to the scene.
+   * Creates visual representation, adds to scene manager and world container.
+   *
+   * @param objectId - ID of the object to add
+   * @param obj - TableObject data
+   * @param sceneManager - Scene manager for hit-testing
+   * @param worldContainer - PixiJS container to add visual to
+   */
+  addObject(
+    objectId: string,
+    obj: TableObject,
+    sceneManager: SceneManager,
+    worldContainer: Container,
+  ): void {
+    // Skip if visual already exists
+    if (this.objectVisuals.get(objectId) !== undefined) {
+      console.warn(
+        `[VisualManager] Visual for object ${objectId} already exists`,
+      );
+      return;
+    }
+
+    // Add to scene manager for hit-testing
+    sceneManager.addObject(objectId, obj);
+
+    // Create visual representation (just the shape, no shadows/labels)
+    const visual = new Container();
+    visual.label = objectId;
+
+    // Create base shape with texture loading support
+    const shapeGraphic = this.createBaseShapeGraphic(
+      objectId,
+      obj,
+      false, // isSelected
+      false, // isStackTarget
+      sceneManager,
+    );
+    visual.addChild(shapeGraphic);
+
+    // Position the visual
+    visual.x = obj._pos.x;
+    visual.y = obj._pos.y;
+    visual.rotation = (obj._pos.r * Math.PI) / 180; // Convert degrees to radians
+
+    // Store visual reference
+    this.objectVisuals.set(objectId, visual);
+
+    // Add to world container
+    worldContainer.addChild(visual);
+  }
+
+  /**
+   * Remove an object from the scene.
+   * Destroys visual and removes from scene manager.
+   *
+   * @param objectId - ID of the object to remove
+   * @param sceneManager - Scene manager to remove from
+   * @param worldContainer - PixiJS container to remove visual from
+   */
+  removeObject(
+    objectId: string,
+    sceneManager: SceneManager,
+    worldContainer: Container,
+  ): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (visual) {
+      worldContainer.removeChild(visual);
+      visual.destroy();
+    }
+
+    this.objectVisuals.delete(objectId);
+    sceneManager.removeObject(objectId);
   }
 
   /**
@@ -562,6 +647,11 @@ export class VisualManager {
         isSelected,
         isStackTarget,
         onTextureLoaded: (_url: string) => {
+          // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
+          if (this.animationManager?.isShuffling(objectId)) {
+            return;
+          }
+
           // Re-render this object when its texture finishes loading
           this.redrawVisual(objectId, sceneManager, {
             isSelected,

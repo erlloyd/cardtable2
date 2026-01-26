@@ -37,10 +37,35 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
     throw new Error(`Invalid JSON in asset pack from ${url}: ${message}`);
   }
 
+  return validateAssetPack(data, url);
+}
+
+/**
+ * Load an asset pack from JSON string (for local plugins)
+ */
+export function loadAssetPackFromString(
+  json: string,
+  source: string = 'string',
+): AssetPack {
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON in asset pack from ${source}: ${message}`);
+  }
+
+  return validateAssetPack(data, source);
+}
+
+/**
+ * Validate asset pack data
+ */
+function validateAssetPack(data: unknown, source: string): AssetPack {
   // Type guard validation
   if (typeof data !== 'object' || data === null) {
     throw new Error(
-      `Invalid asset pack from ${url}: expected object, got ${typeof data}`,
+      `Invalid asset pack from ${source}: expected object, got ${typeof data}`,
     );
   }
 
@@ -49,13 +74,13 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
   // Basic validation
   if (obj.schema !== 'ct-assets@1') {
     throw new Error(
-      `Invalid schema in asset pack from ${url}: expected "ct-assets@1", got "${String(obj.schema)}"`,
+      `Invalid schema in asset pack from ${source}: expected "ct-assets@1", got "${String(obj.schema)}"`,
     );
   }
 
   if (!obj.id || !obj.name || !obj.version) {
     throw new Error(
-      `Missing required fields in asset pack from ${url}: id, name, or version`,
+      `Missing required fields in asset pack from ${source}: id, name, or version`,
     );
   }
 
@@ -86,7 +111,31 @@ export async function loadScenario(url: string): Promise<Scenario> {
   }
 
   const data: unknown = await response.json();
+  return validateScenario(data);
+}
 
+/**
+ * Load a scenario from JSON string (for local plugins)
+ */
+export function loadScenarioFromString(
+  json: string,
+  source: string = 'string',
+): Scenario {
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON in scenario from ${source}: ${message}`);
+  }
+
+  return validateScenario(data);
+}
+
+/**
+ * Validate scenario data
+ */
+function validateScenario(data: unknown): Scenario {
   // Type guard validation
   if (typeof data !== 'object' || data === null) {
     throw new Error(`Invalid scenario: expected object, got ${typeof data}`);

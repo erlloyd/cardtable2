@@ -5,11 +5,18 @@
  * Handles asset packs, scenarios, and table object creation.
  */
 
-import type { Scenario, GameAssets, TableObject } from '@cardtable2/shared';
+import type {
+  Scenario,
+  GameAssets,
+  TableObject,
+  AssetPack,
+} from '@cardtable2/shared';
 import {
   loadAssetPack,
   loadAssetPacks,
   loadScenario,
+  loadScenarioFromString,
+  loadAssetPackFromString,
   mergeAssetPacks,
   resolveCard,
   resolveAllCards,
@@ -22,15 +29,29 @@ import {
   namespaceCardCode,
   instantiateScenario,
 } from './instantiate';
+import {
+  loadAllPlugins,
+  loadPlugin,
+  getPluginScenarioUrl,
+  loadLocalPluginDirectory,
+  getLocalPluginFile,
+  type LoadedPlugin,
+  type LocalPlugin,
+  type PluginManifest,
+  type PluginRegistryEntry,
+} from './pluginLoader';
 
 // Re-export types for convenience
 export type { GameAssets } from '@cardtable2/shared';
+export type { LoadedPlugin, LocalPlugin, PluginManifest, PluginRegistryEntry };
 
 // Re-export functions for convenience
 export {
   loadAssetPack,
   loadAssetPacks,
   loadScenario,
+  loadScenarioFromString,
+  loadAssetPackFromString,
   mergeAssetPacks,
   resolveCard,
   resolveAllCards,
@@ -40,6 +61,9 @@ export {
   namespaceDeckCards,
   namespaceCardCode,
   instantiateScenario,
+  loadAllPlugins,
+  loadPlugin,
+  loadLocalPluginDirectory,
 };
 
 // ============================================================================
@@ -236,4 +260,103 @@ export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
 
   // Merge and return
   return mergeAssetPacks(packs);
+}
+
+// ============================================================================
+// Plugin-Based Loading
+// ============================================================================
+
+/**
+ * Load a scenario from a plugin
+ *
+ * This loads a scenario from a plugin repository, fetching all required
+ * asset packs and instantiating the scenario objects.
+ *
+ * @param pluginId - The plugin ID from pluginsIndex.json
+ * @param scenarioFilename - The scenario filename from the plugin manifest
+ * @returns Complete loaded content ready to be added to Y.Doc
+ *
+ * @example
+ * ```typescript
+ * const content = await loadPluginScenario('marvelchampions', 'marvelchampions-rhino-scenario.json');
+ * // Add objects to Y.Doc
+ * for (const [id, obj] of content.objects) {
+ *   store.addObject(id, obj);
+ * }
+ * ```
+ */
+export async function loadPluginScenario(
+  pluginId: string,
+  scenarioFilename: string,
+): Promise<LoadedContent> {
+  // Load plugin manifest
+  const plugin = await loadPlugin(pluginId);
+
+  // Get scenario URL
+  const scenarioUrl = getPluginScenarioUrl(plugin, scenarioFilename);
+
+  // Load scenario using existing infrastructure
+  // Pass plugin baseUrl so pack IDs can be resolved to plugin URLs
+  // Remove trailing slash for consistency with loadCompleteScenario logic
+  const baseUrl = plugin.registry.baseUrl.replace(/\/$/, '');
+  return loadCompleteScenario(scenarioUrl, baseUrl);
+}
+
+/**
+ * Load a scenario from a local plugin directory
+ *
+ * Prompts the user to select a plugin directory, reads all files locally,
+ * and loads the scenario. This is useful for plugin development.
+ *
+ * @param scenarioFilename - The scenario filename from the plugin manifest
+ * @returns Complete loaded content ready to be added to Y.Doc
+ *
+ * @example
+ * ```typescript
+ * const content = await loadLocalPluginScenario('marvelchampions-rhino-scenario.json');
+ * // Add objects to Y.Doc
+ * for (const [id, obj] of content.objects) {
+ *   store.setObject(id, obj);
+ * }
+ * ```
+ */
+export async function loadLocalPluginScenario(
+  scenarioFilename?: string,
+): Promise<LoadedContent> {
+  // Prompt user to select directory
+  const plugin = await loadLocalPluginDirectory();
+
+  // If no scenario specified, use first one from manifest
+  const targetScenario = scenarioFilename ?? plugin.manifest.scenarios[0];
+  if (!targetScenario) {
+    throw new Error('No scenario found in plugin manifest');
+  }
+
+  // Load scenario JSON
+  const scenarioJson = await getLocalPluginFile(plugin, targetScenario);
+  const scenario = loadScenarioFromString(scenarioJson, targetScenario);
+
+  // Load all asset packs referenced by scenario
+  const packs: AssetPack[] = [];
+  for (const packRef of scenario.packs) {
+    // Pack references can be IDs (need .json extension) or full filenames
+    const packFilename = packRef.endsWith('.json')
+      ? packRef
+      : `${packRef}.json`;
+    const packJson = await getLocalPluginFile(plugin, packFilename);
+    const pack = loadAssetPackFromString(packJson, packFilename);
+    packs.push(pack);
+  }
+
+  // Merge packs
+  const content = mergeAssetPacks(packs);
+
+  // Instantiate scenario objects
+  const objects = instantiateScenario(scenario, content);
+
+  return {
+    scenario,
+    content,
+    objects,
+  };
 }

@@ -15,7 +15,12 @@ import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
-import { loadGameAssetPacks, type GameAssets } from '../content';
+import {
+  loadGameAssetPacks,
+  loadPluginScenario,
+  loadLocalPluginScenario,
+  type GameAssets,
+} from '../content';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -169,6 +174,101 @@ function Table() {
   // Enable keyboard shortcuts
   useKeyboardShortcuts(actionContext);
 
+  // Test function to load plugin scenario from GitHub
+  const handleLoadPluginScenario = async () => {
+    if (!store) {
+      console.error('[Table] Cannot load scenario: store not ready');
+      return;
+    }
+
+    try {
+      console.log(
+        '[Table] Loading Marvel Champions Rhino scenario from GitHub...',
+      );
+      const content = await loadPluginScenario(
+        'marvelchampions',
+        'marvelchampions-rhino-scenario.json',
+      );
+
+      console.log('[Table] Scenario loaded:', {
+        objectCount: content.objects.size,
+        scenarioName: content.scenario.name,
+        cardCount: Object.keys(content.content.cards).length,
+        sampleCards: Object.keys(content.content.cards).slice(0, 5),
+      });
+
+      setGameAssets(content.content);
+
+      // CRITICAL: Defer object addition until after React processes the gameAssets state update.
+      //
+      // Why this is necessary:
+      // - setGameAssets() schedules a React re-render but doesn't execute it immediately
+      // - Objects added to Y.Doc are forwarded to renderer immediately via useStoreSync
+      // - GameAssets reach renderer via Board's useEffect, which only fires after React re-renders
+      // - Without setTimeout, objects reach renderer before gameAssets, causing card lookup failures
+      //
+      // The setTimeout ensures:
+      // 1. setGameAssets schedules React re-render
+      // 2. setTimeout defers callback to next event loop tick
+      // 3. React completes re-render, Board useEffect sends gameAssets to renderer
+      // 4. Callback fires, objects are added to store and forwarded to renderer
+      // 5. Renderer has correct gameAssets when rendering objects
+      setTimeout(() => {
+        for (const [id, obj] of content.objects) {
+          store.setObject(id, obj);
+        }
+        console.log('[Table] Plugin scenario loaded successfully');
+      }, 0);
+    } catch (error) {
+      console.error('[Table] Failed to load plugin scenario:', error);
+    }
+  };
+
+  // Test function to load local plugin directory
+  const handleLoadLocalPlugin = async () => {
+    if (!store) {
+      console.error('[Table] Cannot load scenario: store not ready');
+      return;
+    }
+
+    try {
+      console.log('[Table] Opening directory picker for local plugin...');
+      const content = await loadLocalPluginScenario();
+
+      console.log('[Table] Local plugin scenario loaded:', {
+        objectCount: content.objects.size,
+        scenarioName: content.scenario.name,
+        cardCount: Object.keys(content.content.cards).length,
+        sampleCards: Object.keys(content.content.cards).slice(0, 5),
+      });
+
+      setGameAssets(content.content);
+
+      // CRITICAL: Defer object addition until after React processes the gameAssets state update.
+      //
+      // Why this is necessary:
+      // - setGameAssets() schedules a React re-render but doesn't execute it immediately
+      // - Objects added to Y.Doc are forwarded to renderer immediately via useStoreSync
+      // - GameAssets reach renderer via Board's useEffect, which only fires after React re-renders
+      // - Without setTimeout, objects reach renderer before gameAssets, causing card lookup failures
+      //
+      // The setTimeout ensures:
+      // 1. setGameAssets schedules React re-render
+      // 2. setTimeout defers callback to next event loop tick
+      // 3. React completes re-render, Board useEffect sends gameAssets to renderer
+      // 4. Callback fires, objects are added to store and forwarded to renderer
+      // 5. Renderer has correct gameAssets when rendering objects
+      setTimeout(() => {
+        for (const [id, obj] of content.objects) {
+          store.setObject(id, obj);
+        }
+        console.log('[Table] Local plugin scenario loaded successfully');
+      }, 0);
+    } catch (error) {
+      console.error('[Table] Failed to load local plugin:', error);
+    }
+  };
+
   return (
     <div className="table">
       <Suspense fallback={<div>Loading board...</div>}>
@@ -208,6 +308,54 @@ function Table() {
         gridSnapEnabled={gridSnapEnabled}
         onGridSnapEnabledChange={setGridSnapEnabled}
       />
+
+      {/* TEMPORARY: Test buttons for loading plugin scenarios */}
+      {store && isStoreReady && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '60px',
+            right: '20px',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <button
+            onClick={() => {
+              void handleLoadLocalPlugin();
+            }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#3498db',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+            }}
+          >
+            Load Local Plugin (Dev)
+          </button>
+          <button
+            onClick={() => {
+              void handleLoadPluginScenario();
+            }}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+            }}
+          >
+            Load from GitHub (Test)
+          </button>
+        </div>
+      )}
 
       {/* Command Palette */}
       <CommandPalette

@@ -1,0 +1,11 @@
+{
+  "plugins": [
+    {
+      "id": "marvelchampions",
+      "name": "Marvel Champions",
+      "author": "CardTable Community",
+      "description": "Marvel Champions: The Card Game - Core Set and expansions",
+      "baseUrl": "https://raw.githubusercontent.com/erlloyd/cardtable-plugin-marvelchampions/main/"
+    }
+  ]
+}

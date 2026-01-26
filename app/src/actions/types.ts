@@ -1,5 +1,6 @@
 import type { YjsStore } from '../store/YjsStore';
 import type { TableObjectYMap } from '../store/types';
+import type { GameAssets } from '../content';
 
 /**
  * Category constants for grouping actions
@@ -8,6 +9,7 @@ export const CARD_ACTIONS = 'Card Actions';
 export const SELECTION_ACTIONS = 'Selection';
 export const VIEW_ACTIONS = 'View';
 export const MANAGEMENT_ACTIONS = 'Management';
+export const CONTENT_ACTIONS = 'Content';
 
 /**
  * Selection context information for action availability and execution (M3.6-T4)
@@ -38,6 +40,7 @@ export interface ActionContext {
   currentRoute?: string; // Current route path (e.g., '/table/123' or '/dev/table/123')
   gridSnapEnabled?: boolean; // Whether grid snapping is enabled
   onGridSnapEnabledChange?: (enabled: boolean) => void; // Toggle grid snap callback
+  setGameAssets?: (assets: GameAssets) => void; // Set game assets callback for scenario loading
 }
 
 /**

@@ -1,5 +1,6 @@
 import { ActionRegistry } from './ActionRegistry';
-import { CARD_ACTIONS, VIEW_ACTIONS } from './types';
+import { CARD_ACTIONS, VIEW_ACTIONS, CONTENT_ACTIONS } from './types';
+import type { ActionContext } from './types';
 import {
   flipCards,
   exhaustCards,
@@ -10,7 +11,52 @@ import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
-import { loadCompleteScenario, findGameInIndex } from '../content';
+import {
+  loadCompleteScenario,
+  findGameInIndex,
+  loadPluginScenario,
+  loadLocalPluginScenario,
+  type LoadedContent,
+} from '../content';
+
+/**
+ * Common logic for loading scenarios and adding objects to the table.
+ *
+ * Handles the React state timing issue where gameAssets must reach the renderer
+ * before objects are added. Uses setTimeout to defer object addition until after
+ * React processes the state update.
+ *
+ * @param ctx - Action context with store and setGameAssets callback
+ * @param content - Loaded scenario content (scenario, gameAssets, objects)
+ * @param logPrefix - Prefix for console logs (e.g., '[Load Plugin]')
+ */
+function loadScenarioContent(
+  ctx: ActionContext,
+  content: LoadedContent,
+  logPrefix: string,
+): void {
+  if (!ctx.setGameAssets) {
+    console.error(`${logPrefix} setGameAssets callback not available`);
+    return;
+  }
+
+  console.log(`${logPrefix} Scenario loaded:`, {
+    objectCount: content.objects.size,
+    scenarioName: content.scenario.name,
+    cardCount: Object.keys(content.content.cards).length,
+  });
+
+  ctx.setGameAssets(content.content);
+
+  // CRITICAL: Defer object addition until after React processes the gameAssets state update.
+  // See table.$id.tsx for detailed explanation of why setTimeout is necessary.
+  setTimeout(() => {
+    for (const [id, obj] of content.objects) {
+      ctx.store.setObject(id, obj);
+    }
+    console.log(`${logPrefix} Scenario loaded successfully`);
+  }, 0);
+}
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -424,6 +470,61 @@ export function registerDefaultActions(): void {
           console.log('[Close Table] Navigating to game selection');
           ctx.navigate('/');
         }
+      }
+    },
+  });
+
+  // Content action: Load Plugin from Directory (Dev)
+  registry.register({
+    id: 'load-plugin-from-directory',
+    label: 'Load Plugin from Directory',
+    shortLabel: 'Load Plugin',
+    icon: '📁',
+    category: CONTENT_ACTIONS,
+    description:
+      'Load a plugin scenario from a local directory (development workflow)',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 && ctx.setGameAssets !== undefined,
+    execute: async (ctx) => {
+      try {
+        console.log('[Load Plugin] Opening directory picker...');
+        const content = await loadLocalPluginScenario();
+        loadScenarioContent(ctx, content, '[Load Plugin]');
+      } catch (error) {
+        console.error('[Load Plugin] Failed to load plugin:', error);
+        alert(
+          `Failed to load plugin: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    },
+  });
+
+  // Content action: Load Marvel Champions - Rhino Scenario
+  registry.register({
+    id: 'load-marvelchampions-rhino',
+    label: 'Load Marvel Champions: Rhino',
+    shortLabel: 'MC: Rhino',
+    icon: '🦏',
+    category: CONTENT_ACTIONS,
+    description: 'Load the Marvel Champions Rhino scenario from GitHub',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 && ctx.setGameAssets !== undefined,
+    execute: async (ctx) => {
+      try {
+        console.log('[Load Marvel Champions] Loading Rhino scenario...');
+        const content = await loadPluginScenario(
+          'marvelchampions',
+          'marvelchampions-rhino-scenario.json',
+        );
+        loadScenarioContent(ctx, content, '[Load Marvel Champions]');
+      } catch (error) {
+        console.error(
+          '[Load Marvel Champions] Failed to load scenario:',
+          error,
+        );
+        alert(
+          `Failed to load Marvel Champions scenario: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
       }
     },
   });

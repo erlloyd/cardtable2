@@ -2,6 +2,7 @@ import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from './types';
 import { ObjectKind } from '@cardtable2/shared';
 import type { TableObjectYMap } from '../store/types';
+import type { GameAssets } from '../content';
 
 /**
  * Build ActionContext from current store state and selection (M3.6-T4).
@@ -20,6 +21,7 @@ import type { TableObjectYMap } from '../store/types';
  * @param currentRoute - Optional current route path
  * @param gridSnapEnabled - Optional grid snap enabled state
  * @param onGridSnapEnabledChange - Optional grid snap toggle callback
+ * @param setGameAssets - Optional callback to set game assets for scenario loading
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -29,6 +31,7 @@ export function buildActionContext(
   currentRoute?: string,
   gridSnapEnabled?: boolean,
   onGridSnapEnabledChange?: (enabled: boolean) => void,
+  setGameAssets?: (assets: GameAssets) => void,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -70,5 +73,6 @@ export function buildActionContext(
     currentRoute,
     gridSnapEnabled,
     onGridSnapEnabledChange,
+    setGameAssets,
   };
 }

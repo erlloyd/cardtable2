@@ -251,7 +251,7 @@ function instantiateCounter(
  * Instantiate a zone object from a layout definition
  */
 function instantiateZone(obj: LayoutObject, _content: GameAssets): TableObject {
-  // Zones can be defined inline (with width/height/label) or reference content
+  // Zones can be defined inline (with id/width/height/label) or reference content (with ref)
   const meta: Record<string, unknown> = {};
 
   if (obj.ref) {
@@ -313,8 +313,14 @@ function instantiateLayoutObject(
 
     case 'zone':
       tableObject = instantiateZone(obj, content);
-      // Generate ID from scenario + ref
-      return { id: `${scenario.id}:zone:${obj.ref}`, object: tableObject };
+      // Zones can have explicit ID (inline) or ref (content reference)
+      if (obj.id) {
+        return { id: obj.id, object: tableObject };
+      } else if (obj.ref) {
+        return { id: `${scenario.id}:zone:${obj.ref}`, object: tableObject };
+      } else {
+        throw new Error('Zone object must have either id or ref');
+      }
 
     default:
       throw new Error(`Unknown object type: ${String(obj.type)}`);

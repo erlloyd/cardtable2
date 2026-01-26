@@ -14,6 +14,7 @@ import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { runMigrations } from './migrations';
 import type { TableObjectYMap } from './types';
 import { toTableObject } from './types';
+import type { GameAssets } from '../content';
 
 // Re-export types and utilities for convenience
 export type { TableObjectYMap };
@@ -54,6 +55,11 @@ export class YjsStore {
     | 'connected'
     | 'disconnected' = 'offline'; // M5-T1
   private connectionStatusCallbacks: Set<(status: string) => void> = new Set();
+
+  // Game assets management (session-scoped)
+  private gameAssets: GameAssets | null = null;
+  private gameAssetsListeners: Set<(assets: GameAssets | null) => void> =
+    new Set();
 
   // Typed access to Y.Doc maps (M3.6-T2: now uses TypedMap for type-safe property access)
   public objects: Y.Map<TableObjectYMap>;
@@ -644,6 +650,62 @@ export class YjsStore {
         callback(status);
       }
     }
+  }
+
+  // ============================================================================
+  // Game Assets Management
+  // ============================================================================
+
+  /**
+   * Set game assets and notify all subscribers
+   *
+   * This replaces the React state-based approach with store-managed assets.
+   * Components subscribe via onGameAssetsChange() to receive updates.
+   *
+   * @param assets - Game assets to set (cards, tokens, etc.)
+   */
+  setGameAssets(assets: GameAssets): void {
+    this.gameAssets = assets;
+    // Notify all subscribers
+    for (const listener of this.gameAssetsListeners) {
+      listener(assets);
+    }
+  }
+
+  /**
+   * Get current game assets
+   *
+   * @returns Current game assets or null if not set
+   */
+  getGameAssets(): GameAssets | null {
+    return this.gameAssets;
+  }
+
+  /**
+   * Subscribe to game assets changes
+   *
+   * The callback will be invoked immediately with the current assets,
+   * then again whenever assets change.
+   *
+   * @param fn - Callback to invoke when assets change
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * const unsubscribe = store.onGameAssetsChange((assets) => {
+   *   console.log('Assets updated:', assets);
+   * });
+   * // Later: unsubscribe()
+   * ```
+   */
+  onGameAssetsChange(fn: (assets: GameAssets | null) => void): () => void {
+    this.gameAssetsListeners.add(fn);
+    // Immediately call with current assets
+    fn(this.gameAssets);
+    // Return unsubscribe function
+    return () => {
+      this.gameAssetsListeners.delete(fn);
+    };
   }
 
   // ============================================================================

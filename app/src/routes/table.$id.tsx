@@ -15,7 +15,12 @@ import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
-import { loadGameAssetPacks, type GameAssets } from '../content';
+import {
+  loadGameAssetPacks,
+  reloadScenarioFromMetadata,
+  type GameAssets,
+  type LoadedScenarioMetadata,
+} from '../content';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -70,9 +75,9 @@ function Table() {
     }
   }, [location.state, store, isStoreReady]);
 
-  // Load asset packs for the current game (runs on mount and refresh)
+  // Load content on mount: either reload scenario from metadata or load base game assets
   // Note: Dependencies are [store, isStoreReady] only - we intentionally do NOT
-  // depend on store.metadata because gameId is set once on mount and never changes
+  // depend on store.metadata because it's set once on mount and never changes
   // during the session. Depending on metadata would cause unnecessary reloads when
   // other metadata properties change. The effect only needs to run once when the
   // store becomes ready.
@@ -81,31 +86,67 @@ function Table() {
       return;
     }
 
-    const gameId = store.metadata.get('gameId') as string | undefined;
-    if (!gameId) {
-      console.log('[Table] No gameId in metadata, skipping pack loading');
-      return;
-    }
-
-    const loadPacks = async () => {
+    const loadContent = async () => {
       setPacksLoading(true);
       setPacksError(null);
 
       try {
-        const assets = await loadGameAssetPacks(gameId);
-        setGameAssets(assets);
+        // Check if there's a previously loaded scenario to restore
+        const loadedScenario = store.metadata.get('loadedScenario') as
+          | LoadedScenarioMetadata
+          | undefined;
+
+        if (loadedScenario) {
+          // Reload scenario from metadata (for persistence and multiplayer)
+          console.log('[Table] Reloading scenario from metadata:', {
+            type: loadedScenario.type,
+            scenarioName: loadedScenario.scenarioName,
+          });
+
+          const content = await reloadScenarioFromMetadata(loadedScenario);
+
+          // On reload: Only restore gameAssets, NOT objects
+          // Objects are already persisted in IndexedDB with their current state.
+          // Re-adding them would overwrite user modifications (moved stacks, etc.)
+          console.log(
+            '[Table] Restoring gameAssets only (objects already in IndexedDB)',
+          );
+          store.setGameAssets(content.content);
+        } else {
+          // No scenario loaded - fall back to loading base game asset packs
+          const gameId = store.metadata.get('gameId') as string | undefined;
+          if (!gameId) {
+            console.log('[Table] No gameId in metadata, skipping pack loading');
+            return;
+          }
+
+          console.log('[Table] Loading base game asset packs for:', gameId);
+          const assets = await loadGameAssetPacks(gameId);
+          store.setGameAssets(assets);
+        }
       } catch (err) {
         const errorMessage =
-          err instanceof Error ? err.message : 'Failed to load asset packs';
-        console.error('[Table] Pack loading error:', err);
+          err instanceof Error ? err.message : 'Failed to load content';
+        console.error('[Table] Content loading error:', err);
         setPacksError(errorMessage);
       } finally {
         setPacksLoading(false);
       }
     };
 
-    void loadPacks();
+    void loadContent();
   }, [store, isStoreReady]);
+
+  // Subscribe to store gameAssets changes
+  useEffect(() => {
+    if (!store) return;
+
+    const unsubscribe = store.onGameAssetsChange((assets) => {
+      setGameAssets(assets);
+    });
+
+    return unsubscribe;
+  }, [store]);
 
   // Track selection state for action context (M3.6-T4)
   // Now stores {id, yMap} pairs directly - zero allocations
@@ -146,7 +187,6 @@ function Table() {
       `/table/${id}`,
       gridSnapEnabled,
       setGridSnapEnabled,
-      setGameAssets,
     );
 
     if (context) {
@@ -165,7 +205,6 @@ function Table() {
     id,
     gridSnapEnabled,
     setGridSnapEnabled,
-    setGameAssets,
   ]);
 
   // Enable keyboard shortcuts

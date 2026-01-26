@@ -77,6 +77,18 @@ export interface LoadedContent {
 }
 
 /**
+ * Metadata about a loaded scenario, stored in Y.Doc for persistence and multiplayer sync
+ */
+export interface LoadedScenarioMetadata {
+  type: 'plugin' | 'builtin' | 'local-dev';
+  pluginId?: string; // For 'plugin' type
+  scenarioFile?: string; // For 'plugin' type
+  scenarioUrl?: string; // For 'builtin' type
+  loadedAt: number; // Timestamp
+  scenarioName: string; // For display/logging
+}
+
+/**
  * Load a complete scenario with all its packs and instantiate objects
  *
  * This is the main entry point for loading game content.
@@ -359,4 +371,61 @@ export async function loadLocalPluginScenario(
     content,
     objects,
   };
+}
+
+/**
+ * Reload a scenario from stored metadata
+ *
+ * This function is called on table mount to restore previously loaded scenarios.
+ * It reads the metadata from Y.Doc and reloads the appropriate scenario type.
+ *
+ * Note: 'local-dev' type scenarios cannot be reloaded (require user interaction)
+ *
+ * @param metadata - Loaded scenario metadata from Y.Doc
+ * @returns Complete loaded content ready to be set as gameAssets
+ * @throws Error if scenario cannot be reloaded or metadata is invalid
+ *
+ * @example
+ * ```typescript
+ * const metadata = store.metadata.get('loadedScenario');
+ * if (metadata) {
+ *   const content = await reloadScenarioFromMetadata(metadata);
+ *   setGameAssets(content.content);
+ * }
+ * ```
+ */
+export async function reloadScenarioFromMetadata(
+  metadata: LoadedScenarioMetadata,
+): Promise<LoadedContent> {
+  console.log('[Content] Reloading scenario from metadata:', {
+    type: metadata.type,
+    scenarioName: metadata.scenarioName,
+    loadedAt: new Date(metadata.loadedAt).toISOString(),
+  });
+
+  switch (metadata.type) {
+    case 'plugin':
+      if (!metadata.pluginId || !metadata.scenarioFile) {
+        throw new Error(
+          'Invalid plugin metadata: missing pluginId or scenarioFile',
+        );
+      }
+      return loadPluginScenario(metadata.pluginId, metadata.scenarioFile);
+
+    case 'builtin':
+      if (!metadata.scenarioUrl) {
+        throw new Error('Invalid builtin metadata: missing scenarioUrl');
+      }
+      return loadCompleteScenario(metadata.scenarioUrl);
+
+    case 'local-dev':
+      throw new Error(
+        'Cannot automatically reload local-dev scenarios (requires user interaction)',
+      );
+
+    default: {
+      const unknownType: string = (metadata as { type: string }).type;
+      throw new Error(`Unknown scenario type: ${unknownType}`);
+    }
+  }
 }

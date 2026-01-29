@@ -148,6 +148,56 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
+  // Observe metadata changes for multiplayer scenario loading
+  // When a remote player loads a scenario, we need to reload it locally to get gameAssets
+  useEffect(() => {
+    if (!store || !isStoreReady) return;
+
+    const observer = (
+      _event: unknown,
+      transaction: { local: boolean },
+    ): void => {
+      // Only react to remote changes (from other players)
+      if (transaction.local) return;
+
+      const loadedScenario = store.metadata.get('loadedScenario') as
+        | LoadedScenarioMetadata
+        | undefined;
+
+      // If a remote player loaded a scenario, reload it locally to get gameAssets
+      if (loadedScenario && !store.getGameAssets()) {
+        console.log('[Table] Remote player loaded scenario, reloading locally');
+        setPacksLoading(true);
+        setPacksError(null);
+
+        void reloadScenarioFromMetadata(loadedScenario)
+          .then((content) => {
+            store.setGameAssets(content.content);
+            console.log(
+              '[Table] Remote scenario loaded successfully:',
+              content.scenario.name,
+            );
+          })
+          .catch((err) => {
+            const errorMessage =
+              err instanceof Error
+                ? err.message
+                : 'Failed to load remote scenario';
+            console.error('[Table] Remote scenario loading error:', err);
+            setPacksError(errorMessage);
+          })
+          .finally(() => {
+            setPacksLoading(false);
+          });
+      }
+    };
+
+    store.metadata.observe(observer);
+    return () => {
+      store.metadata.unobserve(observer);
+    };
+  }, [store, isStoreReady]);
+
   // Track selection state for action context (M3.6-T4)
   // Now stores {id, yMap} pairs directly - zero allocations
   const [selectedObjects, setSelectedObjects] = useState<

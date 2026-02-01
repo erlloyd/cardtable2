@@ -21,6 +21,7 @@ import {
   type GameAssets,
   type LoadedScenarioMetadata,
 } from '../content';
+import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -149,7 +150,18 @@ function Table() {
   }, [store]);
 
   // Observe metadata changes for multiplayer scenario loading
-  // When a remote player loads a scenario, we need to reload it locally to get gameAssets
+  //
+  // When a remote player loads a scenario, we need to reload it locally to get gameAssets.
+  //
+  // Why gameAssets aren't in Y.Doc:
+  // - gameAssets contain large data structures (card definitions, image URLs, etc.)
+  // - Storing them in Y.Doc would cause excessive sync overhead for every change
+  // - Y.Doc is optimized for operational transforms on structured data, not large immutable objects
+  // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and reload on each client
+  //
+  // Race condition handling:
+  // - If scenario changes while loading, we compare loadedAt timestamps
+  // - Stale gameAssets are discarded to prevent incorrect rendering
   useEffect(() => {
     if (!store || !isStoreReady) return;
 
@@ -164,26 +176,69 @@ function Table() {
         | LoadedScenarioMetadata
         | undefined;
 
+      // Validate metadata structure
+      if (
+        loadedScenario &&
+        (typeof loadedScenario !== 'object' || !loadedScenario.type)
+      ) {
+        console.error('[Table] Invalid loadedScenario metadata from remote', {
+          errorId: CONTENT_RELOAD_INVALID_METADATA,
+          metadata: loadedScenario,
+        });
+        return;
+      }
+
       // If a remote player loaded a scenario, reload it locally to get gameAssets
       if (loadedScenario && !store.getGameAssets()) {
         console.log('[Table] Remote player loaded scenario, reloading locally');
         setPacksLoading(true);
         setPacksError(null);
 
+        // Capture metadata timestamp to detect stale scenarios
+        const metadataTimestamp = loadedScenario.loadedAt;
+
         void reloadScenarioFromMetadata(loadedScenario)
           .then((content) => {
+            // Check if scenario metadata changed while loading (race condition)
+            const currentMetadata = store.metadata.get('loadedScenario') as
+              | LoadedScenarioMetadata
+              | undefined;
+
+            if (
+              !currentMetadata ||
+              currentMetadata.loadedAt !== metadataTimestamp
+            ) {
+              console.log(
+                '[Table] Scenario changed during load, discarding stale assets',
+                {
+                  loadedScenario: loadedScenario.scenarioName,
+                  loadedAt: metadataTimestamp,
+                  currentScenario: currentMetadata?.scenarioName,
+                  currentLoadedAt: currentMetadata?.loadedAt,
+                },
+              );
+              return;
+            }
+
+            // Metadata still matches - safe to set gameAssets
             store.setGameAssets(content.content);
             console.log(
               '[Table] Remote scenario loaded successfully:',
               content.scenario.name,
             );
           })
-          .catch((err) => {
+          .catch((err: unknown) => {
             const errorMessage =
               err instanceof Error
                 ? err.message
                 : 'Failed to load remote scenario';
-            console.error('[Table] Remote scenario loading error:', err);
+            const errorObject =
+              err instanceof Error ? err : new Error(String(err));
+            console.error('[Table] Remote scenario loading error:', {
+              error: errorObject,
+              errorMessage,
+              metadata: loadedScenario,
+            });
             setPacksError(errorMessage);
           })
           .finally(() => {

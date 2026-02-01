@@ -78,15 +78,28 @@ export interface LoadedContent {
 
 /**
  * Metadata about a loaded scenario, stored in Y.Doc for persistence and multiplayer sync
+ *
+ * Uses discriminated union to ensure type safety - each scenario type has its required fields.
  */
-export interface LoadedScenarioMetadata {
-  type: 'plugin' | 'builtin' | 'local-dev';
-  pluginId?: string; // For 'plugin' type
-  scenarioFile?: string; // For 'plugin' type
-  scenarioUrl?: string; // For 'builtin' type
-  loadedAt: number; // Timestamp
-  scenarioName: string; // For display/logging
-}
+export type LoadedScenarioMetadata =
+  | {
+      type: 'plugin';
+      pluginId: string;
+      scenarioFile: string;
+      loadedAt: number;
+      scenarioName: string;
+    }
+  | {
+      type: 'builtin';
+      scenarioUrl: string;
+      loadedAt: number;
+      scenarioName: string;
+    }
+  | {
+      type: 'local-dev';
+      loadedAt: number;
+      scenarioName: string;
+    };
 
 /**
  * Load a complete scenario with all its packs and instantiate objects
@@ -405,27 +418,16 @@ export async function reloadScenarioFromMetadata(
 
   switch (metadata.type) {
     case 'plugin':
-      if (!metadata.pluginId || !metadata.scenarioFile) {
-        throw new Error(
-          'Invalid plugin metadata: missing pluginId or scenarioFile',
-        );
-      }
+      // Type system guarantees pluginId and scenarioFile are present
       return loadPluginScenario(metadata.pluginId, metadata.scenarioFile);
 
     case 'builtin':
-      if (!metadata.scenarioUrl) {
-        throw new Error('Invalid builtin metadata: missing scenarioUrl');
-      }
+      // Type system guarantees scenarioUrl is present
       return loadCompleteScenario(metadata.scenarioUrl);
 
     case 'local-dev':
       throw new Error(
         'Cannot automatically reload local-dev scenarios (requires user interaction)',
       );
-
-    default: {
-      const unknownType: string = (metadata as { type: string }).type;
-      throw new Error(`Unknown scenario type: ${unknownType}`);
-    }
   }
 }

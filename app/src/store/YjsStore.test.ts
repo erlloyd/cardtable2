@@ -425,6 +425,254 @@ describe('YjsStore', () => {
     });
   });
 
+  describe('GameAssets Management', () => {
+    const mockGameAssets = {
+      packs: [],
+      cardTypes: {
+        hero: {
+          size: 'standard' as const,
+          back: '/assets/hero-back.jpg',
+        },
+      },
+      cards: {
+        HERO001: {
+          type: 'hero',
+          face: '/assets/hero001.jpg',
+        },
+        VILLAIN001: {
+          type: 'villain',
+          face: '/assets/villain001.jpg',
+        },
+      },
+      cardSets: {},
+      tokens: {},
+      counters: {},
+      mats: {},
+    };
+
+    it('starts with no gameAssets', () => {
+      const assets = store.getGameAssets();
+      expect(assets).toBeNull();
+    });
+
+    it('can set and retrieve gameAssets', () => {
+      store.setGameAssets(mockGameAssets);
+      const retrieved = store.getGameAssets();
+      expect(retrieved).toEqual(mockGameAssets);
+    });
+
+    it('can update gameAssets', () => {
+      store.setGameAssets(mockGameAssets);
+
+      const updatedAssets = {
+        ...mockGameAssets,
+        cards: {
+          ...mockGameAssets.cards,
+          HERO002: {
+            type: 'hero',
+            face: '/assets/hero002.jpg',
+          },
+        },
+      };
+
+      store.setGameAssets(updatedAssets);
+      const retrieved = store.getGameAssets();
+      expect(retrieved?.cards).toEqual(updatedAssets.cards);
+      expect(Object.keys(retrieved?.cards || {})).toHaveLength(3);
+    });
+
+    it('notifies listeners when gameAssets are set', () => {
+      const listener = vi.fn();
+      store.onGameAssetsChange(listener);
+
+      // Listener should be called immediately with null
+      expect(listener).toHaveBeenCalledWith(null);
+
+      listener.mockClear();
+
+      // Set gameAssets
+      store.setGameAssets(mockGameAssets);
+
+      // Listener should be called with new assets
+      expect(listener).toHaveBeenCalledWith(mockGameAssets);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls listener immediately with current gameAssets on subscribe', () => {
+      // Set assets before subscribing
+      store.setGameAssets(mockGameAssets);
+
+      const listener = vi.fn();
+      store.onGameAssetsChange(listener);
+
+      // Should be called immediately with current assets
+      expect(listener).toHaveBeenCalledWith(mockGameAssets);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('notifies multiple listeners', () => {
+      const listener1 = vi.fn();
+      const listener2 = vi.fn();
+
+      store.onGameAssetsChange(listener1);
+      store.onGameAssetsChange(listener2);
+
+      listener1.mockClear();
+      listener2.mockClear();
+
+      store.setGameAssets(mockGameAssets);
+
+      expect(listener1).toHaveBeenCalledWith(mockGameAssets);
+      expect(listener2).toHaveBeenCalledWith(mockGameAssets);
+    });
+
+    it('can unsubscribe from gameAssets changes', () => {
+      const listener = vi.fn();
+      const unsubscribe = store.onGameAssetsChange(listener);
+
+      listener.mockClear();
+
+      // Set assets
+      store.setGameAssets(mockGameAssets);
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      // Unsubscribe
+      unsubscribe();
+      listener.mockClear();
+
+      // Update assets
+      const updatedAssets = {
+        ...mockGameAssets,
+        cards: {},
+      };
+      store.setGameAssets(updatedAssets);
+
+      // Listener should not be called
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('isolates listener errors (one failing listener does not affect others)', () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      let callCount = 0;
+      const failingListener = vi.fn().mockImplementation(() => {
+        // Only throw on second call (during setGameAssets, not initial subscription)
+        callCount++;
+        if (callCount > 1) {
+          throw new Error('Listener error');
+        }
+      });
+      const workingListener = vi.fn();
+
+      store.onGameAssetsChange(failingListener);
+      store.onGameAssetsChange(workingListener);
+
+      failingListener.mockClear();
+      workingListener.mockClear();
+
+      // Set assets
+      store.setGameAssets(mockGameAssets);
+
+      // Failing listener should have been called
+      expect(failingListener).toHaveBeenCalledWith(mockGameAssets);
+
+      // Working listener should still be called despite first one failing
+      expect(workingListener).toHaveBeenCalledWith(mockGameAssets);
+
+      // Error should be logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[YjsStore] GameAssets listener failed',
+        expect.objectContaining({
+          errorId: 'STORE_GAMEASSETS_LISTENER_FAILED',
+          error: expect.any(Error) as Error,
+          listenerCount: 2,
+          errorMessage: 'Listener error',
+        }),
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('logs non-Error exceptions from listeners', () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      let callCount = 0;
+      const failingListener = vi.fn().mockImplementation(() => {
+        // Only throw on second call (during setGameAssets, not initial subscription)
+        callCount++;
+        if (callCount > 1) {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw 'String error';
+        }
+      });
+
+      store.onGameAssetsChange(failingListener);
+      failingListener.mockClear();
+
+      store.setGameAssets(mockGameAssets);
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[YjsStore] GameAssets listener failed',
+        expect.objectContaining({
+          errorId: 'STORE_GAMEASSETS_LISTENER_FAILED',
+          errorMessage: 'String error',
+        }),
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('handles multiple updates correctly', () => {
+      const listener = vi.fn();
+      store.onGameAssetsChange(listener);
+
+      listener.mockClear();
+
+      // First update
+      store.setGameAssets(mockGameAssets);
+      expect(listener).toHaveBeenCalledWith(mockGameAssets);
+
+      listener.mockClear();
+
+      // Second update
+      const updatedAssets = {
+        ...mockGameAssets,
+        cards: {
+          HERO003: {
+            type: 'hero',
+            face: '/assets/hero003.jpg',
+          },
+        },
+      };
+      store.setGameAssets(updatedAssets);
+      expect(listener).toHaveBeenCalledWith(updatedAssets);
+
+      listener.mockClear();
+
+      // Third update
+      const finalAssets = {
+        ...mockGameAssets,
+        cards: {},
+      };
+      store.setGameAssets(finalAssets);
+      expect(listener).toHaveBeenCalledWith(finalAssets);
+    });
+
+    it('getGameAssets returns reference to actual assets (not a copy)', () => {
+      store.setGameAssets(mockGameAssets);
+      const retrieved1 = store.getGameAssets();
+      const retrieved2 = store.getGameAssets();
+
+      // Should return the same reference
+      expect(retrieved1).toBe(retrieved2);
+      expect(retrieved1).toBe(mockGameAssets);
+    });
+  });
+
   describe('Cleanup', () => {
     it('can be safely destroyed', () => {
       const localStore = new YjsStore('destroy-test');

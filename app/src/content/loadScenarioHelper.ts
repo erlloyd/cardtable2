@@ -1,5 +1,6 @@
 import type { YjsStore } from '../store/YjsStore';
 import type { LoadedContent, LoadedScenarioMetadata } from './index';
+import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -38,22 +39,41 @@ export function loadScenarioContent(
 
   // CRITICAL: Defer object addition to ensure gameAssets reach renderer first.
   //
-  // Why this is necessary:
-  // - store.setGameAssets() notifies subscribers synchronously
-  // - Board's onGameAssetsChange sends assets to renderer in useEffect (next tick)
-  // - Objects added to Y.Doc are forwarded to renderer immediately via useStoreSync
-  // - Without setTimeout, objects reach renderer before gameAssets, causing card lookup failures
+  // Why setTimeout(0) is necessary:
   //
-  // The setTimeout ensures:
-  // 1. store.setGameAssets notifies Board component
-  // 2. setTimeout defers callback to next event loop tick
-  // 3. React completes re-render, Board useEffect sends gameAssets to renderer
-  // 4. Callback fires, objects are added to store and forwarded to renderer
-  // 5. Renderer has correct gameAssets when rendering objects
+  // Timing issue without setTimeout:
+  // - store.setGameAssets() notifies Board component synchronously (line 38)
+  // - Board's onGameAssetsChange schedules useEffect to send assets to renderer (next React render)
+  // - Objects added to Y.Doc (without setTimeout) are forwarded to renderer IMMEDIATELY via useStoreSync
+  // - Result: Objects arrive at renderer before gameAssets, causing card lookup failures
+  //
+  // How setTimeout(0) fixes the race:
+  // 1. store.setGameAssets() notifies Board component (synchronous)
+  // 2. setTimeout(0) defers object addition to next event loop tick (asynchronous)
+  // 3. React completes re-render cycle, Board useEffect sends gameAssets to renderer
+  // 4. Event loop tick completes, setTimeout callback fires
+  // 5. Objects are added to store and forwarded to renderer
+  // 6. Renderer now has gameAssets available when rendering objects
+  //
+  // This ensures React's state updates complete before Y.Doc mutations.
   setTimeout(() => {
-    for (const [id, obj] of content.objects) {
-      store.setObject(id, obj);
+    try {
+      for (const [id, obj] of content.objects) {
+        store.setObject(id, obj);
+      }
+      console.log(`${logPrefix} Scenario loaded successfully`);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`${logPrefix} Failed to add scenario objects`, {
+        errorId: SCENARIO_OBJECT_ADD_FAILED,
+        error,
+        objectCount: content.objects.size,
+        scenarioName: content.scenario.name,
+        errorMessage,
+      });
+      // Re-throw to prevent silent failure
+      throw error;
     }
-    console.log(`${logPrefix} Scenario loaded successfully`);
   }, 0);
 }

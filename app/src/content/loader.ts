@@ -6,6 +6,16 @@ import type {
   CardSize,
 } from '@cardtable2/shared';
 import { getBackendUrl } from '@/utils/backend';
+import {
+  ASSETPACK_FETCH_FAILED,
+  ASSETPACK_PARSE_FAILED,
+  ASSETPACK_INVALID_SCHEMA,
+  SCENARIO_FETCH_FAILED,
+  SCENARIO_PARSE_FAILED,
+  SCENARIO_INVALID_SCHEMA,
+  CARD_IMAGE_NOT_FOUND,
+  CARD_IMAGE_NO_BACK,
+} from '../constants/errorIds';
 
 // ============================================================================
 // Asset Pack Loading
@@ -20,10 +30,21 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
     response = await fetch(url);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error('[Loader] Network error loading asset pack', {
+      errorId: ASSETPACK_FETCH_FAILED,
+      url,
+      error: message,
+    });
     throw new Error(`Network error loading asset pack from ${url}: ${message}`);
   }
 
   if (!response.ok) {
+    console.error('[Loader] Asset pack fetch failed', {
+      errorId: ASSETPACK_FETCH_FAILED,
+      url,
+      status: response.status,
+      statusText: response.statusText,
+    });
     throw new Error(
       `Failed to load asset pack: HTTP ${response.status} ${response.statusText} (${url})`,
     );
@@ -34,6 +55,11 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
     data = await response.json();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error('[Loader] Failed to parse asset pack JSON', {
+      errorId: ASSETPACK_PARSE_FAILED,
+      url,
+      error: message,
+    });
     throw new Error(`Invalid JSON in asset pack from ${url}: ${message}`);
   }
 
@@ -52,6 +78,11 @@ export function loadAssetPackFromString(
     data = JSON.parse(json);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error('[Loader] Failed to parse asset pack JSON string', {
+      errorId: ASSETPACK_PARSE_FAILED,
+      source,
+      error: message,
+    });
     throw new Error(`Invalid JSON in asset pack from ${source}: ${message}`);
   }
 
@@ -64,6 +95,11 @@ export function loadAssetPackFromString(
 function validateAssetPack(data: unknown, source: string): AssetPack {
   // Type guard validation
   if (typeof data !== 'object' || data === null) {
+    console.error('[Loader] Invalid asset pack structure', {
+      errorId: ASSETPACK_INVALID_SCHEMA,
+      source,
+      type: typeof data,
+    });
     throw new Error(
       `Invalid asset pack from ${source}: expected object, got ${typeof data}`,
     );
@@ -73,12 +109,24 @@ function validateAssetPack(data: unknown, source: string): AssetPack {
 
   // Basic validation
   if (obj.schema !== 'ct-assets@1') {
+    console.error('[Loader] Invalid asset pack schema', {
+      errorId: ASSETPACK_INVALID_SCHEMA,
+      source,
+      schema: obj.schema,
+    });
     throw new Error(
       `Invalid schema in asset pack from ${source}: expected "ct-assets@1", got "${String(obj.schema)}"`,
     );
   }
 
   if (!obj.id || !obj.name || !obj.version) {
+    console.error('[Loader] Asset pack missing required fields', {
+      errorId: ASSETPACK_INVALID_SCHEMA,
+      source,
+      hasId: !!obj.id,
+      hasName: !!obj.name,
+      hasVersion: !!obj.version,
+    });
     throw new Error(
       `Missing required fields in asset pack from ${source}: id, name, or version`,
     );
@@ -103,14 +151,44 @@ export async function loadAssetPacks(urls: string[]): Promise<AssetPack[]> {
  * Load a scenario from a URL
  */
 export async function loadScenario(url: string): Promise<Scenario> {
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Loader] Network error loading scenario', {
+      errorId: SCENARIO_FETCH_FAILED,
+      url,
+      error: message,
+    });
+    throw new Error(`Network error loading scenario from ${url}: ${message}`);
+  }
+
   if (!response.ok) {
+    console.error('[Loader] Scenario fetch failed', {
+      errorId: SCENARIO_FETCH_FAILED,
+      url,
+      status: response.status,
+      statusText: response.statusText,
+    });
     throw new Error(
-      `Failed to load scenario from ${url}: ${response.statusText}`,
+      `Failed to load scenario: HTTP ${response.status} ${response.statusText} (${url})`,
     );
   }
 
-  const data: unknown = await response.json();
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Loader] Failed to parse scenario JSON', {
+      errorId: SCENARIO_PARSE_FAILED,
+      url,
+      error: message,
+    });
+    throw new Error(`Invalid JSON in scenario from ${url}: ${message}`);
+  }
+
   return validateScenario(data);
 }
 
@@ -126,6 +204,11 @@ export function loadScenarioFromString(
     data = JSON.parse(json);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error('[Loader] Failed to parse scenario JSON string', {
+      errorId: SCENARIO_PARSE_FAILED,
+      source,
+      error: message,
+    });
     throw new Error(`Invalid JSON in scenario from ${source}: ${message}`);
   }
 
@@ -138,6 +221,10 @@ export function loadScenarioFromString(
 function validateScenario(data: unknown): Scenario {
   // Type guard validation
   if (typeof data !== 'object' || data === null) {
+    console.error('[Loader] Invalid scenario structure', {
+      errorId: SCENARIO_INVALID_SCHEMA,
+      type: typeof data,
+    });
     throw new Error(`Invalid scenario: expected object, got ${typeof data}`);
   }
 
@@ -145,12 +232,23 @@ function validateScenario(data: unknown): Scenario {
 
   // Basic validation
   if (obj.schema !== 'ct-scenario@1') {
+    console.error('[Loader] Invalid scenario schema', {
+      errorId: SCENARIO_INVALID_SCHEMA,
+      schema: obj.schema,
+    });
     throw new Error(
       `Invalid schema: expected "ct-scenario@1", got "${String(obj.schema)}"`,
     );
   }
 
   if (!obj.id || !obj.name || !obj.version || !obj.packs) {
+    console.error('[Loader] Scenario missing required fields', {
+      errorId: SCENARIO_INVALID_SCHEMA,
+      hasId: !!obj.id,
+      hasName: !!obj.name,
+      hasVersion: !!obj.version,
+      hasPacks: !!obj.packs,
+    });
     throw new Error(`Missing required fields: id, name, version, or packs`);
   }
 
@@ -279,11 +377,22 @@ export function resolveCard(
 ): ResolvedCard {
   const card = content.cards[cardCode];
   if (!card) {
+    console.error('[Loader] Card not found in content', {
+      errorId: CARD_IMAGE_NOT_FOUND,
+      cardCode,
+      availableCards: Object.keys(content.cards),
+    });
     throw new Error(`Card not found: ${cardCode}`);
   }
 
   const cardType = content.cardTypes[card.type];
   if (!cardType) {
+    console.error('[Loader] Card type not found', {
+      errorId: CARD_IMAGE_NOT_FOUND,
+      cardCode,
+      cardType: card.type,
+      availableTypes: Object.keys(content.cardTypes),
+    });
     throw new Error(`Card type not found: ${card.type} (for card ${cardCode})`);
   }
 
@@ -297,6 +406,13 @@ export function resolveCard(
   // Resolve back image (card override > type default)
   const backUrl = card.back ?? cardType.back;
   if (!backUrl) {
+    console.error('[Loader] No back image defined for card', {
+      errorId: CARD_IMAGE_NO_BACK,
+      cardCode,
+      cardType: card.type,
+      hasCardBack: !!card.back,
+      hasTypeBack: !!cardType.back,
+    });
     throw new Error(
       `No back image defined for card ${cardCode} or type ${card.type}`,
     );

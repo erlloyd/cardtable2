@@ -15,6 +15,7 @@ import { runMigrations } from './migrations';
 import type { TableObjectYMap } from './types';
 import { toTableObject } from './types';
 import type { GameAssets } from '../content';
+import { STORE_GAMEASSETS_LISTENER_FAILED } from '../constants/errorIds';
 
 // Re-export types and utilities for convenience
 export type { TableObjectYMap };
@@ -666,9 +667,19 @@ export class YjsStore {
    */
   setGameAssets(assets: GameAssets): void {
     this.gameAssets = assets;
-    // Notify all subscribers
+    // Notify all subscribers with error isolation
     for (const listener of this.gameAssetsListeners) {
-      listener(assets);
+      try {
+        listener(assets);
+      } catch (error) {
+        console.error('[YjsStore] GameAssets listener failed', {
+          errorId: STORE_GAMEASSETS_LISTENER_FAILED,
+          error,
+          listenerCount: this.gameAssetsListeners.size,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+        // Continue to next listener - don't let one failure stop others
+      }
     }
   }
 

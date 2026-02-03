@@ -1,7 +1,7 @@
 # Card Image Preview & Orientation System
 
 ## Status
-📋 **Planned** - Ready to implement
+🚧 **In Progress** - Phase 1: Adding orientation to content types
 
 ## Overview
 Add ability for users to view card images at larger size with proper orientation handling for landscape/portrait cards. Desktop users hover over cards to preview; mobile users double-tap to see a centered preview modal.

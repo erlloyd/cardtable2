@@ -1,5 +1,5 @@
 import { ActionRegistry } from './ActionRegistry';
-import { CARD_ACTIONS, VIEW_ACTIONS } from './types';
+import { CARD_ACTIONS, VIEW_ACTIONS, CONTENT_ACTIONS } from './types';
 import {
   flipCards,
   exhaustCards,
@@ -10,7 +10,19 @@ import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
-import { loadCompleteScenario, findGameInIndex } from '../content';
+import {
+  loadCompleteScenario,
+  findGameInIndex,
+  loadPluginScenario,
+  loadLocalPluginScenario,
+  type LoadedScenarioMetadata,
+} from '../content';
+import { loadScenarioContent } from '../content/loadScenarioHelper';
+import {
+  ACTION_LOAD_SCENARIO_FAILED,
+  ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
+  ACTION_LOAD_MARVELCHAMPIONS_FAILED,
+} from '../constants/errorIds';
 
 /**
  * Register default actions that are available in both table and dev routes.
@@ -378,10 +390,14 @@ export function registerDefaultActions(): void {
 
         console.log('[Load Scenario] Scenario loaded successfully');
       } catch (error) {
-        console.error('[Load Scenario] Failed to load scenario:', error);
-        alert(
-          `Failed to load scenario: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error('[Load Scenario] Failed to load scenario', {
+          errorId: ACTION_LOAD_SCENARIO_FAILED,
+          gameId: ctx.store.metadata.get('gameId'),
+          error: errorMessage,
+        });
+        alert(`Failed to load scenario: ${errorMessage}`);
       }
     },
   });
@@ -424,6 +440,87 @@ export function registerDefaultActions(): void {
           console.log('[Close Table] Navigating to game selection');
           ctx.navigate('/');
         }
+      }
+    },
+  });
+
+  // Content action: Load Plugin from Directory (Dev)
+  registry.register({
+    id: 'load-plugin-from-directory',
+    label: 'Load Plugin from Directory',
+    shortLabel: 'Load Plugin',
+    icon: '📁',
+    category: CONTENT_ACTIONS,
+    description:
+      'Load a plugin scenario from a local directory (development workflow)',
+    isAvailable: (ctx) => ctx.selection.count === 0,
+    execute: async (ctx) => {
+      try {
+        console.log('[Load Plugin] Opening directory picker...');
+        const content = await loadLocalPluginScenario();
+
+        // Store metadata for local-dev scenarios (cannot auto-reload)
+        const metadata: LoadedScenarioMetadata = {
+          type: 'local-dev',
+          loadedAt: Date.now(),
+          scenarioName: content.scenario.name,
+        };
+
+        loadScenarioContent(ctx.store, content, metadata, '[Load Plugin]');
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error('[Load Plugin] Failed to load plugin from directory', {
+          errorId: ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
+          error: errorMessage,
+        });
+        alert(`Failed to load plugin: ${errorMessage}`);
+      }
+    },
+  });
+
+  // Content action: Load Marvel Champions - Rhino Scenario
+  registry.register({
+    id: 'load-marvelchampions-rhino',
+    label: 'Load Marvel Champions: Rhino',
+    shortLabel: 'MC: Rhino',
+    icon: '🦏',
+    category: CONTENT_ACTIONS,
+    description: 'Load the Marvel Champions Rhino scenario from GitHub',
+    isAvailable: (ctx) => ctx.selection.count === 0,
+    execute: async (ctx) => {
+      const pluginId: string = 'marvelchampions';
+      const scenarioFile: string = 'marvelchampions-rhino-scenario.json';
+
+      try {
+        console.log('[Load Marvel Champions] Loading Rhino scenario...');
+        const content = await loadPluginScenario(pluginId, scenarioFile);
+
+        // Store metadata for plugin scenarios (can auto-reload)
+        const metadata: LoadedScenarioMetadata = {
+          type: 'plugin',
+          pluginId,
+          scenarioFile,
+          loadedAt: Date.now(),
+          scenarioName: content.scenario.name,
+        };
+
+        loadScenarioContent(
+          ctx.store,
+          content,
+          metadata,
+          '[Load Marvel Champions]',
+        );
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error('[Load Marvel Champions] Failed to load scenario', {
+          errorId: ACTION_LOAD_MARVELCHAMPIONS_FAILED,
+          pluginId,
+          scenarioFile,
+          error: errorMessage,
+        });
+        alert(`Failed to load Marvel Champions scenario: ${errorMessage}`);
       }
     },
   });

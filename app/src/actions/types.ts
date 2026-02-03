@@ -8,6 +8,7 @@ export const CARD_ACTIONS = 'Card Actions';
 export const SELECTION_ACTIONS = 'Selection';
 export const VIEW_ACTIONS = 'View';
 export const MANAGEMENT_ACTIONS = 'Management';
+export const CONTENT_ACTIONS = 'Content';
 
 /**
  * Selection context information for action availability and execution (M3.6-T4)

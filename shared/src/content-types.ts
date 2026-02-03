@@ -63,7 +63,7 @@ export interface AssetPack {
   baseUrl?: string; // Optional base URL for resolving relative asset paths
   cardTypes?: Record<string, CardType>; // Card type definitions
   cards?: Record<string, Card>; // Card catalog (key is card code)
-  cardSets?: Record<string, string[]>; // Named card sets (key is set code, value is array of card codes)
+  cardSets?: Record<string, Array<string | CardSetEntry>>; // Named card sets (key is set code, value is array of card codes or {code, count} objects)
   tokens?: Record<string, Token>; // Token definitions (key is token code)
   counters?: Record<string, Counter>; // Counter definitions (key is counter code)
   mats?: Record<string, Mat>; // Mat definitions (key is mat code)
@@ -73,9 +73,14 @@ export interface AssetPack {
 // Scenario Types (ct-scenario@1)
 // ============================================================================
 
+export interface CardSetEntry {
+  code: string; // Card code from asset packs
+  count?: number; // Number of copies (defaults to 1)
+}
+
 export interface DeckCardEntry {
   code: string; // Card code from asset packs
-  count: number; // Number of copies
+  count?: number; // Number of copies (defaults to 1)
 }
 
 export interface DeckDefinition {
@@ -89,7 +94,7 @@ export type LayoutObjectType = 'mat' | 'stack' | 'token' | 'counter' | 'zone';
 export interface LayoutObject {
   type: LayoutObjectType; // Object type
   id?: string; // Required for type=stack (unique instance ID)
-  ref?: string; // Required for mat/token/counter/zone (references asset catalog code)
+  ref?: string; // Optional for mat/token/counter/zone (references asset catalog code)
   label?: string; // Optional display label
   pos: {
     x: number; // X position
@@ -98,6 +103,8 @@ export interface LayoutObject {
   z?: number; // Z-order (typically negative for mats)
   faceUp?: boolean; // Whether stack is face-up (for type=stack)
   deck?: string; // Deck reference (for type=stack)
+  width?: number; // Width for inline zone definitions
+  height?: number; // Height for inline zone definitions
 }
 
 export interface Scenario {
@@ -120,7 +127,7 @@ export interface GameAssets {
   packs: AssetPack[]; // All loaded packs (in load order)
   cardTypes: Record<string, CardType>; // Merged card types
   cards: Record<string, Card>; // Merged cards
-  cardSets: Record<string, string[]>; // Merged card sets
+  cardSets: Record<string, Array<string | CardSetEntry>>; // Merged card sets
   tokens: Record<string, Token>; // Merged tokens
   counters: Record<string, Counter>; // Merged counters
   mats: Record<string, Mat>; // Merged mats

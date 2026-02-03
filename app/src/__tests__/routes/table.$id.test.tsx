@@ -45,6 +45,15 @@ vi.mock('../../store/YjsStore', () => ({
     getActorId() {
       return 'test-actor-id';
     }
+    setGameAssets(_assets: unknown) {}
+    getGameAssets() {
+      return null;
+    }
+    onGameAssetsChange(callback: (assets: unknown) => void) {
+      // Immediately call with null
+      callback(null);
+      return () => {};
+    }
     destroy() {}
   },
 }));

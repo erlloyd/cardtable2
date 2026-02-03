@@ -33,14 +33,27 @@ export function expandDeck(
       if (!cardSet) {
         throw new Error(`Card set not found: ${setCode}`);
       }
-      cards.push(...cardSet);
+      // CardSets can be arrays of objects {code, count} or legacy arrays of strings
+      for (const item of cardSet) {
+        if (typeof item === 'string') {
+          // Legacy format: plain string
+          cards.push(item);
+        } else {
+          // New format: object with code and optional count
+          const count = item.count ?? 1;
+          for (let i = 0; i < count; i++) {
+            cards.push(item.code);
+          }
+        }
+      }
     }
   }
 
   // Add individual cards with counts
   if (deckDef.cards) {
     for (const entry of deckDef.cards) {
-      for (let i = 0; i < entry.count; i++) {
+      const count = entry.count ?? 1;
+      for (let i = 0; i < count; i++) {
         cards.push(entry.code);
       }
     }
@@ -238,8 +251,23 @@ function instantiateCounter(
  * Instantiate a zone object from a layout definition
  */
 function instantiateZone(obj: LayoutObject, _content: GameAssets): TableObject {
-  if (!obj.ref) {
-    throw new Error('Zone object missing required ref');
+  // Zones can be defined inline (with id/width/height/label) or reference content (with ref)
+  const meta: Record<string, unknown> = {};
+
+  if (obj.ref) {
+    meta.zoneRef = obj.ref;
+  }
+
+  if (obj.label) {
+    meta.label = obj.label;
+  }
+
+  if (obj.width !== undefined) {
+    meta.width = obj.width;
+  }
+
+  if (obj.height !== undefined) {
+    meta.height = obj.height;
   }
 
   return {
@@ -249,7 +277,7 @@ function instantiateZone(obj: LayoutObject, _content: GameAssets): TableObject {
     _sortKey: generateSortKey(obj.z ?? -50), // Zones typically near bottom
     _locked: false,
     _selectedBy: null,
-    _meta: { zoneRef: obj.ref, label: obj.label },
+    _meta: meta,
   };
 }
 
@@ -285,8 +313,14 @@ function instantiateLayoutObject(
 
     case 'zone':
       tableObject = instantiateZone(obj, content);
-      // Generate ID from scenario + ref
-      return { id: `${scenario.id}:zone:${obj.ref}`, object: tableObject };
+      // Zones can have explicit ID (inline) or ref (content reference)
+      if (obj.id) {
+        return { id: obj.id, object: tableObject };
+      } else if (obj.ref) {
+        return { id: `${scenario.id}:zone:${obj.ref}`, object: tableObject };
+      } else {
+        throw new Error('Zone object must have either id or ref');
+      }
 
     default:
       throw new Error(`Unknown object type: ${String(obj.type)}`);

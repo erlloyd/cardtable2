@@ -504,7 +504,7 @@ describe('instantiateScenario', () => {
     expect(counter._meta.label).toBe('Threat'); // From definition
   });
 
-  it('should instantiate zone', () => {
+  it('should instantiate zone with ref', () => {
     const scenario: Scenario = {
       schema: 'ct-scenario@1',
       id: 'test',
@@ -533,6 +533,40 @@ describe('instantiateScenario', () => {
     expect(zone._pos).toEqual({ x: 700, y: 800, r: 0 });
     expect(zone._meta.zoneRef).toBe('discard');
     expect(zone._meta.label).toBe('Discard Pile');
+  });
+
+  it('should instantiate zone with id (inline)', () => {
+    const scenario: Scenario = {
+      schema: 'ct-scenario@1',
+      id: 'test',
+      name: 'Test',
+      version: '1.0.0',
+      packs: [],
+      layout: {
+        objects: [
+          {
+            type: 'zone',
+            id: 'custom-zone-id',
+            pos: { x: 100, y: 200 },
+            label: 'Custom Zone',
+            width: 150,
+            height: 200,
+          },
+        ],
+      },
+    };
+
+    const objects = instantiateScenario(scenario, mockContent);
+
+    expect(objects.size).toBe(1);
+    const zone = objects.get('custom-zone-id')!;
+
+    expect(zone._kind).toBe(ObjectKind.Zone);
+    expect(zone._pos).toEqual({ x: 100, y: 200, r: 0 });
+    expect(zone._meta.label).toBe('Custom Zone');
+    expect(zone._meta.width).toBe(150);
+    expect(zone._meta.height).toBe(200);
+    expect(zone._meta.zoneRef).toBeUndefined();
   });
 
   it('should instantiate multiple objects', () => {
@@ -677,7 +711,7 @@ describe('instantiateScenario', () => {
     );
   });
 
-  it('should throw error for zone missing ref', () => {
+  it('should throw error for zone missing both id and ref', () => {
     // Testing error handling for invalid object (bypassing type safety)
 
     const scenario: Scenario = {
@@ -690,7 +724,7 @@ describe('instantiateScenario', () => {
         objects: [
           {
             type: 'zone',
-            // Missing ref
+            // Missing both id and ref
             pos: { x: 100, y: 200 },
           } as LayoutObject,
         ],
@@ -698,7 +732,7 @@ describe('instantiateScenario', () => {
     };
 
     expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Zone object missing required ref',
+      'Zone object must have either id or ref',
     );
   });
 

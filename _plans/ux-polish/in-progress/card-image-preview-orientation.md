@@ -1,7 +1,7 @@
 # Card Image Preview & Orientation System
 
 ## Status
-🚧 **In Progress** - Phase 1: Adding orientation to content types
+🚧 **In Progress** - Phase 5: Desktop hover preview integration
 
 ## Overview
 Add ability for users to view card images at larger size with proper orientation handling for landscape/portrait cards. Desktop users hover over cards to preview; mobile users double-tap to see a centered preview modal.
@@ -115,26 +115,48 @@ const displayStyles = {
 
 ### Event Handling
 
-#### Desktop Hover (onHover handler)
+#### Desktop Hover (Renderer Message)
+
+The renderer already has HoverManager that detects hover state changes. When hover changes, the renderer posts a message to the main thread:
 
 ```typescript
-// In stack event handlers
-export const StackEventHandlers: Partial<EventHandlers> = {
-  onHover: (obj: StackObject, isHovered: boolean) => {
-    if (!obj._faceUp) return; // Only preview face-up cards
+// In app/src/renderer/handlers/pointer.ts (where hover changes)
+if (context.hover.setHoveredObject(newHoveredId)) {
+  // Hover state changed - notify main thread
+  const obj = newHoveredId ? context.sceneManager.getObject(newHoveredId) : null;
+  const isFaceUp = obj?._kind === ObjectKind.Stack && (obj as StackObject)._faceUp;
 
-    if (isHovered) {
-      // Start hover delay timer (300ms default)
-      startHoverTimer(() => {
-        showPreview(obj, 'hover');
-      });
-    } else {
-      // Cancel timer and hide preview
-      cancelHoverTimer();
-      hidePreview();
-    }
+  context.postResponse({
+    type: 'object-hovered',
+    objectId: newHoveredId,
+    isFaceUp: isFaceUp || false,
+  });
+}
+```
+
+Board component handles the message:
+
+```typescript
+// In app/src/pages/Board.tsx
+function handleObjectHovered(objectId: string | null, isFaceUp: boolean) {
+  if (!objectId || !isFaceUp) {
+    cancelHoverTimer();
+    setPreviewState({ isOpen: false, card: null });
+    return;
   }
-};
+
+  // Start hover delay timer (300ms default)
+  startHoverTimer(() => {
+    const card = getCardFromObject(objectId);
+    const position = getCursorPosition(); // Get current cursor position
+    setPreviewState({
+      isOpen: true,
+      card,
+      mode: 'hover',
+      position,
+    });
+  });
+}
 ```
 
 #### Mobile Double-Tap (onDoubleClick handler)
@@ -285,24 +307,37 @@ export function getCardOrientation(
 
 ### Phase 5: Desktop Hover Preview
 **Files:**
-- `app/src/renderer/objects/stack/events.ts` - Add onHover handler
-- `app/src/hooks/useHoverPreview.ts` (new) - Hover timer management
-- `app/src/pages/Board.tsx` - Integrate preview state
+- `shared/src/index.ts` - Add `object-hovered` message type
+- `app/src/renderer/handlers/pointer.ts` - Send hover messages to main thread
+- `app/src/components/Board/BoardMessageBus.ts` - Wire up hover message handler
+- `app/src/pages/Board.tsx` - Integrate CardPreview with hover state
+
+**Implementation approach:**
+The renderer already has HoverManager that detects hover (app/src/renderer/managers/HoverManager.ts).
+We just need to:
+1. Add new message type `object-hovered` to RendererToMainMessage
+2. Post message when hover changes (in pointer.ts:510 where setHoveredObject is called)
+3. Board component receives message with object ID and position
+4. Board looks up card data and shows CardPreview component
 
 **Tasks:**
-- Implement onHover handler for StackObject
-- Add hover delay timer (configurable, default 300ms)
-- Only trigger for face-up cards
-- Pass card data and position to CardPreview
-- Auto-dismiss on mouse leave
-- Cancel timer if user moves away before delay
+- Add `object-hovered` message type with objectId and face-up status
+- Send message when hover state changes in pointer handler
+- Add hover delay timer in Board (configurable, default 300ms)
+- Only show preview for face-up stacks
+- Position CardPreview near cursor (avoid covering source card)
+- Auto-dismiss on hover leave (when objectId becomes null)
+- Cancel timer if hover changes before delay expires
 
 **Testing:**
-- Test hover delay timing
+- Test hover delay timing (300ms default)
 - Test auto-dismiss on mouse leave
 - Test face-down cards don't trigger preview
 - Test preview positioning doesn't cover source card
-- Test cancellation when mouse moves before delay
+- Test cancellation when hover moves before delay
+- Test only stack objects trigger preview (not zones/tokens)
+
+**Note:** No awareness updates - preview is local-only, not shown to other multiplayer users.
 
 ### Phase 6: Mobile Double-Tap Preview
 **Files:**

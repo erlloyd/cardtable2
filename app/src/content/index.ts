@@ -426,8 +426,34 @@ export async function reloadScenarioFromMetadata(
       return loadCompleteScenario(metadata.scenarioUrl);
 
     case 'local-dev':
+      console.error('[Content] Cannot reload local-dev scenario', {
+        errorId: 'CONTENT_RELOAD_LOCAL_DEV_UNSUPPORTED',
+        metadata,
+      });
       throw new Error(
         'Cannot automatically reload local-dev scenarios (requires user interaction)',
       );
+
+    default: {
+      // TypeScript exhaustiveness checking means metadata is 'never' here.
+      // However, since metadata comes from Y.Doc (potentially corrupted/stale),
+      // we handle unexpected runtime values defensively.
+      const unknownMetadata = metadata as { type?: unknown };
+      const typeValue = unknownMetadata.type;
+      const unknownType =
+        typeof typeValue === 'string' ||
+        typeof typeValue === 'number' ||
+        typeof typeValue === 'boolean'
+          ? String(typeValue)
+          : 'undefined';
+      console.error('[Content] Unknown metadata type during scenario reload', {
+        errorId: 'CONTENT_RELOAD_UNKNOWN_TYPE',
+        receivedType: unknownType,
+        metadata: unknownMetadata,
+      });
+      throw new Error(
+        `Cannot reload scenario: unknown metadata type "${unknownType}".`,
+      );
+    }
   }
 }

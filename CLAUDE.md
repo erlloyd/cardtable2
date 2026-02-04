@@ -398,6 +398,23 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
     - When using proper validation libraries that abstract the typeof checks
     - When the User explicitly requests runtime type checking
   - If you use typeof for internal type validation, you have failed
+- **CRITICAL - NEVER USE INLINE IMPORTS**: Do NOT use inline `import()` expressions for type casting without explicit user approval
+  - **NEVER** use patterns like `as import('@module').Type`
+  - **ALWAYS** add proper import statements at the top of the file
+  - Inline imports make code harder to read, harder to search, and bypass IDE tooling
+  - **Proper approach**:
+    ```typescript
+    // At top of file
+    import type { StackObject } from '@cardtable2/shared';
+
+    // In code
+    const stackObj = obj as StackObject;
+    ```
+  - **Bad approach**:
+    ```typescript
+    const stackObj = obj as import('@cardtable2/shared').StackObject;
+    ```
+  - If you use inline imports without asking first, you have failed
 
 ### Container Deployment
 - **Docker support**: Multi-stage Dockerfiles for production builds

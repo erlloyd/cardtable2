@@ -253,6 +253,11 @@ export type RendererToMainMessage =
       pos: Position; // Position for new single-card stack
     }
   | {
+      type: 'object-hovered'; // Hover state changed (for card preview)
+      objectId: string | null; // Object being hovered, or null if hover cleared
+      isFaceUp: boolean; // Whether the object is face-up (only relevant for stacks)
+    }
+  | {
       type: 'cursor-style'; // Request cursor style change
       style: 'default' | 'pointer' | 'grab' | 'grabbing';
     };

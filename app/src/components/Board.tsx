@@ -1,5 +1,10 @@
-import { useEffect, useRef, useMemo } from 'react';
-import type { PointerEventData } from '@cardtable2/shared';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import {
+  ObjectKind,
+  type PointerEventData,
+  type Card,
+  type StackObject,
+} from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
 import type { GameAssets } from '../content';
@@ -25,6 +30,7 @@ import {
   MultiSelectToggle,
 } from './Board/components';
 import { ActionHandle } from './ActionHandle';
+import { CardPreview } from './CardPreview';
 
 export interface BoardProps {
   tableId: string;
@@ -96,6 +102,15 @@ function Board({
     Array<(isAnimating: boolean) => void>
   >([]);
 
+  // Card preview state
+  const [previewCard, setPreviewCard] = useState<Card | null>(null);
+  const [previewPosition, setPreviewPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
 
@@ -132,6 +147,61 @@ function Board({
     onGridSnapEnabledChange,
   );
 
+  // Handle hover state changes from renderer (for card preview)
+  const setHoveredObject = useCallback(
+    (objectId: string | null, isFaceUp: boolean) => {
+      // Clear any pending hover timer
+      if (hoverTimerRef.current !== null) {
+        window.clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+
+      // If hover cleared or not face-up, hide preview
+      if (!objectId || !isFaceUp) {
+        setPreviewCard(null);
+        setPreviewPosition(null);
+        return;
+      }
+
+      // Get the object from store
+      const obj = storeRef.current.getObject(objectId);
+      if (!obj || obj._kind !== ObjectKind.Stack) {
+        return;
+      }
+
+      // Get the top card from the stack
+      const stackObj = obj as StackObject;
+      if (!stackObj._cards || stackObj._cards.length === 0) {
+        return;
+      }
+
+      const topCardCode = stackObj._cards[0];
+      const card = gameAssets?.cards[topCardCode];
+      if (!card) {
+        return;
+      }
+
+      // Position preview near cursor (offset to avoid covering card)
+      const cursorPos = lastCursorPosRef.current;
+      setPreviewPosition({
+        x: cursorPos.x + 20,
+        y: cursorPos.y + 20,
+      });
+      setPreviewCard(card);
+    },
+    [gameAssets],
+  );
+
+  // Track cursor position for preview positioning
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      lastCursorPosRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
   // Message bus
   const messageBus = useMemo(() => new BoardMessageBus(), []);
 
@@ -151,6 +221,7 @@ function Board({
         setIsWaitingForCoords,
         setAwarenessHz,
         setCursorStyle,
+        setHoveredObject,
         addMessage,
         flushCallbacks: flushCallbacksRef,
         selectionSettledCallbacks: selectionSettledCallbacksRef,
@@ -175,6 +246,7 @@ function Board({
     setIsWaitingForCoords,
     setAwarenessHz,
     setCursorStyle,
+    setHoveredObject,
     addMessage,
   ]);
 
@@ -400,6 +472,22 @@ function Board({
             onActionExecuted={onActionExecuted}
           />
         )}
+
+      {/* Card Preview */}
+      <CardPreview
+        card={previewCard}
+        gameAssets={gameAssets ?? null}
+        mode="hover"
+        position={previewPosition ?? undefined}
+        onClose={() => {
+          setPreviewCard(null);
+          setPreviewPosition(null);
+          if (hoverTimerRef.current !== null) {
+            window.clearTimeout(hoverTimerRef.current);
+            hoverTimerRef.current = null;
+          }
+        }}
+      />
     </div>
   );
 }

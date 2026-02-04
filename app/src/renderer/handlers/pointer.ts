@@ -5,10 +5,12 @@
  * Includes gesture recognition, object dragging, selection, and hover feedback.
  */
 
-import type {
-  MainToRendererMessage,
-  PointerEventData,
-  TableObject,
+import {
+  ObjectKind,
+  type MainToRendererMessage,
+  type PointerEventData,
+  type StackObject,
+  type TableObject,
 } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { snapMultipleToGrid } from '../../utils/gridSnap';
@@ -531,6 +533,21 @@ export function handlePointerMove(
         );
       }
 
+      // Notify main thread of hover state change (for card preview)
+      const hoveredObj = currentId
+        ? context.sceneManager.getObject(currentId)
+        : null;
+      const isFaceUp =
+        hoveredObj && hoveredObj._kind === ObjectKind.Stack
+          ? (hoveredObj as StackObject)._faceUp
+          : false;
+
+      context.postResponse({
+        type: 'object-hovered',
+        objectId: currentId,
+        isFaceUp,
+      });
+
       // Request render to show hover feedback
       context.app.renderer.render(context.app.stage);
     }
@@ -548,6 +565,14 @@ export function handlePointerMove(
         context.sceneManager,
       );
       context.hover.clearHover(hoveredId);
+
+      // Notify main thread that hover was cleared (for card preview)
+      context.postResponse({
+        type: 'object-hovered',
+        objectId: null,
+        isFaceUp: false,
+      });
+
       context.app.renderer.render(context.app.stage);
     }
   }

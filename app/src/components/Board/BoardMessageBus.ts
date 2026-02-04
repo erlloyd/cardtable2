@@ -36,6 +36,7 @@ export interface BoardHandlerContext {
   setIsWaitingForCoords: (waiting: boolean) => void;
   setAwarenessHz: (hz: number) => void;
   setCursorStyle: (style: 'default' | 'pointer' | 'grab' | 'grabbing') => void;
+  setHoveredObject: (objectId: string | null, isFaceUp: boolean) => void;
   addMessage: (msg: string) => void;
 
   // Refs
@@ -344,6 +345,10 @@ export class BoardMessageBus {
 
     this.registry.register('cursor-style', (msg, ctx) => {
       ctx.setCursorStyle(msg.style);
+    });
+
+    this.registry.register('object-hovered', (msg, ctx) => {
+      ctx.setHoveredObject(msg.objectId, msg.isFaceUp);
     });
 
     this.registry.register('error', (msg, ctx) => {

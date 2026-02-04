@@ -321,21 +321,32 @@ We just need to:
 4. Board looks up card data and shows CardPreview component
 
 **Tasks:**
-- Add `object-hovered` message type with objectId and face-up status
-- Send message when hover state changes in pointer handler
-- Add hover delay timer in Board (configurable, default 300ms)
-- Only show preview for face-up stacks
-- Position CardPreview near cursor (avoid covering source card)
-- Auto-dismiss on hover leave (when objectId becomes null)
-- Cancel timer if hover changes before delay expires
+- ✅ Add `object-hovered` message type with objectId and face-up status
+- ✅ Send message when hover state changes in pointer handler
+- ✅ Only show preview for face-up stacks
+- ✅ Position CardPreview near cursor (avoid covering source card)
+- ✅ Auto-dismiss on hover leave (when objectId becomes null)
+- ✅ Only stack objects trigger preview (not zones/tokens)
+- ⏳ Hide preview when local user starts dragging a stack
+  - Listen to drag start/end messages from renderer
+  - Clear preview state on drag start
+  - Re-enable on drag end (hover state may have changed)
+- ⏳ Ensure entire preview stays in viewport
+  - Calculate available space in all directions from cursor
+  - If preview would overflow right edge, position to left of cursor
+  - If preview would overflow bottom edge, position above cursor
+  - Default: position to right and below cursor (+20px offset)
 
 **Testing:**
-- Test hover delay timing (300ms default)
-- Test auto-dismiss on mouse leave
-- Test face-down cards don't trigger preview
-- Test preview positioning doesn't cover source card
-- Test cancellation when hover moves before delay
-- Test only stack objects trigger preview (not zones/tokens)
+- ✅ Test auto-dismiss on mouse leave
+- ✅ Test face-down cards don't trigger preview
+- ✅ Test preview positioning doesn't cover source card
+- ✅ Test only stack objects trigger preview (not zones/tokens)
+- ⏳ Test preview hides when user starts dragging
+- ⏳ Test preview doesn't reappear until drag completes and hover re-establishes
+- ⏳ Test preview positioning near right edge (flips to left of cursor)
+- ⏳ Test preview positioning near bottom edge (flips above cursor)
+- ⏳ Test preview positioning in corner (both axes flip)
 
 **Note:** No awareness updates - preview is local-only, not shown to other multiplayer users.
 

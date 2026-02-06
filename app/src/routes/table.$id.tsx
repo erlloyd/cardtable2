@@ -118,6 +118,9 @@ function Table() {
           const gameId = store.metadata.get('gameId') as string | undefined;
           if (!gameId) {
             console.log('[Table] No gameId in metadata, skipping pack loading');
+            // Clear error when in blank state (no gameId, no scenario)
+            setPacksError(null);
+            setPacksLoading(false);
             return;
           }
 
@@ -136,6 +139,23 @@ function Table() {
     };
 
     void loadContent();
+
+    // Observe metadata changes to detect when table is reset
+    const observer = () => {
+      const loadedScenario = store.metadata.get('loadedScenario');
+      const gameId = store.metadata.get('gameId');
+
+      // If both are cleared (table reset), clear error
+      if (!loadedScenario && !gameId) {
+        console.log('[Table] Metadata cleared, clearing error state');
+        setPacksError(null);
+      }
+    };
+
+    store.metadata.observe(observer);
+    return () => {
+      store.metadata.unobserve(observer);
+    };
   }, [store, isStoreReady]);
 
   // Subscribe to store gameAssets changes

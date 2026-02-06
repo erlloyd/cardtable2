@@ -274,6 +274,8 @@ export class BoardMessageBus {
 
     this.registry.register('object-drag-started', (_msg, ctx) => {
       ctx.setIsCameraActive(true);
+      // Hide card preview during drag
+      ctx.setHoveredObject(null, false);
     });
 
     this.registry.register('object-drag-ended', (_msg, ctx) => {
@@ -286,6 +288,7 @@ export class BoardMessageBus {
           ids: selectedIds,
         });
       }
+      // Preview will reappear automatically if still hovering (hover manager handles this)
     });
 
     this.registry.register('screen-coords', (msg, ctx) => {

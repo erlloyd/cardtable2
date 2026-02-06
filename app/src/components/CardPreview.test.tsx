@@ -1,8 +1,21 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { CardPreview } from './CardPreview';
 import type { Card, CardType, GameAssets } from '@cardtable2/shared';
+
+// Mock the useImage hook to control image loading
+vi.mock('use-image', () => ({
+  default: vi.fn(),
+}));
 
 describe('CardPreview', () => {
   const createGameAssets = (
@@ -19,9 +32,16 @@ describe('CardPreview', () => {
   });
 
   const mockOnClose = vi.fn();
+  let mockUseImage: Mock;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockOnClose.mockClear();
+
+    // Default: mock portrait image (300x400)
+    const mockImage = { width: 300, height: 400 };
+    mockUseImage = vi.fn(() => [mockImage, 'loaded']);
+    const useImageModule = await import('use-image');
+    vi.mocked(useImageModule).default = mockUseImage;
   });
 
   afterEach(() => {
@@ -217,7 +237,7 @@ describe('CardPreview', () => {
         />,
       );
 
-      const wrapper = container.querySelector('.fixed');
+      const wrapper = container.querySelector('.card-preview-container');
       expect(wrapper).toHaveStyle({
         left: '150px',
         top: '250px',
@@ -303,7 +323,8 @@ describe('CardPreview', () => {
       expect(img).toHaveStyle({ width: '392px', height: '280px' });
     });
 
-    it('applies rotation transform for landscape cards when rotationEnabled is true', () => {
+    it('applies rotation transform when image orientation does not match metadata', () => {
+      // Landscape metadata but portrait image (300x400) -> should rotate
       const gameAssets = createGameAssets(
         { villain: { orientation: 'landscape' } },
         {
@@ -313,6 +334,10 @@ describe('CardPreview', () => {
           },
         },
       );
+
+      // Mock portrait image that doesn't match landscape metadata
+      const mockImage = { width: 300, height: 400 };
+      mockUseImage.mockReturnValue([mockImage, 'loaded']);
 
       render(
         <CardPreview
@@ -328,7 +353,8 @@ describe('CardPreview', () => {
       expect(img).toHaveStyle({ transform: 'rotate(90deg)' });
     });
 
-    it('does not apply rotation for landscape cards when rotationEnabled is false', () => {
+    it('does not apply rotation when rotationEnabled is false', () => {
+      // Landscape metadata but portrait image -> would rotate, but rotationEnabled is false
       const gameAssets = createGameAssets(
         { villain: { orientation: 'landscape' } },
         {
@@ -338,6 +364,10 @@ describe('CardPreview', () => {
           },
         },
       );
+
+      // Mock portrait image that doesn't match landscape metadata
+      const mockImage = { width: 300, height: 400 };
+      mockUseImage.mockReturnValue([mockImage, 'loaded']);
 
       render(
         <CardPreview
@@ -353,7 +383,8 @@ describe('CardPreview', () => {
       expect(img).toHaveStyle({ transform: 'none' });
     });
 
-    it('does not apply rotation for portrait cards', () => {
+    it('does not apply rotation when image matches metadata orientation', () => {
+      // Portrait metadata and portrait image -> no rotation needed
       const gameAssets = createGameAssets(
         { hero: { orientation: 'portrait' } },
         {
@@ -364,9 +395,43 @@ describe('CardPreview', () => {
         },
       );
 
+      // Mock portrait image that matches portrait metadata
+      const mockImage = { width: 300, height: 400 };
+      mockUseImage.mockReturnValue([mockImage, 'loaded']);
+
       render(
         <CardPreview
           card={gameAssets.cards['spiderman']}
+          gameAssets={gameAssets}
+          mode="modal"
+          rotationEnabled={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      const img = screen.getByAltText('Card preview');
+      expect(img).toHaveStyle({ transform: 'none' });
+    });
+
+    it('does not apply rotation for landscape image with landscape metadata', () => {
+      // Landscape metadata and landscape image -> no rotation needed
+      const gameAssets = createGameAssets(
+        { villain: { orientation: 'landscape' } },
+        {
+          rhino: {
+            type: 'villain',
+            face: 'rhino.jpg',
+          },
+        },
+      );
+
+      // Mock landscape image that matches landscape metadata
+      const mockImage = { width: 400, height: 300 };
+      mockUseImage.mockReturnValue([mockImage, 'loaded']);
+
+      render(
+        <CardPreview
+          card={gameAssets.cards['rhino']}
           gameAssets={gameAssets}
           mode="modal"
           rotationEnabled={true}

@@ -77,17 +77,25 @@ export function CardPreview({
 
   // Early return for hover mode (before null checks, like the red box that worked)
   if (card && gameAssets && mode === 'hover') {
-    // Get dimensions (need card and gameAssets for this)
-    const orientation = getCardOrientation(card, gameAssets);
-    const isLandscape = orientation === 'landscape';
+    // Get desired orientation from metadata
+    const desiredOrientation = getCardOrientation(card, gameAssets);
+    const wantLandscape = desiredOrientation === 'landscape';
+
+    // Check if rotation is needed (rotate when image doesn't match metadata)
+    let needsRotation = false;
+    if (rotationEnabled && image) {
+      const imageIsLandscape = image.width > image.height;
+      needsRotation = wantLandscape !== imageIsLandscape;
+    }
+
+    // Use metadata-based dimensions (landscape metadata = landscape preview)
     let dimensions = getPreviewDimensions(size, customDimensions);
-    if (isLandscape) {
+    if (wantLandscape) {
       dimensions = getLandscapeDimensions(dimensions);
     }
 
-    // Rotation transform for landscape cards
-    const rotationTransform =
-      isLandscape && rotationEnabled ? 'rotate(90deg)' : 'none';
+    // Rotation transform
+    const rotationTransform = needsRotation ? 'rotate(90deg)' : 'none';
 
     return (
       <div
@@ -138,19 +146,25 @@ export function CardPreview({
     return null;
   }
 
-  // Determine orientation
-  const orientation = getCardOrientation(card, gameAssets);
-  const isLandscape = orientation === 'landscape';
+  // Get desired orientation from metadata
+  const desiredOrientation = getCardOrientation(card, gameAssets);
+  const wantLandscape = desiredOrientation === 'landscape';
 
-  // Get dimensions
+  // Check if rotation is needed (rotate when image doesn't match metadata)
+  let needsRotation = false;
+  if (rotationEnabled && image) {
+    const imageIsLandscape = image.width > image.height;
+    needsRotation = wantLandscape !== imageIsLandscape;
+  }
+
+  // Use metadata-based dimensions (landscape metadata = landscape preview)
   let dimensions = getPreviewDimensions(size, customDimensions);
-  if (isLandscape) {
+  if (wantLandscape) {
     dimensions = getLandscapeDimensions(dimensions);
   }
 
   // Rotation transform
-  const rotationTransform =
-    isLandscape && rotationEnabled ? 'rotate(90deg)' : 'none';
+  const rotationTransform = needsRotation ? 'rotate(90deg)' : 'none';
 
   if (mode === 'modal') {
     return (

@@ -415,7 +415,12 @@ export function registerDefaultActions(): void {
     },
     execute: (ctx) => {
       ctx.store.clearAllObjects();
-      console.log('[Reset Table] Cleared all objects');
+      ctx.store.metadata.delete('loadedScenario');
+      ctx.store.metadata.delete('gameId');
+      ctx.store.setGameAssets(null);
+      console.log(
+        '[Reset Table] Cleared all objects, metadata, and game assets',
+      );
     },
   });
 

@@ -21,6 +21,7 @@ import {
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
+import { shouldRotateCard } from '../../../content/cardRotation';
 import {
   TEXTURE_LOAD_FAILED,
   CARD_IMAGE_NOT_FOUND,
@@ -174,9 +175,33 @@ function renderMainCard(
     // Create sprite with card image
     const sprite = new Sprite(cachedTexture);
     sprite.label = 'card-face'; // Labeled child for animation targeting
-    sprite.width = STACK_WIDTH;
-    sprite.height = STACK_HEIGHT;
     sprite.anchor.set(0.5, 0.5);
+
+    // Check if card needs rotation based on image orientation
+    let needsRotation = false;
+    if (ctx.gameAssets && obj._cards && obj._cards.length > 0) {
+      const topCardId = obj._cards[0];
+      const card = ctx.gameAssets.cards[topCardId];
+      if (card) {
+        needsRotation = shouldRotateCard(
+          card,
+          ctx.gameAssets,
+          cachedTexture.width,
+          cachedTexture.height,
+        );
+      }
+    }
+
+    // Set dimensions (swap if rotating)
+    if (needsRotation) {
+      sprite.width = STACK_HEIGHT;
+      sprite.height = STACK_WIDTH;
+      sprite.rotation = -Math.PI / 2; // -90 degrees (clockwise)
+    } else {
+      sprite.width = STACK_WIDTH;
+      sprite.height = STACK_HEIGHT;
+    }
+
     container.addChild(sprite);
 
     // Add border for selection/drop target state

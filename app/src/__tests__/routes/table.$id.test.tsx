@@ -17,46 +17,49 @@ vi.mock('../../components/Board', () => ({
 }));
 
 // Mock YjsStore since it's used by the Table route (M3.6-T5)
-vi.mock('../../store/YjsStore', () => ({
-  YjsStore: class MockYjsStore {
-    objects = new Y.Map();
-    metadata = new Y.Map();
-    async waitForReady() {
-      return Promise.resolve();
-    }
-    forEachObject(_fn: (yMap: never, id: string) => void) {
-      // Mock - no objects, so this function is never called
-    }
-    getObjectYMap(_id: string) {
-      return undefined;
-    }
-    getObjectsSelectedBy(_actorId: string) {
-      return [];
-    }
-    onObjectsChange(_callback: () => void) {
-      return () => {};
-    }
-    onConnectionStatusChange(_callback: () => void) {
-      return () => {};
-    }
-    getConnectionStatus() {
-      return 'offline';
-    }
-    getActorId() {
-      return 'test-actor-id';
-    }
-    setGameAssets(_assets: unknown) {}
-    getGameAssets() {
-      return null;
-    }
-    onGameAssetsChange(callback: (assets: unknown) => void) {
-      // Immediately call with null
-      callback(null);
-      return () => {};
-    }
-    destroy() {}
-  },
-}));
+vi.mock('../../store/YjsStore', () => {
+  const mockDoc = new Y.Doc();
+  return {
+    YjsStore: class MockYjsStore {
+      objects = mockDoc.getMap('objects');
+      metadata = mockDoc.getMap('metadata');
+      async waitForReady() {
+        return Promise.resolve();
+      }
+      forEachObject(_fn: (yMap: never, id: string) => void) {
+        // Mock - no objects, so this function is never called
+      }
+      getObjectYMap(_id: string) {
+        return undefined;
+      }
+      getObjectsSelectedBy(_actorId: string) {
+        return [];
+      }
+      onObjectsChange(_callback: () => void) {
+        return () => {};
+      }
+      onConnectionStatusChange(_callback: () => void) {
+        return () => {};
+      }
+      getConnectionStatus() {
+        return 'offline';
+      }
+      getActorId() {
+        return 'test-actor-id';
+      }
+      setGameAssets(_assets: unknown) {}
+      getGameAssets() {
+        return null;
+      }
+      onGameAssetsChange(callback: (assets: unknown) => void) {
+        // Immediately call with null
+        callback(null);
+        return () => {};
+      }
+      destroy() {}
+    },
+  };
+});
 
 describe('Table Route', () => {
   it('renders with table ID from route', async () => {

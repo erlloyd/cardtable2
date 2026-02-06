@@ -9,6 +9,12 @@ import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
 import type { GameAssets } from '../content';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
+import { getCardOrientation } from '../content/utils';
+import {
+  getPreviewDimensions,
+  getLandscapeDimensions,
+  DEFAULT_PREVIEW_SIZE,
+} from '../constants/previewSizes';
 
 // Hooks
 import { useRenderer } from '../hooks/useRenderer';
@@ -181,12 +187,39 @@ function Board({
         return;
       }
 
-      // Position preview near cursor (offset to avoid covering card)
+      // Calculate preview dimensions based on card orientation
+      const orientation = getCardOrientation(card, gameAssets);
+      const isLandscape = orientation === 'landscape';
+      let dimensions = getPreviewDimensions(DEFAULT_PREVIEW_SIZE);
+      if (isLandscape) {
+        dimensions = getLandscapeDimensions(dimensions);
+      }
+
+      // Calculate viewport-aware position
       const cursorPos = lastCursorPosRef.current;
-      setPreviewPosition({
-        x: cursorPos.x + 20,
-        y: cursorPos.y + 20,
-      });
+      const offset = 20; // Default offset from cursor
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // Default: position to right and below cursor
+      let x = cursorPos.x + offset;
+      let y = cursorPos.y + offset;
+
+      // If preview would overflow right edge, flip to left of cursor
+      if (x + dimensions.width > viewportWidth) {
+        x = cursorPos.x - dimensions.width - offset;
+      }
+
+      // If preview would overflow bottom edge, flip above cursor
+      if (y + dimensions.height > viewportHeight) {
+        y = cursorPos.y - dimensions.height - offset;
+      }
+
+      // Ensure preview doesn't go off left or top edge
+      x = Math.max(offset, x);
+      y = Math.max(offset, y);
+
+      setPreviewPosition({ x, y });
       setPreviewCard(card);
     },
     [gameAssets],

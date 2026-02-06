@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ObjectKind,
   type PointerEventData,
@@ -553,74 +554,69 @@ function Board({
         }}
       />
 
-      {/* Blurred Overlay - Mobile Double-Tap */}
-      {isModalVisible && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onPointerUp={(e) => {
-            // Ignore gestures that were part of opening the modal (standard pattern per W3C spec)
-            const elapsed = Date.now() - modalOpenTimeRef.current;
-            if (elapsed > IGNORE_GESTURES_MS && e.target === e.currentTarget) {
-              e.stopPropagation();
-              setIsModalVisible(false);
-              setModalPreviewCard(null);
-            }
-          }}
-          onClick={(e) => {
-            // Also handle onClick for mouse/keyboard support
-            const elapsed = Date.now() - modalOpenTimeRef.current;
-            if (elapsed > IGNORE_GESTURES_MS && e.target === e.currentTarget) {
-              e.stopPropagation();
-              setIsModalVisible(false);
-              setModalPreviewCard(null);
-            }
-          }}
-        >
-          {/* Card image */}
-          {modalPreviewCard ? (
-            <img
-              src={modalPreviewCard.face}
-              alt="Card preview"
-              style={{
-                maxWidth: '90vw',
-                maxHeight: '90vh',
-                borderRadius: '8px',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: '300px',
-                height: '420px',
-                backgroundColor: '#4a5568',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '16px',
-              }}
-            >
-              Loading...
-            </div>
-          )}
-        </div>
-      )}
+      {/* Blurred Overlay - Mobile Double-Tap (rendered via portal to escape stacking context) */}
+      {isModalVisible &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onClick={(e) => {
+              // Close modal on backdrop click (after timing threshold to avoid gesture conflicts)
+              const elapsed = Date.now() - modalOpenTimeRef.current;
+              if (
+                elapsed > IGNORE_GESTURES_MS &&
+                e.target === e.currentTarget
+              ) {
+                setIsModalVisible(false);
+                setModalPreviewCard(null);
+              }
+            }}
+          >
+            {/* Card image */}
+            {modalPreviewCard ? (
+              <img
+                src={modalPreviewCard.face}
+                alt="Card preview"
+                style={{
+                  maxWidth: '90vw',
+                  maxHeight: '90vh',
+                  borderRadius: '8px',
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '300px',
+                  height: '420px',
+                  backgroundColor: '#4a5568',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '16px',
+                }}
+              >
+                Loading...
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

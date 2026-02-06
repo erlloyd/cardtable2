@@ -1,7 +1,7 @@
 # Card Image Preview & Orientation System
 
 ## Status
-🚧 **In Progress** - Phase 7: Settings UI Integration
+🚧 **In Progress** - Phase 8: E2E Testing
 
 **Completed Phases:**
 - ✅ Phase 1: Content Type Extensions
@@ -12,7 +12,10 @@
 - ✅ Phase 5: Desktop Hover Preview (all 3 sub-phases complete)
 - ✅ Phase 6: Mobile Double-Tap Preview (with portal fix and zoom threshold)
 
-**Next Up:** Phase 7 - Settings UI Integration (localStorage + settings panel)
+**Deferred to Future Work:**
+- ⏭️ Phase 7: Settings UI Integration → [Issue #58](https://github.com/erlloyd/cardtable2/issues/58)
+
+**Next Up:** Phase 8 - E2E Testing (or merge feature)
 
 ## Overview
 Add ability for users to view card images at larger size with proper orientation handling for landscape/portrait cards. Desktop users hover over cards to preview; mobile users double-tap to see a centered preview modal.
@@ -445,23 +448,23 @@ We just need to:
 **Completed:** 2026-02-06
 **Commits:** (multiple commits during implementation)
 
-### Phase 7: Settings UI Integration
-**Files:**
-- `app/src/components/SettingsPanel.tsx` - Add preview settings section
+### Phase 7: Settings UI Integration ⏭️ **DEFERRED**
+**Status:** Deferred to future work - [Issue #58](https://github.com/erlloyd/cardtable2/issues/58)
 
-**Tasks:**
-- Add preview settings section to settings panel
+**Reason:** Current hardcoded defaults (medium size, 300ms hover delay, rotation enabled, 80% zoom threshold) work well for most users. Settings UI can be added later based on user feedback.
+
+**Planned Features:**
 - Size preset selector (small/medium/large/custom)
 - Custom size inputs (width/height)
-- Hover delay slider
+- Hover delay slider (desktop)
 - Enable/disable toggle
 - Rotation toggle
-- Live preview of settings
+- Zoom threshold adjustment
+- localStorage persistence
 
-**Testing:**
-- Test all settings persist correctly
-- Test preview updates when settings change
-- Test validation on custom sizes
+**Files:**
+- `app/src/hooks/usePreviewSettings.ts` - Settings storage hook
+- `app/src/components/SettingsPanel.tsx` - Settings UI section
 
 ### Phase 8: E2E Testing
 **Files:**

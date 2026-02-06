@@ -795,6 +795,20 @@ export function handlePointerLeave(
 // Double-tap tracking for mobile card preview
 const lastTapTimes = new Map<string, number>();
 const DOUBLE_TAP_THRESHOLD = 300; // ms
+const TAP_CLEANUP_THRESHOLD = 5000; // Clear old entries after 5 seconds
+
+/**
+ * Cleanup old tap times to prevent Map from growing indefinitely.
+ * Called periodically when new taps occur.
+ */
+function cleanupOldTapTimes() {
+  const now = Date.now();
+  for (const [id, time] of lastTapTimes.entries()) {
+    if (now - time > TAP_CLEANUP_THRESHOLD) {
+      lastTapTimes.delete(id);
+    }
+  }
+}
 
 /**
  * Helper: Handle selection logic on pointer end (up or cancel)
@@ -856,6 +870,8 @@ function handleSelectionOnPointerEnd(
           }
           return;
         } else {
+          // Cleanup old entries periodically to prevent Map growth
+          cleanupOldTapTimes();
           lastTapTimes.set(objectId, now);
         }
       }

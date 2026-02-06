@@ -1,4 +1,4 @@
-import { Fragment, useEffect } from 'react';
+import { Fragment, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogPanel,
@@ -61,6 +61,19 @@ export function CardPreview({
   // Load image with hook (must be called unconditionally)
   const [image, status] = useImage(imageUrl);
 
+  // Log image loading failures for debugging
+  useEffect(() => {
+    if (status === 'failed' && imageUrl) {
+      console.error('[CardPreview] Failed to load card image', {
+        imageUrl,
+        cardType: card?.type,
+        cardFace: card?.face,
+        mode,
+        context: 'card-preview-image-load',
+      });
+    }
+  }, [status, imageUrl, card, mode]);
+
   // Close on ESC key (hover mode only - modal mode handled by Dialog)
   useEffect(() => {
     if (!isOpen || mode === 'modal') return;
@@ -75,8 +88,16 @@ export function CardPreview({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, mode, onClose]);
 
-  // Early return for hover mode (before null checks, like the red box that worked)
-  if (card && gameAssets && mode === 'hover') {
+  // Calculate rotation and dimensions (shared logic for both modes)
+  const getCardDisplayProps = useCallback(() => {
+    if (!card || !gameAssets) {
+      return {
+        dimensions: getPreviewDimensions(size, customDimensions),
+        needsRotation: false,
+        rotationTransform: 'none',
+      };
+    }
+
     // Get desired orientation from metadata
     const desiredOrientation = getCardOrientation(card, gameAssets);
     const wantLandscape = desiredOrientation === 'landscape';
@@ -96,6 +117,13 @@ export function CardPreview({
 
     // Rotation transform
     const rotationTransform = needsRotation ? 'rotate(90deg)' : 'none';
+
+    return { dimensions, needsRotation, rotationTransform };
+  }, [card, gameAssets, rotationEnabled, image, size, customDimensions]);
+
+  // Early return for hover mode
+  if (card && gameAssets && mode === 'hover') {
+    const { dimensions, rotationTransform } = getCardDisplayProps();
 
     return (
       <div
@@ -147,25 +175,8 @@ export function CardPreview({
     return null;
   }
 
-  // Get desired orientation from metadata
-  const desiredOrientation = getCardOrientation(card, gameAssets);
-  const wantLandscape = desiredOrientation === 'landscape';
-
-  // Check if rotation is needed (rotate when image doesn't match metadata)
-  let needsRotation = false;
-  if (rotationEnabled && image) {
-    const imageIsLandscape = image.width > image.height;
-    needsRotation = wantLandscape !== imageIsLandscape;
-  }
-
-  // Use metadata-based dimensions (landscape metadata = landscape preview)
-  let dimensions = getPreviewDimensions(size, customDimensions);
-  if (wantLandscape) {
-    dimensions = getLandscapeDimensions(dimensions);
-  }
-
-  // Rotation transform
-  const rotationTransform = needsRotation ? 'rotate(90deg)' : 'none';
+  // Calculate rotation and dimensions for modal mode
+  const { dimensions, rotationTransform } = getCardDisplayProps();
 
   if (mode === 'modal') {
     return (

@@ -665,4 +665,85 @@ describe('CardPreview', () => {
       expect(mockOnClose).not.toHaveBeenCalled();
     });
   });
+
+  describe('Error States', () => {
+    it('shows failed state when image load fails', () => {
+      mockUseImage.mockReturnValue([null, 'failed']);
+
+      const card: Card = {
+        type: 'hero',
+        face: 'front.jpg',
+      };
+
+      render(
+        <CardPreview
+          card={card}
+          gameAssets={createGameAssets()}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      // Verify "Failed to load" message is visible
+      expect(screen.getByText('Failed to load')).toBeInTheDocument();
+    });
+
+    it('logs error when image load fails', () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      mockUseImage.mockReturnValue([null, 'failed']);
+
+      const card: Card = {
+        type: 'hero',
+        face: 'front.jpg',
+      };
+
+      render(
+        <CardPreview
+          card={card}
+          gameAssets={createGameAssets()}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      // Verify error was logged
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[CardPreview] Failed to load card image',
+        expect.objectContaining({
+          imageUrl: 'front.jpg',
+          cardType: 'hero',
+          cardFace: 'front.jpg',
+          mode: 'hover',
+        }),
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('shows loading state while image loads', () => {
+      mockUseImage.mockReturnValue([null, 'loading']);
+
+      const card: Card = {
+        type: 'hero',
+        face: 'front.jpg',
+      };
+
+      render(
+        <CardPreview
+          card={card}
+          gameAssets={createGameAssets()}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      // Verify "Loading..." message is visible
+      expect(screen.getByText('Loading...')).toBeInTheDocument();
+    });
+  });
 });

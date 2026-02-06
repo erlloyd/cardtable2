@@ -164,17 +164,52 @@ function Board({
   const getCardFromStack = useCallback(
     (objectId: string): Card | null => {
       const obj = storeRef.current.getObject(objectId);
-      if (!obj || obj._kind !== ObjectKind.Stack) {
+
+      if (!obj) {
+        console.warn('[Board] Cannot show preview: Object not found', {
+          objectId,
+          context: 'card-preview',
+        });
+        return null;
+      }
+
+      if (obj._kind !== ObjectKind.Stack) {
+        console.warn('[Board] Cannot show preview: Object is not a stack', {
+          objectId,
+          objectKind: obj._kind,
+          context: 'card-preview',
+        });
         return null;
       }
 
       const stackObj = obj as StackObject;
       if (!stackObj._cards || stackObj._cards.length === 0) {
+        console.warn('[Board] Cannot show preview: Stack has no cards', {
+          objectId,
+          hasCardsArray: !!stackObj._cards,
+          cardCount: stackObj._cards?.length ?? 0,
+          context: 'card-preview',
+        });
         return null;
       }
 
       const topCardCode = stackObj._cards[0];
-      return gameAssets?.cards[topCardCode] ?? null;
+      const card = gameAssets?.cards[topCardCode];
+
+      if (!card) {
+        console.error(
+          '[Board] Cannot show preview: Card not found in gameAssets',
+          {
+            objectId,
+            cardCode: topCardCode,
+            hasGameAssets: !!gameAssets,
+            context: 'card-preview',
+          },
+        );
+        return null;
+      }
+
+      return card;
     },
     [gameAssets],
   );
@@ -282,6 +317,15 @@ function Board({
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Cleanup hover timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current !== null) {
+        window.clearTimeout(hoverTimerRef.current);
+      }
+    };
   }, []);
 
   // Message bus

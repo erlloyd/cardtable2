@@ -1,29 +1,30 @@
 import type { Card, GameAssets } from '@cardtable2/shared';
 
 /**
- * Determine if a card image needs rotation to match container orientation.
+ * Determine if a card image needs rotation based on image aspect ratio.
  *
- * Rule: Rotate when image orientation doesn't match container orientation.
+ * Currently rotates all landscape images (width > height) to fit portrait containers.
+ * This is a simplified implementation that assumes all containers are portrait-oriented.
  *
- * - Non-exhausted (portrait container): Rotate landscape images
- * - Exhausted (landscape container): Rotate portrait images
- *
- * Currently only handles non-exhausted cards (portrait container).
- *
- * @param _card - Card data with metadata (unused currently, kept for future exhausted support)
- * @param _gameAssets - Game assets (unused currently, kept for future exhausted support)
- * @param imageWidth - Natural width of the loaded image
- * @param imageHeight - Natural height of the loaded image
- * @returns true if the card should be rotated 90°
+ * @param _card - Card data (reserved for future exhausted state support)
+ * @param _gameAssets - Game assets (reserved for future exhausted state support)
+ * @param imageWidth - Natural width of the loaded image in pixels
+ * @param imageHeight - Natural height of the loaded image in pixels
+ * @returns true if the image should be rotated 90° clockwise (landscape images only)
  *
  * @example
  * ```ts
- * // Portrait container + landscape image -> rotate
+ * // Landscape image (wider than tall) -> rotate
  * shouldRotateCard(card, gameAssets, 1030, 710) // true
  *
- * // Portrait container + portrait image -> don't rotate
+ * // Portrait image (taller than wide) -> don't rotate
  * shouldRotateCard(card, gameAssets, 300, 400) // false
+ *
+ * // Square image -> don't rotate
+ * shouldRotateCard(card, gameAssets, 500, 500) // false
  * ```
+ *
+ * @todo Add exhausted state support: rotate portrait images when card is exhausted (landscape container)
  */
 export function shouldRotateCard(
   _card: Card,
@@ -31,11 +32,10 @@ export function shouldRotateCard(
   imageWidth: number,
   imageHeight: number,
 ): boolean {
-  // Check image natural orientation
+  // Check if image is landscape (wider than tall)
   const imageIsLandscape = imageWidth > imageHeight;
 
-  // For non-exhausted cards (portrait container):
-  // Rotate if image is landscape
+  // Rotate landscape images to fit portrait containers
   return imageIsLandscape;
 
   // TODO: When exhausted state is implemented:

@@ -1,5 +1,3 @@
- 
-
 /**
  * E2E Tests for Card Preview System (Phase 6)
  *
@@ -297,6 +295,105 @@ test.describe('Card Preview - Component Integration', () => {
     // Command palette should open
     const paletteInput = page.locator('input[placeholder*="Search"]').first();
     await expect(paletteInput).toBeVisible({ timeout: 2000 });
+  });
+});
+
+test.describe('Card Preview - Zoom Threshold Logic', () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    const tableId = `zoom-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
+
+    await expect(page.getByTestId('worker-status')).toContainText(
+      'Initialized',
+      { timeout: 5000 },
+    );
+    await page.waitForTimeout(200);
+  });
+
+  test('zoom threshold prevents preview when card is large enough', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => {
+      errors.push(error.message);
+    });
+
+    const canvas = page.getByTestId('board-canvas');
+    const box = await canvas.boundingBox();
+    expect(box).toBeTruthy();
+
+    const centerX = box!.x + box!.width / 2;
+    const centerY = box!.y + box!.height / 2;
+
+    // Zoom in significantly using wheel events
+    for (let i = 0; i < 10; i++) {
+      await page.mouse.move(centerX, centerY);
+      await page.mouse.wheel(0, -100);
+      await page.waitForTimeout(50);
+    }
+
+    // Wait for zoom to settle
+    await page.waitForTimeout(300);
+
+    // Now hover over the card (should not show preview due to zoom threshold)
+    await page.mouse.move(centerX, centerY);
+    await page.waitForTimeout(400);
+
+    // No errors should have occurred during zoom + hover
+    expect(errors).toEqual([]);
+
+    // Note: We can't verify preview doesn't appear without gameAssets,
+    // but we verify the logic executes without errors
+  });
+});
+
+test.describe('Card Preview - Face-Up Filtering', () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    const tableId = `faceup-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
+
+    await expect(page.getByTestId('worker-status')).toContainText(
+      'Initialized',
+      { timeout: 5000 },
+    );
+    await page.waitForTimeout(200);
+  });
+
+  test('face-up filtering logic executes without errors', async ({ page }) => {
+    const errors: string[] = [];
+    const consoleWarnings: string[] = [];
+
+    page.on('pageerror', (error) => {
+      errors.push(error.message);
+    });
+
+    page.on('console', (msg) => {
+      if (msg.type() === 'warn' && msg.text().includes('Cannot show preview')) {
+        consoleWarnings.push(msg.text());
+      }
+    });
+
+    const canvas = page.getByTestId('board-canvas');
+    const box = await canvas.boundingBox();
+    expect(box).toBeTruthy();
+
+    // Hover over various positions (some may be face-down cards)
+    const positions = [
+      { x: box!.x + box!.width * 0.3, y: box!.y + box!.height * 0.3 },
+      { x: box!.x + box!.width * 0.5, y: box!.y + box!.height * 0.5 },
+      { x: box!.x + box!.width * 0.7, y: box!.y + box!.height * 0.7 },
+    ];
+
+    for (const pos of positions) {
+      await page.mouse.move(pos.x, pos.y);
+      await page.waitForTimeout(400);
+    }
+
+    // No errors should have occurred
+    expect(errors).toEqual([]);
+
+    // Note: Without gameAssets, we may see warnings about missing cards,
+    // which is expected behavior. The test verifies the logic runs without crashes.
   });
 });
 

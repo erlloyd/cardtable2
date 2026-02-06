@@ -181,7 +181,12 @@ function Board({
 
   // Handle hover state changes from renderer (for card preview)
   const setHoveredObject = useCallback(
-    (objectId: string | null, isFaceUp: boolean) => {
+    (
+      objectId: string | null,
+      isFaceUp: boolean,
+      cardScreenWidth?: number,
+      cardScreenHeight?: number,
+    ) => {
       // Clear any pending hover timer
       if (hoverTimerRef.current !== null) {
         window.clearTimeout(hoverTimerRef.current);
@@ -204,9 +209,23 @@ function Board({
       // Calculate preview dimensions based on card orientation
       const orientation = getCardOrientation(card, gameAssets);
       const isLandscape = orientation === 'landscape';
-      let dimensions = getPreviewDimensions(DEFAULT_PREVIEW_SIZE);
+      let previewDimensions = getPreviewDimensions(DEFAULT_PREVIEW_SIZE);
       if (isLandscape) {
-        dimensions = getLandscapeDimensions(dimensions);
+        previewDimensions = getLandscapeDimensions(previewDimensions);
+      }
+
+      // Check zoom threshold: if card is >= 80% of preview size, don't show preview
+      if (cardScreenWidth && cardScreenHeight) {
+        const widthRatio = cardScreenWidth / previewDimensions.width;
+        const heightRatio = cardScreenHeight / previewDimensions.height;
+        const maxRatio = Math.max(widthRatio, heightRatio);
+
+        if (maxRatio >= 0.8) {
+          // Card is already large enough, don't show preview
+          setPreviewCard(null);
+          setPreviewPosition(null);
+          return;
+        }
       }
 
       // Calculate viewport-aware position
@@ -220,13 +239,13 @@ function Board({
       let y = cursorPos.y + offset;
 
       // If preview would overflow right edge, flip to left of cursor
-      if (x + dimensions.width > viewportWidth) {
-        x = cursorPos.x - dimensions.width - offset;
+      if (x + previewDimensions.width > viewportWidth) {
+        x = cursorPos.x - previewDimensions.width - offset;
       }
 
       // If preview would overflow bottom edge, flip above cursor
-      if (y + dimensions.height > viewportHeight) {
-        y = cursorPos.y - dimensions.height - offset;
+      if (y + previewDimensions.height > viewportHeight) {
+        y = cursorPos.y - previewDimensions.height - offset;
       }
 
       // Ensure preview doesn't go off left or top edge

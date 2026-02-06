@@ -542,10 +542,25 @@ export function handlePointerMove(
           ? (hoveredObj as StackObject)._faceUp
           : false;
 
+      // Calculate card's screen dimensions for zoom threshold check
+      let cardScreenWidth: number | undefined;
+      let cardScreenHeight: number | undefined;
+      if (currentId) {
+        const visual = context.visual.getAllVisuals().get(currentId);
+        if (visual) {
+          // Get bounds in screen space
+          const bounds = visual.getBounds();
+          cardScreenWidth = bounds.width;
+          cardScreenHeight = bounds.height;
+        }
+      }
+
       context.postResponse({
         type: 'object-hovered',
         objectId: currentId,
         isFaceUp,
+        cardScreenWidth,
+        cardScreenHeight,
       });
 
       // Request render to show hover feedback

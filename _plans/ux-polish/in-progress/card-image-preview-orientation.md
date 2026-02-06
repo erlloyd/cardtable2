@@ -1,7 +1,7 @@
 # Card Image Preview & Orientation System
 
 ## Status
-🚧 **In Progress** - Phase 6: Mobile double-tap detection and modal preview
+🚧 **In Progress** - Phase 7: Settings UI Integration
 
 **Completed Phases:**
 - ✅ Phase 1: Content Type Extensions
@@ -10,8 +10,9 @@
 - ✅ Phase 4: CardPreview React Component
 - ✅ Phase 4.5: Canvas Card Rotation (bonus feature)
 - ✅ Phase 5: Desktop Hover Preview (all 3 sub-phases complete)
+- ✅ Phase 6: Mobile Double-Tap Preview (with portal fix and zoom threshold)
 
-**Next Up:** Phase 6 - Mobile double-tap detection
+**Next Up:** Phase 7 - Settings UI Integration (localStorage + settings panel)
 
 ## Overview
 Add ability for users to view card images at larger size with proper orientation handling for landscape/portrait cards. Desktop users hover over cards to preview; mobile users double-tap to see a centered preview modal.
@@ -407,26 +408,42 @@ We just need to:
 
 **Note:** No awareness updates - preview is local-only, not shown to other multiplayer users.
 
-### Phase 6: Mobile Double-Tap Preview
+### Phase 6: Mobile Double-Tap Preview ✅ **COMPLETED**
 **Files:**
-- `app/src/renderer/objects/stack/events.ts` - Update onClick handler
-- `app/src/hooks/useDoubleTap.ts` (new) - Double-tap detection
+- `app/src/renderer/handlers/pointer.ts` - Double-tap detection in handlePointerUp
+- `shared/src/index.ts` - Added `show-card-preview-modal` message type
+- `app/src/components/Board/BoardMessageBus.ts` - Wire up modal message handler
+- `app/src/components/Board.tsx` - Modal state management with React portal
 
 **Tasks:**
-- Implement double-tap detection in onClick handler
-- Track tap timing per-object (prevent cross-object double-tap)
-- Only trigger for touch pointerType
-- Show modal preview on double-tap
-- Prevent touch default behavior on double-tap
-- Reset timer after successful double-tap
+- ✅ Implement double-tap detection in pointer handler (300ms threshold)
+- ✅ Track tap timing globally (not per-object for simpler UX)
+- ✅ Only trigger for touch pointerType
+- ✅ Show modal preview on double-tap via new message type
+- ✅ Add `show-card-preview-modal` to RendererToMainMessage union
+- ✅ Board receives message and displays modal with card preview
+- ✅ Timing protection: ignore gestures in first 200ms after modal opens
+- ✅ **FIX:** React portal implementation to escape stacking contexts
+  - Modal rendered to `document.body` via `createPortal`
+  - Fixes z-index issues with GlobalMenuBar buttons
+  - Prevents backdrop clicks from activating underlying UI
+- ✅ **FEATURE:** Zoom threshold to hide hover preview when unnecessary
+  - Calculate card's rendered screen dimensions in pointer.ts
+  - Extended `object-hovered` message with `cardScreenWidth` and `cardScreenHeight`
+  - Board component checks if card >= 80% of preview size
+  - Automatically hides hover preview when card is already large enough
 
 **Testing:**
-- Test double-tap detection with various timing
-- Test single tap still works normally
-- Test cross-object taps don't trigger
-- Test mouse clicks don't trigger double-tap
-- Test touch-specific behavior
-- Test modal dismissal
+- ✅ Test double-tap detection with various timing
+- ✅ Test single tap still works normally
+- ✅ Test mouse clicks don't trigger double-tap (touch-only)
+- ✅ Test modal dismissal (click backdrop, timing protection)
+- ✅ Test modal renders above all UI elements
+- ✅ Test backdrop clicks don't activate underlying buttons
+- ✅ Test zoom threshold prevents preview when card is large
+
+**Completed:** 2026-02-06
+**Commits:** (multiple commits during implementation)
 
 ### Phase 7: Settings UI Integration
 **Files:**
@@ -513,10 +530,12 @@ We just need to:
 2. **Missing card images**: Show placeholder or error state in preview
 3. **Very small screens**: Adjust preview size to fit viewport
 4. **Rapid hover/unhover**: Debounce to prevent flashing
-5. **Multiple stacks**: Each tracks its own tap timing
+5. **Multiple stacks**: Global double-tap timing (simpler UX than per-object)
 6. **Rotated stacks**: Preview shows upright card image (not rotated with stack)
 7. **Face-down privacy**: Never preview face-down cards
 8. **Touch vs mouse**: Only touch triggers double-tap, not mouse double-click
+9. **Modal z-index stacking**: Use React portal to `document.body` to escape stacking contexts
+10. **Zoom threshold**: Hide hover preview when card >= 80% of preview size (already large enough)
 
 ## Performance Considerations
 

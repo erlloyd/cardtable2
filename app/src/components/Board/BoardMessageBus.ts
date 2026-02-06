@@ -36,7 +36,12 @@ export interface BoardHandlerContext {
   setIsWaitingForCoords: (waiting: boolean) => void;
   setAwarenessHz: (hz: number) => void;
   setCursorStyle: (style: 'default' | 'pointer' | 'grab' | 'grabbing') => void;
-  setHoveredObject: (objectId: string | null, isFaceUp: boolean) => void;
+  setHoveredObject: (
+    objectId: string | null,
+    isFaceUp: boolean,
+    cardScreenWidth?: number,
+    cardScreenHeight?: number,
+  ) => void;
   showCardPreviewModal: (objectId: string) => void;
   addMessage: (msg: string) => void;
 
@@ -352,7 +357,12 @@ export class BoardMessageBus {
     });
 
     this.registry.register('object-hovered', (msg, ctx) => {
-      ctx.setHoveredObject(msg.objectId, msg.isFaceUp);
+      ctx.setHoveredObject(
+        msg.objectId,
+        msg.isFaceUp,
+        msg.cardScreenWidth,
+        msg.cardScreenHeight,
+      );
     });
 
     this.registry.register('show-card-preview-modal', (msg, ctx) => {

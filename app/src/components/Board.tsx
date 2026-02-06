@@ -577,6 +577,7 @@ function Board({
       {isModalVisible &&
         createPortal(
           <div
+            data-testid="card-preview-modal"
             className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center"
             style={{
               position: 'fixed',

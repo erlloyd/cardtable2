@@ -99,6 +99,7 @@ export function CardPreview({
 
     return (
       <div
+        data-testid="card-preview-hover"
         className="card-preview-container"
         style={{
           left: `${position.x}px`,

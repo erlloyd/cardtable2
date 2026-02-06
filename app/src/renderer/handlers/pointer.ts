@@ -777,6 +777,10 @@ export function handlePointerLeave(
   }
 }
 
+// Double-tap tracking for mobile card preview
+const lastTapTimes = new Map<string, number>();
+const DOUBLE_TAP_THRESHOLD = 300; // ms
+
 /**
  * Helper: Handle selection logic on pointer end (up or cancel)
  *
@@ -810,6 +814,37 @@ function handleSelectionOnPointerEnd(
     const hitResult = context.sceneManager.hitTest(worldX, worldY);
 
     if (hitResult) {
+      // Check for double-tap on touch devices (mobile card preview)
+      if (event.pointerType === 'touch') {
+        const now = Date.now();
+        const objectId = hitResult.id;
+        const lastTapTime = lastTapTimes.get(objectId) || 0;
+        const timeSinceLastTap = now - lastTapTime;
+
+        if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD) {
+          lastTapTimes.delete(objectId);
+
+          // Only show preview for face-up stacks
+          const obj = context.sceneManager.getObject(objectId);
+          if (obj && obj._kind === ObjectKind.Stack) {
+            const stackObj = obj as StackObject;
+            if (stackObj._faceUp) {
+              console.log(
+                '[DoubleTap] Sending show-card-preview-modal message for:',
+                objectId,
+              );
+              context.postResponse({
+                type: 'show-card-preview-modal',
+                objectId,
+              });
+            }
+          }
+          return;
+        } else {
+          lastTapTimes.set(objectId, now);
+        }
+      }
+
       // Clicked on an object - handle selection logic
       const isMultiSelectModifier =
         pointerDownEvent.metaKey ||

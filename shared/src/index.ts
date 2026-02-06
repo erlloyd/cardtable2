@@ -260,6 +260,10 @@ export type RendererToMainMessage =
   | {
       type: 'cursor-style'; // Request cursor style change
       style: 'default' | 'pointer' | 'grab' | 'grabbing';
+    }
+  | {
+      type: 'show-card-preview-modal'; // Show card preview in modal (mobile double-tap)
+      objectId: string; // Object ID to preview
     };
 
 // ============================================================================

@@ -37,6 +37,7 @@ export interface BoardHandlerContext {
   setAwarenessHz: (hz: number) => void;
   setCursorStyle: (style: 'default' | 'pointer' | 'grab' | 'grabbing') => void;
   setHoveredObject: (objectId: string | null, isFaceUp: boolean) => void;
+  showCardPreviewModal: (objectId: string) => void;
   addMessage: (msg: string) => void;
 
   // Refs
@@ -352,6 +353,14 @@ export class BoardMessageBus {
 
     this.registry.register('object-hovered', (msg, ctx) => {
       ctx.setHoveredObject(msg.objectId, msg.isFaceUp);
+    });
+
+    this.registry.register('show-card-preview-modal', (msg, ctx) => {
+      console.log(
+        '[BoardMessageBus] Received show-card-preview-modal:',
+        msg.objectId,
+      );
+      ctx.showCardPreviewModal(msg.objectId);
     });
 
     this.registry.register('error', (msg, ctx) => {

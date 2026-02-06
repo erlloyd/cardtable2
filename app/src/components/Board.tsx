@@ -610,8 +610,8 @@ function Board({
                 src={modalPreviewCard.face}
                 alt="Card preview"
                 style={{
-                  maxWidth: '90vw',
-                  maxHeight: '90vh',
+                  maxWidth: 'clamp(280px, 60vw, 450px)',
+                  maxHeight: 'clamp(392px, 60vh, 630px)',
                   borderRadius: '8px',
                   boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
                 }}

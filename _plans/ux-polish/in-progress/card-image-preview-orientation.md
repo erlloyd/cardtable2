@@ -1,7 +1,17 @@
 # Card Image Preview & Orientation System
 
 ## Status
-🚧 **In Progress** - Phase 5: Desktop hover preview integration
+🚧 **In Progress** - Phase 6: Mobile double-tap detection and modal preview
+
+**Completed Phases:**
+- ✅ Phase 1: Content Type Extensions
+- ⏭️ Phase 2: Preview Settings System (partially skipped, defaults used)
+- ✅ Phase 3: Orientation Resolution Utility
+- ✅ Phase 4: CardPreview React Component
+- ✅ Phase 4.5: Canvas Card Rotation (bonus feature)
+- ✅ Phase 5: Desktop Hover Preview (all 3 sub-phases complete)
+
+**Next Up:** Phase 6 - Mobile double-tap detection
 
 ## Overview
 Add ability for users to view card images at larger size with proper orientation handling for landscape/portrait cards. Desktop users hover over cards to preview; mobile users double-tap to see a centered preview modal.
@@ -238,74 +248,116 @@ export function getCardOrientation(
 
 ## Implementation Plan
 
-### Phase 1: Content Type Extensions
+### Phase 1: Content Type Extensions ✅ **COMPLETED**
 **Files:**
 - `shared/src/content-types.ts` - Add `orientation` to CardType and Card
 
 **Tasks:**
-- Add `orientation?: 'portrait' | 'landscape' | 'auto'` to CardType
-- Add `orientation?: 'portrait' | 'landscape' | 'auto'` to Card
-- Update JSDoc comments to explain inheritance
-- Run type checks to ensure no breaking changes
+- ✅ Add `orientation?: 'portrait' | 'landscape' | 'auto'` to CardType
+- ✅ Add `orientation?: 'portrait' | 'landscape' | 'auto'` to Card
+- ✅ Update JSDoc comments to explain inheritance
+- ✅ Run type checks to ensure no breaking changes
 
 **Testing:**
-- Verify TypeScript compilation
-- Confirm existing content still loads
+- ✅ Verify TypeScript compilation
+- ✅ Confirm existing content still loads
 
-### Phase 2: Preview Settings System
+**Completed:** 2026-02-05
+**Commit:** cad510b
+
+### Phase 2: Preview Settings System ⏭️ **SKIPPED**
 **Files:**
-- `app/src/types/settings.ts` (new) - PreviewSettings interface
-- `app/src/hooks/usePreviewSettings.ts` (new) - Settings hook with localStorage
-- `app/src/constants/previewSizes.ts` (new) - Size presets
+- `app/src/constants/previewSizes.ts` (implemented) - Size presets only
+
+**Decision:** Skipped full settings system in favor of using reasonable defaults. Settings UI can be added later in Phase 7 if needed.
+
+**What was implemented:**
+- ✅ Size presets (small/medium/large) in constants file
+- ✅ Default rotation enabled flag
+- ⏭️ LocalStorage persistence (deferred to Phase 7)
+- ⏭️ Settings hook (deferred to Phase 7)
+
+### Phase 3: Orientation Resolution Utility ✅ **COMPLETED**
+**Files:**
+- `app/src/content/utils.ts` - getCardOrientation function
+- `app/src/content/cardRotation.ts` (NEW) - shouldRotateCard utility
 
 **Tasks:**
-- Define PreviewSettings interface
-- Create hook for loading/saving preview preferences
-- Define size presets (small/medium/large dimensions)
-- Add localStorage persistence
+- ✅ Implement getCardOrientation with inheritance logic
+- ✅ Handle 'auto' by defaulting to 'portrait'
+- ✅ Add comprehensive unit tests
+- ✅ **BONUS:** Created shouldRotateCard utility for canvas rotation
 
 **Testing:**
-- Test settings persistence across page reloads
-- Verify default values applied correctly
+- ✅ Test card-level orientation override
+- ✅ Test CardType default orientation
+- ✅ Test fallback to 'portrait'
+- ✅ Test 'auto' handling
+- ✅ Test rotation logic for landscape images
 
-### Phase 3: Orientation Resolution Utility
+**Completed:** 2026-02-05
+**Commit:** cad510b
+
+### Phase 4: CardPreview React Component ✅ **COMPLETED**
 **Files:**
-- `app/src/content/utils.ts` - Add getCardOrientation function
+- `app/src/components/CardPreview.tsx` - Main preview component
+- `app/src/components/CardPreview.test.tsx` - Comprehensive tests (23 tests)
+- `app/src/styles/CardPreview.css` - Preview styles (Tailwind classes)
 
 **Tasks:**
-- Implement getCardOrientation with inheritance logic
-- Handle 'auto' by defaulting to 'portrait' (future: aspect ratio detection)
-- Add comprehensive unit tests
+- ✅ Create CardPreview component with hover/modal modes
+- ✅ Implement rotation transform for landscape cards (+90° for preview)
+- ✅ Add backdrop and close button (modal mode)
+- ✅ Position logic for hover mode (handled in Board.tsx)
+- ✅ Keyboard shortcuts (ESC to close)
+- ✅ Click-outside to dismiss (via Headless UI Dialog)
 
 **Testing:**
-- Test card-level orientation override
-- Test CardType default orientation
-- Test fallback to 'portrait'
-- Test 'auto' handling
+- ✅ Test portrait card rendering
+- ✅ Test landscape card rendering with rotation
+- ✅ Test hover positioning
+- ✅ Test modal centering
+- ✅ Test dismiss behaviors (ESC, click-outside, close button)
+- ✅ Test disabled rotation mode
+- ✅ Test all size presets (small/medium/large/custom)
 
-### Phase 4: CardPreview React Component
+**Completed:** 2026-02-05
+**Commit:** cad510b
+
+### Phase 4.5: Canvas Card Rotation ✅ **COMPLETED** (Bonus Feature)
 **Files:**
-- `app/src/components/CardPreview.tsx` (new) - Main preview component
-- `app/src/components/CardPreview.test.tsx` (new) - Component tests
-- `app/src/styles/CardPreview.css` (new) - Preview styles
+- `app/src/content/cardRotation.ts` (NEW) - Rotation logic utility
+- `app/src/renderer/objects/stack/behaviors.ts` - Canvas sprite rotation
 
-**Tasks:**
-- Create CardPreview component with hover/modal modes
-- Implement rotation transform for landscape cards
-- Add backdrop and close button (modal mode)
-- Position logic for hover mode (avoid covering source card)
-- Keyboard shortcuts (ESC to close)
-- Click-outside to dismiss (modal mode)
+**What was implemented:**
+This feature ensures landscape card images are properly rotated on the canvas, not just in previews.
+
+**Rotation Rules:**
+- **Non-exhausted cards** (portrait container): Rotate if image is landscape (width > height)
+- **Exhausted cards** (landscape container): NOT YET IMPLEMENTED - will rotate if image is portrait
+- Canvas uses -90° (clockwise) rotation
+- Preview uses +90° (counter-clockwise) rotation with metadata-based dimensions
+
+**Implementation Details:**
+```typescript
+// In stack behaviors render function:
+if (needsRotation) {
+  sprite.width = STACK_HEIGHT;   // Swap dimensions
+  sprite.height = STACK_WIDTH;
+  sprite.rotation = -Math.PI / 2; // -90 degrees
+}
+```
 
 **Testing:**
-- Test portrait card rendering
-- Test landscape card rendering with rotation
-- Test hover positioning
-- Test modal centering
-- Test dismiss behaviors (ESC, click-outside, close button)
-- Test disabled rotation mode
+- ✅ Test landscape images rotate correctly on canvas
+- ✅ Test portrait images don't rotate on canvas
+- ✅ Test dimensions swap correctly when rotated
+- ✅ Test rotation direction is -90° (clockwise)
 
-### Phase 5: Desktop Hover Preview
+**Completed:** 2026-02-05
+**Commit:** cad510b
+
+### Phase 5: Desktop Hover Preview ✅ **COMPLETED**
 **Files:**
 - `shared/src/index.ts` - Add `object-hovered` message type
 - `app/src/renderer/handlers/pointer.ts` - Send hover messages to main thread
@@ -327,26 +379,31 @@ We just need to:
 - ✅ Position CardPreview near cursor (avoid covering source card)
 - ✅ Auto-dismiss on hover leave (when objectId becomes null)
 - ✅ Only stack objects trigger preview (not zones/tokens)
-- ⏳ Hide preview when local user starts dragging a stack
-  - Listen to drag start/end messages from renderer
-  - Clear preview state on drag start
-  - Re-enable on drag end (hover state may have changed)
-- ⏳ Ensure entire preview stays in viewport
-  - Calculate available space in all directions from cursor
-  - If preview would overflow right edge, position to left of cursor
-  - If preview would overflow bottom edge, position above cursor
-  - Default: position to right and below cursor (+20px offset)
+- ✅ Hide preview when local user starts dragging a stack
+  - ✅ Listen to drag start/end messages from renderer
+  - ✅ Clear preview state on drag start
+  - ✅ Re-enable on drag end (hover state may have changed)
+- ✅ Ensure entire preview stays in viewport
+  - ✅ Calculate available space in all directions from cursor
+  - ✅ If preview would overflow right edge, position to left of cursor
+  - ✅ If preview would overflow bottom edge, position above cursor
+  - ✅ Default: position to right and below cursor (+20px offset)
+- ✅ **BONUS:** Canvas card rotation for landscape images (-90° rotation)
 
 **Testing:**
 - ✅ Test auto-dismiss on mouse leave
 - ✅ Test face-down cards don't trigger preview
 - ✅ Test preview positioning doesn't cover source card
 - ✅ Test only stack objects trigger preview (not zones/tokens)
-- ⏳ Test preview hides when user starts dragging
-- ⏳ Test preview doesn't reappear until drag completes and hover re-establishes
-- ⏳ Test preview positioning near right edge (flips to left of cursor)
-- ⏳ Test preview positioning near bottom edge (flips above cursor)
-- ⏳ Test preview positioning in corner (both axes flip)
+- ✅ Test preview hides when user starts dragging
+- ✅ Test preview doesn't reappear until drag completes and hover re-establishes
+- ✅ Test preview positioning near right edge (flips to left of cursor)
+- ✅ Test preview positioning near bottom edge (flips above cursor)
+- ✅ Test preview positioning in corner (both axes flip)
+- ✅ Test canvas rotation for landscape cards
+
+**Completed:** 2026-02-05
+**Commit:** cad510b
 
 **Note:** No awareness updates - preview is local-only, not shown to other multiplayer users.
 

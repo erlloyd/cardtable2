@@ -115,7 +115,6 @@ function Board({
     x: number;
     y: number;
   } | null>(null);
-  const hoverTimerRef = useRef<number | null>(null);
   const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Modal preview state (mobile double-tap)
@@ -222,12 +221,6 @@ function Board({
       cardScreenWidth?: number,
       cardScreenHeight?: number,
     ) => {
-      // Clear any pending hover timer
-      if (hoverTimerRef.current !== null) {
-        window.clearTimeout(hoverTimerRef.current);
-        hoverTimerRef.current = null;
-      }
-
       // If hover cleared or not face-up, hide preview
       if (!objectId || !isFaceUp) {
         setPreviewCard(null);
@@ -317,15 +310,6 @@ function Board({
 
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  // Cleanup hover timer on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimerRef.current !== null) {
-        window.clearTimeout(hoverTimerRef.current);
-      }
-    };
   }, []);
 
   // Message bus
@@ -610,10 +594,6 @@ function Board({
         onClose={() => {
           setPreviewCard(null);
           setPreviewPosition(null);
-          if (hoverTimerRef.current !== null) {
-            window.clearTimeout(hoverTimerRef.current);
-            hoverTimerRef.current = null;
-          }
         }}
       />
 

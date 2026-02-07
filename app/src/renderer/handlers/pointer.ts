@@ -542,16 +542,18 @@ export function handlePointerMove(
           ? (hoveredObj as StackObject)._faceUp
           : false;
 
-      // Calculate card's screen dimensions for zoom threshold check
+      // Calculate card's screen dimensions (CSS pixels) for zoom threshold check
       let cardScreenWidth: number | undefined;
       let cardScreenHeight: number | undefined;
       if (currentId) {
         const visual = context.visual.getAllVisuals().get(currentId);
         if (visual) {
-          // Get bounds in screen space
+          // Get bounds in renderer/canvas space (DPR-scaled)
           const bounds = visual.getBounds();
-          cardScreenWidth = bounds.width;
-          cardScreenHeight = bounds.height;
+          const dpr = context.app.renderer.resolution ?? 1;
+          // Normalize to CSS pixels for comparison with main-thread preview sizes
+          cardScreenWidth = bounds.width / dpr;
+          cardScreenHeight = bounds.height / dpr;
         }
       }
 

@@ -36,6 +36,13 @@ export interface BoardHandlerContext {
   setIsWaitingForCoords: (waiting: boolean) => void;
   setAwarenessHz: (hz: number) => void;
   setCursorStyle: (style: 'default' | 'pointer' | 'grab' | 'grabbing') => void;
+  setHoveredObject: (
+    objectId: string | null,
+    isFaceUp: boolean,
+    cardScreenWidth?: number,
+    cardScreenHeight?: number,
+  ) => void;
+  showCardPreviewModal: (objectId: string) => void;
   addMessage: (msg: string) => void;
 
   // Refs
@@ -273,6 +280,8 @@ export class BoardMessageBus {
 
     this.registry.register('object-drag-started', (_msg, ctx) => {
       ctx.setIsCameraActive(true);
+      // Hide card preview during drag
+      ctx.setHoveredObject(null, false);
     });
 
     this.registry.register('object-drag-ended', (_msg, ctx) => {
@@ -285,6 +294,7 @@ export class BoardMessageBus {
           ids: selectedIds,
         });
       }
+      // Preview will reappear automatically if still hovering (hover manager handles this)
     });
 
     this.registry.register('screen-coords', (msg, ctx) => {
@@ -344,6 +354,23 @@ export class BoardMessageBus {
 
     this.registry.register('cursor-style', (msg, ctx) => {
       ctx.setCursorStyle(msg.style);
+    });
+
+    this.registry.register('object-hovered', (msg, ctx) => {
+      ctx.setHoveredObject(
+        msg.objectId,
+        msg.isFaceUp,
+        msg.cardScreenWidth,
+        msg.cardScreenHeight,
+      );
+    });
+
+    this.registry.register('show-card-preview-modal', (msg, ctx) => {
+      console.log(
+        '[BoardMessageBus] Received show-card-preview-modal:',
+        msg.objectId,
+      );
+      ctx.showCardPreviewModal(msg.objectId);
     });
 
     this.registry.register('error', (msg, ctx) => {

@@ -663,9 +663,9 @@ export class YjsStore {
    * This replaces the React state-based approach with store-managed assets.
    * Components subscribe via onGameAssetsChange() to receive updates.
    *
-   * @param assets - Game assets to set (cards, tokens, etc.)
+   * @param assets - Game assets to set (cards, tokens, etc.), or null to clear
    */
-  setGameAssets(assets: GameAssets): void {
+  setGameAssets(assets: GameAssets | null): void {
     this.gameAssets = assets;
     // Notify all subscribers with error isolation
     for (const listener of this.gameAssetsListeners) {

@@ -253,8 +253,19 @@ export type RendererToMainMessage =
       pos: Position; // Position for new single-card stack
     }
   | {
+      type: 'object-hovered'; // Hover state changed (for card preview)
+      objectId: string | null; // Object being hovered, or null if hover cleared
+      isFaceUp: boolean; // Whether the object is face-up (only relevant for stacks)
+      cardScreenWidth?: number; // Card's rendered width in screen pixels (for zoom threshold check)
+      cardScreenHeight?: number; // Card's rendered height in screen pixels (for zoom threshold check)
+    }
+  | {
       type: 'cursor-style'; // Request cursor style change
       style: 'default' | 'pointer' | 'grab' | 'grabbing';
+    }
+  | {
+      type: 'show-card-preview-modal'; // Show card preview in modal (mobile double-tap)
+      objectId: string; // Object ID to preview
     };
 
 // ============================================================================

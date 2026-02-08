@@ -26,9 +26,12 @@ export type MatSize =
   | 'playmat' // 1920x1080px
   | [number, number]; // Custom [width, height] in pixels
 
+export type CardOrientation = 'portrait' | 'landscape' | 'auto';
+
 export interface CardType {
   back?: string; // Default card back image URL
   size?: CardSize; // Default size for this card type
+  orientation?: CardOrientation; // Default orientation for this card type (defaults to 'portrait')
 }
 
 export interface Card {
@@ -36,6 +39,7 @@ export interface Card {
   face: string; // Card face image URL
   back?: string; // Optional override of type's back image
   size?: CardSize; // Optional override of type's size
+  orientation?: CardOrientation; // Optional override of type's orientation (follows inheritance: card → cardType → 'portrait')
 }
 
 export interface Token {

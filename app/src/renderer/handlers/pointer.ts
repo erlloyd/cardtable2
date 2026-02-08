@@ -5,10 +5,12 @@
  * Includes gesture recognition, object dragging, selection, and hover feedback.
  */
 
-import type {
-  MainToRendererMessage,
-  PointerEventData,
-  TableObject,
+import {
+  ObjectKind,
+  type MainToRendererMessage,
+  type PointerEventData,
+  type StackObject,
+  type TableObject,
 } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { snapMultipleToGrid } from '../../utils/gridSnap';
@@ -531,6 +533,38 @@ export function handlePointerMove(
         );
       }
 
+      // Notify main thread of hover state change (for card preview)
+      const hoveredObj = currentId
+        ? context.sceneManager.getObject(currentId)
+        : null;
+      const isFaceUp =
+        hoveredObj && hoveredObj._kind === ObjectKind.Stack
+          ? (hoveredObj as StackObject)._faceUp
+          : false;
+
+      // Calculate card's screen dimensions (CSS pixels) for zoom threshold check
+      let cardScreenWidth: number | undefined;
+      let cardScreenHeight: number | undefined;
+      if (currentId) {
+        const visual = context.visual.getAllVisuals().get(currentId);
+        if (visual) {
+          // Get bounds in renderer/canvas space (DPR-scaled)
+          const bounds = visual.getBounds();
+          const dpr = context.app.renderer.resolution ?? 1;
+          // Normalize to CSS pixels for comparison with main-thread preview sizes
+          cardScreenWidth = bounds.width / dpr;
+          cardScreenHeight = bounds.height / dpr;
+        }
+      }
+
+      context.postResponse({
+        type: 'object-hovered',
+        objectId: currentId,
+        isFaceUp,
+        cardScreenWidth,
+        cardScreenHeight,
+      });
+
       // Request render to show hover feedback
       context.app.renderer.render(context.app.stage);
     }
@@ -548,6 +582,14 @@ export function handlePointerMove(
         context.sceneManager,
       );
       context.hover.clearHover(hoveredId);
+
+      // Notify main thread that hover was cleared (for card preview)
+      context.postResponse({
+        type: 'object-hovered',
+        objectId: null,
+        isFaceUp: false,
+      });
+
       context.app.renderer.render(context.app.stage);
     }
   }
@@ -752,6 +794,24 @@ export function handlePointerLeave(
   }
 }
 
+// Double-tap tracking for mobile card preview
+const lastTapTimes = new Map<string, number>();
+const DOUBLE_TAP_THRESHOLD = 300; // ms
+const TAP_CLEANUP_THRESHOLD = 5000; // Clear old entries after 5 seconds
+
+/**
+ * Cleanup old tap times to prevent Map from growing indefinitely.
+ * Called periodically when new taps occur.
+ */
+function cleanupOldTapTimes() {
+  const now = Date.now();
+  for (const [id, time] of lastTapTimes.entries()) {
+    if (now - time > TAP_CLEANUP_THRESHOLD) {
+      lastTapTimes.delete(id);
+    }
+  }
+}
+
 /**
  * Helper: Handle selection logic on pointer end (up or cancel)
  *
@@ -785,6 +845,39 @@ function handleSelectionOnPointerEnd(
     const hitResult = context.sceneManager.hitTest(worldX, worldY);
 
     if (hitResult) {
+      // Check for double-tap on touch devices (mobile card preview)
+      if (event.pointerType === 'touch') {
+        const now = Date.now();
+        const objectId = hitResult.id;
+        const lastTapTime = lastTapTimes.get(objectId) || 0;
+        const timeSinceLastTap = now - lastTapTime;
+
+        if (timeSinceLastTap < DOUBLE_TAP_THRESHOLD) {
+          lastTapTimes.delete(objectId);
+
+          // Only show preview for face-up stacks
+          const obj = context.sceneManager.getObject(objectId);
+          if (obj && obj._kind === ObjectKind.Stack) {
+            const stackObj = obj as StackObject;
+            if (stackObj._faceUp) {
+              console.log(
+                '[DoubleTap] Sending show-card-preview-modal message for:',
+                objectId,
+              );
+              context.postResponse({
+                type: 'show-card-preview-modal',
+                objectId,
+              });
+            }
+          }
+          return;
+        } else {
+          // Cleanup old entries periodically to prevent Map growth
+          cleanupOldTapTimes();
+          lastTapTimes.set(objectId, now);
+        }
+      }
+
       // Clicked on an object - handle selection logic
       const isMultiSelectModifier =
         pointerDownEvent.metaKey ||

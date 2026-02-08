@@ -1,9 +1,21 @@
-import { useEffect, useRef, useMemo } from 'react';
-import type { PointerEventData } from '@cardtable2/shared';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  ObjectKind,
+  type PointerEventData,
+  type Card,
+  type StackObject,
+} from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
 import type { GameAssets } from '../content';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
+import { getCardOrientation } from '../content/utils';
+import {
+  getPreviewDimensions,
+  getLandscapeDimensions,
+  DEFAULT_PREVIEW_SIZE,
+} from '../constants/previewSizes';
 
 // Hooks
 import { useRenderer } from '../hooks/useRenderer';
@@ -25,6 +37,7 @@ import {
   MultiSelectToggle,
 } from './Board/components';
 import { ActionHandle } from './ActionHandle';
+import { CardPreview } from './CardPreview';
 
 export interface BoardProps {
   tableId: string;
@@ -96,6 +109,20 @@ function Board({
     Array<(isAnimating: boolean) => void>
   >([]);
 
+  // Card preview state (hover mode)
+  const [previewCard, setPreviewCard] = useState<Card | null>(null);
+  const [previewPosition, setPreviewPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Modal preview state (mobile double-tap)
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [modalPreviewCard, setModalPreviewCard] = useState<Card | null>(null);
+  const modalOpenTimeRef = useRef<number>(0);
+  const IGNORE_GESTURES_MS = 300; // Match DOUBLE_TAP_THRESHOLD
+
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
 
@@ -132,6 +159,159 @@ function Board({
     onGridSnapEnabledChange,
   );
 
+  // Helper: Get card from stack object
+  const getCardFromStack = useCallback(
+    (objectId: string): Card | null => {
+      const obj = storeRef.current.getObject(objectId);
+
+      if (!obj) {
+        console.warn('[Board] Cannot show preview: Object not found', {
+          objectId,
+          context: 'card-preview',
+        });
+        return null;
+      }
+
+      if (obj._kind !== ObjectKind.Stack) {
+        console.warn('[Board] Cannot show preview: Object is not a stack', {
+          objectId,
+          objectKind: obj._kind,
+          context: 'card-preview',
+        });
+        return null;
+      }
+
+      const stackObj = obj as StackObject;
+      if (!stackObj._cards || stackObj._cards.length === 0) {
+        console.warn('[Board] Cannot show preview: Stack has no cards', {
+          objectId,
+          hasCardsArray: !!stackObj._cards,
+          cardCount: stackObj._cards?.length ?? 0,
+          context: 'card-preview',
+        });
+        return null;
+      }
+
+      const topCardCode = stackObj._cards[0];
+      const card = gameAssets?.cards[topCardCode];
+
+      if (!card) {
+        console.error(
+          '[Board] Cannot show preview: Card not found in gameAssets',
+          {
+            objectId,
+            cardCode: topCardCode,
+            hasGameAssets: !!gameAssets,
+            context: 'card-preview',
+          },
+        );
+        return null;
+      }
+
+      return card;
+    },
+    [gameAssets],
+  );
+
+  // Handle hover state changes from renderer (for card preview)
+  const setHoveredObject = useCallback(
+    (
+      objectId: string | null,
+      isFaceUp: boolean,
+      cardScreenWidth?: number,
+      cardScreenHeight?: number,
+    ) => {
+      // If hover cleared or not face-up, hide preview
+      if (!objectId || !isFaceUp) {
+        setPreviewCard(null);
+        setPreviewPosition(null);
+        return;
+      }
+
+      // Get the card using helper
+      const card = getCardFromStack(objectId);
+      if (!card || !gameAssets) {
+        return;
+      }
+
+      // Calculate preview dimensions based on card orientation
+      const orientation = getCardOrientation(card, gameAssets);
+      const isLandscape = orientation === 'landscape';
+      let previewDimensions = getPreviewDimensions(DEFAULT_PREVIEW_SIZE);
+      if (isLandscape) {
+        previewDimensions = getLandscapeDimensions(previewDimensions);
+      }
+
+      // Check zoom threshold: if card is >= 80% of preview size, don't show preview
+      if (cardScreenWidth && cardScreenHeight) {
+        const widthRatio = cardScreenWidth / previewDimensions.width;
+        const heightRatio = cardScreenHeight / previewDimensions.height;
+        const maxRatio = Math.max(widthRatio, heightRatio);
+
+        if (maxRatio >= 0.8) {
+          // Card is already large enough, don't show preview
+          setPreviewCard(null);
+          setPreviewPosition(null);
+          return;
+        }
+      }
+
+      // Calculate viewport-aware position
+      const cursorPos = lastCursorPosRef.current;
+      const offset = 20; // Default offset from cursor
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // Default: position to right and below cursor
+      let x = cursorPos.x + offset;
+      let y = cursorPos.y + offset;
+
+      // If preview would overflow right edge, flip to left of cursor
+      if (x + previewDimensions.width > viewportWidth) {
+        x = cursorPos.x - previewDimensions.width - offset;
+      }
+
+      // If preview would overflow bottom edge, flip above cursor
+      if (y + previewDimensions.height > viewportHeight) {
+        y = cursorPos.y - previewDimensions.height - offset;
+      }
+
+      // Ensure preview doesn't go off left or top edge
+      x = Math.max(offset, x);
+      y = Math.max(offset, y);
+
+      setPreviewPosition({ x, y });
+      setPreviewCard(card);
+    },
+    [gameAssets, getCardFromStack],
+  );
+
+  // Handle modal preview request from renderer (mobile double-tap)
+  const showCardPreviewModal = useCallback(
+    (objectId: string) => {
+      // Get the card using helper
+      const card = getCardFromStack(objectId);
+      if (!card) {
+        return;
+      }
+
+      modalOpenTimeRef.current = Date.now();
+      setModalPreviewCard(card);
+      setIsModalVisible(true);
+    },
+    [getCardFromStack],
+  );
+
+  // Track cursor position for preview positioning
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      lastCursorPosRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
   // Message bus
   const messageBus = useMemo(() => new BoardMessageBus(), []);
 
@@ -151,6 +331,8 @@ function Board({
         setIsWaitingForCoords,
         setAwarenessHz,
         setCursorStyle,
+        setHoveredObject,
+        showCardPreviewModal,
         addMessage,
         flushCallbacks: flushCallbacksRef,
         selectionSettledCallbacks: selectionSettledCallbacksRef,
@@ -175,6 +357,8 @@ function Board({
     setIsWaitingForCoords,
     setAwarenessHz,
     setCursorStyle,
+    setHoveredObject,
+    showCardPreviewModal,
     addMessage,
   ]);
 
@@ -399,6 +583,83 @@ function Board({
             actionContext={actionContext}
             onActionExecuted={onActionExecuted}
           />
+        )}
+
+      {/* Card Preview - Hover Mode */}
+      <CardPreview
+        card={previewCard}
+        gameAssets={gameAssets ?? null}
+        mode="hover"
+        position={previewPosition ?? undefined}
+        onClose={() => {
+          setPreviewCard(null);
+          setPreviewPosition(null);
+        }}
+      />
+
+      {/* Blurred Overlay - Mobile Double-Tap (rendered via portal to escape stacking context) */}
+      {isModalVisible &&
+        createPortal(
+          <div
+            data-testid="card-preview-modal"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            onClick={(e) => {
+              // Close modal on backdrop click (after timing threshold to avoid gesture conflicts)
+              const elapsed = Date.now() - modalOpenTimeRef.current;
+              if (
+                elapsed > IGNORE_GESTURES_MS &&
+                e.target === e.currentTarget
+              ) {
+                setIsModalVisible(false);
+                setModalPreviewCard(null);
+              }
+            }}
+          >
+            {/* Card image */}
+            {modalPreviewCard ? (
+              <img
+                src={modalPreviewCard.face}
+                alt="Card preview"
+                style={{
+                  maxWidth: 'clamp(280px, 60vw, 450px)',
+                  maxHeight: 'clamp(392px, 60vh, 630px)',
+                  borderRadius: '8px',
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '300px',
+                  height: '420px',
+                  backgroundColor: '#4a5568',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '16px',
+                }}
+              >
+                Loading...
+              </div>
+            )}
+          </div>,
+          document.body,
         )}
     </div>
   );

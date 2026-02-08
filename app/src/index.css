@@ -648,6 +648,30 @@ h1 {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Card Preview Styles - Hover Mode */
+.card-preview-container {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.card-preview-wrapper {
+  pointer-events: auto;
+}
+
+.card-preview-box {
+  background-color: #4a5568;
+  border-radius: 8px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: white;
+  font-size: 14px;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

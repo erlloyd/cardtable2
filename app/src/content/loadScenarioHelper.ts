@@ -1,6 +1,8 @@
 import type { YjsStore } from '../store/YjsStore';
 import type { LoadedContent, LoadedScenarioMetadata } from './index';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
+import { ActionRegistry } from '../actions/ActionRegistry';
+import { registerAttachmentActions } from '../actions/attachmentActions';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -12,6 +14,9 @@ import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
  * before objects are added, ensuring correct rendering.
  *
  * Also stores scenario metadata in Y.Doc for persistence and multiplayer sync.
+ *
+ * Additionally, registers dynamic attachment actions based on the loaded
+ * asset pack's tokenTypes, statusTypes, and modifierStats definitions.
  *
  * @param store - Yjs store instance
  * @param content - Loaded scenario content (scenario, gameAssets, objects)
@@ -36,6 +41,11 @@ export function loadScenarioContent(
 
   // Set game assets in store (notifies subscribers like Board component)
   store.setGameAssets(content.content);
+
+  // Register dynamic attachment actions based on loaded game assets
+  const registry = ActionRegistry.getInstance();
+  registerAttachmentActions(registry, content.content);
+  console.log(`${logPrefix} Registered attachment actions for loaded content`);
 
   // CRITICAL: Defer object addition to ensure gameAssets reach renderer first.
   //

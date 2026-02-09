@@ -335,6 +335,7 @@ export function getPluginScenarioUrls(plugin: LoadedPlugin): string[] {
 export interface LocalPlugin {
   manifest: PluginManifest;
   files: Map<string, File>;
+  imageUrls: Map<string, string>; // Maps relative path (e.g., "tokens/damage.png") to blob URL
 }
 
 /**
@@ -477,8 +478,23 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
     );
   }
 
+  // Create blob URLs for image files
+  const imageUrls = new Map<string, string>();
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
+
+  for (const [filename, file] of fileMap.entries()) {
+    const hasImageExt = imageExtensions.some((ext) =>
+      filename.toLowerCase().endsWith(ext),
+    );
+    if (hasImageExt) {
+      const blobUrl = URL.createObjectURL(file);
+      imageUrls.set(filename, blobUrl);
+    }
+  }
+
   console.log(`[PluginLoader] Loaded local plugin: ${obj.name}`, {
     fileCount: fileMap.size,
+    imageCount: imageUrls.size,
     assets: obj.assets,
     scenarios: obj.scenarios,
   });
@@ -486,6 +502,7 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
   return {
     manifest: manifest as PluginManifest,
     files: fileMap,
+    imageUrls,
   };
 }
 

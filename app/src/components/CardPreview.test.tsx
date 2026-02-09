@@ -29,6 +29,10 @@ describe('CardPreview', () => {
     tokens: {},
     counters: {},
     mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   });
 
   const mockOnClose = vi.fn();

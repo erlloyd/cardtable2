@@ -272,6 +272,10 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
     tokens: {},
     counters: {},
     mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   };
 
   // Merge each pack in order (later packs override earlier ones)
@@ -313,6 +317,35 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
     }
     if (pack.mats) {
       Object.assign(merged.mats, pack.mats);
+    }
+
+    // Merge attachment type definitions with URL resolution
+    if (pack.tokenTypes) {
+      for (const [typeCode, tokenType] of Object.entries(pack.tokenTypes)) {
+        merged.tokenTypes[typeCode] = {
+          ...tokenType,
+          image: resolveAssetUrl(tokenType.image, pack.baseUrl),
+        };
+      }
+    }
+    if (pack.statusTypes) {
+      for (const [typeCode, statusType] of Object.entries(pack.statusTypes)) {
+        merged.statusTypes[typeCode] = {
+          ...statusType,
+          image: resolveAssetUrl(statusType.image, pack.baseUrl),
+        };
+      }
+    }
+    if (pack.modifierStats) {
+      Object.assign(merged.modifierStats, pack.modifierStats);
+    }
+    if (pack.iconTypes) {
+      for (const [typeCode, iconType] of Object.entries(pack.iconTypes)) {
+        merged.iconTypes[typeCode] = {
+          ...iconType,
+          image: resolveAssetUrl(iconType.image, pack.baseUrl),
+        };
+      }
     }
   }
 

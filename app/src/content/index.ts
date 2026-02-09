@@ -376,6 +376,9 @@ export async function loadLocalPluginScenario(
   // Merge packs
   const content = mergeAssetPacks(packs);
 
+  // Replace relative image paths with blob URLs from local filesystem
+  replaceImagePathsWithBlobUrls(content, plugin.imageUrls);
+
   // Instantiate scenario objects
   const objects = instantiateScenario(scenario, content);
 
@@ -456,4 +459,80 @@ export async function reloadScenarioFromMetadata(
       );
     }
   }
+}
+
+/**
+ * Replace relative image paths in GameAssets with blob URLs
+ *
+ * This is used for local plugin loading to replace paths like "tokens/damage.png"
+ * with blob URLs like "blob:http://localhost:3000/abc-123-def" that point to
+ * the actual file data in memory.
+ *
+ * Handles both relative paths (e.g., "tokens/damage.png") and already-resolved
+ * URLs (e.g., "http://localhost:3001/api/card-image/.../tokens/damage.png").
+ *
+ * @param content - Merged game assets to modify in-place
+ * @param imageUrls - Map of relative paths to blob URLs
+ */
+function replaceImagePathsWithBlobUrls(
+  content: GameAssets,
+  imageUrls: Map<string, string>,
+): void {
+  let replacementCount = 0;
+
+  // Helper to find blob URL for a given image path (relative or resolved)
+  const findBlobUrl = (imagePath: string): string | undefined => {
+    // Try direct lookup first (for relative paths)
+    const directMatch = imageUrls.get(imagePath);
+    if (directMatch) {
+      return directMatch;
+    }
+
+    // Try matching by checking if URL ends with any of the relative paths
+    // This handles already-resolved URLs like "http://.../tokens/damage.png"
+    for (const [relativePath, blobUrl] of imageUrls.entries()) {
+      if (imagePath.endsWith(relativePath)) {
+        return blobUrl;
+      }
+    }
+
+    return undefined;
+  };
+
+  // Replace tokenTypes images
+  if (content.tokenTypes) {
+    for (const tokenType of Object.values(content.tokenTypes)) {
+      const blobUrl = findBlobUrl(tokenType.image);
+      if (blobUrl) {
+        tokenType.image = blobUrl;
+        replacementCount++;
+      }
+    }
+  }
+
+  // Replace statusTypes images
+  if (content.statusTypes) {
+    for (const statusType of Object.values(content.statusTypes)) {
+      const blobUrl = findBlobUrl(statusType.image);
+      if (blobUrl) {
+        statusType.image = blobUrl;
+        replacementCount++;
+      }
+    }
+  }
+
+  // Replace iconTypes images
+  if (content.iconTypes) {
+    for (const iconType of Object.values(content.iconTypes)) {
+      const blobUrl = findBlobUrl(iconType.image);
+      if (blobUrl) {
+        iconType.image = blobUrl;
+        replacementCount++;
+      }
+    }
+  }
+
+  console.log(
+    `[Content] Replaced ${replacementCount} image paths with blob URLs`,
+  );
 }

@@ -448,6 +448,10 @@ describe('YjsStore', () => {
       tokens: {},
       counters: {},
       mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
     };
 
     it('starts with no gameAssets', () => {

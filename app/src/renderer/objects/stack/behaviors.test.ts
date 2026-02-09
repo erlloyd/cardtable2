@@ -130,6 +130,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
         tokens: {},
         counters: {},
         mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
       };
       const textureLoader: Partial<RenderContext['textureLoader']> = {
         load: vi.fn(),
@@ -219,6 +223,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
         tokens: {},
         counters: {},
         mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
       };
       const textureLoader: Partial<RenderContext['textureLoader']> = {
         load: vi.fn(),
@@ -334,6 +342,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
         tokens: {},
         counters: {},
         mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
       };
       const textureLoader: Partial<RenderContext['textureLoader']> = {
         load: vi.fn(),
@@ -391,6 +403,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
         tokens: {},
         counters: {},
         mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
       };
       const textureLoader: Partial<RenderContext['textureLoader']> = {
         load: vi.fn(),
@@ -505,6 +521,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
           tokens: {},
           counters: {},
           mats: {},
+          tokenTypes: {},
+          statusTypes: {},
+          modifierStats: {},
+          iconTypes: {},
         },
         textureLoader: mockTextureLoader as unknown as TextureLoader,
         onTextureLoaded: mockOnTextureLoaded,

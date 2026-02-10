@@ -150,8 +150,9 @@ export async function loadCompleteScenario(
   // Load all packs in parallel
   const packs = await loadAssetPacks(packUrls);
 
-  // Merge packs
-  const content = mergeAssetPacks(packs);
+  // Merge packs - pass packBaseUrl for attachment image resolution
+  // (attachment images live in the plugin repo, not at pack.baseUrl)
+  const content = mergeAssetPacks(packs, packBaseUrl);
 
   // Instantiate scenario objects
   const objects = instantiateScenario(scenario, content);

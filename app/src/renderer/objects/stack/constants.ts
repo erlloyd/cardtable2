@@ -32,12 +32,12 @@ export const STACK_BADGE_FONT_SIZE = 12;
 // ============================================================================
 
 /** Attachment sizes */
-export const ATTACHMENT_TOKEN_SIZE = 24; // Token image base size (px)
+export const ATTACHMENT_TOKEN_SIZE = 16; // Token image base size (px) - sized to fit 4 tokens vertically
 export const ATTACHMENT_MODIFIER_HEIGHT = 16; // Modifier bar height (px)
 export const ATTACHMENT_ICON_SIZE = 16; // Icon image size (px)
 
 /** Attachment spacing */
-export const ATTACHMENT_VERTICAL_SPACING = 4; // Gap between attachments of same type (px)
+export const ATTACHMENT_VERTICAL_SPACING = 0; // Gap between attachments of same type (px)
 export const ATTACHMENT_TYPE_SPACING = 8; // Gap between different attachment types (px)
 export const ATTACHMENT_START_Y = -STACK_HEIGHT / 2 + 8; // Start position from card top (px)
 export const ATTACHMENT_BADGE_PADDING = 8; // Horizontal padding inside status/modifier badges (px)

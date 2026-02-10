@@ -613,7 +613,12 @@ function renderTokens(
 ): number {
   let currentY = startY;
 
-  for (const [tokenType, count] of Object.entries(tokens)) {
+  // Sort tokens by type code for consistent ordering
+  const sortedTokens = Object.entries(tokens).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+
+  for (const [tokenType, count] of sortedTokens) {
     if (count <= 0) continue; // Skip zero-count tokens
 
     const tokenDef = ctx.gameAssets?.tokenTypes?.[tokenType];
@@ -642,7 +647,7 @@ function renderTokens(
 
       container.addChild(sprite);
 
-      // Overlay count text (bottom-right of token)
+      // Overlay count text (centered on token)
       const text = ctx.createText({
         text: count.toString(),
         style: {
@@ -651,8 +656,8 @@ function renderTokens(
           fontWeight: 'bold',
         },
       });
-      text.anchor.set(1, 1); // Bottom-right anchor
-      text.position.set(sprite.width / 2 - 2, currentY + sprite.height / 2 - 2);
+      text.anchor.set(0.5, 0.5); // Center anchor
+      text.position.set(0, currentY); // Center position (same as sprite)
 
       // Add text shadow for readability
       text.style.stroke = { color: 0x000000, width: 3 };

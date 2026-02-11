@@ -311,6 +311,7 @@ function renderStackDecorations(
   container: Container,
   cardCount: number,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): void {
   if (cardCount < 2 || ctx.minimal) {
     return;
@@ -350,6 +351,7 @@ function renderStackDecorations(
   text.label = 'badge-text'; // Labeled child
   text.anchor.set(0.5, 0.5);
   text.position.set(badgeX, badgeY);
+  text.rotation = counterRotation;
 
   // Unstack handle (upper-right corner, flush with card borders)
   const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2;
@@ -376,6 +378,9 @@ function renderStackDecorations(
     x: handleX,
     y: handleY,
   });
+  iconGraphic.rotation = counterRotation;
+  iconGraphic.pivot.set(handleX, handleY);
+  iconGraphic.position.set(handleX, handleY);
   container.addChild(iconGraphic);
 }
 
@@ -489,6 +494,7 @@ function renderAttachments(
   container: Container,
   obj: StackObject,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): void {
   // Skip in minimal mode (ghost previews)
   if (ctx.minimal) {
@@ -505,22 +511,40 @@ function renderAttachments(
 
   // Render in priority order: Status → Modifiers → Tokens → Icons
   if (attachments.status && attachments.status.length > 0) {
-    currentY = renderStatus(container, attachments.status, currentY, ctx);
+    currentY = renderStatus(
+      container,
+      attachments.status,
+      currentY,
+      ctx,
+      counterRotation,
+    );
     currentY += ATTACHMENT_TYPE_SPACING;
   }
 
   if (attachments.modifiers && Object.keys(attachments.modifiers).length > 0) {
-    currentY = renderModifiers(container, attachments.modifiers, currentY, ctx);
+    currentY = renderModifiers(
+      container,
+      attachments.modifiers,
+      currentY,
+      ctx,
+      counterRotation,
+    );
     currentY += ATTACHMENT_TYPE_SPACING;
   }
 
   if (attachments.tokens && Object.keys(attachments.tokens).length > 0) {
-    currentY = renderTokens(container, attachments.tokens, currentY, ctx);
+    currentY = renderTokens(
+      container,
+      attachments.tokens,
+      currentY,
+      ctx,
+      counterRotation,
+    );
     currentY += ATTACHMENT_TYPE_SPACING;
   }
 
   if (attachments.icons && attachments.icons.length > 0) {
-    renderIcons(container, attachments.icons, currentY, ctx);
+    renderIcons(container, attachments.icons, currentY, ctx, counterRotation);
   }
 }
 
@@ -532,6 +556,7 @@ function renderStatus(
   statuses: string[],
   startY: number,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): number {
   let currentY = startY;
 
@@ -573,6 +598,7 @@ function renderStatus(
 
       sprite.anchor.set(0.5, 0.5);
       sprite.position.set(0, currentY);
+      sprite.rotation = counterRotation;
 
       container.addChild(sprite);
       currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
@@ -590,6 +616,7 @@ function renderModifiers(
   modifiers: Record<string, number>,
   startY: number,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): number {
   let currentY = startY;
 
@@ -610,9 +637,14 @@ function renderModifiers(
 
     const displayText = `${statLabel} ${isPositive ? '▲' : '▼'}${isPositive ? '+' : ''}${value}`;
 
+    // Wrap bar + text in a container for counter-rotation
+    const modContainer = new Container();
+    modContainer.label = `modifier-${stat}`;
+    modContainer.position.set(0, currentY);
+    modContainer.rotation = counterRotation;
+
     // Create bar background
     const barGraphic = new Graphics();
-    barGraphic.label = `modifier-${stat}`;
 
     // Measure text to determine bar width
     const text = ctx.createText({
@@ -625,10 +657,10 @@ function renderModifiers(
     });
     const barWidth = text.width + ATTACHMENT_BADGE_PADDING * 2;
 
-    // Draw rounded rectangle bar
+    // Draw rounded rectangle bar (relative to modContainer origin)
     barGraphic.roundRect(
       -barWidth / 2,
-      currentY - ATTACHMENT_MODIFIER_HEIGHT / 2,
+      -ATTACHMENT_MODIFIER_HEIGHT / 2,
       barWidth,
       ATTACHMENT_MODIFIER_HEIGHT,
       STACK_BADGE_RADIUS,
@@ -640,12 +672,14 @@ function renderModifiers(
       alpha: 0.6,
     });
 
-    container.addChild(barGraphic);
+    modContainer.addChild(barGraphic);
 
-    // Add text
+    // Add text (centered in modContainer)
     text.anchor.set(0.5, 0.5);
-    text.position.set(0, currentY);
-    container.addChild(text);
+    text.position.set(0, 0);
+    modContainer.addChild(text);
+
+    container.addChild(modContainer);
 
     currentY += ATTACHMENT_MODIFIER_HEIGHT + ATTACHMENT_VERTICAL_SPACING;
   }
@@ -661,6 +695,7 @@ function renderTokens(
   tokens: Record<string, number>,
   startY: number,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): number {
   let currentY = startY;
 
@@ -685,8 +720,13 @@ function renderTokens(
     const cachedTexture = ctx.textureLoader?.get(tokenDef.image);
 
     if (cachedTexture) {
+      // Wrap sprite + count in a container for counter-rotation
+      const tokenContainer = new Container();
+      tokenContainer.label = `token-${tokenType}`;
+      tokenContainer.position.set(0, currentY);
+      tokenContainer.rotation = counterRotation;
+
       const sprite = new Sprite(cachedTexture);
-      sprite.label = `token-${tokenType}`;
 
       // Scale to fit within target size while preserving aspect ratio (like CSS object-fit: contain)
       const maxSize = tokenDef.size || ATTACHMENT_TOKEN_SIZE;
@@ -695,9 +735,7 @@ function renderTokens(
       sprite.scale.set(scale);
 
       sprite.anchor.set(0.5, 0.5);
-      sprite.position.set(0, currentY);
-
-      container.addChild(sprite);
+      tokenContainer.addChild(sprite);
 
       // Overlay count text (centered on token)
       const text = ctx.createText({
@@ -708,13 +746,13 @@ function renderTokens(
           fontWeight: 'bold',
         },
       });
-      text.anchor.set(0.5, 0.5); // Center anchor
-      text.position.set(0, currentY); // Center position (same as sprite)
+      text.anchor.set(0.5, 0.5);
 
       // Add text shadow for readability
       text.style.stroke = { color: 0x000000, width: 3 };
 
-      container.addChild(text);
+      tokenContainer.addChild(text);
+      container.addChild(tokenContainer);
 
       currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
     } else {
@@ -746,6 +784,7 @@ function renderIcons(
   icons: string[],
   startY: number,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): number {
   let currentY = startY;
 
@@ -775,6 +814,7 @@ function renderIcons(
 
       sprite.anchor.set(0.5, 0.5);
       sprite.position.set(0, currentY);
+      sprite.rotation = counterRotation;
 
       container.addChild(sprite);
 
@@ -812,11 +852,15 @@ export const StackBehaviors: ObjectBehaviors = {
     // Layer 2: Main card (image sprite or placeholder)
     renderMainCard(container, stackObj, ctx);
 
+    // Counter-rotation for overlays: keeps text/icons upright when card is exhausted.
+    // The parent visual container is rotated by _pos.r, so we apply the inverse.
+    const counterRotation = (-obj._pos.r * Math.PI) / 180;
+
     // Layer 3: Badge and unstack handle for multi-card stacks
-    renderStackDecorations(container, cardCount, ctx);
+    renderStackDecorations(container, cardCount, ctx, counterRotation);
 
     // Layer 4: On-card attachments (tokens, status, modifiers, icons)
-    renderAttachments(container, stackObj, ctx);
+    renderAttachments(container, stackObj, ctx, counterRotation);
 
     return container;
   },

@@ -74,7 +74,12 @@ export class KeyboardManager {
   }
 
   /**
-   * Handle a keyboard event and execute the associated action if found
+   * Handle a keyboard event and execute the associated action if found.
+   *
+   * Resolves shortcuts dynamically from the action registry so that
+   * actions registered after initialization (e.g., attachment actions
+   * loaded with a plugin) are always available.
+   *
    * @param event KeyboardEvent from the browser
    * @param context ActionContext for executing the action
    * @returns true if the event was handled, false otherwise
@@ -87,8 +92,24 @@ export class KeyboardManager {
 
     const normalized = this.normalizeKeyEvent(event);
 
-    // Check if we have a registered shortcut
-    const actionId = this.shortcuts.get(normalized);
+    // Check pre-registered shortcuts first
+    let actionId = this.shortcuts.get(normalized);
+
+    // Fall back to scanning all registered actions for a matching shortcut.
+    // This handles dynamically registered actions (e.g., plugin attachment actions).
+    if (!actionId) {
+      const allActions = this.actionRegistry.getAllActions();
+      for (const action of allActions) {
+        if (
+          action.shortcut &&
+          this.normalizeShortcut(action.shortcut) === normalized
+        ) {
+          actionId = action.id;
+          break;
+        }
+      }
+    }
+
     if (!actionId) {
       return false;
     }
@@ -203,8 +224,10 @@ export class KeyboardManager {
       parts.push('Shift');
     }
 
-    // Add the key
-    let key = event.key.toUpperCase();
+    // Add the key — use event.code for digit keys since Shift changes
+    // event.key to symbols (e.g., Shift+1 → '!' on US keyboards)
+    const digitMatch = /^Digit(\d)$/.exec(event.code);
+    let key = digitMatch ? digitMatch[1] : event.key.toUpperCase();
 
     // Normalize special keys
     if (key === ' ') key = 'SPACE';

@@ -24,10 +24,12 @@ export function registerAttachmentActions(
   // Clear any previously registered attachment actions
   clearAttachmentActions(registry);
 
-  // Generate token actions
+  // Generate token actions (index determines keyboard shortcut slot: Cmd+1, Cmd+2, etc.)
   if (gameAssets.tokenTypes) {
+    let slotIndex = 0;
     for (const [typeCode, tokenDef] of Object.entries(gameAssets.tokenTypes)) {
-      registerTokenActions(registry, typeCode, tokenDef.name);
+      registerTokenActions(registry, typeCode, tokenDef.name, slotIndex);
+      slotIndex++;
     }
   }
 
@@ -85,12 +87,19 @@ function registerTokenActions(
   registry: ActionRegistry,
   typeCode: string,
   typeName: string,
+  slotIndex: number,
 ): void {
+  // Keyboard shortcut slot: Cmd+1 to Cmd+9 for add, Shift+1 to Shift+9 for remove
+  const slotNumber = slotIndex + 1; // 1-based
+  const addShortcut = slotNumber <= 9 ? `Cmd+${slotNumber}` : undefined;
+  const removeShortcut = slotNumber <= 9 ? `Shift+${slotNumber}` : undefined;
+
   // Add token action
   registry.register({
     id: `add-token-${typeCode}`,
     label: `Add ${typeName} Token`,
     icon: '🎯',
+    shortcut: addShortcut,
     category: CARD_ACTIONS,
     isAvailable: (ctx) => {
       return ctx.selection.count === 1 && ctx.selection.hasStacks;
@@ -124,6 +133,7 @@ function registerTokenActions(
     id: `remove-token-${typeCode}`,
     label: `Remove ${typeName} Token`,
     icon: '➖',
+    shortcut: removeShortcut,
     category: CARD_ACTIONS,
     isAvailable: (ctx) => {
       if (ctx.selection.count !== 1 || !ctx.selection.hasStacks) return false;

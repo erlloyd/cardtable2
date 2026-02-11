@@ -82,6 +82,7 @@ export interface StatusTypeDef {
   image: string; // URL to status card image (typically landscape, PNG with transparency)
   width?: number; // Optional width in pixels (defaults to standard based on aspect ratio)
   height?: number; // Optional height in pixels (defaults to standard based on aspect ratio)
+  countable?: boolean; // When true, supports stacking multiple counts (like tokens). Default: false (toggle on/off)
 }
 
 /**

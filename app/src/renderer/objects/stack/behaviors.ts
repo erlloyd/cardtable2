@@ -509,18 +509,12 @@ function renderAttachments(
 
   let currentY = ATTACHMENT_START_Y;
 
-  // Render in priority order: Status → Modifiers → Tokens → Icons
-  if (attachments.status && attachments.status.length > 0) {
-    currentY = renderStatus(
-      container,
-      attachments.status,
-      currentY,
-      ctx,
-      counterRotation,
-    );
-    currentY += ATTACHMENT_TYPE_SPACING;
+  // Status cards hang off the right edge of the card (separate from center stack)
+  if (attachments.status && Object.keys(attachments.status).length > 0) {
+    renderStatus(container, attachments.status, ctx, counterRotation);
   }
 
+  // Center stack: Modifiers → Tokens → Icons
   if (attachments.modifiers && Object.keys(attachments.modifiers).length > 0) {
     currentY = renderModifiers(
       container,
@@ -550,31 +544,33 @@ function renderAttachments(
 
 /**
  * Helper: Render status effect badges
+ * Statuses are stored as Record<string, number> — the count is always >= 1.
+ * Countable statuses show a count overlay when count > 1.
  */
 function renderStatus(
   container: Container,
-  statuses: string[],
-  startY: number,
+  statuses: Record<string, number>,
   ctx: RenderContext,
   counterRotation: number = 0,
-): number {
-  let currentY = startY;
-
-  const sortedStatuses = sortArrayByPluginOrder(
-    statuses,
+): void {
+  const sortedStatuses = sortByPluginOrder(
+    Object.entries(statuses),
     ctx.gameAssets?.statusTypes,
   );
 
-  for (const statusType of sortedStatuses) {
+  // Stack status cards vertically along the right edge, hanging off the card
+  const startY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE + 12; // Below the badge area with extra padding
+  let currentY = startY;
+
+  for (const [statusType, count] of sortedStatuses) {
+    if (count <= 0) continue;
+
     const statusDef = ctx.gameAssets?.statusTypes?.[statusType];
     if (!statusDef?.image) continue;
 
     const cachedTexture = ctx.textureLoader?.get(statusDef.image);
 
     if (cachedTexture) {
-      const sprite = new Sprite(cachedTexture);
-      sprite.label = `status-${statusType}`;
-
       // Scale to fit within target dimensions while preserving aspect ratio (contain)
       // Default 4:1 ratio matches typical status card images
       const maxW = statusDef.width ?? 48;
@@ -583,14 +579,38 @@ function renderStatus(
         maxW / cachedTexture.width,
         maxH / cachedTexture.height,
       );
+
+      // Wrap in container for counter-rotation around the anchor point
+      const statusContainer = new Container();
+      statusContainer.label = `status-${statusType}`;
+      // Position so most of the image hangs off the right edge
+      statusContainer.position.set(STACK_WIDTH / 2 + 6, currentY);
+      statusContainer.rotation = counterRotation;
+
+      const sprite = new Sprite(cachedTexture);
       sprite.scale.set(scale);
-
       sprite.anchor.set(0.5, 0.5);
-      sprite.position.set(0, currentY);
-      sprite.rotation = counterRotation;
 
-      container.addChild(sprite);
-      currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
+      statusContainer.addChild(sprite);
+
+      // Show count overlay for countable statuses with count > 1
+      if (statusDef.countable && count > 1) {
+        const countText = ctx.createText({
+          text: count.toString(),
+          style: {
+            fontSize: ATTACHMENT_COUNT_FONT_SIZE,
+            fill: ATTACHMENT_TEXT_COLOR,
+            fontWeight: 'bold',
+          },
+        });
+        countText.anchor.set(0.5, 0.5);
+        countText.style.stroke = { color: 0x000000, width: 3 };
+        statusContainer.addChild(countText);
+      }
+
+      container.addChild(statusContainer);
+
+      currentY += cachedTexture.height * scale + 2;
     } else {
       // Start async load
       if (ctx.textureLoader && ctx.onTextureLoaded) {
@@ -608,8 +628,6 @@ function renderStatus(
       }
     }
   }
-
-  return currentY;
 }
 
 /**

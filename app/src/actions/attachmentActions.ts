@@ -7,7 +7,11 @@
  * The core system has no hardcoded game-specific types - everything is plugin-driven.
  */
 
-import type { AttachmentData, GameAssets } from '@cardtable2/shared';
+import type {
+  AttachmentData,
+  GameAssets,
+  StatusTypeDef,
+} from '@cardtable2/shared';
 import type { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS } from './types';
 
@@ -33,12 +37,12 @@ export function registerAttachmentActions(
     }
   }
 
-  // Generate status actions
+  // Generate status actions (add + remove per type, mirroring token pattern)
   if (gameAssets.statusTypes) {
     for (const [typeCode, statusDef] of Object.entries(
       gameAssets.statusTypes,
     )) {
-      registerStatusAddAction(registry, typeCode, statusDef.name);
+      registerStatusActions(registry, typeCode, statusDef);
     }
   }
 
@@ -47,14 +51,6 @@ export function registerAttachmentActions(
     for (const [statCode] of Object.entries(gameAssets.modifierStats)) {
       registerModifierActions(registry, statCode);
     }
-  }
-
-  // Generate generic "Remove Status" action (removes any status)
-  if (
-    gameAssets.statusTypes &&
-    Object.keys(gameAssets.statusTypes).length > 0
-  ) {
-    registerStatusRemoveAction(registry);
   }
 }
 
@@ -180,13 +176,19 @@ function registerTokenActions(
 }
 
 /**
- * Register add action for a specific status type
+ * Register add/remove actions for a specific status type.
+ * Countable statuses work like tokens (increment/decrement).
+ * Non-countable statuses toggle on/off (count clamped to 0 or 1).
  */
-function registerStatusAddAction(
+function registerStatusActions(
   registry: ActionRegistry,
   typeCode: string,
-  typeName: string,
+  statusDef: StatusTypeDef,
 ): void {
+  const typeName = statusDef.name;
+  const countable = statusDef.countable ?? false;
+
+  // Add status action
   registry.register({
     id: `add-status-${typeCode}`,
     label: `Add ${typeName}`,
@@ -195,16 +197,18 @@ function registerStatusAddAction(
     isAvailable: (ctx) => {
       if (ctx.selection.count !== 1 || !ctx.selection.hasStacks) return false;
 
-      // Check if card already has this status
-      const stackId = ctx.selection.ids[0];
-      const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return false;
+      if (!countable) {
+        // Non-countable: only available if not already present
+        const stackId = ctx.selection.ids[0];
+        const yMap = ctx.store.getObjectYMap(stackId);
+        if (!yMap) return false;
 
-      const meta = yMap.get('_meta') as Record<string, unknown>;
-      const attachments = meta?.attachments as AttachmentData;
-      const hasStatus = attachments?.status?.includes(typeCode);
+        const meta = yMap.get('_meta') as Record<string, unknown>;
+        const attachments = meta?.attachments as AttachmentData;
+        return (attachments?.status?.[typeCode] ?? 0) < 1;
+      }
 
-      return !hasStatus;
+      return true;
     },
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
@@ -214,12 +218,9 @@ function registerStatusAddAction(
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
         const attachments = (meta.attachments as AttachmentData) || {};
-        const status = attachments.status || [];
+        const status = { ...(attachments.status || {}) };
 
-        // Add status if not already present
-        if (!status.includes(typeCode)) {
-          status.push(typeCode);
-        }
+        status[typeCode] = (status[typeCode] || 0) + 1;
 
         yMap.set('_meta', {
           ...meta,
@@ -231,30 +232,23 @@ function registerStatusAddAction(
       });
     },
   });
-}
 
-/**
- * Register generic "Remove Status" action (removes first status)
- */
-function registerStatusRemoveAction(registry: ActionRegistry): void {
+  // Remove status action
   registry.register({
-    id: 'remove-status',
-    label: 'Remove Status',
+    id: `remove-status-${typeCode}`,
+    label: `Remove ${typeName}`,
     icon: '❌',
     category: CARD_ACTIONS,
     isAvailable: (ctx) => {
       if (ctx.selection.count !== 1 || !ctx.selection.hasStacks) return false;
 
-      // Check if card has any status effects
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
       if (!yMap) return false;
 
       const meta = yMap.get('_meta') as Record<string, unknown>;
       const attachments = meta?.attachments as AttachmentData;
-      const statusCount = attachments?.status?.length || 0;
-
-      return statusCount > 0;
+      return (attachments?.status?.[typeCode] ?? 0) > 0;
     },
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
@@ -264,11 +258,13 @@ function registerStatusRemoveAction(registry: ActionRegistry): void {
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
         const attachments = (meta.attachments as AttachmentData) || {};
-        const status = attachments.status || [];
+        const status = { ...(attachments.status || {}) };
 
-        // Remove the first status
-        if (status.length > 0) {
-          status.shift();
+        const current = status[typeCode] || 0;
+        if (current > 1) {
+          status[typeCode] = current - 1;
+        } else {
+          delete status[typeCode];
         }
 
         yMap.set('_meta', {

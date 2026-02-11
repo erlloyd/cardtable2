@@ -36,8 +36,8 @@ export enum ObjectKind {
 export interface AttachmentData {
   /** Token quantities by token type code (e.g., { threat: 3, damage: 5 }) */
   tokens?: Record<string, number>;
-  /** Active status effects by status type code (e.g., ["stunned", "confused"]) */
-  status?: string[];
+  /** Status effect counts by type code (e.g., { stunned: 1, confused: 2 }) */
+  status?: Record<string, number>;
   /** Stat modifiers by stat code (e.g., { THW: 1, ATK: -1 }) */
   modifiers?: Record<string, number>;
   /** Active icons by icon type code (e.g., ["retaliate", "guard"]) */

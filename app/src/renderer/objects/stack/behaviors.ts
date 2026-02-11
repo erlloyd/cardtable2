@@ -575,26 +575,15 @@ function renderStatus(
       const sprite = new Sprite(cachedTexture);
       sprite.label = `status-${statusType}`;
 
-      // Scale using defined dimensions or default max size
-      if (statusDef.width && statusDef.height) {
-        // Both dimensions specified - set directly
-        sprite.width = statusDef.width;
-        sprite.height = statusDef.height;
-      } else if (statusDef.width) {
-        // Only width specified - scale to fit width, preserve aspect ratio
-        const scale = statusDef.width / cachedTexture.width;
-        sprite.scale.set(scale);
-      } else if (statusDef.height) {
-        // Only height specified - scale to fit height, preserve aspect ratio
-        const scale = statusDef.height / cachedTexture.height;
-        sprite.scale.set(scale);
-      } else {
-        // No dimensions specified - scale to fit max 48px (like CSS object-fit: contain)
-        const maxSize = 48;
-        const scale =
-          maxSize / Math.max(cachedTexture.width, cachedTexture.height);
-        sprite.scale.set(scale);
-      }
+      // Scale to fit within target dimensions while preserving aspect ratio (contain)
+      // Default 4:1 ratio matches typical status card images
+      const maxW = statusDef.width ?? 48;
+      const maxH = statusDef.height ?? 12;
+      const scale = Math.min(
+        maxW / cachedTexture.width,
+        maxH / cachedTexture.height,
+      );
+      sprite.scale.set(scale);
 
       sprite.anchor.set(0.5, 0.5);
       sprite.position.set(0, currentY);
@@ -602,6 +591,21 @@ function renderStatus(
 
       container.addChild(sprite);
       currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
+    } else {
+      // Start async load
+      if (ctx.textureLoader && ctx.onTextureLoaded) {
+        ctx.textureLoader
+          .load(statusDef.image)
+          .then(() => {
+            ctx.onTextureLoaded?.(statusDef.image);
+          })
+          .catch((error) => {
+            console.error(
+              `[StackBehaviors] Failed to load status image: ${statusDef.image}`,
+              error,
+            );
+          });
+      }
     }
   }
 

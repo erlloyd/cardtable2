@@ -439,6 +439,47 @@ function createPlaceholderGraphic(
 }
 
 /**
+ * Sort entries by the order their keys appear in a plugin type definition.
+ * This allows plugins to control display order by the order they list types
+ * in their asset pack — no separate "index" property needed.
+ * Entries not found in the definition appear at the end in their original order.
+ */
+function sortByPluginOrder<T>(
+  entries: [string, T][],
+  pluginTypes: Record<string, unknown> | undefined,
+): [string, T][] {
+  if (!pluginTypes) return entries;
+  const order = Object.keys(pluginTypes);
+  return [...entries].sort(([a], [b]) => {
+    const indexA = order.indexOf(a);
+    const indexB = order.indexOf(b);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+}
+
+/**
+ * Sort an array of type codes by the order they appear in a plugin type definition.
+ */
+function sortArrayByPluginOrder(
+  items: string[],
+  pluginTypes: Record<string, unknown> | undefined,
+): string[] {
+  if (!pluginTypes) return items;
+  const order = Object.keys(pluginTypes);
+  return [...items].sort((a, b) => {
+    const indexA = order.indexOf(a);
+    const indexB = order.indexOf(b);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+}
+
+/**
  * Helper: Render on-card attachments (tokens, status, modifiers, icons)
  *
  * Attachments stack vertically down the center of the card, covering artwork.
@@ -494,7 +535,12 @@ function renderStatus(
 ): number {
   let currentY = startY;
 
-  for (const statusType of statuses) {
+  const sortedStatuses = sortArrayByPluginOrder(
+    statuses,
+    ctx.gameAssets?.statusTypes,
+  );
+
+  for (const statusType of sortedStatuses) {
     const statusDef = ctx.gameAssets?.statusTypes?.[statusType];
     if (!statusDef?.image) continue;
 
@@ -547,7 +593,12 @@ function renderModifiers(
 ): number {
   let currentY = startY;
 
-  for (const [stat, value] of Object.entries(modifiers)) {
+  const sortedModifiers = sortByPluginOrder(
+    Object.entries(modifiers),
+    ctx.gameAssets?.modifierStats,
+  );
+
+  for (const [stat, value] of sortedModifiers) {
     if (value === 0) continue; // Skip zero modifiers
 
     const modifierDef = ctx.gameAssets?.modifierStats?.[stat];
@@ -613,9 +664,10 @@ function renderTokens(
 ): number {
   let currentY = startY;
 
-  // Sort tokens by type code for consistent ordering
-  const sortedTokens = Object.entries(tokens).sort(([a], [b]) =>
-    a.localeCompare(b),
+  // Sort tokens by the order defined in the plugin's asset pack
+  const sortedTokens = sortByPluginOrder(
+    Object.entries(tokens),
+    ctx.gameAssets?.tokenTypes,
   );
 
   for (const [tokenType, count] of sortedTokens) {
@@ -697,7 +749,9 @@ function renderIcons(
 ): number {
   let currentY = startY;
 
-  for (const iconType of icons) {
+  const sortedIcons = sortArrayByPluginOrder(icons, ctx.gameAssets?.iconTypes);
+
+  for (const iconType of sortedIcons) {
     const iconDef = ctx.gameAssets?.iconTypes?.[iconType];
     if (!iconDef?.image) {
       console.warn(

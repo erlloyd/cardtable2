@@ -13,6 +13,8 @@ import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
+import { ActionRegistry } from '../actions/ActionRegistry';
+import { registerAttachmentActions } from '../actions/attachmentActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import {
@@ -113,6 +115,10 @@ function Table() {
             '[Table] Restoring gameAssets only (objects already in IndexedDB)',
           );
           store.setGameAssets(content.content);
+          registerAttachmentActions(
+            ActionRegistry.getInstance(),
+            content.content,
+          );
         } else {
           // No scenario loaded - fall back to loading base game asset packs
           const gameId = store.metadata.get('gameId') as string | undefined;
@@ -127,6 +133,7 @@ function Table() {
           console.log('[Table] Loading base game asset packs for:', gameId);
           const assets = await loadGameAssetPacks(gameId);
           store.setGameAssets(assets);
+          registerAttachmentActions(ActionRegistry.getInstance(), assets);
         }
       } catch (err) {
         const errorMessage =

@@ -367,6 +367,7 @@ function Table() {
             actionContext={actionContext}
             onActionExecuted={commandPalette.recordAction}
             gameAssets={gameAssets}
+            isMenuOpen={contextMenu.isOpen || commandPalette.isOpen}
           />
         )}
       </Suspense>

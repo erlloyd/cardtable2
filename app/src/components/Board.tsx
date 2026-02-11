@@ -54,6 +54,7 @@ export interface BoardProps {
   actionContext?: ActionContext | null;
   onActionExecuted?: (actionId: string) => void;
   gameAssets?: GameAssets | null;
+  isMenuOpen?: boolean;
 }
 
 function Board({
@@ -71,6 +72,7 @@ function Board({
   actionContext,
   onActionExecuted,
   gameAssets,
+  isMenuOpen,
 }: BoardProps) {
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -116,6 +118,14 @@ function Board({
     y: number;
   } | null>(null);
   const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Dismiss hover preview when any menu opens
+  useEffect(() => {
+    if (isMenuOpen) {
+      setPreviewCard(null);
+      setPreviewPosition(null);
+    }
+  }, [isMenuOpen]);
 
   // Modal preview state (mobile double-tap)
   const [isModalVisible, setIsModalVisible] = useState(false);

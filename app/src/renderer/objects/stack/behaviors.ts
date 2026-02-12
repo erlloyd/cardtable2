@@ -514,18 +514,18 @@ function renderAttachments(
     renderStatus(container, attachments.status, ctx, counterRotation);
   }
 
-  // Center stack: Modifiers → Tokens → Icons
+  // Modifiers sit below the card
   if (attachments.modifiers && Object.keys(attachments.modifiers).length > 0) {
-    currentY = renderModifiers(
+    renderModifiers(
       container,
       attachments.modifiers,
-      currentY,
+      STACK_HEIGHT / 2 + 4,
       ctx,
       counterRotation,
     );
-    currentY += ATTACHMENT_TYPE_SPACING;
   }
 
+  // Center stack: Tokens → Icons (on the card face)
   if (attachments.tokens && Object.keys(attachments.tokens).length > 0) {
     currentY = renderTokens(
       container,

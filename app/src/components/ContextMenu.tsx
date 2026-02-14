@@ -24,6 +24,7 @@ export function ContextMenu({
   );
   const menuRef = useRef<HTMLDivElement>(null);
   const [adjustedPosition, setAdjustedPosition] = useState(position);
+  const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined);
 
   // Get available actions
   const actions = context ? actionRegistry.getAvailableActions(context) : [];
@@ -77,6 +78,7 @@ export function ContextMenu({
     y = Math.max(VIEWPORT_MARGIN, y);
 
     setAdjustedPosition({ x, y });
+    setMaxHeight(viewportHeight - y - VIEWPORT_MARGIN);
   }, [isOpen, position]);
 
   const handleSelect = (action: Action) => {
@@ -137,6 +139,7 @@ export function ContextMenu({
             position: 'fixed',
             left: adjustedPosition.x,
             top: adjustedPosition.y,
+            maxHeight,
           }}
         >
           {actions.length === 0 && (

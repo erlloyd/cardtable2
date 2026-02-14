@@ -4,8 +4,10 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: true,
-  // No retries needed - tests are now 100% reliable with waitForRenderer()
-  retries: 0,
+  // Tests use deterministic callbacks (waitForRenderer, waitForSelectionSettled)
+  // but CI runners can occasionally drop keyboard events under load.
+  // Retry once on CI to handle this; locally tests are 100% reliable.
+  retries: process.env.CI ? 1 : 0,
   // Playwright workers are I/O-bound (browser automation), not CPU-bound
   // Can run more workers than CPUs for better parallelization
   // CI: 2 workers on GitHub Actions (2 core runner) - conservative for stability

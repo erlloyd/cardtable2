@@ -480,6 +480,8 @@ function replaceImagePathsWithBlobUrls(
   imageUrls: Map<string, string>,
 ): void {
   let replacementCount = 0;
+  const unmatchedImages: Array<{ type: string; key: string; path: string }> =
+    [];
 
   // Helper to find blob URL for a given image path (relative or resolved)
   const findBlobUrl = (imagePath: string): string | undefined => {
@@ -491,8 +493,15 @@ function replaceImagePathsWithBlobUrls(
 
     // Try matching by checking if URL ends with any of the relative paths
     // This handles already-resolved URLs like "http://.../tokens/damage.png"
+    // We also verify the character before the match is a path separator (or the
+    // path is an exact match) to avoid false positives like "extra-damage.png"
+    // matching "damage.png".
     for (const [relativePath, blobUrl] of imageUrls.entries()) {
-      if (imagePath.endsWith(relativePath)) {
+      if (
+        imagePath.endsWith(relativePath) &&
+        (imagePath.length === relativePath.length ||
+          imagePath[imagePath.length - relativePath.length - 1] === '/')
+      ) {
         return blobUrl;
       }
     }
@@ -500,37 +509,47 @@ function replaceImagePathsWithBlobUrls(
     return undefined;
   };
 
-  // Replace tokenTypes images
   if (content.tokenTypes) {
-    for (const tokenType of Object.values(content.tokenTypes)) {
+    for (const [key, tokenType] of Object.entries(content.tokenTypes)) {
       const blobUrl = findBlobUrl(tokenType.image);
       if (blobUrl) {
         tokenType.image = blobUrl;
         replacementCount++;
+      } else {
+        unmatchedImages.push({ type: 'token', key, path: tokenType.image });
       }
     }
   }
 
-  // Replace statusTypes images
   if (content.statusTypes) {
-    for (const statusType of Object.values(content.statusTypes)) {
+    for (const [key, statusType] of Object.entries(content.statusTypes)) {
       const blobUrl = findBlobUrl(statusType.image);
       if (blobUrl) {
         statusType.image = blobUrl;
         replacementCount++;
+      } else {
+        unmatchedImages.push({ type: 'status', key, path: statusType.image });
       }
     }
   }
 
-  // Replace iconTypes images
   if (content.iconTypes) {
-    for (const iconType of Object.values(content.iconTypes)) {
+    for (const [key, iconType] of Object.entries(content.iconTypes)) {
       const blobUrl = findBlobUrl(iconType.image);
       if (blobUrl) {
         iconType.image = blobUrl;
         replacementCount++;
+      } else {
+        unmatchedImages.push({ type: 'icon', key, path: iconType.image });
       }
     }
+  }
+
+  if (unmatchedImages.length > 0) {
+    console.warn(
+      `[Content] ${unmatchedImages.length} attachment image(s) could not be matched to local files`,
+      { unmatchedImages },
+    );
   }
 
   console.log(

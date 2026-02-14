@@ -41,6 +41,7 @@ import { renderStackPopIcon } from '../../graphics/stackPop';
 import { shouldRotateCard } from '../../../content/cardRotation';
 import {
   TEXTURE_LOAD_FAILED,
+  ATTACHMENT_IMAGE_LOAD_FAILED,
   CARD_IMAGE_NOT_FOUND,
   CARD_IMAGE_NO_FACE,
   CARD_IMAGE_NO_BACK,
@@ -487,8 +488,11 @@ function sortArrayByPluginOrder(
 /**
  * Helper: Render on-card attachments (tokens, status, modifiers, icons)
  *
- * Attachments stack vertically down the center of the card, covering artwork.
- * Render order: Status (top) → Modifiers → Tokens → Icons (bottom)
+ * Attachments render in four regions:
+ * - Status: hanging off the right edge of the card
+ * - Modifiers: positioned below the card
+ * - Tokens: stacked vertically in the center of the card
+ * - Icons: stacked vertically below tokens
  */
 function renderAttachments(
   container: Container,
@@ -619,11 +623,16 @@ function renderStatus(
           .then(() => {
             ctx.onTextureLoaded?.(statusDef.image);
           })
-          .catch((error) => {
-            console.error(
-              `[StackBehaviors] Failed to load status image: ${statusDef.image}`,
-              error,
-            );
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error('[StackBehaviors] Failed to load status image', {
+              errorId: ATTACHMENT_IMAGE_LOAD_FAILED,
+              imageUrl: statusDef.image,
+              attachmentType: 'status',
+              statusType,
+              error: message,
+            });
           });
       }
     }
@@ -785,11 +794,16 @@ function renderTokens(
           .then(() => {
             ctx.onTextureLoaded?.(tokenDef.image);
           })
-          .catch((error) => {
-            console.error(
-              `[StackBehaviors] Failed to load token image: ${tokenDef.image}`,
-              error,
-            );
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error('[StackBehaviors] Failed to load token image', {
+              errorId: ATTACHMENT_IMAGE_LOAD_FAILED,
+              imageUrl: tokenDef.image,
+              attachmentType: 'token',
+              tokenType,
+              error: message,
+            });
           });
       }
     }
@@ -849,11 +863,16 @@ function renderIcons(
           .then(() => {
             ctx.onTextureLoaded?.(iconDef.image);
           })
-          .catch((error) => {
-            console.error(
-              `[StackBehaviors] Failed to load icon image: ${iconDef.image}`,
-              error,
-            );
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error('[StackBehaviors] Failed to load icon image', {
+              errorId: ATTACHMENT_IMAGE_LOAD_FAILED,
+              imageUrl: iconDef.image,
+              attachmentType: 'icon',
+              iconType,
+              error: message,
+            });
           });
       }
     }

@@ -13,6 +13,7 @@ import type {
   StatusTypeDef,
 } from '@cardtable2/shared';
 import type { ActionRegistry } from './ActionRegistry';
+import { ATTACHMENT_OBJECT_NOT_FOUND } from '../constants/errorIds';
 import { CARD_ACTIONS } from './types';
 
 /**
@@ -23,10 +24,11 @@ export function registerAttachmentActions(
   registry: ActionRegistry,
   gameAssets: GameAssets | null,
 ): void {
-  if (!gameAssets) return;
-
-  // Clear any previously registered attachment actions
+  // Clear any previously registered attachment actions first,
+  // even if gameAssets is null (e.g., table reset)
   clearAttachmentActions(registry);
+
+  if (!gameAssets) return;
 
   // Generate token actions (index determines keyboard shortcut slot: Cmd+1, Cmd+2, etc.)
   if (gameAssets.tokenTypes) {
@@ -37,7 +39,7 @@ export function registerAttachmentActions(
     }
   }
 
-  // Generate status actions (add + remove per type, mirroring token pattern)
+  // Generate status actions (add + remove per type; countable statuses increment, non-countable toggle)
   if (gameAssets.statusTypes) {
     for (const [typeCode, statusDef] of Object.entries(
       gameAssets.statusTypes,
@@ -68,12 +70,20 @@ function clearAttachmentActions(registry: ActionRegistry): void {
       action.id.startsWith('add-token-') ||
       action.id.startsWith('remove-token-') ||
       action.id.startsWith('add-status-') ||
-      action.id.startsWith('remove-status') ||
+      action.id.startsWith('remove-status-') ||
       action.id.startsWith('modify-')
     ) {
       registry.unregister(action.id);
     }
   }
+}
+
+function logObjectNotFound(actionId: string, stackId: string): void {
+  console.error('[AttachmentActions] Object not found in store', {
+    errorId: ATTACHMENT_OBJECT_NOT_FOUND,
+    actionId,
+    stackId,
+  });
 }
 
 /**
@@ -103,12 +113,15 @@ function registerTokenActions(
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return;
+      if (!yMap) {
+        logObjectNotFound(`attachment-${typeCode}`, stackId);
+        return;
+      }
 
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
         const attachments = (meta.attachments as AttachmentData) || {};
-        const tokens = attachments.tokens || {};
+        const tokens = { ...(attachments.tokens || {}) };
 
         // Add one token of this type
         tokens[typeCode] = (tokens[typeCode] || 0) + 1;
@@ -148,12 +161,15 @@ function registerTokenActions(
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return;
+      if (!yMap) {
+        logObjectNotFound(`attachment-${typeCode}`, stackId);
+        return;
+      }
 
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
         const attachments = (meta.attachments as AttachmentData) || {};
-        const tokens = attachments.tokens || {};
+        const tokens = { ...(attachments.tokens || {}) };
 
         // Remove one token of this type
         const current = tokens[typeCode] || 0;
@@ -213,7 +229,10 @@ function registerStatusActions(
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return;
+      if (!yMap) {
+        logObjectNotFound(`attachment-${typeCode}`, stackId);
+        return;
+      }
 
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
@@ -253,7 +272,10 @@ function registerStatusActions(
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return;
+      if (!yMap) {
+        logObjectNotFound(`attachment-${typeCode}`, stackId);
+        return;
+      }
 
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
@@ -298,12 +320,15 @@ function registerModifierActions(
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return;
+      if (!yMap) {
+        logObjectNotFound(`modify-${statCode}-plus`, stackId);
+        return;
+      }
 
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
         const attachments = (meta.attachments as AttachmentData) || {};
-        const modifiers = attachments.modifiers || {};
+        const modifiers = { ...(attachments.modifiers || {}) };
 
         // Add +1 to stat
         modifiers[statCode] = (modifiers[statCode] || 0) + 1;
@@ -331,12 +356,15 @@ function registerModifierActions(
     execute: (ctx) => {
       const stackId = ctx.selection.ids[0];
       const yMap = ctx.store.getObjectYMap(stackId);
-      if (!yMap) return;
+      if (!yMap) {
+        logObjectNotFound(`modify-${statCode}-minus`, stackId);
+        return;
+      }
 
       ctx.store.getDoc().transact(() => {
         const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
         const attachments = (meta.attachments as AttachmentData) || {};
-        const modifiers = attachments.modifiers || {};
+        const modifiers = { ...(attachments.modifiers || {}) };
 
         // Subtract 1 from stat (can go negative)
         modifiers[statCode] = (modifiers[statCode] || 0) - 1;

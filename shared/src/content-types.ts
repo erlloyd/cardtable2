@@ -70,7 +70,7 @@ export interface Mat {
 export interface TokenTypeDef {
   name: string; // Display name (e.g., "Threat")
   image: string; // URL to token image (PNG with transparency)
-  size?: number; // Optional size override in pixels (defaults to 24)
+  size?: number; // Optional size override in pixels (defaults to 20)
 }
 
 /**
@@ -80,8 +80,8 @@ export interface TokenTypeDef {
 export interface StatusTypeDef {
   name: string; // Display name (e.g., "Stunned")
   image: string; // URL to status card image (typically landscape, PNG with transparency)
-  width?: number; // Optional width in pixels (defaults to standard based on aspect ratio)
-  height?: number; // Optional height in pixels (defaults to standard based on aspect ratio)
+  width?: number; // Optional width in pixels (defaults to 48)
+  height?: number; // Optional height in pixels (defaults to 12)
   countable?: boolean; // When true, supports stacking multiple counts (like tokens). Default: false (toggle on/off)
 }
 

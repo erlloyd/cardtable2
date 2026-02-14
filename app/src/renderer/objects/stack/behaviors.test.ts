@@ -772,4 +772,585 @@ describe('Stack Behaviors - Visual Rendering', () => {
       });
     });
   });
+
+  describe('Attachment Rendering', () => {
+    let mockTextureLoader: {
+      load: ReturnType<typeof vi.fn>;
+      get: ReturnType<typeof vi.fn>;
+      has: ReturnType<typeof vi.fn>;
+      shouldShowFallback: ReturnType<typeof vi.fn>;
+      isSlowLoading: ReturnType<typeof vi.fn>;
+      hasFailed: ReturnType<typeof vi.fn>;
+    };
+    let mockOnTextureLoaded: ReturnType<typeof vi.fn>;
+    let contextWithAssets: RenderContext;
+    let mockTexture: { width: number; height: number };
+
+    // Override createText for attachment tests to avoid PixiJS canvas measurement.
+    // The modifier renderer reads text.width to size the bar background, which
+    // triggers CanvasTextMetrics in a real Text object and fails without a canvas.
+    const attachmentCreateText = vi.fn((options: TextOptions) => {
+      const text = new Text(options);
+      text.resolution = 6;
+      // Provide a fixed width so renderModifiers can measure the bar
+      Object.defineProperty(text, 'width', { value: 40, writable: true });
+      return text;
+    });
+
+    beforeEach(() => {
+      attachmentCreateText.mockClear();
+      mockTexture = { width: 64, height: 64 };
+      mockOnTextureLoaded = vi.fn();
+      mockTextureLoader = {
+        load: vi.fn().mockResolvedValue(mockTexture),
+        get: vi.fn(),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => false),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => false),
+      };
+
+      contextWithAssets = {
+        ...mockContext,
+        createText: attachmentCreateText,
+        objectId: 'stack-1',
+        gameAssets: {
+          packs: [],
+          cards: {
+            card1: {
+              type: 'player',
+              face: '/card1-face.jpg',
+            },
+          },
+          cardTypes: {
+            player: { back: '/player-back.jpg' },
+          },
+          cardSets: {},
+          tokens: {},
+          counters: {},
+          mats: {},
+          tokenTypes: {
+            damage: { name: 'Damage', image: '/tokens/damage.png' },
+            threat: { name: 'Threat', image: '/tokens/threat.png' },
+          },
+          statusTypes: {
+            stunned: {
+              name: 'Stunned',
+              image: '/status/stunned.png',
+              width: 48,
+              height: 12,
+            },
+            confused: {
+              name: 'Confused',
+              image: '/status/confused.png',
+              countable: true,
+            },
+          },
+          modifierStats: {
+            THW: {
+              code: 'THW',
+              name: 'Thwart',
+              positiveColor: 0x4caf50,
+              negativeColor: 0xf44336,
+            },
+          },
+          iconTypes: {
+            retaliate: {
+              name: 'Retaliate',
+              image: '/icons/retaliate.png',
+            },
+          },
+        },
+        textureLoader: mockTextureLoader as unknown as TextureLoader,
+        onTextureLoaded: mockOnTextureLoaded,
+      } as RenderContext;
+    });
+
+    it('should not render attachments when no _meta present', () => {
+      const stack = createTestStack({ _meta: {} });
+
+      const container = StackBehaviors.render(stack, contextWithAssets);
+
+      // Should still render the card, just no attachment containers
+      expect(container).toBeInstanceOf(Container);
+    });
+
+    it('should not render attachments when _meta.attachments is undefined', () => {
+      const stack = createTestStack({ _meta: {} });
+
+      const container = StackBehaviors.render(stack, contextWithAssets);
+
+      expect(container).toBeInstanceOf(Container);
+    });
+
+    it('should not render attachments in minimal mode', () => {
+      const stack = createTestStack({
+        _meta: { attachments: { tokens: { damage: 3 } } },
+      });
+
+      const minimalContext = {
+        ...contextWithAssets,
+        minimal: true,
+      } as RenderContext;
+
+      mockTextureLoader.get.mockReturnValue(mockTexture);
+
+      StackBehaviors.render(stack, minimalContext);
+
+      // In minimal mode, no token text should be created
+      // Only the card placeholder text would be created via createKindLabel
+      const createTextCalls = attachmentCreateText.mock.calls;
+      const tokenCountCalls = createTextCalls.filter(
+        (call: unknown[]) => (call[0] as Record<string, unknown>).text === '3',
+      );
+      expect(tokenCountCalls.length).toBe(0);
+    });
+
+    describe('Token Rendering', () => {
+      it('should render tokens with cached textures', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { tokens: { damage: 3 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // Token count text should be created
+        expect(attachmentCreateText).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: '3',
+          }),
+        );
+      });
+
+      it('should start async load when token texture not cached', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { tokens: { damage: 1 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(undefined);
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        expect(mockTextureLoader.load).toHaveBeenCalledWith(
+          '/tokens/damage.png',
+        );
+      });
+
+      it('should skip tokens with count 0 or less', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { tokens: { damage: 0, threat: 2 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // Only threat count text should appear
+        const createTextCalls = attachmentCreateText.mock.calls.filter(
+          (call: unknown[]) =>
+            (call[0] as Record<string, unknown>).text === '0' ||
+            (call[0] as Record<string, unknown>).text === '2',
+        );
+        expect(createTextCalls.length).toBe(1);
+        expect((createTextCalls[0][0] as Record<string, unknown>).text).toBe(
+          '2',
+        );
+      });
+
+      it('should render multiple token types', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { tokens: { damage: 5, threat: 3 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // Both token counts should appear
+        const texts = attachmentCreateText.mock.calls.map(
+          (call: unknown[]) => (call[0] as Record<string, unknown>).text,
+        );
+        expect(texts).toContain('5');
+        expect(texts).toContain('3');
+      });
+    });
+
+    describe('Status Rendering', () => {
+      it('should render status effects with cached textures', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { status: { stunned: 1 } } },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockImplementation((url: string) =>
+          url.includes('stunned') ? statusTexture : undefined,
+        );
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        // Should have a status container child
+        const statusChild = container.children.find(
+          (c: { label: string }) => c.label === 'status-stunned',
+        );
+        expect(statusChild).toBeDefined();
+      });
+
+      it('should start async load when status texture not cached', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { status: { stunned: 1 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(undefined);
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        expect(mockTextureLoader.load).toHaveBeenCalledWith(
+          '/status/stunned.png',
+        );
+      });
+
+      it('should show count overlay for countable status with count > 1', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { status: { confused: 3 } } },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockImplementation((url: string) =>
+          url.includes('confused') ? statusTexture : undefined,
+        );
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // Count text "3" should be created for countable status
+        expect(attachmentCreateText).toHaveBeenCalledWith(
+          expect.objectContaining({
+            text: '3',
+          }),
+        );
+      });
+
+      it('should not show count overlay for countable status with count = 1', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { status: { confused: 1 } } },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockImplementation((url: string) =>
+          url.includes('confused') ? statusTexture : undefined,
+        );
+
+        attachmentCreateText.mockClear();
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // No count text should be created when count is 1
+        const countCalls = attachmentCreateText.mock.calls.filter(
+          (call: unknown[]) =>
+            (call[0] as Record<string, unknown>).text === '1',
+        );
+        expect(countCalls.length).toBe(0);
+      });
+
+      it('should not show count overlay for non-countable status', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { status: { stunned: 1 } } },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockImplementation((url: string) =>
+          url.includes('stunned') ? statusTexture : undefined,
+        );
+
+        attachmentCreateText.mockClear();
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // No count text should be created for non-countable
+        const countCalls = attachmentCreateText.mock.calls.filter(
+          (call: unknown[]) =>
+            (call[0] as Record<string, unknown>).text === '1',
+        );
+        expect(countCalls.length).toBe(0);
+      });
+
+      it('should skip status effects with count 0 or less', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { status: { stunned: 0 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue({ width: 400, height: 100 });
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        const statusChild = container.children.find(
+          (c: { label: string }) => c.label === 'status-stunned',
+        );
+        expect(statusChild).toBeUndefined();
+      });
+    });
+
+    describe('Modifier Rendering', () => {
+      it('should render modifier bars with text', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { modifiers: { THW: 2 } } },
+        });
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // Modifier text should contain stat code and value
+        const modTextCalls = attachmentCreateText.mock.calls.filter(
+          (call: unknown[]) =>
+            String((call[0] as Record<string, unknown>).text).includes('THW'),
+        );
+        expect(modTextCalls.length).toBeGreaterThan(0);
+      });
+
+      it('should render positive modifier with up arrow', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { modifiers: { THW: 1 } } },
+        });
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        const modCall = attachmentCreateText.mock.calls.find(
+          (call: unknown[]) =>
+            String((call[0] as Record<string, unknown>).text).includes('THW'),
+        );
+        expect(modCall).toBeDefined();
+        expect((modCall![0] as Record<string, unknown>).text).toContain('▲');
+        expect((modCall![0] as Record<string, unknown>).text).toContain('+1');
+      });
+
+      it('should render negative modifier with down arrow', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { modifiers: { THW: -2 } } },
+        });
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        const modCall = attachmentCreateText.mock.calls.find(
+          (call: unknown[]) =>
+            String((call[0] as Record<string, unknown>).text).includes('THW'),
+        );
+        expect(modCall).toBeDefined();
+        expect((modCall![0] as Record<string, unknown>).text).toContain('▼');
+        expect((modCall![0] as Record<string, unknown>).text).toContain('-2');
+      });
+
+      it('should skip modifiers with value 0', () => {
+        const stack = createTestStack({
+          _meta: { attachments: { modifiers: { THW: 0 } } },
+        });
+
+        attachmentCreateText.mockClear();
+        StackBehaviors.render(stack, contextWithAssets);
+
+        const modCalls = attachmentCreateText.mock.calls.filter(
+          (call: unknown[]) =>
+            String((call[0] as Record<string, unknown>).text).includes('THW'),
+        );
+        expect(modCalls.length).toBe(0);
+      });
+    });
+
+    describe('Counter-Rotation', () => {
+      it('should apply counter-rotation when card is exhausted (90 degrees)', () => {
+        const stack = createTestStack({
+          _pos: { x: 0, y: 0, r: 90 },
+          _meta: { attachments: { tokens: { damage: 1 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        // Find the token container
+        const tokenContainer = container.children.find(
+          (c: { label: string }) => c.label === 'token-damage',
+        );
+        expect(tokenContainer).toBeDefined();
+        // Counter-rotation = -90deg in radians = -PI/2
+        expect(tokenContainer!.rotation).toBeCloseTo(-Math.PI / 2, 5);
+      });
+
+      it('should not apply counter-rotation when card is not rotated', () => {
+        const stack = createTestStack({
+          _pos: { x: 0, y: 0, r: 0 },
+          _meta: { attachments: { tokens: { damage: 1 } } },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        const tokenContainer = container.children.find(
+          (c: { label: string }) => c.label === 'token-damage',
+        );
+        expect(tokenContainer).toBeDefined();
+        expect(tokenContainer!.rotation).toBeCloseTo(0, 5);
+      });
+
+      it('should apply counter-rotation to modifier containers', () => {
+        const stack = createTestStack({
+          _pos: { x: 0, y: 0, r: 90 },
+          _meta: { attachments: { modifiers: { THW: 1 } } },
+        });
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        const modContainer = container.children.find(
+          (c: { label: string }) => c.label === 'modifier-THW',
+        );
+        expect(modContainer).toBeDefined();
+        expect(modContainer!.rotation).toBeCloseTo(-Math.PI / 2, 5);
+      });
+
+      it('should apply counter-rotation to status containers', () => {
+        const stack = createTestStack({
+          _pos: { x: 0, y: 0, r: 90 },
+          _meta: { attachments: { status: { stunned: 1 } } },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockImplementation((url: string) =>
+          url.includes('stunned') ? statusTexture : undefined,
+        );
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        const statusContainer = container.children.find(
+          (c: { label: string }) => c.label === 'status-stunned',
+        );
+        expect(statusContainer).toBeDefined();
+        expect(statusContainer!.rotation).toBeCloseTo(-Math.PI / 2, 5);
+      });
+
+      it('should apply counter-rotation to badge text on multi-card stacks', () => {
+        const stack = createTestStack({
+          _pos: { x: 0, y: 0, r: 90 },
+          _cards: ['card1', 'card2'],
+        });
+
+        StackBehaviors.render(stack, contextWithAssets);
+
+        // Badge text should have counter-rotation
+        const textCalls = attachmentCreateText.mock.calls;
+        expect(textCalls.length).toBeGreaterThan(0);
+        // The badge text instance should have rotation set
+        const badgeText = attachmentCreateText.mock.results[0].value as {
+          rotation: number;
+        };
+        expect(badgeText.rotation).toBeCloseTo(-Math.PI / 2, 5);
+      });
+    });
+
+    describe('Plugin-Defined Ordering', () => {
+      it('should render tokens in plugin definition order', () => {
+        // In gameAssets, damage is defined before threat
+        const stack = createTestStack({
+          _meta: {
+            attachments: {
+              tokens: { threat: 2, damage: 5 },
+            },
+          },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        // Find token containers by order in children
+        const tokenContainers = container.children.filter(
+          (c: { label: string }) => c.label?.startsWith('token-'),
+        );
+        expect(tokenContainers.length).toBe(2);
+        expect(tokenContainers[0].label).toBe('token-damage');
+        expect(tokenContainers[1].label).toBe('token-threat');
+      });
+
+      it('should render status effects in plugin definition order', () => {
+        // In gameAssets, stunned is defined before confused
+        const stack = createTestStack({
+          _meta: {
+            attachments: {
+              status: { confused: 1, stunned: 1 },
+            },
+          },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockReturnValue(statusTexture);
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        const statusContainers = container.children.filter(
+          (c: { label: string }) => c.label?.startsWith('status-'),
+        );
+        expect(statusContainers.length).toBe(2);
+        expect(statusContainers[0].label).toBe('status-stunned');
+        expect(statusContainers[1].label).toBe('status-confused');
+      });
+    });
+
+    describe('Combined Attachments', () => {
+      it('should render tokens and modifiers together', () => {
+        const stack = createTestStack({
+          _meta: {
+            attachments: {
+              tokens: { damage: 3 },
+              modifiers: { THW: 1 },
+            },
+          },
+        });
+
+        mockTextureLoader.get.mockReturnValue(mockTexture);
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        // Both token and modifier elements should be present
+        const tokenContainer = container.children.find(
+          (c: { label: string }) => c.label === 'token-damage',
+        );
+        const modContainer = container.children.find(
+          (c: { label: string }) => c.label === 'modifier-THW',
+        );
+        expect(tokenContainer).toBeDefined();
+        expect(modContainer).toBeDefined();
+      });
+
+      it('should render all attachment types together', () => {
+        const stack = createTestStack({
+          _meta: {
+            attachments: {
+              tokens: { damage: 3 },
+              status: { stunned: 1 },
+              modifiers: { THW: 1 },
+            },
+          },
+        });
+
+        const statusTexture = { width: 400, height: 100 };
+        mockTextureLoader.get.mockImplementation((url: string) => {
+          if (url.includes('status') || url.includes('stunned'))
+            return statusTexture;
+          return mockTexture;
+        });
+
+        const container = StackBehaviors.render(stack, contextWithAssets);
+
+        const tokenContainer = container.children.find(
+          (c: { label: string }) => c.label === 'token-damage',
+        );
+        const statusContainer = container.children.find(
+          (c: { label: string }) => c.label === 'status-stunned',
+        );
+        const modContainer = container.children.find(
+          (c: { label: string }) => c.label === 'modifier-THW',
+        );
+        expect(tokenContainer).toBeDefined();
+        expect(statusContainer).toBeDefined();
+        expect(modContainer).toBeDefined();
+      });
+    });
+  });
 });

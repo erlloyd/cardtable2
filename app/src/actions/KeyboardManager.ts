@@ -1,4 +1,5 @@
 import { ActionRegistry } from './ActionRegistry';
+import { KEYBOARD_ACTION_EXECUTE_FAILED } from '../constants/errorIds';
 import type { ActionContext } from './types';
 
 /**
@@ -133,7 +134,14 @@ export class KeyboardManager {
     event.stopPropagation();
 
     // Execute the action
-    void this.actionRegistry.execute(actionId, context);
+    this.actionRegistry.execute(actionId, context).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[KeyboardManager] Action execution failed', {
+        errorId: KEYBOARD_ACTION_EXECUTE_FAILED,
+        actionId,
+        error: message,
+      });
+    });
 
     return true;
   }

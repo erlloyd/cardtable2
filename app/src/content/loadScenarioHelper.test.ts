@@ -71,6 +71,10 @@ describe('loadScenarioContent', () => {
         tokens: {},
         counters: {},
         mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
       },
       objects: new Map<string, TableObject>([
         ['obj1', mockObject1],

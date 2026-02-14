@@ -432,22 +432,7 @@ test.describe('Shuffle Stack E2E', () => {
       // Check if 5-card stack changed order
       orderChanged = results[2].orderChanged;
 
-      if (!orderChanged && retry < maxRetries - 1) {
-        // Select stacks again for next shuffle
-        await page.mouse.click(positions[0].x, positions[0].y);
-        await page.evaluate(async () => {
-          await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
-        });
-
-        await page.keyboard.down('Meta');
-        await page.mouse.click(positions[1].x, positions[1].y);
-        await page.mouse.click(positions[2].x, positions[2].y);
-        await page.keyboard.up('Meta');
-
-        await page.evaluate(async () => {
-          await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
-        });
-      }
+      // Stacks remain selected after shuffle — no need to re-select for retry
     }
 
     // All stacks should have same set of cards

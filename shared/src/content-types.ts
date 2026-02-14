@@ -59,6 +59,52 @@ export interface Mat {
   size?: MatSize; // Defaults to 'playmat' if omitted
 }
 
+// ============================================================================
+// On-Card Attachment Type Definitions
+// ============================================================================
+
+/**
+ * Token type definition for on-card quantity badges
+ * Images should be PNG with transparent background
+ */
+export interface TokenTypeDef {
+  name: string; // Display name (e.g., "Threat")
+  image: string; // URL to token image (PNG with transparency)
+  size?: number; // Optional size override in pixels (defaults to 20)
+}
+
+/**
+ * Status effect type definition - displayed as small landscape card images
+ * Status cards typically show keyword effects like "Stunned", "Confused", etc.
+ */
+export interface StatusTypeDef {
+  name: string; // Display name (e.g., "Stunned")
+  image: string; // URL to status card image (typically landscape, PNG with transparency)
+  width?: number; // Optional width in pixels (defaults to 48)
+  height?: number; // Optional height in pixels (defaults to 12)
+  countable?: boolean; // When true, supports stacking multiple counts (like tokens). Default: false (toggle on/off)
+}
+
+/**
+ * Modifier stat type definition for stat change indicators
+ */
+export interface ModifierStatDef {
+  code: string; // Short code (e.g., "THW", "ATK")
+  name: string; // Full name (e.g., "Thwart", "Attack")
+  positiveColor: number; // Color for positive modifiers (hex)
+  negativeColor: number; // Color for negative modifiers (hex)
+}
+
+/**
+ * Icon type definition for game-specific symbols
+ * Images should be PNG with transparent background
+ */
+export interface IconTypeDef {
+  name: string; // Display name (e.g., "Retaliate")
+  image: string; // URL to icon image (PNG with transparency)
+  size?: number; // Optional size override in pixels (defaults to 16)
+}
+
 export interface AssetPack {
   schema: 'ct-assets@1'; // Schema version identifier
   id: string; // Unique pack identifier
@@ -71,6 +117,11 @@ export interface AssetPack {
   tokens?: Record<string, Token>; // Token definitions (key is token code)
   counters?: Record<string, Counter>; // Counter definitions (key is counter code)
   mats?: Record<string, Mat>; // Mat definitions (key is mat code)
+  // On-card attachment type definitions
+  tokenTypes?: Record<string, TokenTypeDef>; // Token types for on-card badges (key is token type code)
+  statusTypes?: Record<string, StatusTypeDef>; // Status effect types (key is status type code)
+  modifierStats?: Record<string, ModifierStatDef>; // Modifier stat types (key is stat code)
+  iconTypes?: Record<string, IconTypeDef>; // Icon types (key is icon type code)
 }
 
 // ============================================================================
@@ -135,6 +186,11 @@ export interface GameAssets {
   tokens: Record<string, Token>; // Merged tokens
   counters: Record<string, Counter>; // Merged counters
   mats: Record<string, Mat>; // Merged mats
+  // On-card attachment type definitions (merged)
+  tokenTypes: Record<string, TokenTypeDef>; // Merged token types
+  statusTypes: Record<string, StatusTypeDef>; // Merged status types
+  modifierStats: Record<string, ModifierStatDef>; // Merged modifier stats
+  iconTypes: Record<string, IconTypeDef>; // Merged icon types
 }
 
 // ============================================================================

@@ -1,5 +1,9 @@
 import { Graphics, Container, Sprite } from 'pixi.js';
-import type { TableObject, StackObject } from '@cardtable2/shared';
+import type {
+  TableObject,
+  StackObject,
+  AttachmentData,
+} from '@cardtable2/shared';
 import type { ObjectBehaviors, RenderContext, ShadowConfig } from '../types';
 import {
   STACK_WIDTH,
@@ -18,12 +22,26 @@ import {
   STACK_BADGE_ALPHA,
   STACK_BADGE_TEXT_COLOR,
   STACK_BADGE_FONT_SIZE,
+  ATTACHMENT_TOKEN_SIZE,
+  ATTACHMENT_MODIFIER_HEIGHT,
+  ATTACHMENT_ICON_SIZE,
+  ATTACHMENT_VERTICAL_SPACING,
+  ATTACHMENT_TYPE_SPACING,
+  ATTACHMENT_START_Y,
+  ATTACHMENT_BADGE_PADDING,
+  ATTACHMENT_COUNT_FONT_SIZE,
+  ATTACHMENT_LABEL_FONT_SIZE,
+  ATTACHMENT_TEXT_COLOR,
+  MODIFIER_BAR_ALPHA,
+  MODIFIER_COLOR_POSITIVE,
+  MODIFIER_COLOR_NEGATIVE,
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
 import { shouldRotateCard } from '../../../content/cardRotation';
 import {
   TEXTURE_LOAD_FAILED,
+  ATTACHMENT_IMAGE_LOAD_FAILED,
   CARD_IMAGE_NOT_FOUND,
   CARD_IMAGE_NO_FACE,
   CARD_IMAGE_NO_BACK,
@@ -294,6 +312,7 @@ function renderStackDecorations(
   container: Container,
   cardCount: number,
   ctx: RenderContext,
+  counterRotation: number = 0,
 ): void {
   if (cardCount < 2 || ctx.minimal) {
     return;
@@ -333,6 +352,7 @@ function renderStackDecorations(
   text.label = 'badge-text'; // Labeled child
   text.anchor.set(0.5, 0.5);
   text.position.set(badgeX, badgeY);
+  text.rotation = counterRotation;
 
   // Unstack handle (upper-right corner, flush with card borders)
   const handleX = STACK_WIDTH / 2 - STACK_BADGE_SIZE / 2;
@@ -359,6 +379,9 @@ function renderStackDecorations(
     x: handleX,
     y: handleY,
   });
+  iconGraphic.rotation = counterRotation;
+  iconGraphic.pivot.set(handleX, handleY);
+  iconGraphic.position.set(handleX, handleY);
   container.addChild(iconGraphic);
 }
 
@@ -421,6 +444,443 @@ function createPlaceholderGraphic(
   return graphic;
 }
 
+/**
+ * Sort entries by the order their keys appear in a plugin type definition.
+ * This allows plugins to control display order by the order they list types
+ * in their asset pack — no separate "index" property needed.
+ * Entries not found in the definition appear at the end in their original order.
+ */
+function sortByPluginOrder<T>(
+  entries: [string, T][],
+  pluginTypes: Record<string, unknown> | undefined,
+): [string, T][] {
+  if (!pluginTypes) return entries;
+  const order = Object.keys(pluginTypes);
+  return [...entries].sort(([a], [b]) => {
+    const indexA = order.indexOf(a);
+    const indexB = order.indexOf(b);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+}
+
+/**
+ * Sort an array of type codes by the order they appear in a plugin type definition.
+ */
+function sortArrayByPluginOrder(
+  items: string[],
+  pluginTypes: Record<string, unknown> | undefined,
+): string[] {
+  if (!pluginTypes) return items;
+  const order = Object.keys(pluginTypes);
+  return [...items].sort((a, b) => {
+    const indexA = order.indexOf(a);
+    const indexB = order.indexOf(b);
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+}
+
+/**
+ * Helper: Render on-card attachments (tokens, status, modifiers, icons)
+ *
+ * Attachments render in four regions:
+ * - Status: hanging off the right edge of the card
+ * - Modifiers: positioned below the card
+ * - Tokens: stacked vertically in the center of the card
+ * - Icons: stacked vertically below tokens
+ */
+function renderAttachments(
+  container: Container,
+  obj: StackObject,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): void {
+  // Skip in minimal mode (ghost previews)
+  if (ctx.minimal) {
+    return;
+  }
+
+  // Get attachment data from _meta
+  const attachments = obj._meta?.attachments as AttachmentData | undefined;
+  if (!attachments) {
+    return;
+  }
+
+  let currentY = ATTACHMENT_START_Y;
+
+  // Status cards hang off the right edge of the card (separate from center stack)
+  if (attachments.status && Object.keys(attachments.status).length > 0) {
+    renderStatus(container, attachments.status, ctx, counterRotation);
+  }
+
+  // Modifiers sit below the card
+  if (attachments.modifiers && Object.keys(attachments.modifiers).length > 0) {
+    renderModifiers(
+      container,
+      attachments.modifiers,
+      STACK_HEIGHT / 2 + 4,
+      ctx,
+      counterRotation,
+    );
+  }
+
+  // Center stack: Tokens → Icons (on the card face)
+  if (attachments.tokens && Object.keys(attachments.tokens).length > 0) {
+    currentY = renderTokens(
+      container,
+      attachments.tokens,
+      currentY,
+      ctx,
+      counterRotation,
+    );
+    currentY += ATTACHMENT_TYPE_SPACING;
+  }
+
+  if (attachments.icons && attachments.icons.length > 0) {
+    renderIcons(container, attachments.icons, currentY, ctx, counterRotation);
+  }
+}
+
+/**
+ * Helper: Render status effect badges
+ * Statuses are stored as Record<string, number> — the count is always >= 1.
+ * Countable statuses show a count overlay when count > 1.
+ */
+function renderStatus(
+  container: Container,
+  statuses: Record<string, number>,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): void {
+  const sortedStatuses = sortByPluginOrder(
+    Object.entries(statuses),
+    ctx.gameAssets?.statusTypes,
+  );
+
+  // Stack status cards vertically along the right edge, hanging off the card
+  const startY = -STACK_HEIGHT / 2 + STACK_BADGE_SIZE + 12; // Below the badge area with extra padding
+  let currentY = startY;
+
+  for (const [statusType, count] of sortedStatuses) {
+    if (count <= 0) continue;
+
+    const statusDef = ctx.gameAssets?.statusTypes?.[statusType];
+    if (!statusDef?.image) continue;
+
+    const cachedTexture = ctx.textureLoader?.get(statusDef.image);
+
+    if (cachedTexture) {
+      // Scale to fit within target dimensions while preserving aspect ratio (contain)
+      // Default 4:1 ratio matches typical status card images
+      const maxW = statusDef.width ?? 48;
+      const maxH = statusDef.height ?? 12;
+      const scale = Math.min(
+        maxW / cachedTexture.width,
+        maxH / cachedTexture.height,
+      );
+
+      // Wrap in container for counter-rotation around the anchor point
+      const statusContainer = new Container();
+      statusContainer.label = `status-${statusType}`;
+      // Position so most of the image hangs off the right edge
+      statusContainer.position.set(STACK_WIDTH / 2 + 6, currentY);
+      statusContainer.rotation = counterRotation;
+
+      const sprite = new Sprite(cachedTexture);
+      sprite.scale.set(scale);
+      sprite.anchor.set(0.5, 0.5);
+
+      statusContainer.addChild(sprite);
+
+      // Show count overlay for countable statuses with count > 1
+      if (statusDef.countable && count > 1) {
+        const countText = ctx.createText({
+          text: count.toString(),
+          style: {
+            fontSize: ATTACHMENT_COUNT_FONT_SIZE,
+            fill: ATTACHMENT_TEXT_COLOR,
+            fontWeight: 'bold',
+          },
+        });
+        countText.anchor.set(0.5, 0.5);
+        countText.style.stroke = { color: 0x000000, width: 3 };
+        statusContainer.addChild(countText);
+      }
+
+      container.addChild(statusContainer);
+
+      currentY += cachedTexture.height * scale + 2;
+    } else {
+      // Start async load
+      if (ctx.textureLoader && ctx.onTextureLoaded) {
+        ctx.textureLoader
+          .load(statusDef.image)
+          .then(() => {
+            ctx.onTextureLoaded?.(statusDef.image);
+          })
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error('[StackBehaviors] Failed to load status image', {
+              errorId: ATTACHMENT_IMAGE_LOAD_FAILED,
+              imageUrl: statusDef.image,
+              attachmentType: 'status',
+              statusType,
+              error: message,
+            });
+          });
+      }
+    }
+  }
+}
+
+/**
+ * Helper: Render modifier stat bars
+ */
+function renderModifiers(
+  container: Container,
+  modifiers: Record<string, number>,
+  startY: number,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): number {
+  let currentY = startY;
+
+  const sortedModifiers = sortByPluginOrder(
+    Object.entries(modifiers),
+    ctx.gameAssets?.modifierStats,
+  );
+
+  for (const [stat, value] of sortedModifiers) {
+    if (value === 0) continue; // Skip zero modifiers
+
+    const modifierDef = ctx.gameAssets?.modifierStats?.[stat];
+    const statLabel = modifierDef?.code || stat;
+    const isPositive = value > 0;
+    const bgColor = isPositive
+      ? modifierDef?.positiveColor || MODIFIER_COLOR_POSITIVE
+      : modifierDef?.negativeColor || MODIFIER_COLOR_NEGATIVE;
+
+    const displayText = `${statLabel} ${isPositive ? '▲' : '▼'}${isPositive ? '+' : ''}${value}`;
+
+    // Wrap bar + text in a container for counter-rotation
+    const modContainer = new Container();
+    modContainer.label = `modifier-${stat}`;
+    modContainer.position.set(0, currentY);
+    modContainer.rotation = counterRotation;
+
+    // Create bar background
+    const barGraphic = new Graphics();
+
+    // Measure text to determine bar width
+    const text = ctx.createText({
+      text: displayText,
+      style: {
+        fontSize: ATTACHMENT_LABEL_FONT_SIZE,
+        fill: 0x212121, // Dark text for colored bars
+        fontWeight: 'bold',
+      },
+    });
+    const barWidth = text.width + ATTACHMENT_BADGE_PADDING * 2;
+
+    // Draw rounded rectangle bar (relative to modContainer origin)
+    barGraphic.roundRect(
+      -barWidth / 2,
+      -ATTACHMENT_MODIFIER_HEIGHT / 2,
+      barWidth,
+      ATTACHMENT_MODIFIER_HEIGHT,
+      STACK_BADGE_RADIUS,
+    );
+    barGraphic.fill({ color: bgColor, alpha: MODIFIER_BAR_ALPHA });
+    barGraphic.stroke({
+      width: ctx.scaleStrokeWidth(1),
+      color: 0xffffff,
+      alpha: 0.6,
+    });
+
+    modContainer.addChild(barGraphic);
+
+    // Add text (centered in modContainer)
+    text.anchor.set(0.5, 0.5);
+    text.position.set(0, 0);
+    modContainer.addChild(text);
+
+    container.addChild(modContainer);
+
+    currentY += ATTACHMENT_MODIFIER_HEIGHT + ATTACHMENT_VERTICAL_SPACING;
+  }
+
+  return currentY;
+}
+
+/**
+ * Helper: Render token quantity badges (with images)
+ */
+function renderTokens(
+  container: Container,
+  tokens: Record<string, number>,
+  startY: number,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): number {
+  let currentY = startY;
+
+  // Sort tokens by the order defined in the plugin's asset pack
+  const sortedTokens = sortByPluginOrder(
+    Object.entries(tokens),
+    ctx.gameAssets?.tokenTypes,
+  );
+
+  for (const [tokenType, count] of sortedTokens) {
+    if (count <= 0) continue; // Skip zero-count tokens
+
+    const tokenDef = ctx.gameAssets?.tokenTypes?.[tokenType];
+    if (!tokenDef?.image) {
+      console.warn(
+        `[StackBehaviors] Token type "${tokenType}" has no image defined`,
+      );
+      continue;
+    }
+
+    // Load token image
+    const cachedTexture = ctx.textureLoader?.get(tokenDef.image);
+
+    if (cachedTexture) {
+      // Wrap sprite + count in a container for counter-rotation
+      const tokenContainer = new Container();
+      tokenContainer.label = `token-${tokenType}`;
+      tokenContainer.position.set(0, currentY);
+      tokenContainer.rotation = counterRotation;
+
+      const sprite = new Sprite(cachedTexture);
+
+      // Scale to fit within target size while preserving aspect ratio (like CSS object-fit: contain)
+      const maxSize = tokenDef.size || ATTACHMENT_TOKEN_SIZE;
+      const scale =
+        maxSize / Math.max(cachedTexture.width, cachedTexture.height);
+      sprite.scale.set(scale);
+
+      sprite.anchor.set(0.5, 0.5);
+      tokenContainer.addChild(sprite);
+
+      // Overlay count text (centered on token)
+      const text = ctx.createText({
+        text: count.toString(),
+        style: {
+          fontSize: ATTACHMENT_COUNT_FONT_SIZE,
+          fill: ATTACHMENT_TEXT_COLOR,
+          fontWeight: 'bold',
+        },
+      });
+      text.anchor.set(0.5, 0.5);
+
+      // Add text shadow for readability
+      text.style.stroke = { color: 0x000000, width: 3 };
+
+      tokenContainer.addChild(text);
+      container.addChild(tokenContainer);
+
+      currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
+    } else {
+      // Start async load
+      if (ctx.textureLoader && ctx.onTextureLoaded) {
+        ctx.textureLoader
+          .load(tokenDef.image)
+          .then(() => {
+            ctx.onTextureLoaded?.(tokenDef.image);
+          })
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error('[StackBehaviors] Failed to load token image', {
+              errorId: ATTACHMENT_IMAGE_LOAD_FAILED,
+              imageUrl: tokenDef.image,
+              attachmentType: 'token',
+              tokenType,
+              error: message,
+            });
+          });
+      }
+    }
+  }
+
+  return currentY;
+}
+
+/**
+ * Helper: Render icon symbols (with images)
+ */
+function renderIcons(
+  container: Container,
+  icons: string[],
+  startY: number,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): number {
+  let currentY = startY;
+
+  const sortedIcons = sortArrayByPluginOrder(icons, ctx.gameAssets?.iconTypes);
+
+  for (const iconType of sortedIcons) {
+    const iconDef = ctx.gameAssets?.iconTypes?.[iconType];
+    if (!iconDef?.image) {
+      console.warn(
+        `[StackBehaviors] Icon type "${iconType}" has no image defined`,
+      );
+      continue;
+    }
+
+    // Load icon image
+    const cachedTexture = ctx.textureLoader?.get(iconDef.image);
+
+    if (cachedTexture) {
+      const sprite = new Sprite(cachedTexture);
+      sprite.label = `icon-${iconType}`;
+
+      // Scale to fit within target size while preserving aspect ratio (like CSS object-fit: contain)
+      const maxSize = iconDef.size || ATTACHMENT_ICON_SIZE;
+      const scale =
+        maxSize / Math.max(cachedTexture.width, cachedTexture.height);
+      sprite.scale.set(scale);
+
+      sprite.anchor.set(0.5, 0.5);
+      sprite.position.set(0, currentY);
+      sprite.rotation = counterRotation;
+
+      container.addChild(sprite);
+
+      currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
+    } else {
+      // Start async load
+      if (ctx.textureLoader && ctx.onTextureLoaded) {
+        ctx.textureLoader
+          .load(iconDef.image)
+          .then(() => {
+            ctx.onTextureLoaded?.(iconDef.image);
+          })
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            console.error('[StackBehaviors] Failed to load icon image', {
+              errorId: ATTACHMENT_IMAGE_LOAD_FAILED,
+              imageUrl: iconDef.image,
+              attachmentType: 'icon',
+              iconType,
+              error: message,
+            });
+          });
+      }
+    }
+  }
+
+  return currentY;
+}
+
 export const StackBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Container {
     const container = new Container();
@@ -433,8 +893,15 @@ export const StackBehaviors: ObjectBehaviors = {
     // Layer 2: Main card (image sprite or placeholder)
     renderMainCard(container, stackObj, ctx);
 
+    // Counter-rotation for overlays: keeps text/icons upright when card is exhausted.
+    // The parent visual container is rotated by _pos.r, so we apply the inverse.
+    const counterRotation = (-obj._pos.r * Math.PI) / 180;
+
     // Layer 3: Badge and unstack handle for multi-card stacks
-    renderStackDecorations(container, cardCount, ctx);
+    renderStackDecorations(container, cardCount, ctx, counterRotation);
+
+    // Layer 4: On-card attachments (tokens, status, modifiers, icons)
+    renderAttachments(container, stackObj, ctx, counterRotation);
 
     return container;
   },

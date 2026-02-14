@@ -449,6 +449,10 @@ describe('resolveCard', () => {
     tokens: {},
     counters: {},
     mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   };
 
   it('should resolve card with type inheritance', () => {
@@ -560,6 +564,10 @@ describe('resolveAllCards', () => {
       tokens: {},
       counters: {},
       mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
     };
 
     const resolved = resolveAllCards(content);
@@ -581,6 +589,10 @@ describe('resolveAllCards', () => {
       tokens: {},
       counters: {},
       mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
     };
 
     const resolved = resolveAllCards(emptyContent);

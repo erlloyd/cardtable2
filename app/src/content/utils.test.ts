@@ -14,6 +14,10 @@ describe('getCardOrientation', () => {
     tokens: {},
     counters: {},
     mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   });
 
   describe('Card-level override', () => {
@@ -327,6 +331,10 @@ describe('getCardOrientationByCode', () => {
     tokens: {},
     counters: {},
     mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   });
 
   it('returns landscape for card with landscape orientation', () => {

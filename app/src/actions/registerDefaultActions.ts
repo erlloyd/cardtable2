@@ -1,5 +1,6 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS, VIEW_ACTIONS, CONTENT_ACTIONS } from './types';
+import { registerAttachmentActions } from './attachmentActions';
 import {
   flipCards,
   exhaustCards,
@@ -23,10 +24,12 @@ import {
   ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
   ACTION_LOAD_MARVELCHAMPIONS_FAILED,
 } from '../constants/errorIds';
-
 /**
  * Register default actions that are available in both table and dev routes.
  * This ensures consistent functionality across all table views.
+ *
+ * Note: Attachment actions (tokens, status, modifiers) are registered dynamically
+ * when content is loaded via registerAttachmentActions() in the content loading flow.
  */
 export function registerDefaultActions(): void {
   const registry = ActionRegistry.getInstance();
@@ -418,8 +421,12 @@ export function registerDefaultActions(): void {
       ctx.store.metadata.delete('loadedScenario');
       ctx.store.metadata.delete('gameId');
       ctx.store.setGameAssets(null);
+
+      // Clear attachment actions since we have no game assets
+      registerAttachmentActions(registry, null);
+
       console.log(
-        '[Reset Table] Cleared all objects, metadata, and game assets',
+        '[Reset Table] Cleared all objects, metadata, game assets, and attachment actions',
       );
     },
   });

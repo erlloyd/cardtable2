@@ -17,6 +17,33 @@ export enum ObjectKind {
   Counter = 'counter',
 }
 
+// ============================================================================
+// On-Card Attachment System
+// ============================================================================
+
+/**
+ * Attachment data structure stored in _meta.attachments
+ * Each card/stack can have multiple attachments of each type
+ *
+ * Attachment types are completely defined by game asset packs:
+ * - tokenTypes: defines available token types with images (e.g., threat, damage)
+ * - statusTypes: defines available status effects with styling (e.g., stunned, confused)
+ * - modifierStats: defines available stat modifiers with colors (e.g., ATK, THW, DEF)
+ * - iconTypes: defines available icons with images (e.g., retaliate, guard)
+ *
+ * This keeps the core system game-agnostic - all game-specific types come from plugins.
+ */
+export interface AttachmentData {
+  /** Token quantities by token type code (e.g., { threat: 3, damage: 5 }) */
+  tokens?: Record<string, number>;
+  /** Status effect counts by type code (e.g., { stunned: 1, confused: 2 }) */
+  status?: Record<string, number>;
+  /** Stat modifiers by stat code (e.g., { THW: 1, ATK: -1 }) */
+  modifiers?: Record<string, number>;
+  /** Active icons by icon type code (e.g., ["retaliate", "guard"]) */
+  icons?: string[];
+}
+
 // Position in world coordinates
 export interface Position {
   x: number;

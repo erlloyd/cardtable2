@@ -150,8 +150,9 @@ export async function loadCompleteScenario(
   // Load all packs in parallel
   const packs = await loadAssetPacks(packUrls);
 
-  // Merge packs
-  const content = mergeAssetPacks(packs);
+  // Merge packs - pass packBaseUrl for attachment image resolution
+  // (attachment images live in the plugin repo, not at pack.baseUrl)
+  const content = mergeAssetPacks(packs, packBaseUrl);
 
   // Instantiate scenario objects
   const objects = instantiateScenario(scenario, content);
@@ -376,6 +377,9 @@ export async function loadLocalPluginScenario(
   // Merge packs
   const content = mergeAssetPacks(packs);
 
+  // Replace relative image paths with blob URLs from local filesystem
+  replaceImagePathsWithBlobUrls(content, plugin.imageUrls);
+
   // Instantiate scenario objects
   const objects = instantiateScenario(scenario, content);
 
@@ -456,4 +460,99 @@ export async function reloadScenarioFromMetadata(
       );
     }
   }
+}
+
+/**
+ * Replace relative image paths in GameAssets with blob URLs
+ *
+ * This is used for local plugin loading to replace paths like "tokens/damage.png"
+ * with blob URLs like "blob:http://localhost:3000/abc-123-def" that point to
+ * the actual file data in memory.
+ *
+ * Handles both relative paths (e.g., "tokens/damage.png") and already-resolved
+ * URLs (e.g., "http://localhost:3001/api/card-image/.../tokens/damage.png").
+ *
+ * @param content - Merged game assets to modify in-place
+ * @param imageUrls - Map of relative paths to blob URLs
+ */
+function replaceImagePathsWithBlobUrls(
+  content: GameAssets,
+  imageUrls: Map<string, string>,
+): void {
+  let replacementCount = 0;
+  const unmatchedImages: Array<{ type: string; key: string; path: string }> =
+    [];
+
+  // Helper to find blob URL for a given image path (relative or resolved)
+  const findBlobUrl = (imagePath: string): string | undefined => {
+    // Try direct lookup first (for relative paths)
+    const directMatch = imageUrls.get(imagePath);
+    if (directMatch) {
+      return directMatch;
+    }
+
+    // Try matching by checking if URL ends with any of the relative paths
+    // This handles already-resolved URLs like "http://.../tokens/damage.png"
+    // We also verify the character before the match is a path separator (or the
+    // path is an exact match) to avoid false positives like "extra-damage.png"
+    // matching "damage.png".
+    for (const [relativePath, blobUrl] of imageUrls.entries()) {
+      if (
+        imagePath.endsWith(relativePath) &&
+        (imagePath.length === relativePath.length ||
+          imagePath[imagePath.length - relativePath.length - 1] === '/')
+      ) {
+        return blobUrl;
+      }
+    }
+
+    return undefined;
+  };
+
+  if (content.tokenTypes) {
+    for (const [key, tokenType] of Object.entries(content.tokenTypes)) {
+      const blobUrl = findBlobUrl(tokenType.image);
+      if (blobUrl) {
+        tokenType.image = blobUrl;
+        replacementCount++;
+      } else {
+        unmatchedImages.push({ type: 'token', key, path: tokenType.image });
+      }
+    }
+  }
+
+  if (content.statusTypes) {
+    for (const [key, statusType] of Object.entries(content.statusTypes)) {
+      const blobUrl = findBlobUrl(statusType.image);
+      if (blobUrl) {
+        statusType.image = blobUrl;
+        replacementCount++;
+      } else {
+        unmatchedImages.push({ type: 'status', key, path: statusType.image });
+      }
+    }
+  }
+
+  if (content.iconTypes) {
+    for (const [key, iconType] of Object.entries(content.iconTypes)) {
+      const blobUrl = findBlobUrl(iconType.image);
+      if (blobUrl) {
+        iconType.image = blobUrl;
+        replacementCount++;
+      } else {
+        unmatchedImages.push({ type: 'icon', key, path: iconType.image });
+      }
+    }
+  }
+
+  if (unmatchedImages.length > 0) {
+    console.warn(
+      `[Content] ${unmatchedImages.length} attachment image(s) could not be matched to local files`,
+      { unmatchedImages },
+    );
+  }
+
+  console.log(
+    `[Content] Replaced ${replacementCount} image paths with blob URLs`,
+  );
 }

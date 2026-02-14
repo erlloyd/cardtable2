@@ -39,6 +39,10 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       tokens: {},
       counters: {},
       mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
     },
     objects: new Map(),
   });
@@ -313,6 +317,10 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
         tokens: {},
         counters: {},
         mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
       });
 
       observer(null, { local: false });

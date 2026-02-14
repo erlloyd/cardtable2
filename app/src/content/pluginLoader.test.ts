@@ -811,6 +811,7 @@ describe('getLocalPluginFile', () => {
     const plugin = {
       manifest: mockManifest,
       files: new Map([['test.json', mockFile]]),
+      imageUrls: new Map(),
     };
 
     const result = await getLocalPluginFile(plugin, 'test.json');
@@ -822,6 +823,7 @@ describe('getLocalPluginFile', () => {
     const plugin = {
       manifest: mockManifest,
       files: new Map(),
+      imageUrls: new Map(),
     };
 
     await expect(
@@ -837,6 +839,7 @@ describe('getLocalPluginFile', () => {
     const plugin = {
       manifest: mockManifest,
       files: new Map([['error.json', mockFile]]),
+      imageUrls: new Map(),
     };
 
     await expect(getLocalPluginFile(plugin, 'error.json')).rejects.toThrow(

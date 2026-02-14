@@ -106,6 +106,10 @@ const mockContent: GameAssets = {
   tokens: mockPack1.tokens ?? {},
   counters: mockPack1.counters ?? {},
   mats: mockPack1.mats ?? {},
+  tokenTypes: {},
+  statusTypes: {},
+  modifierStats: {},
+  iconTypes: {},
 };
 
 // ============================================================================

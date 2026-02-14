@@ -262,8 +262,17 @@ function validateScenario(data: unknown): Scenario {
 /**
  * Merge multiple asset packs into a single content collection
  * Later packs override earlier packs (last-wins strategy)
+ *
+ * @param packs - Asset packs to merge
+ * @param pluginBaseUrl - Optional base URL for resolving attachment images (tokens, status, icons).
+ *   When loading from a plugin, attachment images live in the plugin repo, not at pack.baseUrl
+ *   (which is typically the card image CDN). Pass the plugin's base URL here so attachment
+ *   images resolve correctly.
  */
-export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
+export function mergeAssetPacks(
+  packs: AssetPack[],
+  pluginBaseUrl?: string,
+): GameAssets {
   const merged: GameAssets = {
     packs,
     cardTypes: {},
@@ -272,6 +281,10 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
     tokens: {},
     counters: {},
     mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   };
 
   // Merge each pack in order (later packs override earlier ones)
@@ -313,6 +326,37 @@ export function mergeAssetPacks(packs: AssetPack[]): GameAssets {
     }
     if (pack.mats) {
       Object.assign(merged.mats, pack.mats);
+    }
+
+    // Merge attachment type definitions with URL resolution
+    // Attachment images live in the plugin repo, so use pluginBaseUrl when available
+    const attachmentBase = pluginBaseUrl ?? pack.baseUrl;
+    if (pack.tokenTypes) {
+      for (const [typeCode, tokenType] of Object.entries(pack.tokenTypes)) {
+        merged.tokenTypes[typeCode] = {
+          ...tokenType,
+          image: resolveAssetUrl(tokenType.image, attachmentBase),
+        };
+      }
+    }
+    if (pack.statusTypes) {
+      for (const [typeCode, statusType] of Object.entries(pack.statusTypes)) {
+        merged.statusTypes[typeCode] = {
+          ...statusType,
+          image: resolveAssetUrl(statusType.image, attachmentBase),
+        };
+      }
+    }
+    if (pack.modifierStats) {
+      Object.assign(merged.modifierStats, pack.modifierStats);
+    }
+    if (pack.iconTypes) {
+      for (const [typeCode, iconType] of Object.entries(pack.iconTypes)) {
+        merged.iconTypes[typeCode] = {
+          ...iconType,
+          image: resolveAssetUrl(iconType.image, attachmentBase),
+        };
+      }
     }
   }
 

@@ -440,6 +440,7 @@ h1 {
   padding: 0.5rem 0;
   z-index: 100;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .context-menu-empty {

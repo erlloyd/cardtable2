@@ -53,6 +53,7 @@ export function ContextMenu({
   useEffect(() => {
     if (!isOpen || !menuRef.current) {
       setAdjustedPosition(position);
+      setMaxHeight(undefined);
       return;
     }
 

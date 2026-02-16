@@ -18,9 +18,13 @@ import type { ActionContext } from '../actions/types';
 export function useKeyboardShortcuts(
   context: ActionContext | null,
   enabled = true,
+  onActionExecuted?: () => void,
 ): void {
   const contextRef = useRef(context);
   contextRef.current = context;
+
+  const onActionExecutedRef = useRef(onActionExecuted);
+  onActionExecutedRef.current = onActionExecuted;
 
   useEffect(() => {
     if (!enabled || !contextRef.current) {
@@ -41,7 +45,10 @@ export function useKeyboardShortcuts(
     // Handle keyboard events — read context from ref to always use latest state
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!contextRef.current) return;
-      keyboardManager.handleKeyEvent(event, contextRef.current);
+      const handled = keyboardManager.handleKeyEvent(event, contextRef.current);
+      if (handled) {
+        onActionExecutedRef.current?.();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

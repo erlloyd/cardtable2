@@ -3,7 +3,15 @@ import {
   useNavigate,
   useLocation,
 } from '@tanstack/react-router';
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTableStore } from '../hooks/useTableStore';
 import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
@@ -19,7 +27,9 @@ import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
+import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
+import { moveCardToHand } from '../store/YjsHandActions';
 import {
   loadGameAssetPacks,
   reloadScenarioFromMetadata,
@@ -56,6 +66,54 @@ function Table() {
 
   // Hand panel state
   const handPanel = useHandPanel(store);
+
+  // Drag coordination between board and hand panel
+  const boardRef = useRef<BoardHandle>(null);
+  const handPanelRef = useRef<HTMLDivElement>(null);
+  const [isBoardDragging, setIsBoardDragging] = useState(false);
+  const [phantomFeedback, setPhantomFeedback] = useState<{
+    worldX: number;
+    worldY: number;
+    snapPos?: { x: number; y: number };
+    stackTargetId?: string;
+  } | null>(null);
+
+  const handleBoardDragStart = useCallback(() => {
+    setIsBoardDragging(true);
+  }, []);
+
+  const handleBoardDragEnd = useCallback(() => {
+    setIsBoardDragging(false);
+  }, []);
+
+  // Board-to-hand drop detection
+  useEffect(() => {
+    if (!isBoardDragging || !store || !handPanel.activeHandId) return;
+
+    const handlePointerUp = (e: PointerEvent) => {
+      const panelEl = handPanelRef.current;
+      if (!panelEl) return;
+
+      const rect = panelEl.getBoundingClientRect();
+      const isOverPanel =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+
+      if (isOverPanel) {
+        // Get first selected stack and move its top card to hand
+        const selected = store.getObjectsSelectedBy(store.getActorId());
+        if (selected.length > 0) {
+          const firstSelected = selected[0];
+          moveCardToHand(store, firstSelected.id, 0, handPanel.activeHandId!);
+        }
+      }
+    };
+
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => window.removeEventListener('pointerup', handlePointerUp);
+  }, [isBoardDragging, store, handPanel.activeHandId]);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
@@ -349,7 +407,10 @@ function Table() {
   ]);
 
   // Enable keyboard shortcuts
-  useKeyboardShortcuts(actionContext);
+  const handleKeyboardAction = useCallback(() => {
+    boardRef.current?.clearPreview();
+  }, []);
+  useKeyboardShortcuts(actionContext, true, handleKeyboardAction);
 
   return (
     <div className="table">
@@ -362,6 +423,7 @@ function Table() {
           <div>Error loading packs: {packsError}</div>
         ) : (
           <Board
+            ref={boardRef}
             tableId={id}
             store={store}
             connectionStatus={connectionStatus}
@@ -377,6 +439,9 @@ function Table() {
             onActionExecuted={commandPalette.recordAction}
             gameAssets={gameAssets}
             isMenuOpen={contextMenu.isOpen || commandPalette.isOpen}
+            onBoardDragStart={handleBoardDragStart}
+            onBoardDragEnd={handleBoardDragEnd}
+            onPhantomDragFeedback={setPhantomFeedback}
           />
         )}
       </Suspense>
@@ -384,6 +449,7 @@ function Table() {
       {/* Hand Panel */}
       {store && isStoreReady && !packsLoading && !packsError && (
         <HandPanel
+          ref={handPanelRef}
           store={store}
           gameAssets={gameAssets}
           activeHandId={handPanel.activeHandId}
@@ -391,6 +457,9 @@ function Table() {
           isCollapsed={handPanel.isCollapsed}
           onCollapsedChange={handPanel.setIsCollapsed}
           handIds={handPanel.handIds}
+          isBoardDragging={isBoardDragging}
+          boardRef={boardRef}
+          phantomDragFeedback={phantomFeedback}
         />
       )}
 

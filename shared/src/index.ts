@@ -209,7 +209,10 @@ export type MainToRendererMessage =
         state: AwarenessState;
       }>;
     }
-  | { type: 'request-screen-coords'; ids: string[] }; // M3.5.1-T6: Request screen coordinates for objects
+  | { type: 'request-screen-coords'; ids: string[] } // M3.5.1-T6: Request screen coordinates for objects
+  | { type: 'phantom-drag-start' } // Hand-to-board phantom drag: begin
+  | { type: 'phantom-drag-move'; canvasX: number; canvasY: number } // Hand-to-board phantom drag: update position (DPR-scaled canvas coords)
+  | { type: 'phantom-drag-end' }; // Hand-to-board phantom drag: cleanup
 
 // Messages sent from renderer to main thread
 export type RendererToMainMessage =
@@ -303,6 +306,13 @@ export type RendererToMainMessage =
   | {
       type: 'show-card-preview-modal'; // Show card preview in modal (mobile double-tap)
       objectId: string; // Object ID to preview
+    }
+  | {
+      type: 'phantom-drag-feedback'; // Hand-to-board phantom drag: renderer feedback
+      worldX: number; // Current world position
+      worldY: number;
+      snapPos?: { x: number; y: number }; // Snapped position (if grid snap active)
+      stackTargetId?: string; // Stack target for merging (if hovering over one)
     };
 
 // ============================================================================

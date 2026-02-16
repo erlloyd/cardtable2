@@ -678,7 +678,7 @@ h1 {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .hand-panel--empty {
@@ -748,6 +748,29 @@ h1 {
   color: white;
 }
 
+.hand-panel__tab-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.hand-panel__tab-delete {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 0 0.2rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  border-radius: 2px;
+  transition: all 120ms ease;
+}
+
+.hand-panel__tab-delete:hover {
+  color: rgba(255, 100, 100, 0.9);
+  background: rgba(255, 100, 100, 0.15);
+}
+
 .hand-panel__name {
   font-size: 0.875rem;
   font-weight: 600;
@@ -792,18 +815,30 @@ h1 {
 
 .hand-panel__cards {
   flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  position: relative;
   padding: 0.5rem 1rem;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
+  min-height: 110px;
 }
 
 .hand-panel__card {
-  position: relative;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0.5rem;
   cursor: pointer;
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+  user-select: none;
+}
+
+.hand-panel__card--hovered {
+  transform: translateY(-20px) scale(1.05);
+  z-index: 999 !important;
+}
+
+.hand-panel__card--dragging-source {
+  opacity: 0.3;
+  transform: scale(0.9);
 }
 
 .hand-panel__card-img {
@@ -811,11 +846,7 @@ h1 {
   width: auto;
   border-radius: 4px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: transform 150ms ease;
-}
-
-.hand-panel__card:hover .hand-panel__card-img {
-  transform: translateY(-8px);
+  pointer-events: none;
 }
 
 .hand-panel__card-placeholder {
@@ -831,6 +862,7 @@ h1 {
   color: rgba(255, 255, 255, 0.5);
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
 
 .hand-panel__play-btn {
@@ -863,6 +895,30 @@ h1 {
   font-size: 0.8125rem;
   padding: 1rem;
   text-align: center;
+}
+
+.hand-panel--drop-target {
+  border-top: 2px solid rgba(79, 70, 229, 0.8);
+  background: linear-gradient(
+    to bottom,
+    rgba(79, 70, 229, 0.15),
+    transparent 60%
+  );
+}
+
+.hand-panel__phantom-ghost {
+  position: fixed;
+  z-index: 100000;
+  pointer-events: none;
+  opacity: 0.85;
+  transform: translate(-50%, -50%) scale(1.1);
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.4));
+}
+
+.hand-panel__phantom-ghost img {
+  height: 100px;
+  width: auto;
+  border-radius: 4px;
 }
 
 @media (prefers-color-scheme: light) {

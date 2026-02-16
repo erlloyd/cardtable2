@@ -67,6 +67,16 @@ export interface BoardHandlerContext {
       ) => void
     >
   >;
+
+  // Drag callbacks for hand panel coordination
+  onBoardDragStart?: () => void;
+  onBoardDragEnd?: () => void;
+  onPhantomDragFeedback?: (feedback: {
+    worldX: number;
+    worldY: number;
+    snapPos?: { x: number; y: number };
+    stackTargetId?: string;
+  }) => void;
 }
 
 /**
@@ -282,6 +292,7 @@ export class BoardMessageBus {
       ctx.setIsCameraActive(true);
       // Hide card preview during drag
       ctx.setHoveredObject(null, false);
+      ctx.onBoardDragStart?.();
     });
 
     this.registry.register('object-drag-ended', (_msg, ctx) => {
@@ -295,6 +306,11 @@ export class BoardMessageBus {
         });
       }
       // Preview will reappear automatically if still hovering (hover manager handles this)
+      ctx.onBoardDragEnd?.();
+    });
+
+    this.registry.register('phantom-drag-feedback', (msg, ctx) => {
+      ctx.onPhantomDragFeedback?.(msg);
     });
 
     this.registry.register('screen-coords', (msg, ctx) => {

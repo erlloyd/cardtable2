@@ -1,7 +1,16 @@
-import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import {
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   ObjectKind,
+  type MainToRendererMessage,
   type PointerEventData,
   type Card,
   type StackObject,
@@ -39,6 +48,15 @@ import {
 import { ActionHandle } from './ActionHandle';
 import { CardPreview } from './CardPreview';
 
+export interface BoardHandle {
+  sendRendererMessage: (msg: MainToRendererMessage) => void;
+  viewportToCanvas: (
+    clientX: number,
+    clientY: number,
+  ) => { x: number; y: number } | null;
+  clearPreview: () => void;
+}
+
 export interface BoardProps {
   tableId: string;
   store: YjsStore;
@@ -55,25 +73,39 @@ export interface BoardProps {
   onActionExecuted?: (actionId: string) => void;
   gameAssets?: GameAssets | null;
   isMenuOpen?: boolean;
+  onBoardDragStart?: () => void;
+  onBoardDragEnd?: () => void;
+  onPhantomDragFeedback?: (feedback: {
+    worldX: number;
+    worldY: number;
+    snapPos?: { x: number; y: number };
+    stackTargetId?: string;
+  }) => void;
 }
 
-function Board({
-  tableId,
-  store,
-  connectionStatus,
-  showDebugUI = false,
-  onContextMenu,
-  interactionMode: externalInteractionMode,
-  onInteractionModeChange,
-  isMultiSelectMode: externalIsMultiSelectMode,
-  onMultiSelectModeChange,
-  gridSnapEnabled: externalGridSnapEnabled,
-  onGridSnapEnabledChange,
-  actionContext,
-  onActionExecuted,
-  gameAssets,
-  isMenuOpen,
-}: BoardProps) {
+const Board = forwardRef<BoardHandle, BoardProps>(function Board(
+  {
+    tableId,
+    store,
+    connectionStatus,
+    showDebugUI = false,
+    onContextMenu,
+    interactionMode: externalInteractionMode,
+    onInteractionModeChange,
+    isMultiSelectMode: externalIsMultiSelectMode,
+    onMultiSelectModeChange,
+    gridSnapEnabled: externalGridSnapEnabled,
+    onGridSnapEnabledChange,
+    actionContext,
+    onActionExecuted,
+    gameAssets,
+    isMenuOpen,
+    onBoardDragStart,
+    onBoardDragEnd,
+    onPhantomDragFeedback,
+  },
+  ref,
+) {
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,6 +167,33 @@ function Board({
 
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
+
+  // Expose imperative handle for hand-to-board phantom drag
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendRendererMessage: (msg: MainToRendererMessage) => {
+        if (renderer) {
+          renderer.sendMessage(msg);
+        }
+      },
+      viewportToCanvas: (clientX: number, clientY: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        return {
+          x: (clientX - rect.left) * dpr,
+          y: (clientY - rect.top) * dpr,
+        };
+      },
+      clearPreview: () => {
+        setPreviewCard(null);
+        setPreviewPosition(null);
+      },
+    }),
+    [renderer],
+  );
 
   const {
     isReady,
@@ -349,6 +408,9 @@ function Board({
         animationStateCallbacks: animationStateCallbacksRef,
         throttledCursorUpdate,
         throttledDragStateUpdate,
+        onBoardDragStart,
+        onBoardDragEnd,
+        onPhantomDragFeedback,
       };
 
       // Fire and forget - message handlers are synchronous
@@ -370,6 +432,9 @@ function Board({
     setHoveredObject,
     showCardPreviewModal,
     addMessage,
+    onBoardDragStart,
+    onBoardDragEnd,
+    onPhantomDragFeedback,
   ]);
 
   // Store sync
@@ -673,6 +738,6 @@ function Board({
         )}
     </div>
   );
-}
+});
 
 export default Board;

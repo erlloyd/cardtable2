@@ -44,6 +44,16 @@ export interface AttachmentData {
   icons?: string[];
 }
 
+// ============================================================================
+// Player Hand Data
+// ============================================================================
+
+export interface HandData {
+  name: string;
+  cards: string[];
+  visibility: string; // "public" | "private" (scaffold for multiplayer privacy)
+}
+
 // Position in world coordinates
 export interface Position {
   x: number;

@@ -15,8 +15,11 @@ import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
+import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
+import { HandPanel } from '../components/HandPanel';
+import { useHandPanel } from '../hooks/useHandPanel';
 import {
   loadGameAssetPacks,
   reloadScenarioFromMetadata,
@@ -51,9 +54,13 @@ function Table() {
   const [packsError, setPacksError] = useState<string | null>(null);
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
 
+  // Hand panel state
+  const handPanel = useHandPanel(store);
+
   // Register default actions (shared with dev route)
   useEffect(() => {
     registerDefaultActions();
+    registerHandActions(ActionRegistry.getInstance());
   }, []);
 
   // Store gameId in Y.Doc metadata from location state (new table only)
@@ -319,6 +326,7 @@ function Table() {
       `/table/${id}`,
       gridSnapEnabled,
       setGridSnapEnabled,
+      handPanel.activeHandId ?? undefined,
     );
 
     if (context) {
@@ -337,6 +345,7 @@ function Table() {
     id,
     gridSnapEnabled,
     setGridSnapEnabled,
+    handPanel.activeHandId,
   ]);
 
   // Enable keyboard shortcuts
@@ -371,6 +380,19 @@ function Table() {
           />
         )}
       </Suspense>
+
+      {/* Hand Panel */}
+      {store && isStoreReady && !packsLoading && !packsError && (
+        <HandPanel
+          store={store}
+          gameAssets={gameAssets}
+          activeHandId={handPanel.activeHandId}
+          onActiveHandChange={handPanel.setActiveHandId}
+          isCollapsed={handPanel.isCollapsed}
+          onCollapsedChange={handPanel.setIsCollapsed}
+          handIds={handPanel.handIds}
+        />
+      )}
 
       {/* Global Menu Bar (M3.5.1-T5) */}
       <GlobalMenuBar

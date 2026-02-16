@@ -68,6 +68,9 @@ export class YjsStore {
   // Metadata map for table-level state (game ID, settings, etc.)
   public metadata: Y.Map<unknown>;
 
+  // Player hands map (hand ID -> Y.Map with name, cards, visibility)
+  public hands: Y.Map<Y.Map<unknown>>;
+
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
@@ -100,6 +103,9 @@ export class YjsStore {
 
     // Get or create metadata map
     this.metadata = this.doc.getMap('metadata');
+
+    // Get or create hands map
+    this.hands = this.doc.getMap('hands');
 
     // Initialize awareness (M3-T4)
     this.awareness = new Awareness(this.doc);
@@ -716,6 +722,124 @@ export class YjsStore {
     // Return unsubscribe function
     return () => {
       this.gameAssetsListeners.delete(fn);
+    };
+  }
+
+  // ============================================================================
+  // Player Hands Methods
+  // ============================================================================
+
+  /**
+   * Create a new hand with the given name.
+   * @returns The hand ID
+   */
+  createHand(name: string): string {
+    const handId = uuidv4();
+    this.doc.transact(() => {
+      const handMap = new Y.Map<unknown>();
+      handMap.set('name', name);
+      handMap.set('cards', []);
+      handMap.set('visibility', 'public');
+      this.hands.set(handId, handMap);
+    });
+    return handId;
+  }
+
+  /**
+   * Delete a hand by ID.
+   */
+  deleteHand(handId: string): void {
+    this.doc.transact(() => {
+      this.hands.delete(handId);
+    });
+  }
+
+  /**
+   * Rename a hand.
+   */
+  renameHand(handId: string, name: string): void {
+    const handMap = this.hands.get(handId);
+    if (!handMap) return;
+    this.doc.transact(() => {
+      handMap.set('name', name);
+    });
+  }
+
+  /**
+   * Get the cards array for a hand.
+   * @returns Array of card IDs, or empty array if hand not found
+   */
+  getHandCards(handId: string): string[] {
+    const handMap = this.hands.get(handId);
+    if (!handMap) return [];
+    return (handMap.get('cards') as string[]) ?? [];
+  }
+
+  /**
+   * Get the name of a hand.
+   */
+  getHandName(handId: string): string {
+    const handMap = this.hands.get(handId);
+    if (!handMap) return '';
+    return (handMap.get('name') as string) ?? '';
+  }
+
+  /**
+   * Add a card to a hand at the given index (or append).
+   */
+  addCardToHand(handId: string, cardId: string, index?: number): void {
+    const handMap = this.hands.get(handId);
+    if (!handMap) return;
+    this.doc.transact(() => {
+      const cards = [...((handMap.get('cards') as string[]) ?? [])];
+      if (index !== undefined && index >= 0 && index <= cards.length) {
+        cards.splice(index, 0, cardId);
+      } else {
+        cards.push(cardId);
+      }
+      handMap.set('cards', cards);
+    });
+  }
+
+  /**
+   * Remove a card from a hand at the given index.
+   * @returns The removed card ID, or null if not found
+   */
+  removeCardFromHand(handId: string, cardIndex: number): string | null {
+    const handMap = this.hands.get(handId);
+    if (!handMap) return null;
+    const cards = [...((handMap.get('cards') as string[]) ?? [])];
+    if (cardIndex < 0 || cardIndex >= cards.length) return null;
+    let removed: string | null = null;
+    this.doc.transact(() => {
+      removed = cards.splice(cardIndex, 1)[0];
+      handMap.set('cards', cards);
+    });
+    return removed;
+  }
+
+  /**
+   * Get all hand IDs.
+   */
+  getHandIds(): string[] {
+    const ids: string[] = [];
+    this.hands.forEach((_handMap, id) => {
+      ids.push(id);
+    });
+    return ids;
+  }
+
+  /**
+   * Subscribe to changes in the hands map (deep observer).
+   * @returns Unsubscribe function
+   */
+  onHandsChange(callback: () => void): () => void {
+    const observer = () => {
+      callback();
+    };
+    this.hands.observeDeep(observer);
+    return () => {
+      this.hands.unobserveDeep(observer);
     };
   }
 

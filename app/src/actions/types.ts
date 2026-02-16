@@ -9,6 +9,7 @@ export const SELECTION_ACTIONS = 'Selection';
 export const VIEW_ACTIONS = 'View';
 export const MANAGEMENT_ACTIONS = 'Management';
 export const CONTENT_ACTIONS = 'Content';
+export const HAND_ACTIONS = 'Hand Actions';
 
 /**
  * Selection context information for action availability and execution (M3.6-T4)
@@ -39,6 +40,7 @@ export interface ActionContext {
   currentRoute?: string; // Current route path (e.g., '/table/123' or '/dev/table/123')
   gridSnapEnabled?: boolean; // Whether grid snapping is enabled
   onGridSnapEnabledChange?: (enabled: boolean) => void; // Toggle grid snap callback
+  activeHandId?: string; // Currently active player hand
 }
 
 /**

@@ -20,6 +20,7 @@ import type { TableObjectYMap } from '../store/types';
  * @param currentRoute - Optional current route path
  * @param gridSnapEnabled - Optional grid snap enabled state
  * @param onGridSnapEnabledChange - Optional grid snap toggle callback
+ * @param activeHandId - Optional currently active player hand ID
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -29,6 +30,7 @@ export function buildActionContext(
   currentRoute?: string,
   gridSnapEnabled?: boolean,
   onGridSnapEnabledChange?: (enabled: boolean) => void,
+  activeHandId?: string,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -70,5 +72,6 @@ export function buildActionContext(
     currentRoute,
     gridSnapEnabled,
     onGridSnapEnabledChange,
+    activeHandId,
   };
 }

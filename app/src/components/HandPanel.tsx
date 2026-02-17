@@ -461,23 +461,27 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                   onPointerDown={(e) => handleCardPointerDown(index, cardId, e)}
                 >
                   {imageUrl && !failedImages.has(cardId) ? (
-                    <img
-                      src={imageUrl}
-                      alt={cardId}
-                      className="hand-panel__card-img"
-                      draggable={false}
-                      onLoad={(e) => handleImageLoad(cardId, e)}
-                      onError={() => handleImageError(cardId)}
-                      style={
-                        landscapeCards.has(cardId)
-                          ? {
-                              transform: 'rotate(90deg)',
-                              width: '100px',
-                              height: 'auto',
-                            }
-                          : undefined
-                      }
-                    />
+                    landscapeCards.has(cardId) ? (
+                      <div className="hand-panel__card-landscape">
+                        <img
+                          src={imageUrl}
+                          alt={cardId}
+                          className="hand-panel__card-img hand-panel__card-img--landscape"
+                          draggable={false}
+                          onLoad={(e) => handleImageLoad(cardId, e)}
+                          onError={() => handleImageError(cardId)}
+                        />
+                      </div>
+                    ) : (
+                      <img
+                        src={imageUrl}
+                        alt={cardId}
+                        className="hand-panel__card-img"
+                        draggable={false}
+                        onLoad={(e) => handleImageLoad(cardId, e)}
+                        onError={() => handleImageError(cardId)}
+                      />
+                    )
                   ) : (
                     <div className="hand-panel__card-placeholder">{cardId}</div>
                   )}
@@ -522,20 +526,22 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
               top: `${phantomDrag.currentY}px`,
             }}
           >
-            <img
-              src={phantomGhostUrl}
-              alt="Dragging card"
-              draggable={false}
-              style={
-                phantomDrag?.cardId && landscapeCards.has(phantomDrag.cardId)
-                  ? {
-                      transform: 'rotate(90deg)',
-                      width: '100px',
-                      height: 'auto',
-                    }
-                  : undefined
-              }
-            />
+            {phantomDrag.cardId && landscapeCards.has(phantomDrag.cardId) ? (
+              <div className="hand-panel__card-landscape">
+                <img
+                  src={phantomGhostUrl}
+                  alt="Dragging card"
+                  className="hand-panel__card-img--landscape"
+                  draggable={false}
+                />
+              </div>
+            ) : (
+              <img
+                src={phantomGhostUrl}
+                alt="Dragging card"
+                draggable={false}
+              />
+            )}
           </div>
         )}
       </div>

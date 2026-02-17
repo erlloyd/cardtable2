@@ -6,6 +6,10 @@ import { moveCardToBoard } from '../store/YjsHandActions';
 import { stackObjects } from '../store/YjsActions';
 import { computeFanLayout, CARD_WIDTH } from '../utils/fanLayout';
 import { CardPreview } from './CardPreview';
+import {
+  getPreviewDimensions,
+  getLandscapeDimensions,
+} from '../constants/previewSizes';
 import type { BoardHandle } from './Board';
 
 interface PhantomDragFeedback {
@@ -180,7 +184,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       (index: number, e: React.PointerEvent<HTMLDivElement>) => {
         if (phantomDragRef.current?.isDragging) return;
         setHoveredIndex(index);
-        setHoveredCardRect(e.currentTarget.getBoundingClientRect());
+        setHoveredCardRect(new DOMRect(e.clientX, e.clientY, 0, 0));
       },
       [],
     );
@@ -361,14 +365,21 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       );
     }
 
-    // Hover preview position: above the hovered card
-    const previewPosition =
-      hoveredIndex !== null && hoveredCardRect
-        ? {
-            x: hoveredCardRect.left + hoveredCardRect.width / 2 - 75,
-            y: hoveredCardRect.top - 220,
-          }
-        : null;
+    // Hover preview position: bottom of preview 10px above hand panel top
+    const PREVIEW_GAP = 10;
+    const panelTop =
+      panelRootRef.current?.getBoundingClientRect().top ?? window.innerHeight;
+    const previewPosition = (() => {
+      if (hoveredIndex === null || !hoveredCardRect) return null;
+      const hoveredCardId = cards[hoveredIndex];
+      const isLandscape = hoveredCardId && landscapeCards.has(hoveredCardId);
+      const baseDims = getPreviewDimensions('medium');
+      const dims = isLandscape ? getLandscapeDimensions(baseDims) : baseDims;
+      return {
+        x: hoveredCardRect.x - dims.width / 2,
+        y: panelTop - PREVIEW_GAP - dims.height,
+      };
+    })();
 
     const hoveredCard =
       hoveredIndex !== null && gameAssets
@@ -514,21 +525,27 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
               })
             )}
           </div>
-
-          {/* Hover preview */}
-          {hoveredCard && previewPosition && !phantomDrag?.isDragging && (
-            <CardPreview
-              card={hoveredCard}
-              gameAssets={gameAssets}
-              mode="hover"
-              position={previewPosition}
-              onClose={() => {
-                setHoveredIndex(null);
-                setHoveredCardRect(null);
-              }}
-            />
-          )}
         </div>
+
+        {/* Hover preview — portaled to body to avoid backdrop-filter containing block */}
+        {hoveredCard &&
+          previewPosition &&
+          !phantomDrag?.isDragging &&
+          createPortal(
+            <div style={{ pointerEvents: 'none' }}>
+              <CardPreview
+                card={hoveredCard}
+                gameAssets={gameAssets}
+                mode="hover"
+                position={previewPosition}
+                onClose={() => {
+                  setHoveredIndex(null);
+                  setHoveredCardRect(null);
+                }}
+              />
+            </div>,
+            document.body,
+          )}
 
         {/* Phantom drag ghost — portaled to body to avoid backdrop-filter containing block */}
         {phantomDrag?.isDragging &&

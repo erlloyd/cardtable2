@@ -18,7 +18,7 @@ Cardtable 2.0 currently has no concept of a player's "hand" — all cards exist 
 
 ---
 
-## Stage 1: Data Model + Hand Panel + Context Menu Actions
+## Stage 1: Data Model + Hand Panel + Context Menu Actions (COMPLETE)
 
 **PR-releasable outcome**: Player can create a hand, add cards via context menu, see them in a panel at the bottom, and play them back to the board.
 
@@ -111,7 +111,7 @@ Fixed-position overlays (GlobalMenuBar z:40, ContextMenu z:99, CommandPalette z:
 
 ---
 
-## Stage 2: Fan Layout + Hover Preview + Drag-and-Drop
+## Stage 2: Fan Layout + Hover Preview + Drag-and-Drop (COMPLETE)
 
 **PR-releasable outcome**: Cards display in a polished overlapping fan. Hover shows preview. Drag cards between board and hand.
 
@@ -208,29 +208,19 @@ A normal board drag that detects drop over the hand panel:
 
 ---
 
-## Stage 3: Multiple Hands + Tabs + Drag-to-Reorder
+## Stage 3: Multiple Hands + Tabs + Drag-to-Reorder (PARTIALLY COMPLETE)
 
 **PR-releasable outcome**: Multiple named hands with tab switching. Cards reorderable within hand.
 
-### 3.1 Tab Bar
+### 3.1 Tab Bar (COMPLETE)
 
-**`app/src/components/HandPanel.tsx`** — Add tab bar above the card fan:
+Implemented in Stage 2: tabs with active highlight, "+" create button, delete button per tab, tab switching via `onActiveHandChange`.
 
-```
-[Hero 1] [Hero 2] [+]                    [v collapse]
-[       fan of cards for active hand              ]
-```
+### 3.2 Hand Management (PARTIAL)
 
-- Active tab highlighted (indigo accent, matching existing UI palette)
-- "+" creates new hand (inline rename or prompt)
-- Right-click tab → rename, delete (with confirmation if cards present)
-- Clicking a tab switches `activeHandId`
+`renameHand(handId, newName)` exists in `YjsStore.ts` but has no UI yet (no rename on tab right-click or double-click).
 
-### 3.2 Hand Management
-
-**`app/src/store/YjsStore.ts`** — Add `renameHand(handId, newName)`.
-
-### 3.3 Drag-to-Reorder
+### 3.3 Drag-to-Reorder (NOT STARTED)
 
 **`app/src/hooks/useHandReorder.ts`** (new) — Pointer event handlers for reordering:
 
@@ -241,9 +231,9 @@ A normal board drag that detects drop over the hand panel:
 
 **`app/src/store/YjsHandActions.ts`** — Add `reorderCardInHand()` — splice operation on the `cards` array in a single transaction.
 
-### 3.4 Context Menu Label Update
+### 3.4 Context Menu Label Update (COMPLETE)
 
-When multiple hands exist, "Add to Hand" label shows target: `"Add to Hand (Hero 1)"`. User switches active tab to target a different hand.
+Dynamic label shows hand name: `"Add to Hand (Hero 1)"`.
 
 ### 3.5 Testing
 

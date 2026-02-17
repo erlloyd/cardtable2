@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
 import type { GameAssets } from '@cardtable2/shared';
 import { moveCardToBoard } from '../store/YjsHandActions';
@@ -35,6 +36,7 @@ export interface HandPanelProps {
   isBoardDragging?: boolean;
   boardRef?: React.RefObject<BoardHandle | null>;
   phantomDragFeedback?: PhantomDragFeedback | null;
+  onPhantomDragActiveChange?: (active: boolean) => void;
 }
 
 const DRAG_SLOP = 5;
@@ -52,6 +54,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       isBoardDragging,
       boardRef,
       phantomDragFeedback,
+      onPhantomDragActiveChange,
     },
     ref,
   ) {
@@ -129,6 +132,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
 
     const handlePlayCard = (cardIndex: number) => {
       if (!activeHandId) return;
+      setHoveredIndex(null);
+      setHoveredCardRect(null);
       moveCardToBoard(
         store,
         activeHandId,
@@ -239,10 +244,11 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           setHoveredIndex(null);
           setHoveredCardRect(null);
 
-          // Notify renderer
+          // Notify renderer and parent
           boardRef?.current?.sendRendererMessage({
             type: 'phantom-drag-start',
           });
+          onPhantomDragActiveChange?.(true);
           return;
         }
 
@@ -305,8 +311,9 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             }
           }
 
-          // Notify renderer to clean up
+          // Notify renderer and parent to clean up
           boardRef?.current?.sendRendererMessage({ type: 'phantom-drag-end' });
+          onPhantomDragActiveChange?.(false);
         }
 
         setPhantomDrag(null);
@@ -318,7 +325,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         window.removeEventListener('pointermove', handleMove);
         window.removeEventListener('pointerup', handleUp);
       };
-    }, [phantomDrag, activeHandId, boardRef, store]);
+    }, [phantomDrag, activeHandId, boardRef, store, onPhantomDragActiveChange]);
 
     // Calculate card position in fan
     const getCardLeft = useCallback(
@@ -374,177 +381,186 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       : null;
 
     return (
-      <div
-        ref={(node) => {
-          panelRootRef.current = node;
-          if (typeof ref === 'function') ref(node);
-          else if (ref) ref.current = node;
-        }}
-        className={`hand-panel${isBoardDragging ? ' hand-panel--drop-target' : ''}`}
-      >
-        <div className="hand-panel__header">
-          <div className="hand-panel__tabs">
-            {handIds.map((hid) => (
-              <span key={hid} className="hand-panel__tab-wrapper">
-                <button
-                  className={`hand-panel__tab${hid === activeHandId ? ' hand-panel__tab--active' : ''}`}
-                  onClick={() => onActiveHandChange(hid)}
-                >
-                  {store.getHandName(hid) || 'Hand'}
-                </button>
-                <button
-                  className="hand-panel__tab-delete"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteHand(hid);
-                  }}
-                  title="Delete hand"
-                  aria-label={`Delete ${store.getHandName(hid) || 'hand'}`}
-                >
-                  &times;
-                </button>
-              </span>
-            ))}
-          </div>
-          <div className="hand-panel__header-actions">
-            <button
-              className="hand-panel__create-btn"
-              onClick={handleCreateHand}
-              title="Create new hand"
-            >
-              +
-            </button>
-            <button
-              className="hand-panel__toggle"
-              onClick={() => onCollapsedChange(true)}
-              aria-label="Collapse hand panel"
-            >
-              &#9660;
-            </button>
-          </div>
-        </div>
-
-        <div className="hand-panel__cards" ref={cardsContainerRef}>
-          {cards.length === 0 ? (
-            <div className="hand-panel__empty">
-              {handIds.length === 0
-                ? 'Create a hand to get started.'
-                : 'No cards in hand. Select a card on the board and use "Add to Hand" (A).'}
+      <>
+        <div
+          ref={(node) => {
+            panelRootRef.current = node;
+            if (typeof ref === 'function') ref(node);
+            else if (ref) ref.current = node;
+          }}
+          className={`hand-panel${isBoardDragging ? ' hand-panel--drop-target' : ''}`}
+        >
+          <div className="hand-panel__header">
+            <div className="hand-panel__tabs">
+              {handIds.map((hid) => (
+                <span key={hid} className="hand-panel__tab-wrapper">
+                  <button
+                    className={`hand-panel__tab${hid === activeHandId ? ' hand-panel__tab--active' : ''}`}
+                    onClick={() => onActiveHandChange(hid)}
+                  >
+                    {store.getHandName(hid) || 'Hand'}
+                  </button>
+                  <button
+                    className="hand-panel__tab-delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteHand(hid);
+                    }}
+                    title="Delete hand"
+                    aria-label={`Delete ${store.getHandName(hid) || 'hand'}`}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
             </div>
-          ) : containerWidth === 0 ? null : (
-            cards.map((cardId, index) => {
-              const imageUrl = getCardImageUrl(cardId);
-              const isHovered = hoveredIndex === index;
-              const isDragSource =
-                phantomDrag?.isDragging && phantomDrag.cardIndex === index;
+            <div className="hand-panel__header-actions">
+              <button
+                className="hand-panel__create-btn"
+                onClick={handleCreateHand}
+                title="Create new hand"
+              >
+                +
+              </button>
+              <button
+                className="hand-panel__toggle"
+                onClick={() => onCollapsedChange(true)}
+                aria-label="Collapse hand panel"
+              >
+                &#9660;
+              </button>
+            </div>
+          </div>
 
-              const className = [
-                'hand-panel__card',
-                isHovered && !phantomDrag?.isDragging
-                  ? 'hand-panel__card--hovered'
-                  : '',
-                isDragSource ? 'hand-panel__card--dragging-source' : '',
-              ]
-                .filter(Boolean)
-                .join(' ');
+          <div className="hand-panel__cards" ref={cardsContainerRef}>
+            {cards.length === 0 ? (
+              <div className="hand-panel__empty">
+                {handIds.length === 0
+                  ? 'Create a hand to get started.'
+                  : 'No cards in hand. Select a card on the board and use "Add to Hand" (A).'}
+              </div>
+            ) : containerWidth === 0 ? null : (
+              cards.map((cardId, index) => {
+                const imageUrl = getCardImageUrl(cardId);
+                const isHovered = hoveredIndex === index;
+                const isDragSource =
+                  phantomDrag?.isDragging && phantomDrag.cardIndex === index;
 
-              return (
-                <div
-                  key={`${cardId}-${index}`}
-                  className={className}
-                  style={{
-                    left: `${getCardLeft(index)}px`,
-                    zIndex: isHovered ? 999 : index,
-                  }}
-                  onPointerEnter={(e) => handleCardPointerEnter(index, e)}
-                  onPointerLeave={handleCardPointerLeave}
-                  onPointerDown={(e) => handleCardPointerDown(index, cardId, e)}
-                >
-                  {imageUrl && !failedImages.has(cardId) ? (
-                    landscapeCards.has(cardId) ? (
-                      <div className="hand-panel__card-landscape">
+                const className = [
+                  'hand-panel__card',
+                  isHovered && !phantomDrag?.isDragging
+                    ? 'hand-panel__card--hovered'
+                    : '',
+                  isDragSource ? 'hand-panel__card--dragging-source' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+
+                return (
+                  <div
+                    key={`${cardId}-${index}`}
+                    className={className}
+                    style={{
+                      left: `${getCardLeft(index)}px`,
+                      zIndex: isHovered ? 999 : index,
+                    }}
+                    onPointerEnter={(e) => handleCardPointerEnter(index, e)}
+                    onPointerLeave={handleCardPointerLeave}
+                    onPointerDown={(e) =>
+                      handleCardPointerDown(index, cardId, e)
+                    }
+                  >
+                    {imageUrl && !failedImages.has(cardId) ? (
+                      landscapeCards.has(cardId) ? (
+                        <div className="hand-panel__card-landscape">
+                          <img
+                            src={imageUrl}
+                            alt={cardId}
+                            className="hand-panel__card-img hand-panel__card-img--landscape"
+                            draggable={false}
+                            onLoad={(e) => handleImageLoad(cardId, e)}
+                            onError={() => handleImageError(cardId)}
+                          />
+                        </div>
+                      ) : (
                         <img
                           src={imageUrl}
                           alt={cardId}
-                          className="hand-panel__card-img hand-panel__card-img--landscape"
+                          className="hand-panel__card-img"
                           draggable={false}
                           onLoad={(e) => handleImageLoad(cardId, e)}
                           onError={() => handleImageError(cardId)}
                         />
-                      </div>
+                      )
                     ) : (
-                      <img
-                        src={imageUrl}
-                        alt={cardId}
-                        className="hand-panel__card-img"
-                        draggable={false}
-                        onLoad={(e) => handleImageLoad(cardId, e)}
-                        onError={() => handleImageError(cardId)}
-                      />
-                    )
-                  ) : (
-                    <div className="hand-panel__card-placeholder">{cardId}</div>
-                  )}
-                  {!phantomDrag?.isDragging && (
-                    <button
-                      className="hand-panel__play-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayCard(index);
-                      }}
-                      title="Play card to board"
-                    >
-                      Play
-                    </button>
-                  )}
-                </div>
-              );
-            })
+                      <div className="hand-panel__card-placeholder">
+                        {cardId}
+                      </div>
+                    )}
+                    {!phantomDrag?.isDragging && (
+                      <button
+                        className="hand-panel__play-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlayCard(index);
+                        }}
+                        title="Play card to board"
+                      >
+                        Play
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Hover preview */}
+          {hoveredCard && previewPosition && !phantomDrag?.isDragging && (
+            <CardPreview
+              card={hoveredCard}
+              gameAssets={gameAssets}
+              mode="hover"
+              position={previewPosition}
+              onClose={() => {
+                setHoveredIndex(null);
+                setHoveredCardRect(null);
+              }}
+            />
           )}
         </div>
 
-        {/* Hover preview */}
-        {hoveredCard && previewPosition && !phantomDrag?.isDragging && (
-          <CardPreview
-            card={hoveredCard}
-            gameAssets={gameAssets}
-            mode="hover"
-            position={previewPosition}
-            onClose={() => {
-              setHoveredIndex(null);
-              setHoveredCardRect(null);
-            }}
-          />
-        )}
-
-        {/* Phantom drag ghost */}
-        {phantomDrag?.isDragging && phantomGhostUrl && (
-          <div
-            className="hand-panel__phantom-ghost"
-            style={{
-              left: `${phantomDrag.currentX}px`,
-              top: `${phantomDrag.currentY}px`,
-            }}
-          >
-            {phantomDrag.cardId && landscapeCards.has(phantomDrag.cardId) ? (
-              <div className="hand-panel__card-landscape">
+        {/* Phantom drag ghost — portaled to body to avoid backdrop-filter containing block */}
+        {phantomDrag?.isDragging &&
+          phantomGhostUrl &&
+          createPortal(
+            <div
+              className="hand-panel__phantom-ghost"
+              style={{
+                left: `${phantomDrag.currentX}px`,
+                top: `${phantomDrag.currentY}px`,
+              }}
+            >
+              {phantomDrag.cardId && landscapeCards.has(phantomDrag.cardId) ? (
+                <div className="hand-panel__card-landscape">
+                  <img
+                    src={phantomGhostUrl}
+                    alt="Dragging card"
+                    className="hand-panel__card-img--landscape"
+                    draggable={false}
+                  />
+                </div>
+              ) : (
                 <img
                   src={phantomGhostUrl}
                   alt="Dragging card"
-                  className="hand-panel__card-img--landscape"
                   draggable={false}
                 />
-              </div>
-            ) : (
-              <img
-                src={phantomGhostUrl}
-                alt="Dragging card"
-                draggable={false}
-              />
-            )}
-          </div>
-        )}
-      </div>
+              )}
+            </div>,
+            document.body,
+          )}
+      </>
     );
   },
 );

@@ -71,6 +71,7 @@ function Table() {
   const boardRef = useRef<BoardHandle>(null);
   const handPanelRef = useRef<HTMLDivElement>(null);
   const [isBoardDragging, setIsBoardDragging] = useState(false);
+  const [isPhantomDragActive, setIsPhantomDragActive] = useState(false);
   const [phantomFeedback, setPhantomFeedback] = useState<{
     worldX: number;
     worldY: number;
@@ -439,6 +440,7 @@ function Table() {
             onActionExecuted={commandPalette.recordAction}
             gameAssets={gameAssets}
             isMenuOpen={contextMenu.isOpen || commandPalette.isOpen}
+            isPhantomDragActive={isPhantomDragActive}
             onBoardDragStart={handleBoardDragStart}
             onBoardDragEnd={handleBoardDragEnd}
             onPhantomDragFeedback={setPhantomFeedback}
@@ -460,6 +462,7 @@ function Table() {
           isBoardDragging={isBoardDragging}
           boardRef={boardRef}
           phantomDragFeedback={phantomFeedback}
+          onPhantomDragActiveChange={setIsPhantomDragActive}
         />
       )}
 

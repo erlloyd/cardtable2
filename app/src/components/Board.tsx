@@ -73,6 +73,7 @@ export interface BoardProps {
   onActionExecuted?: (actionId: string) => void;
   gameAssets?: GameAssets | null;
   isMenuOpen?: boolean;
+  isPhantomDragActive?: boolean;
   onBoardDragStart?: () => void;
   onBoardDragEnd?: () => void;
   onPhantomDragFeedback?: (feedback: {
@@ -100,6 +101,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     onActionExecuted,
     gameAssets,
     isMenuOpen,
+    isPhantomDragActive,
     onBoardDragStart,
     onBoardDragEnd,
     onPhantomDragFeedback,
@@ -151,13 +153,13 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   } | null>(null);
   const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Dismiss hover preview when any menu opens
+  // Dismiss hover preview when any menu opens or phantom drag starts
   useEffect(() => {
-    if (isMenuOpen) {
+    if (isMenuOpen || isPhantomDragActive) {
       setPreviewCard(null);
       setPreviewPosition(null);
     }
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isPhantomDragActive]);
 
   // Modal preview state (mobile double-tap)
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -297,6 +299,9 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         return;
       }
 
+      // Suppress hover preview during phantom drag
+      if (isPhantomDragActive) return;
+
       // Get the card using helper
       const card = getCardFromStack(objectId);
       if (!card || !gameAssets) {
@@ -352,7 +357,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       setPreviewPosition({ x, y });
       setPreviewCard(card);
     },
-    [gameAssets, getCardFromStack],
+    [gameAssets, getCardFromStack, isPhantomDragActive],
   );
 
   // Handle modal preview request from renderer (mobile double-tap)

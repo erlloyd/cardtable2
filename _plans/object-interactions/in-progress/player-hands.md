@@ -335,6 +335,86 @@ hands?: {
 
 ---
 
+## Stage 5: Draw Cards System — Numeric Prefix + Per-Stack Draw Mode
+
+**PR-releasable outcome**: Press `D` to draw top card (respects per-stack draw mode), prefix with a number for multiple (`3D` = draw 3). Per-stack "Draw to: Hand" / "Draw to: Table" toggle via context menu, with a global default. Numeric prefix system is generic and reusable for future actions (`3P` = peek 3).
+
+### 5.1 Numeric Prefix in KeyboardManager
+
+**`app/src/actions/KeyboardManager.ts`** — Add prefix accumulation:
+
+- New state: `numericPrefix: string`, `prefixTimeout`, `onPrefixChange` callback
+- In `handleKeyEvent()`, before shortcut matching: intercept digit keys (1-9, or 0 when prefix started) with no modifiers → accumulate into `numericPrefix`, reset 2-second timeout, call `onPrefixChange`, return `true`
+- When action IS matched: parse prefix as number, inject into context as `numericPrefix`, execute action, clear prefix
+- When no action matches after prefix + non-digit: clear prefix
+- New public methods: `setOnPrefixChange(cb)`, `getNumericPrefix(): number`, `clearPrefix()`
+
+### 5.2 ActionContext Extension
+
+**`app/src/actions/types.ts`** — Add to `ActionContext`:
+```typescript
+numericPrefix?: number; // Vim-style numeric prefix (e.g., 3 in "3D")
+```
+
+### 5.3 Expose Prefix in useKeyboardShortcuts
+
+**`app/src/hooks/useKeyboardShortcuts.tsx`** — Return current prefix string so the table route can render an overlay. Wire `keyboardManager.setOnPrefixChange()` to React state.
+
+### 5.4 Prefix Overlay UI
+
+**`app/src/routes/table.$id.tsx`** — Render subtle overlay when prefix is non-empty.
+
+**`app/src/index.css`** — Fixed-position overlay, bottom-right above hand panel. 32px bold text, translucent dark background, `pointer-events: none`.
+
+### 5.5 Per-Stack Draw Mode
+
+**Storage**: `_meta.drawMode` on individual stacks (`'hand' | 'table'`). Global default in `store.metadata.get('defaultDrawMode')` — defaults to `'hand'` if unset. No shared type changes needed (`_meta` is already `Record<string, unknown>`).
+
+Helper in `app/src/actions/handActions.ts`: `getDrawMode(store, stackId)` checks per-stack `_meta.drawMode`, falls back to global `defaultDrawMode`, falls back to `'hand'`.
+
+### 5.6 Draw Card Action (replaces add-to-hand)
+
+**`app/src/actions/handActions.ts`** — Replace `add-to-hand` (shortcut A) with `draw-card` (shortcut D):
+
+- Dynamic label: `"Draw Card"` or `"Draw N Cards"` based on `ctx.numericPrefix`
+- `isAvailable`: selection has stacks
+- `execute`: for each selected stack, check `getDrawMode()`:
+  - **hand mode**: auto-create hand if needed, call `moveCardToHand()` N times (top card each time) in single transaction
+  - **table mode**: call new `drawCardsToTable()` — extracts top N cards, creates face-up single-card stacks offset from source
+
+### 5.7 Draw Mode Context Menu Actions
+
+**`app/src/actions/handActions.ts`** — Two actions for toggling per-stack draw mode:
+
+- `set-draw-to-hand`: label "Draw to: Hand", icon ✋, available when any selected stack isn't set to hand
+- `set-draw-to-table`: label "Draw to: Table", icon 🂠, available when any selected stack isn't set to table
+- Each writes `drawMode` into the stack's `_meta` via `setDrawMode(store, stackId, mode)` helper
+
+### 5.8 Draw to Table Helper
+
+**`app/src/store/YjsHandActions.ts`** — New `drawCardsToTable(store, stackId, count): string[]`:
+- Single transaction: extract top N cards (clamped to available), create face-up single-card stacks offset to the right of source, delete source if emptied
+
+### 5.9 Key Files
+
+| File | Action |
+|------|--------|
+| `app/src/actions/types.ts` | Add `numericPrefix` to ActionContext |
+| `app/src/actions/KeyboardManager.ts` | Numeric prefix accumulation + injection |
+| `app/src/hooks/useKeyboardShortcuts.tsx` | Expose prefix string for UI |
+| `app/src/routes/table.$id.tsx` | Render prefix overlay |
+| `app/src/index.css` | Overlay styles |
+| `app/src/store/YjsHandActions.ts` | Add `drawCardsToTable()` |
+| `app/src/actions/handActions.ts` | Replace `add-to-hand` with `draw-card` + draw mode actions |
+
+### 5.10 Testing
+
+- **Unit**: `KeyboardManager` prefix accumulation, timeout, clearing
+- **Unit**: `drawCardsToTable` — draws N, clamps to available, positions offset
+- **Manual**: Type `3D` to draw 3, verify context menu draw mode toggle, verify overlay appears/clears
+
+---
+
 ## Key Files Reference
 
 | File | Stage | Action |

@@ -930,11 +930,11 @@ h1 {
   z-index: 100000;
   pointer-events: none;
   opacity: 0.85;
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: translate(-50%, -50%);
   filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.4));
 }
 
-.hand-panel__phantom-ghost img {
+.hand-panel__phantom-ghost > img {
   height: 100px;
   width: auto;
   border-radius: 4px;

@@ -1,16 +1,21 @@
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
-import type { GameAssets } from '@cardtable2/shared';
+import type { Card, GameAssets } from '@cardtable2/shared';
 import { moveCardToBoard } from '../store/YjsHandActions';
 import { stackObjects } from '../store/YjsActions';
 import { computeFanLayout, CARD_WIDTH } from '../utils/fanLayout';
 import { CardPreview } from './CardPreview';
+import { FullScreenCardPreview } from './FullScreenCardPreview';
 import {
   getPreviewDimensions,
   getLandscapeDimensions,
 } from '../constants/previewSizes';
 import type { BoardHandle } from './Board';
+
+const MOBILE_BREAKPOINT = 768;
+const DOUBLE_TAP_THRESHOLD = 300;
+const SCROLL_AMOUNT_CARDS = 3;
 
 interface PhantomDragFeedback {
   worldX: number;
@@ -77,11 +82,23 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const [failedImages, setFailedImages] = useState<Set<string>>(
       () => new Set(),
     );
+    const [isMobile, setIsMobile] = useState(
+      () => window.innerWidth < MOBILE_BREAKPOINT,
+    );
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+    const [doubleTapPreviewCard, setDoubleTapPreviewCard] =
+      useState<Card | null>(null);
 
     const cardsContainerRef = useRef<HTMLDivElement>(null);
     const panelRootRef = useRef<HTMLDivElement>(null);
     const phantomDragRef = useRef<PhantomDragState | null>(null);
     const phantomFeedbackRef = useRef<PhantomDragFeedback | null>(null);
+    const lastTapTimeRef = useRef<Map<number, number>>(new Map());
+    const headerSwipeRef = useRef<{
+      startX: number;
+      scrollLeft: number;
+    } | null>(null);
 
     // Keep refs in sync
     phantomDragRef.current = phantomDrag;
@@ -117,8 +134,44 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       return () => observer.disconnect();
     }, []);
 
+    // Track window resize for mobile breakpoint
+    useEffect(() => {
+      const handleResize = () => {
+        setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Track scroll position for arrow button visibility
+    const updateScrollState = useCallback(() => {
+      const container = cardsContainerRef.current;
+      if (!container) return;
+      setCanScrollLeft(container.scrollLeft > 0);
+      setCanScrollRight(
+        container.scrollLeft <
+          container.scrollWidth - container.clientWidth - 1,
+      );
+    }, []);
+
+    useEffect(() => {
+      const container = cardsContainerRef.current;
+      if (!container || !isMobile) return;
+      updateScrollState();
+      container.addEventListener('scroll', updateScrollState);
+      return () => container.removeEventListener('scroll', updateScrollState);
+    }, [isMobile, updateScrollState]);
+
+    // Update scroll arrows when cards or layout changes
+    useEffect(() => {
+      if (isMobile) {
+        // Defer to next frame so DOM has updated
+        requestAnimationFrame(updateScrollState);
+      }
+    }, [cards.length, containerWidth, isMobile, updateScrollState]);
+
     const handName = activeHandId ? store.getHandName(activeHandId) : '';
-    const fanLayout = computeFanLayout(cards.length, containerWidth);
+    const fanLayout = computeFanLayout(cards.length, containerWidth, isMobile);
 
     const handleCreateHand = () => {
       const name = `Hand ${handIds.length + 1}`;
@@ -179,6 +232,71 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       });
     }, []);
 
+    // Scroll arrow handlers
+    const handleScrollLeft = useCallback(() => {
+      const container = cardsContainerRef.current;
+      if (!container) return;
+      const scrollBy = SCROLL_AMOUNT_CARDS * (CARD_WIDTH - fanLayout.overlap);
+      container.scrollBy({ left: -scrollBy, behavior: 'smooth' });
+    }, [fanLayout.overlap]);
+
+    const handleScrollRight = useCallback(() => {
+      const container = cardsContainerRef.current;
+      if (!container) return;
+      const scrollBy = SCROLL_AMOUNT_CARDS * (CARD_WIDTH - fanLayout.overlap);
+      container.scrollBy({ left: scrollBy, behavior: 'smooth' });
+    }, [fanLayout.overlap]);
+
+    // Header swipe-to-scroll
+    const handleHeaderPointerDown = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isMobile) return;
+        const container = cardsContainerRef.current;
+        if (!container) return;
+        headerSwipeRef.current = {
+          startX: e.clientX,
+          scrollLeft: container.scrollLeft,
+        };
+      },
+      [isMobile],
+    );
+
+    const handleHeaderPointerMove = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!headerSwipeRef.current) return;
+        const container = cardsContainerRef.current;
+        if (!container) return;
+        const dx = e.clientX - headerSwipeRef.current.startX;
+        container.scrollLeft = headerSwipeRef.current.scrollLeft - dx;
+      },
+      [],
+    );
+
+    const handleHeaderPointerUp = useCallback(() => {
+      headerSwipeRef.current = null;
+    }, []);
+
+    // Double-tap to preview (touch devices only, matching board behavior)
+    const handleCardTap = useCallback(
+      (index: number, pointerType: string) => {
+        if (pointerType !== 'touch') return;
+        const now = Date.now();
+        const lastTap = lastTapTimeRef.current.get(index) ?? 0;
+        if (now - lastTap < DOUBLE_TAP_THRESHOLD) {
+          const cardId = cards[index];
+          const card =
+            cardId && gameAssets ? (gameAssets.cards[cardId] ?? null) : null;
+          if (card) {
+            setDoubleTapPreviewCard(card);
+          }
+          lastTapTimeRef.current.delete(index);
+        } else {
+          lastTapTimeRef.current.set(index, now);
+        }
+      },
+      [cards, gameAssets],
+    );
+
     // Hover handlers
     const handleCardPointerEnter = useCallback(
       (index: number, e: React.PointerEvent<HTMLDivElement>) => {
@@ -205,6 +323,9 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         if (e.button !== 0) return;
         e.preventDefault();
 
+        // Track taps for double-tap preview (touch only)
+        handleCardTap(index, e.pointerType);
+
         setPhantomDrag({
           cardIndex: index,
           cardId,
@@ -215,7 +336,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           isDragging: false,
         });
       },
-      [],
+      [handleCardTap],
     );
 
     // Phantom drag — window pointermove + pointerup
@@ -401,7 +522,13 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           }}
           className={`hand-panel${isStackDragOverHand ? ' hand-panel--drop-target' : ''}`}
         >
-          <div className="hand-panel__header">
+          <div
+            className="hand-panel__header"
+            onPointerDown={handleHeaderPointerDown}
+            onPointerMove={handleHeaderPointerMove}
+            onPointerUp={handleHeaderPointerUp}
+            onPointerCancel={handleHeaderPointerUp}
+          >
             <div className="hand-panel__tabs">
               {handIds.map((hid) => (
                 <span key={hid} className="hand-panel__tab-wrapper">
@@ -443,86 +570,111 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             </div>
           </div>
 
-          <div className="hand-panel__cards" ref={cardsContainerRef}>
-            {cards.length === 0 ? (
-              <div className="hand-panel__empty">
-                {handIds.length === 0
-                  ? 'Create a hand to get started.'
-                  : 'No cards in hand. Select a card on the board and use "Add to Hand" (A).'}
-              </div>
-            ) : containerWidth === 0 ? null : (
-              cards.map((cardId, index) => {
-                const imageUrl = getCardImageUrl(cardId);
-                const isHovered = hoveredIndex === index;
-                const isDragSource =
-                  phantomDrag?.isDragging && phantomDrag.cardIndex === index;
+          <div className="hand-panel__cards-wrapper">
+            {isMobile && canScrollLeft && (
+              <button
+                className="hand-panel__scroll-arrow hand-panel__scroll-arrow--left"
+                onClick={handleScrollLeft}
+                aria-label="Scroll cards left"
+              >
+                &#9664;
+              </button>
+            )}
 
-                const className = [
-                  'hand-panel__card',
-                  isHovered && !phantomDrag?.isDragging
-                    ? 'hand-panel__card--hovered'
-                    : '',
-                  isDragSource ? 'hand-panel__card--dragging-source' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ');
+            <div
+              className={`hand-panel__cards${isMobile ? ' hand-panel__cards--mobile' : ''}`}
+              ref={cardsContainerRef}
+            >
+              {cards.length === 0 ? (
+                <div className="hand-panel__empty">
+                  {handIds.length === 0
+                    ? 'Create a hand to get started.'
+                    : 'No cards in hand. Select a card on the board and use "Add to Hand" (A).'}
+                </div>
+              ) : containerWidth === 0 ? null : (
+                cards.map((cardId, index) => {
+                  const imageUrl = getCardImageUrl(cardId);
+                  const isHovered = hoveredIndex === index;
+                  const isDragSource =
+                    phantomDrag?.isDragging && phantomDrag.cardIndex === index;
 
-                return (
-                  <div
-                    key={`${cardId}-${index}`}
-                    className={className}
-                    style={{
-                      left: `${getCardLeft(index)}px`,
-                      zIndex: isHovered ? 999 : index,
-                    }}
-                    onPointerEnter={(e) => handleCardPointerEnter(index, e)}
-                    onPointerLeave={handleCardPointerLeave}
-                    onPointerDown={(e) =>
-                      handleCardPointerDown(index, cardId, e)
-                    }
-                  >
-                    {imageUrl && !failedImages.has(cardId) ? (
-                      landscapeCards.has(cardId) ? (
-                        <div className="hand-panel__card-landscape">
+                  const className = [
+                    'hand-panel__card',
+                    isHovered && !phantomDrag?.isDragging
+                      ? 'hand-panel__card--hovered'
+                      : '',
+                    isDragSource ? 'hand-panel__card--dragging-source' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+
+                  return (
+                    <div
+                      key={`${cardId}-${index}`}
+                      className={className}
+                      style={{
+                        left: `${getCardLeft(index)}px`,
+                        zIndex: isHovered ? 999 : index,
+                      }}
+                      onPointerEnter={(e) => handleCardPointerEnter(index, e)}
+                      onPointerLeave={handleCardPointerLeave}
+                      onPointerDown={(e) =>
+                        handleCardPointerDown(index, cardId, e)
+                      }
+                    >
+                      {imageUrl && !failedImages.has(cardId) ? (
+                        landscapeCards.has(cardId) ? (
+                          <div className="hand-panel__card-landscape">
+                            <img
+                              src={imageUrl}
+                              alt={cardId}
+                              className="hand-panel__card-img hand-panel__card-img--landscape"
+                              draggable={false}
+                              onLoad={(e) => handleImageLoad(cardId, e)}
+                              onError={() => handleImageError(cardId)}
+                            />
+                          </div>
+                        ) : (
                           <img
                             src={imageUrl}
                             alt={cardId}
-                            className="hand-panel__card-img hand-panel__card-img--landscape"
+                            className="hand-panel__card-img"
                             draggable={false}
                             onLoad={(e) => handleImageLoad(cardId, e)}
                             onError={() => handleImageError(cardId)}
                           />
-                        </div>
+                        )
                       ) : (
-                        <img
-                          src={imageUrl}
-                          alt={cardId}
-                          className="hand-panel__card-img"
-                          draggable={false}
-                          onLoad={(e) => handleImageLoad(cardId, e)}
-                          onError={() => handleImageError(cardId)}
-                        />
-                      )
-                    ) : (
-                      <div className="hand-panel__card-placeholder">
-                        {cardId}
-                      </div>
-                    )}
-                    {!phantomDrag?.isDragging && (
-                      <button
-                        className="hand-panel__play-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePlayCard(index);
-                        }}
-                        title="Play card to board"
-                      >
-                        Play
-                      </button>
-                    )}
-                  </div>
-                );
-              })
+                        <div className="hand-panel__card-placeholder">
+                          {cardId}
+                        </div>
+                      )}
+                      {!phantomDrag?.isDragging && (
+                        <button
+                          className="hand-panel__play-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePlayCard(index);
+                          }}
+                          title="Play card to board"
+                        >
+                          Play
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {isMobile && canScrollRight && (
+              <button
+                className="hand-panel__scroll-arrow hand-panel__scroll-arrow--right"
+                onClick={handleScrollRight}
+                aria-label="Scroll cards right"
+              >
+                &#9654;
+              </button>
             )}
           </div>
         </div>
@@ -577,6 +729,14 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             </div>,
             document.body,
           )}
+
+        {/* Full-screen card preview — touch double-tap */}
+        {doubleTapPreviewCard && (
+          <FullScreenCardPreview
+            card={doubleTapPreviewCard}
+            onClose={() => setDoubleTapPreviewCard(null)}
+          />
+        )}
       </>
     );
   },

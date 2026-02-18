@@ -7,6 +7,7 @@ describe('computeFanLayout', () => {
     expect(layout.overlap).toBe(0);
     expect(layout.startOffset).toBe(0);
     expect(layout.cardWidth).toBe(CARD_WIDTH);
+    expect(layout.totalContentWidth).toBe(0);
   });
 
   it('centers a single card', () => {
@@ -20,6 +21,7 @@ describe('computeFanLayout', () => {
     const totalWidth = 3 * CARD_WIDTH;
     expect(layout.overlap).toBe(0);
     expect(layout.startOffset).toBeCloseTo((500 - totalWidth) / 2);
+    expect(layout.totalContentWidth).toBe(totalWidth);
   });
 
   it('applies overlap when cards exceed container width', () => {
@@ -52,5 +54,27 @@ describe('computeFanLayout', () => {
     // Two cards of 72px in 82px = need 62px overlap
     expect(layout.overlap).toBeGreaterThan(0);
     expect(layout.overlap).toBeLessThanOrEqual(CARD_WIDTH * 0.7);
+  });
+
+  describe('mobile mode', () => {
+    it('caps overlap at 40% of card width (60% minimum visible)', () => {
+      const layout = computeFanLayout(50, 100, true);
+      const maxOverlap = CARD_WIDTH * 0.4;
+      expect(layout.overlap).toBeLessThanOrEqual(maxOverlap + 0.01);
+    });
+
+    it('centers cards that fit without overlap', () => {
+      const layout = computeFanLayout(3, 500, true);
+      const totalWidth = 3 * CARD_WIDTH;
+      expect(layout.overlap).toBe(0);
+      expect(layout.startOffset).toBeCloseTo((500 - totalWidth) / 2);
+    });
+
+    it('reports totalContentWidth larger than container when scrolling needed', () => {
+      // 20 cards, mobile max overlap = 40% of 72 = 28.8px, visible per card = 43.2px
+      // content = 20 * 72 - 19 * 28.8 = 1440 - 547.2 = 892.8
+      const layout = computeFanLayout(20, 300, true);
+      expect(layout.totalContentWidth).toBeGreaterThan(300);
+    });
   });
 });

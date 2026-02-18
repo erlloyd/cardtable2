@@ -242,6 +242,108 @@ Dynamic label shows hand name: `"Add to Hand (Hero 1)"`.
 
 ---
 
+## Stage 3.5: Mobile / Small Screen Hand Panel
+
+**PR-releasable outcome**: Hand panel adapts to small screens with horizontal scroll, touch-friendly interactions, and drag-to-reorder that works alongside scrolling.
+
+### Design Decisions
+
+**Breakpoint**: 768px — below this, switch to mobile layout.
+
+**Core tension**: Drag-to-reorder (the primary touch action) and horizontal scroll are both horizontal gestures. We solve this by giving scroll its own dedicated UI zones, keeping the card area 100% for drag.
+
+**Interaction model on mobile**:
+- **Touch and drag a card** → immediate reorder (snappy, primary action). Drag upward/to board → play card.
+- **Double tap a card** → show preview modal
+- **Scroll via arrow buttons** on left/right edges of the card area
+- **Scroll via swipe on header zone** — the tab row / area above cards forwards horizontal touch to scroll the cards
+
+### 3.5.1 Responsive Fan Layout
+
+**`app/src/utils/fanLayout.ts`** — Update `computeFanLayout()`:
+
+- Accept `isMobile` parameter
+- Desktop: max 70% overlap (current behavior)
+- Mobile: max 40% overlap — ensures ~43px visible per card, meeting 44px touch target minimum
+- When cards overflow the container at max overlap, the container scrolls horizontally
+
+### 3.5.2 Scroll Container
+
+**`app/src/index.css`** — Mobile-specific changes to `.hand-panel__cards`:
+
+```css
+@media (max-width: 767px) {
+  .hand-panel__cards {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+```
+
+Cards are positioned using `computeFanLayout()` as normal — the container just becomes scrollable when content overflows.
+
+### 3.5.3 Scroll Arrow Buttons
+
+**`app/src/components/HandPanel.tsx`** — Add left/right arrow buttons:
+
+- Positioned at left/right edges of the card area, overlaying the cards
+- Large tap targets (~44px wide, full card-area height)
+- Semi-transparent background so cards are visible beneath
+- Only visible when there's content to scroll in that direction
+- Tap: scroll by 2-3 card widths. Hold: continuous scroll.
+- Rendered only on mobile (or when cards overflow)
+
+### 3.5.4 Header Swipe-to-Scroll
+
+**`app/src/components/HandPanel.tsx`** — Wire horizontal touch events on the header/tab area to scroll the cards container:
+
+- `pointerdown` + `pointermove` on the header div → programmatically set `cardsContainerRef.current.scrollLeft`
+- This works because tab switching is a tap action (no horizontal drag needed on tabs)
+- Provides a natural "grab and slide" scroll zone above the cards
+
+### 3.5.5 Touch Interactions
+
+**Double tap to preview**:
+- Track tap timing per card. If two taps within 300ms → show preview modal (full card overlay with dismiss on tap/backdrop)
+- Replaces hover preview which doesn't exist on touch devices
+- First tap does nothing visible (or subtle highlight) to avoid accidental previews
+
+**Drag to reorder**:
+- Touch and drag on a card immediately picks it up (after small slop threshold, ~8px)
+- Card lifts and follows finger horizontally
+- Other cards animate to create insertion gap
+- Drop commits reorder via `reorderCardInHand()`
+- Higher drag slop than desktop (8px vs 5px) to avoid accidental drags on scroll
+
+**Play button**:
+- Always visible on mobile (not hover-gated)
+- Positioned on each card, tappable without needing to hover
+
+### 3.5.6 Suppress Desktop Hover on Mobile
+
+- Disable card hover lift animation on touch devices
+- Disable hover preview positioning logic
+- Use `pointer: coarse` media query or `pointerType === 'touch'` detection
+
+### 3.5.7 Key Files
+
+| File | Action |
+|------|--------|
+| `app/src/utils/fanLayout.ts` | Add `isMobile` parameter, adjust max overlap |
+| `app/src/components/HandPanel.tsx` | Scroll arrows, header swipe, double-tap preview, mobile play button |
+| `app/src/index.css` | Scroll container styles, mobile media queries, arrow button styles |
+
+### 3.5.8 Testing
+
+- **Visual**: Manual testing at 375px, 414px, 768px widths with 3, 10, 20, 30 cards
+- **Touch**: Verify drag-to-reorder works without triggering scroll
+- **Touch**: Verify arrow buttons scroll correctly
+- **Touch**: Verify header swipe scrolls the card area
+- **Touch**: Verify double-tap shows preview modal
+- **E2E**: Playwright mobile viewport tests for scroll and layout
+
+---
+
 ## Stage 4: Multiplayer Hand Privacy
 
 **PR-releasable outcome**: Players can toggle their hands between public and private. Private hands show card backs to other players. Games can configure the default visibility.

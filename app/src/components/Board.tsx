@@ -7,7 +7,6 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
-import { createPortal } from 'react-dom';
 import {
   ObjectKind,
   type MainToRendererMessage,
@@ -47,6 +46,7 @@ import {
 } from './Board/components';
 import { ActionHandle } from './ActionHandle';
 import { CardPreview } from './CardPreview';
+import { FullScreenCardPreview } from './FullScreenCardPreview';
 
 export interface BoardHandle {
   sendRendererMessage: (msg: MainToRendererMessage) => void;
@@ -164,8 +164,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Modal preview state (mobile double-tap)
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalPreviewCard, setModalPreviewCard] = useState<Card | null>(null);
-  const modalOpenTimeRef = useRef<number>(0);
-  const IGNORE_GESTURES_MS = 300; // Match DOUBLE_TAP_THRESHOLD
 
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
@@ -369,7 +367,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         return;
       }
 
-      modalOpenTimeRef.current = Date.now();
       setModalPreviewCard(card);
       setIsModalVisible(true);
     },
@@ -677,70 +674,16 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         }}
       />
 
-      {/* Blurred Overlay - Mobile Double-Tap (rendered via portal to escape stacking context) */}
-      {isModalVisible &&
-        createPortal(
-          <div
-            data-testid="card-preview-modal"
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center"
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(4px)',
-              WebkitBackdropFilter: 'blur(4px)',
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onClick={(e) => {
-              // Close modal on backdrop click (after timing threshold to avoid gesture conflicts)
-              const elapsed = Date.now() - modalOpenTimeRef.current;
-              if (
-                elapsed > IGNORE_GESTURES_MS &&
-                e.target === e.currentTarget
-              ) {
-                setIsModalVisible(false);
-                setModalPreviewCard(null);
-              }
-            }}
-          >
-            {/* Card image */}
-            {modalPreviewCard ? (
-              <img
-                src={modalPreviewCard.face}
-                alt="Card preview"
-                style={{
-                  maxWidth: 'clamp(280px, 60vw, 450px)',
-                  maxHeight: 'clamp(392px, 60vh, 630px)',
-                  borderRadius: '8px',
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: '300px',
-                  height: '420px',
-                  backgroundColor: '#4a5568',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontSize: '16px',
-                }}
-              >
-                Loading...
-              </div>
-            )}
-          </div>,
-          document.body,
-        )}
+      {/* Full-screen card preview - Mobile Double-Tap */}
+      {isModalVisible && modalPreviewCard && (
+        <FullScreenCardPreview
+          card={modalPreviewCard}
+          onClose={() => {
+            setIsModalVisible(false);
+            setModalPreviewCard(null);
+          }}
+        />
+      )}
     </div>
   );
 });

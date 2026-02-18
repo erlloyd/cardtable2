@@ -81,28 +81,52 @@ function Table() {
   } | null>(null);
 
   const [isStackDragOverHand, setIsStackDragOverHand] = useState(false);
+  const isStackDragOverHandRef = useRef(false);
+  isStackDragOverHandRef.current = isStackDragOverHand;
 
   const handleBoardDragStart = useCallback(() => {
     setIsBoardDragging(true);
   }, []);
 
+  // Drop logic: when drag ends while hovering over hand panel, move stacks to hand
   const handleBoardDragEnd = useCallback(() => {
+    if (isStackDragOverHandRef.current && store) {
+      // Auto-create hand if none exist
+      let targetHandId = handPanel.activeHandId;
+      if (!targetHandId) {
+        targetHandId = store.createHand('Hand 1');
+        handPanel.setActiveHandId(targetHandId);
+      }
+
+      // Move all cards from selected stacks to hand
+      const selected = store.getObjectsSelectedBy(store.getActorId());
+      for (const obj of selected) {
+        if (obj.yMap.get('_kind') === ObjectKind.Stack) {
+          moveAllCardsToHand(store, obj.id, targetHandId);
+        }
+      }
+    }
+
     setIsBoardDragging(false);
     setIsStackDragOverHand(false);
-  }, []);
+  }, [store, handPanel]);
 
   // Track whether a stack drag is hovering over the hand panel
   useEffect(() => {
     if (!isBoardDragging || !store) return;
 
-    // Check if the dragged selection includes a stack
-    const selected = store.getObjectsSelectedBy(store.getActorId());
-    const hasStack = selected.some(
-      (obj) => obj.yMap.get('_kind') === ObjectKind.Stack,
-    );
-    if (!hasStack) return;
-
     const handlePointerMove = (e: PointerEvent) => {
+      // Check selection on each move (not at effect setup) because
+      // in worker mode, selection may arrive after drag-started
+      const selected = store.getObjectsSelectedBy(store.getActorId());
+      const hasStack = selected.some(
+        (obj) => obj.yMap.get('_kind') === ObjectKind.Stack,
+      );
+      if (!hasStack) {
+        setIsStackDragOverHand(false);
+        return;
+      }
+
       const panelEl = handPanelRef.current;
       if (!panelEl) return;
 
@@ -122,43 +146,6 @@ function Table() {
       setIsStackDragOverHand(false);
     };
   }, [isBoardDragging, store]);
-
-  // Board-to-hand drop detection
-  useEffect(() => {
-    if (!isBoardDragging || !store) return;
-
-    const handlePointerUp = (e: PointerEvent) => {
-      const panelEl = handPanelRef.current;
-      if (!panelEl) return;
-
-      const rect = panelEl.getBoundingClientRect();
-      const isOverPanel =
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom;
-
-      if (isOverPanel) {
-        // Auto-create hand if none exist
-        let targetHandId = handPanel.activeHandId;
-        if (!targetHandId) {
-          targetHandId = store.createHand('Hand 1');
-          handPanel.setActiveHandId(targetHandId);
-        }
-
-        // Move all cards from selected stacks to hand
-        const selected = store.getObjectsSelectedBy(store.getActorId());
-        for (const obj of selected) {
-          if (obj.yMap.get('_kind') === ObjectKind.Stack) {
-            moveAllCardsToHand(store, obj.id, targetHandId);
-          }
-        }
-      }
-    };
-
-    window.addEventListener('pointerup', handlePointerUp);
-    return () => window.removeEventListener('pointerup', handlePointerUp);
-  }, [isBoardDragging, store, handPanel]);
 
   // Register default actions (shared with dev route)
   useEffect(() => {

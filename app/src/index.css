@@ -811,12 +811,61 @@ h1 {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.hand-panel__cards-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+
 .hand-panel__cards {
   flex: 1;
   position: relative;
   padding: 0.5rem 1rem;
   overflow: visible;
   min-height: 110px;
+}
+
+.hand-panel__cards--mobile {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.hand-panel__cards--mobile::-webkit-scrollbar {
+  display: none;
+}
+
+.hand-panel__scroll-arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.4);
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 150ms ease;
+}
+
+.hand-panel__scroll-arrow:active {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.hand-panel__scroll-arrow--left {
+  left: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.hand-panel__scroll-arrow--right {
+  right: 0;
+  border-radius: 4px 0 0 4px;
 }
 
 .hand-panel__card {
@@ -905,6 +954,17 @@ h1 {
 
 .hand-panel__play-btn:hover {
   background-color: rgba(79, 70, 229, 1);
+}
+
+/* On touch devices at small widths, always show the play button */
+@media (hover: none) and (max-width: 767px) {
+  .hand-panel__play-btn {
+    opacity: 1;
+  }
+
+  .hand-panel__card--hovered {
+    transform: none;
+  }
 }
 
 .hand-panel__empty {

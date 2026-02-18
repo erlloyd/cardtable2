@@ -14,19 +14,11 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Configure CORS based on environment
-const allowedOrigins =
-  NODE_ENV === 'development'
-    ? [
-        'http://localhost:3000',
-        'http://localhost:5173', // Vite default
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:5173',
-      ]
-    : [
-        'https://beta.card-table.app',
-        'https://card-table.app',
-        /^https:\/\/cardtable2-app-pr-\d+-prs\.up\.railway\.app$/, // PR previews
-      ];
+const productionOrigins: (string | RegExp)[] = [
+  'https://beta.card-table.app',
+  'https://card-table.app',
+  /^https:\/\/cardtable2-app-pr-\d+-prs\.up\.railway\.app$/, // PR previews
+];
 
 app.use(
   cors({
@@ -34,8 +26,13 @@ app.use(
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
 
-      // Check if origin matches any allowed pattern
-      const isAllowed = allowedOrigins.some((allowed) =>
+      // In development, allow all origins so LAN devices can connect
+      if (NODE_ENV === 'development') {
+        return callback(null, origin);
+      }
+
+      // Production: check against allowed origins
+      const isAllowed = productionOrigins.some((allowed) =>
         typeof allowed === 'string' ? allowed === origin : allowed.test(origin),
       );
 
@@ -93,8 +90,10 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`[Server] Running on http://localhost:${PORT}`);
   console.log(`[Server] Environment: ${NODE_ENV}`);
   console.log(
-    `[Server] CORS allowed origins:`,
-    allowedOrigins.map((o) => (typeof o === 'string' ? o : o.source)),
+    `[Server] CORS origins:`,
+    NODE_ENV === 'development'
+      ? 'all (development mode)'
+      : productionOrigins.map((o) => (typeof o === 'string' ? o : o.source)),
   );
   console.log(`[Server] WebSocket endpoint: ws://localhost:${PORT}`);
   console.log(`[Server] Health check: http://localhost:${PORT}/health`);

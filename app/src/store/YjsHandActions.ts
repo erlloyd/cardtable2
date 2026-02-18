@@ -98,6 +98,69 @@ export function moveCardToHand(
 }
 
 /**
+ * Move all cards from a board stack into a hand.
+ *
+ * In a single transaction:
+ * - Extracts all cards from the stack
+ * - Deletes the stack from the board
+ * - Appends all cards to the hand
+ *
+ * @returns The extracted card IDs, or empty array if the operation failed
+ */
+export function moveAllCardsToHand(
+  store: YjsStore,
+  stackId: string,
+  handId: string,
+): string[] {
+  const yMap = store.getObjectYMap(stackId);
+  if (!yMap) {
+    console.warn(`[moveAllCardsToHand] Stack ${stackId} not found`);
+    return [];
+  }
+
+  const kind = yMap.get('_kind');
+  if (kind !== ObjectKind.Stack) {
+    console.warn(
+      `[moveAllCardsToHand] Object ${stackId} is not a stack (kind: ${String(kind)})`,
+    );
+    return [];
+  }
+
+  const cards = yMap.get('_cards');
+  if (!cards || cards.length === 0) {
+    console.warn(`[moveAllCardsToHand] Stack ${stackId} has no cards`);
+    return [];
+  }
+
+  const handMap = store.hands.get(handId);
+  if (!handMap) {
+    console.warn(`[moveAllCardsToHand] Hand ${handId} not found`);
+    return [];
+  }
+
+  const extractedCards = [...cards];
+
+  store.getDoc().transact(() => {
+    store.deleteObject(stackId);
+
+    const handCards = [...((handMap.get('cards') as string[]) ?? [])];
+    handCards.push(...extractedCards);
+    handMap.set('cards', handCards);
+  });
+
+  console.log(
+    '[moveAllCardsToHand] Moved',
+    extractedCards.length,
+    'cards from stack',
+    stackId,
+    'to hand',
+    handId,
+  );
+
+  return extractedCards;
+}
+
+/**
  * Move a card from a hand back to the board as a new single-card stack.
  *
  * - Removes the card from the hand

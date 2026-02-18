@@ -29,7 +29,7 @@ import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
 import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
-import { moveCardToHand } from '../store/YjsHandActions';
+import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
   loadGameAssetPacks,
   reloadScenarioFromMetadata,
@@ -37,6 +37,7 @@ import {
   type LoadedScenarioMetadata,
 } from '../content';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
+import { ObjectKind } from '@cardtable2/shared';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -79,17 +80,52 @@ function Table() {
     stackTargetId?: string;
   } | null>(null);
 
+  const [isStackDragOverHand, setIsStackDragOverHand] = useState(false);
+
   const handleBoardDragStart = useCallback(() => {
     setIsBoardDragging(true);
   }, []);
 
   const handleBoardDragEnd = useCallback(() => {
     setIsBoardDragging(false);
+    setIsStackDragOverHand(false);
   }, []);
+
+  // Track whether a stack drag is hovering over the hand panel
+  useEffect(() => {
+    if (!isBoardDragging || !store) return;
+
+    // Check if the dragged selection includes a stack
+    const selected = store.getObjectsSelectedBy(store.getActorId());
+    const hasStack = selected.some(
+      (obj) => obj.yMap.get('_kind') === ObjectKind.Stack,
+    );
+    if (!hasStack) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const panelEl = handPanelRef.current;
+      if (!panelEl) return;
+
+      const rect = panelEl.getBoundingClientRect();
+      const isOverPanel =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+
+      setIsStackDragOverHand(isOverPanel);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      setIsStackDragOverHand(false);
+    };
+  }, [isBoardDragging, store]);
 
   // Board-to-hand drop detection
   useEffect(() => {
-    if (!isBoardDragging || !store || !handPanel.activeHandId) return;
+    if (!isBoardDragging || !store) return;
 
     const handlePointerUp = (e: PointerEvent) => {
       const panelEl = handPanelRef.current;
@@ -103,18 +139,26 @@ function Table() {
         e.clientY <= rect.bottom;
 
       if (isOverPanel) {
-        // Get first selected stack and move its top card to hand
+        // Auto-create hand if none exist
+        let targetHandId = handPanel.activeHandId;
+        if (!targetHandId) {
+          targetHandId = store.createHand('Hand 1');
+          handPanel.setActiveHandId(targetHandId);
+        }
+
+        // Move all cards from selected stacks to hand
         const selected = store.getObjectsSelectedBy(store.getActorId());
-        if (selected.length > 0) {
-          const firstSelected = selected[0];
-          moveCardToHand(store, firstSelected.id, 0, handPanel.activeHandId!);
+        for (const obj of selected) {
+          if (obj.yMap.get('_kind') === ObjectKind.Stack) {
+            moveAllCardsToHand(store, obj.id, targetHandId);
+          }
         }
       }
     };
 
     window.addEventListener('pointerup', handlePointerUp);
     return () => window.removeEventListener('pointerup', handlePointerUp);
-  }, [isBoardDragging, store, handPanel.activeHandId]);
+  }, [isBoardDragging, store, handPanel]);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
@@ -459,7 +503,7 @@ function Table() {
           isCollapsed={handPanel.isCollapsed}
           onCollapsedChange={handPanel.setIsCollapsed}
           handIds={handPanel.handIds}
-          isBoardDragging={isBoardDragging}
+          isStackDragOverHand={isStackDragOverHand}
           boardRef={boardRef}
           phantomDragFeedback={phantomFeedback}
           onPhantomDragActiveChange={setIsPhantomDragActive}

@@ -11,14 +11,13 @@ import type { RendererContext } from '../RendererContext';
 import { getBehaviors } from '../objects';
 import { snapToGrid } from '../../utils/gridSnap';
 
-let isPhantomDragActive = false;
 let lastStackTargetId: string | null = null;
 
 export function handlePhantomDragStart(
   _message: Extract<MainToRendererMessage, { type: 'phantom-drag-start' }>,
-  _context: RendererContext,
+  context: RendererContext,
 ): void {
-  isPhantomDragActive = true;
+  context.drag.setPhantomDragActive(true);
   lastStackTargetId = null;
 }
 
@@ -26,7 +25,7 @@ export function handlePhantomDragMove(
   message: Extract<MainToRendererMessage, { type: 'phantom-drag-move' }>,
   context: RendererContext,
 ): void {
-  if (!isPhantomDragActive) return;
+  if (!context.drag.isDragging()) return;
 
   // Convert canvas coords to world coords
   const worldPos = context.coordConverter.screenToWorld(
@@ -75,6 +74,9 @@ export function handlePhantomDragMove(
     snapPos = snapped;
   }
 
+  // Render to display stack target feedback
+  context.app.renderer.render(context.app.stage);
+
   // Send feedback to main thread
   context.postResponse({
     type: 'phantom-drag-feedback',
@@ -89,9 +91,9 @@ export function handlePhantomDragEnd(
   _message: Extract<MainToRendererMessage, { type: 'phantom-drag-end' }>,
   context: RendererContext,
 ): void {
-  if (!isPhantomDragActive) return;
+  if (!context.drag.isDragging()) return;
 
-  isPhantomDragActive = false;
+  context.drag.setPhantomDragActive(false);
 
   // Clear stack target feedback
   if (lastStackTargetId) {
@@ -106,4 +108,6 @@ export function handlePhantomDragEnd(
 
   // Clear grid snap ghosts
   context.gridSnap.clearGhosts();
+
+  context.app.renderer.render(context.app.stage);
 }

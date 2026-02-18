@@ -37,7 +37,7 @@ export interface HandPanelProps {
   isCollapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   handIds: string[];
-  isBoardDragging?: boolean;
+  isStackDragOverHand?: boolean;
   boardRef?: React.RefObject<BoardHandle | null>;
   phantomDragFeedback?: PhantomDragFeedback | null;
   onPhantomDragActiveChange?: (active: boolean) => void;
@@ -55,7 +55,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       isCollapsed,
       onCollapsedChange,
       handIds,
-      isBoardDragging,
+      isStackDragOverHand,
       boardRef,
       phantomDragFeedback,
       onPhantomDragActiveChange,
@@ -348,7 +348,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             if (typeof ref === 'function') ref(node);
             else if (ref) ref.current = node;
           }}
-          className={`hand-panel hand-panel--collapsed${isBoardDragging ? ' hand-panel--drop-target' : ''}`}
+          className={`hand-panel hand-panel--collapsed${isStackDragOverHand ? ' hand-panel--drop-target' : ''}`}
         >
           <button
             className="hand-panel__toggle"
@@ -399,7 +399,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             if (typeof ref === 'function') ref(node);
             else if (ref) ref.current = node;
           }}
-          className={`hand-panel${isBoardDragging ? ' hand-panel--drop-target' : ''}`}
+          className={`hand-panel${isStackDragOverHand ? ' hand-panel--drop-target' : ''}`}
         >
           <div className="hand-panel__header">
             <div className="hand-panel__tabs">

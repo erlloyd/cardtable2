@@ -567,6 +567,78 @@ describe('TextureLoader', () => {
       expect(loader.hasFailed(url)).toBe(false);
       expect(loader.shouldShowFallback(url)).toBe(false);
     });
+
+    it('should reject immediately without fetching after 2 failed attempts', async () => {
+      // Arrange
+      const url = 'http://example.com/unreachable.jpg';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        statusText: 'Not Found',
+      });
+
+      // Fail twice (initial + one retry)
+      await expect(loader.load(url)).rejects.toThrow();
+      await expect(loader.load(url)).rejects.toThrow();
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(2);
+
+      // Act - Third attempt should not fetch
+      vi.mocked(global.fetch).mockClear();
+      await expect(loader.load(url)).rejects.toThrow('failed after 2 attempts');
+
+      // Assert - No network request was made
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('should allow retry after first failure but cap at 2 attempts', async () => {
+      // Arrange
+      const url = 'http://example.com/flaky.jpg';
+
+      // First attempt fails
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        statusText: 'Service Unavailable',
+      });
+      await expect(loader.load(url)).rejects.toThrow();
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+
+      // Second attempt (retry) also fails
+      await expect(loader.load(url)).rejects.toThrow();
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(2);
+
+      // Third attempt should be blocked
+      await expect(loader.load(url)).rejects.toThrow('failed after 2 attempts');
+      // fetch not called a third time
+      expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(2);
+    });
+
+    it('should reset attempt count after clear() allowing fresh retries', async () => {
+      // Arrange
+      const url = 'http://example.com/image.jpg';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        statusText: 'Not Found',
+      });
+
+      // Exhaust both attempts
+      await expect(loader.load(url)).rejects.toThrow();
+      await expect(loader.load(url)).rejects.toThrow();
+      await expect(loader.load(url)).rejects.toThrow('failed after 2 attempts');
+
+      // Act - Clear resets everything
+      loader.clear();
+
+      // Should be able to try again (new fetch call)
+      const mockBlob = new Blob(['fake image data'], { type: 'image/jpeg' });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        blob: () => Promise.resolve(mockBlob),
+      });
+      const texture = await loader.load(url);
+
+      // Assert
+      expect(texture).toBeDefined();
+      expect(loader.hasFailed(url)).toBe(false);
+    });
   });
 
   describe('Edge Cases', () => {

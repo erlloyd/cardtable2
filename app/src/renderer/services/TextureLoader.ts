@@ -25,7 +25,7 @@ export class TextureLoader {
   private cache: Map<string, Texture> = new Map();
   private loading: Map<string, Promise<Texture>> = new Map();
   private loadingStartTimes: Map<string, number> = new Map(); // Track when each URL started loading
-  private failedUrls: Set<string> = new Set(); // Track which URLs failed to load
+  private failedUrls: Map<string, number> = new Map(); // Track load attempt count per URL
 
   // Threshold for considering a load "slow" (5 seconds)
   private readonly SLOW_LOAD_THRESHOLD_MS = 5000;
@@ -54,10 +54,17 @@ export class TextureLoader {
       return loading;
     }
 
+    // Allow one retry, then stop — avoids infinite fetch-fail-rerender loops
+    const attempts = this.failedUrls.get(url) ?? 0;
+    if (attempts >= 2) {
+      throw new Error(
+        `TextureLoader: ${url} failed after ${attempts} attempts`,
+      );
+    }
+
     // Start new load
     const startTime = Date.now();
     this.loadingStartTimes.set(url, startTime);
-    this.failedUrls.delete(url); // Clear any previous failure
 
     const promise = this.loadInternal(url);
     this.loading.set(url, promise);
@@ -65,10 +72,11 @@ export class TextureLoader {
     try {
       const texture = await promise;
       this.cache.set(url, texture);
+      this.failedUrls.delete(url); // Clear failure tracking on success
       this.loadingStartTimes.delete(url); // Clean up tracking
       return texture;
     } catch (error) {
-      this.failedUrls.add(url); // Mark as failed
+      this.failedUrls.set(url, (this.failedUrls.get(url) ?? 0) + 1);
       this.loadingStartTimes.delete(url); // Clean up tracking
 
       // Wrap error with additional context and preserve original error
@@ -213,7 +221,7 @@ export class TextureLoader {
    * Check if a URL has failed to load.
    */
   hasFailed(url: string): boolean {
-    return this.failedUrls.has(url);
+    return (this.failedUrls.get(url) ?? 0) > 0;
   }
 
   /**

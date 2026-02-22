@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
 import type { Card, GameAssets } from '@cardtable2/shared';
-import { moveCardToBoard } from '../store/YjsHandActions';
+import { moveCardToBoard, reorderCardInHand } from '../store/YjsHandActions';
 import { stackObjects } from '../store/YjsActions';
 import { computeFanLayout, CARD_WIDTH } from '../utils/fanLayout';
 import { CardPreview } from './CardPreview';
@@ -49,6 +49,37 @@ export interface HandPanelProps {
 }
 
 const DRAG_SLOP = 5;
+// Cards are positioned at top: 0.5rem inside the container (8px at 16px base)
+const CARD_ROW_TOP_OFFSET = 8;
+
+/**
+ * Compute how far a card at `index` should shift during a drag-reorder.
+ *
+ * - When `toSlot` is set (ghost over card row), the empty slot at `fromSlot`
+ *   visually moves to `toSlot` by shifting cards between them.
+ * - When `toSlot` is null (ghost above card row / off panel), cards after
+ *   `fromSlot` shift left to close the gap.
+ */
+function computeShiftOffset(
+  index: number,
+  fromSlot: number,
+  toSlot: number | null,
+  slotWidth: number,
+): number {
+  if (toSlot !== null && toSlot !== fromSlot) {
+    if (fromSlot < toSlot) {
+      // Source left of insertion — shift cards between them left
+      if (index > fromSlot && index <= toSlot) return -slotWidth;
+    } else {
+      // Source right of insertion — shift cards between them right
+      if (index >= toSlot && index < fromSlot) return slotWidth;
+    }
+  } else if (toSlot === null) {
+    // Ghost outside card row — close the gap
+    if (index > fromSlot) return -slotWidth;
+  }
+  return 0;
+}
 
 export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
   function HandPanel(
@@ -89,6 +120,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const [canScrollRight, setCanScrollRight] = useState(false);
     const [doubleTapPreviewCard, setDoubleTapPreviewCard] =
       useState<Card | null>(null);
+    const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
 
     const cardsContainerRef = useRef<HTMLDivElement>(null);
     const panelRootRef = useRef<HTMLDivElement>(null);
@@ -99,7 +131,17 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       startX: number;
       scrollLeft: number;
     } | null>(null);
+    const cleanupDragListenersRef = useRef<(() => void) | null>(null);
 
+    // Refs to keep prop/computed values accessible from imperative listeners
+    const activeHandIdRef = useRef(activeHandId);
+    activeHandIdRef.current = activeHandId;
+    const storeRef = useRef(store);
+    storeRef.current = store;
+    const boardRefRef = useRef(boardRef);
+    boardRefRef.current = boardRef;
+    const onPhantomDragActiveChangeRef = useRef(onPhantomDragActiveChange);
+    onPhantomDragActiveChangeRef.current = onPhantomDragActiveChange;
     // Keep refs in sync
     phantomDragRef.current = phantomDrag;
     phantomFeedbackRef.current = phantomDragFeedback ?? null;
@@ -171,7 +213,14 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     }, [cards.length, containerWidth, isMobile, updateScrollState]);
 
     const handName = activeHandId ? store.getHandName(activeHandId) : '';
+
+    // Always compute fan layout from the full card count so that centering
+    // (startOffset) doesn't shift when a card is dragged out.
     const fanLayout = computeFanLayout(cards.length, containerWidth, isMobile);
+    const fanLayoutRef = useRef(fanLayout);
+    fanLayoutRef.current = fanLayout;
+    const cardsRef = useRef(cards);
+    cardsRef.current = cards;
 
     const handleCreateHand = () => {
       const name = `Hand ${handIds.length + 1}`;
@@ -313,7 +362,57 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       setHoveredCardRect(null);
     }, []);
 
+    // Helper: determine drag drop target from pointer position.
+    // Returns { overPanel, inCardRow } so callers can decide:
+    //   overPanel && inCardRow  → reorder within hand
+    //   !overPanel              → drop on board
+    //   overPanel && !inCardRow → cancel (card returns to original slot)
+    //
+    // The ghost uses transform: translate(-50%, -50%), so its vertical
+    // midpoint equals clientY — the "inCardRow" check tests whether that
+    // midpoint is at or below the top edge of the card row.
+    const getDragDropTarget = useCallback(
+      (clientX: number, clientY: number) => {
+        const panelEl = panelRootRef.current;
+        if (!panelEl) return { overPanel: false, inCardRow: false };
+        const rect = panelEl.getBoundingClientRect();
+        const overPanel =
+          clientX >= rect.left &&
+          clientX <= rect.right &&
+          clientY >= rect.top &&
+          clientY <= rect.bottom;
+        const container = cardsContainerRef.current;
+        const inCardRow = container
+          ? clientY >=
+            container.getBoundingClientRect().top + CARD_ROW_TOP_OFFSET
+          : false;
+        return { overPanel, inCardRow };
+      },
+      [],
+    );
+
+    // Helper: compute insertion index from pointer X over the cards container
+    const computeInsertionIndex = useCallback(
+      (clientX: number): number | null => {
+        const container = cardsContainerRef.current;
+        if (!container) return null;
+        const containerRect = container.getBoundingClientRect();
+        const scrollOffset = container.scrollLeft;
+        const relativeX = clientX - containerRect.left + scrollOffset;
+        const layout = fanLayoutRef.current;
+        const cardSpacing = CARD_WIDTH - layout.overlap;
+        if (cardSpacing <= 0) return 0;
+        const rawIndex = Math.round(
+          (relativeX - layout.startOffset) / cardSpacing,
+        );
+        return Math.max(0, Math.min(rawIndex, cardsRef.current.length - 1));
+      },
+      [],
+    );
+
     // Phantom drag — pointer down on a card
+    // Listeners are registered imperatively (not via useEffect) to avoid
+    // React 18's synchronous effect flush removing them during the same event.
     const handleCardPointerDown = useCallback(
       (
         index: number,
@@ -321,12 +420,13 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         e: React.PointerEvent<HTMLDivElement>,
       ) => {
         if (e.button !== 0) return;
+        if (phantomDragRef.current) return; // drag already active
         e.preventDefault();
 
         // Track taps for double-tap preview (touch only)
         handleCardTap(index, e.pointerType);
 
-        setPhantomDrag({
+        const dragState: PhantomDragState = {
           cardIndex: index,
           cardId,
           startX: e.clientX,
@@ -334,123 +434,163 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           currentX: e.clientX,
           currentY: e.clientY,
           isDragging: false,
-        });
-      },
-      [handleCardTap],
-    );
+        };
+        setPhantomDrag(dragState);
+        phantomDragRef.current = dragState;
 
-    // Phantom drag — window pointermove + pointerup
-    useEffect(() => {
-      if (!phantomDrag) return;
+        // Remove any stale listeners from a previous drag
+        cleanupDragListenersRef.current?.();
 
-      const handleMove = (e: PointerEvent) => {
-        const current = phantomDragRef.current;
-        if (!current) return;
+        const handleMove = (ev: PointerEvent) => {
+          const current = phantomDragRef.current;
+          if (!current) return;
 
-        const dx = e.clientX - current.startX;
-        const dy = e.clientY - current.startY;
+          const dx = ev.clientX - current.startX;
+          const dy = ev.clientY - current.startY;
 
-        if (!current.isDragging) {
-          if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return;
+          if (!current.isDragging) {
+            if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return;
 
-          // Start phantom drag
-          setPhantomDrag((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  isDragging: true,
-                  currentX: e.clientX,
-                  currentY: e.clientY,
-                }
-              : null,
-          );
-
-          // Clear hover state
-          setHoveredIndex(null);
-          setHoveredCardRect(null);
-
-          // Notify renderer and parent
-          boardRef?.current?.sendRendererMessage({
-            type: 'phantom-drag-start',
-          });
-          onPhantomDragActiveChange?.(true);
-          return;
-        }
-
-        // Update position
-        setPhantomDrag((prev) =>
-          prev ? { ...prev, currentX: e.clientX, currentY: e.clientY } : null,
-        );
-
-        // Send move to renderer for stack/snap detection
-        const canvasPos = boardRef?.current?.viewportToCanvas(
-          e.clientX,
-          e.clientY,
-        );
-        if (canvasPos) {
-          boardRef?.current?.sendRendererMessage({
-            type: 'phantom-drag-move',
-            canvasX: canvasPos.x,
-            canvasY: canvasPos.y,
-          });
-        }
-      };
-
-      const handleUp = (e: PointerEvent) => {
-        const current = phantomDragRef.current;
-        if (!current) return;
-
-        if (current.isDragging) {
-          // Check if drop is over the hand panel (cancel) or the board (drop)
-          const panelEl = panelRootRef.current;
-          const isOverPanel =
-            panelEl &&
-            e.clientX >= panelEl.getBoundingClientRect().left &&
-            e.clientX <= panelEl.getBoundingClientRect().right &&
-            e.clientY >= panelEl.getBoundingClientRect().top &&
-            e.clientY <= panelEl.getBoundingClientRect().bottom;
-
-          if (!isOverPanel && activeHandId) {
-            // Drop on board
-            const feedback = phantomFeedbackRef.current;
-            const pos = feedback?.snapPos ?? {
-              x: feedback?.worldX ?? 0,
-              y: feedback?.worldY ?? 0,
+            // Start phantom drag
+            const started: PhantomDragState = {
+              ...current,
+              isDragging: true,
+              currentX: ev.clientX,
+              currentY: ev.clientY,
             };
+            setPhantomDrag(started);
+            phantomDragRef.current = started;
 
-            const newStackId = moveCardToBoard(
-              store,
-              activeHandId,
-              current.cardIndex,
-              { x: pos.x, y: pos.y, r: 0 },
-              true,
-            );
+            // Clear hover state
+            setHoveredIndex(null);
+            setHoveredCardRect(null);
 
-            // If dropping on a stack target, merge
-            if (newStackId && feedback?.stackTargetId) {
-              try {
-                stackObjects(store, [newStackId], feedback.stackTargetId);
-              } catch (err) {
-                console.error('[HandPanel] Stack merge failed:', err);
-              }
-            }
+            // Notify renderer and parent
+            boardRefRef.current?.current?.sendRendererMessage({
+              type: 'phantom-drag-start',
+            });
+            onPhantomDragActiveChangeRef.current?.(true);
+            return;
           }
 
-          // Notify renderer and parent to clean up
-          boardRef?.current?.sendRendererMessage({ type: 'phantom-drag-end' });
-          onPhantomDragActiveChange?.(false);
-        }
+          // Update position
+          const updated: PhantomDragState = {
+            ...current,
+            currentX: ev.clientX,
+            currentY: ev.clientY,
+          };
+          setPhantomDrag(updated);
+          phantomDragRef.current = updated;
 
-        setPhantomDrag(null);
-      };
+          // Show insertion gap only when ghost is over the panel and its
+          // vertical midpoint is within the card row.
+          const { overPanel, inCardRow } = getDragDropTarget(
+            ev.clientX,
+            ev.clientY,
+          );
+          setInsertionIndex(
+            overPanel && inCardRow ? computeInsertionIndex(ev.clientX) : null,
+          );
 
-      window.addEventListener('pointermove', handleMove);
-      window.addEventListener('pointerup', handleUp);
+          // Send move to renderer for stack/snap detection
+          const canvasPos = boardRefRef.current?.current?.viewportToCanvas(
+            ev.clientX,
+            ev.clientY,
+          );
+          if (canvasPos) {
+            boardRefRef.current?.current?.sendRendererMessage({
+              type: 'phantom-drag-move',
+              canvasX: canvasPos.x,
+              canvasY: canvasPos.y,
+            });
+          }
+        };
+
+        const handleUp = (ev: PointerEvent) => {
+          const current = phantomDragRef.current;
+          if (!current) return;
+
+          if (current.isDragging) {
+            const { overPanel, inCardRow } = getDragDropTarget(
+              ev.clientX,
+              ev.clientY,
+            );
+            const handId = activeHandIdRef.current;
+
+            if (overPanel && inCardRow && handId) {
+              // Reorder within hand — insertion index is a position in the
+              // original cards array, mapping directly to reorderCardInHand.
+              const toIndex = computeInsertionIndex(ev.clientX);
+              if (toIndex !== null) {
+                reorderCardInHand(
+                  storeRef.current,
+                  handId,
+                  current.cardIndex,
+                  toIndex,
+                );
+              }
+            } else if (!overPanel && handId) {
+              // Drop on board
+              const feedback = phantomFeedbackRef.current;
+              const pos = feedback?.snapPos ?? {
+                x: feedback?.worldX ?? 0,
+                y: feedback?.worldY ?? 0,
+              };
+
+              const newStackId = moveCardToBoard(
+                storeRef.current,
+                handId,
+                current.cardIndex,
+                { x: pos.x, y: pos.y, r: 0 },
+                true,
+              );
+
+              // If dropping on a stack target, merge
+              if (newStackId && feedback?.stackTargetId) {
+                try {
+                  stackObjects(
+                    storeRef.current,
+                    [newStackId],
+                    feedback.stackTargetId,
+                  );
+                } catch (err) {
+                  console.error('[HandPanel] Stack merge failed:', err);
+                }
+              }
+            }
+
+            // Notify renderer and parent to clean up
+            boardRefRef.current?.current?.sendRendererMessage({
+              type: 'phantom-drag-end',
+            });
+            onPhantomDragActiveChangeRef.current?.(false);
+          }
+
+          // Clean up
+          cleanupDragListenersRef.current?.();
+          setPhantomDrag(null);
+          phantomDragRef.current = null;
+          setInsertionIndex(null);
+        };
+
+        window.addEventListener('pointermove', handleMove);
+        window.addEventListener('pointerup', handleUp);
+
+        cleanupDragListenersRef.current = () => {
+          window.removeEventListener('pointermove', handleMove);
+          window.removeEventListener('pointerup', handleUp);
+          cleanupDragListenersRef.current = null;
+        };
+      },
+      [handleCardTap, getDragDropTarget, computeInsertionIndex],
+    );
+
+    // Safety cleanup on unmount
+    useEffect(() => {
       return () => {
-        window.removeEventListener('pointermove', handleMove);
-        window.removeEventListener('pointerup', handleUp);
+        cleanupDragListenersRef.current?.();
       };
-    }, [phantomDrag, activeHandId, boardRef, store, onPhantomDragActiveChange]);
+    }, []);
 
     // Calculate card position in fan
     const getCardLeft = useCallback(
@@ -592,78 +732,86 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                     : 'No cards in hand. Select a card on the board and use "Add to Hand" (A).'}
                 </div>
               ) : containerWidth === 0 ? null : (
-                cards.map((cardId, index) => {
-                  const imageUrl = getCardImageUrl(cardId);
-                  const isHovered = hoveredIndex === index;
-                  const isDragSource =
-                    phantomDrag?.isDragging && phantomDrag.cardIndex === index;
+                (() => {
+                  const isDragging = phantomDrag?.isDragging ?? false;
+                  const slotWidth = CARD_WIDTH - fanLayout.overlap;
+                  const fromSlot = phantomDrag?.cardIndex ?? -1;
 
-                  const className = [
-                    'hand-panel__card',
-                    isHovered && !phantomDrag?.isDragging
-                      ? 'hand-panel__card--hovered'
-                      : '',
-                    isDragSource ? 'hand-panel__card--dragging-source' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ');
+                  return cards.map((cardId, index) => {
+                    // Don't render the card being dragged (it's shown as the ghost)
+                    if (isDragging && index === fromSlot) return null;
 
-                  return (
-                    <div
-                      key={`${cardId}-${index}`}
-                      className={className}
-                      style={{
-                        left: `${getCardLeft(index)}px`,
-                        zIndex: isHovered ? 999 : index,
-                      }}
-                      onPointerEnter={(e) => handleCardPointerEnter(index, e)}
-                      onPointerLeave={handleCardPointerLeave}
-                      onPointerDown={(e) =>
-                        handleCardPointerDown(index, cardId, e)
-                      }
-                    >
-                      {imageUrl && !failedImages.has(cardId) ? (
-                        landscapeCards.has(cardId) ? (
-                          <div className="hand-panel__card-landscape">
+                    const imageUrl = getCardImageUrl(cardId);
+                    const isHovered = hoveredIndex === index;
+                    const shiftOffset = isDragging
+                      ? computeShiftOffset(
+                          index,
+                          fromSlot,
+                          insertionIndex,
+                          slotWidth,
+                        )
+                      : 0;
+
+                    return (
+                      <div
+                        key={`${cardId}-${index}`}
+                        className={`hand-panel__card${isHovered && !isDragging ? ' hand-panel__card--hovered' : ''}`}
+                        style={{
+                          left: `${getCardLeft(index) + shiftOffset}px`,
+                          zIndex: isHovered ? 999 : index,
+                          transition: isDragging
+                            ? 'left 150ms ease'
+                            : undefined,
+                        }}
+                        onPointerEnter={(e) => handleCardPointerEnter(index, e)}
+                        onPointerLeave={handleCardPointerLeave}
+                        onPointerDown={(e) =>
+                          handleCardPointerDown(index, cardId, e)
+                        }
+                      >
+                        {imageUrl && !failedImages.has(cardId) ? (
+                          landscapeCards.has(cardId) ? (
+                            <div className="hand-panel__card-landscape">
+                              <img
+                                src={imageUrl}
+                                alt={cardId}
+                                className="hand-panel__card-img hand-panel__card-img--landscape"
+                                draggable={false}
+                                onLoad={(e) => handleImageLoad(cardId, e)}
+                                onError={() => handleImageError(cardId)}
+                              />
+                            </div>
+                          ) : (
                             <img
                               src={imageUrl}
                               alt={cardId}
-                              className="hand-panel__card-img hand-panel__card-img--landscape"
+                              className="hand-panel__card-img"
                               draggable={false}
                               onLoad={(e) => handleImageLoad(cardId, e)}
                               onError={() => handleImageError(cardId)}
                             />
-                          </div>
+                          )
                         ) : (
-                          <img
-                            src={imageUrl}
-                            alt={cardId}
-                            className="hand-panel__card-img"
-                            draggable={false}
-                            onLoad={(e) => handleImageLoad(cardId, e)}
-                            onError={() => handleImageError(cardId)}
-                          />
-                        )
-                      ) : (
-                        <div className="hand-panel__card-placeholder">
-                          {cardId}
-                        </div>
-                      )}
-                      {!phantomDrag?.isDragging && (
-                        <button
-                          className="hand-panel__play-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePlayCard(index);
-                          }}
-                          title="Play card to board"
-                        >
-                          Play
-                        </button>
-                      )}
-                    </div>
-                  );
-                })
+                          <div className="hand-panel__card-placeholder">
+                            {cardId}
+                          </div>
+                        )}
+                        {!isDragging && (
+                          <button
+                            className="hand-panel__play-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePlayCard(index);
+                            }}
+                            title="Play card to board"
+                          >
+                            Play
+                          </button>
+                        )}
+                      </div>
+                    );
+                  });
+                })()
               )}
             </div>
 

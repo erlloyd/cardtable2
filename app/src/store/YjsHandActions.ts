@@ -215,3 +215,44 @@ export function moveCardToBoard(
 
   return newStackId;
 }
+
+/**
+ * Reorder a card within a hand by moving it from one index to another.
+ *
+ * In a single transaction:
+ * - Removes the card at fromIndex
+ * - Inserts it at toIndex
+ *
+ * No-op if indices are equal or invalid.
+ */
+export function reorderCardInHand(
+  store: YjsStore,
+  handId: string,
+  fromIndex: number,
+  toIndex: number,
+): void {
+  if (fromIndex === toIndex) return;
+
+  const handMap = store.hands.get(handId);
+  if (!handMap) {
+    console.warn(`[reorderCardInHand] Hand ${handId} not found`);
+    return;
+  }
+
+  const handCards = (handMap.get('cards') as string[]) ?? [];
+  if (fromIndex < 0 || fromIndex >= handCards.length) {
+    console.warn(
+      `[reorderCardInHand] fromIndex ${fromIndex} out of range (${handCards.length} cards)`,
+    );
+    return;
+  }
+
+  const clampedTo = Math.max(0, Math.min(toIndex, handCards.length - 1));
+
+  store.getDoc().transact(() => {
+    const cards = [...(handMap.get('cards') as string[])];
+    const [card] = cards.splice(fromIndex, 1);
+    cards.splice(clampedTo, 0, card);
+    handMap.set('cards', cards);
+  });
+}

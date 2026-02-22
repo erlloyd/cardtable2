@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore, toTableObject } from './YjsStore';
 import { createObject } from './YjsActions';
-import { moveCardToHand, moveCardToBoard } from './YjsHandActions';
+import {
+  moveCardToHand,
+  moveCardToBoard,
+  reorderCardInHand,
+} from './YjsHandActions';
 import { ObjectKind, type StackObject } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
@@ -232,6 +236,81 @@ describe('YjsHandActions', () => {
         true,
       );
       expect(result).toBeNull();
+    });
+  });
+
+  describe('reorderCardInHand', () => {
+    it('moves a card forward in the hand', () => {
+      const handId = store.createHand('Test Hand');
+      store.addCardToHand(handId, 'card-a');
+      store.addCardToHand(handId, 'card-b');
+      store.addCardToHand(handId, 'card-c');
+      store.addCardToHand(handId, 'card-d');
+
+      reorderCardInHand(store, handId, 0, 2);
+
+      expect(store.getHandCards(handId)).toEqual([
+        'card-b',
+        'card-c',
+        'card-a',
+        'card-d',
+      ]);
+    });
+
+    it('moves a card backward in the hand', () => {
+      const handId = store.createHand('Test Hand');
+      store.addCardToHand(handId, 'card-a');
+      store.addCardToHand(handId, 'card-b');
+      store.addCardToHand(handId, 'card-c');
+      store.addCardToHand(handId, 'card-d');
+
+      reorderCardInHand(store, handId, 3, 1);
+
+      expect(store.getHandCards(handId)).toEqual([
+        'card-a',
+        'card-d',
+        'card-b',
+        'card-c',
+      ]);
+    });
+
+    it('is a no-op when fromIndex equals toIndex', () => {
+      const handId = store.createHand('Test Hand');
+      store.addCardToHand(handId, 'card-a');
+      store.addCardToHand(handId, 'card-b');
+
+      reorderCardInHand(store, handId, 1, 1);
+
+      expect(store.getHandCards(handId)).toEqual(['card-a', 'card-b']);
+    });
+
+    it('clamps toIndex to valid range', () => {
+      const handId = store.createHand('Test Hand');
+      store.addCardToHand(handId, 'card-a');
+      store.addCardToHand(handId, 'card-b');
+      store.addCardToHand(handId, 'card-c');
+
+      reorderCardInHand(store, handId, 0, 100);
+
+      expect(store.getHandCards(handId)).toEqual([
+        'card-b',
+        'card-c',
+        'card-a',
+      ]);
+    });
+
+    it('does nothing for non-existent hand', () => {
+      reorderCardInHand(store, 'non-existent', 0, 1);
+    });
+
+    it('does nothing for out-of-range fromIndex', () => {
+      const handId = store.createHand('Test Hand');
+      store.addCardToHand(handId, 'card-a');
+      store.addCardToHand(handId, 'card-b');
+
+      reorderCardInHand(store, handId, 5, 0);
+
+      expect(store.getHandCards(handId)).toEqual(['card-a', 'card-b']);
     });
   });
 });

@@ -159,6 +159,11 @@ To add a new object type:
 
 See `app/src/renderer/objects/README.md` for full documentation.
 
+#### High-Frequency Event Handlers (pointermove, scroll, etc.)
+- **Be suspicious of any work done on every pointer move.** Pointer events fire 60-120+ times/second — only do work per-move if there is no better alternative.
+- Prefer direct DOM mutation (via refs) over React state for values that change at pointer frequency
+- Prefer checks that bail out early (e.g., "has the value actually changed?") over unconditional updates
+
 ### Shared Package
 - Direct TypeScript imports (no build step)
 - Contains common types used by both app and server

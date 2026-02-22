@@ -29,8 +29,6 @@ interface PhantomDragState {
   cardId: string;
   startX: number;
   startY: number;
-  currentX: number;
-  currentY: number;
   isDragging: boolean;
 }
 
@@ -132,6 +130,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       scrollLeft: number;
     } | null>(null);
     const cleanupDragListenersRef = useRef<(() => void) | null>(null);
+    const ghostElRef = useRef<HTMLDivElement>(null);
+    const ghostPositionRef = useRef({ x: 0, y: 0 });
 
     // Refs to keep prop/computed values accessible from imperative listeners
     const activeHandIdRef = useRef(activeHandId);
@@ -174,7 +174,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
 
       observer.observe(container);
       return () => observer.disconnect();
-    }, []);
+    }, [isCollapsed]);
 
     // Track window resize for mobile breakpoint
     useEffect(() => {
@@ -431,10 +431,9 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           cardId,
           startX: e.clientX,
           startY: e.clientY,
-          currentX: e.clientX,
-          currentY: e.clientY,
           isDragging: false,
         };
+        ghostPositionRef.current = { x: e.clientX, y: e.clientY };
         setPhantomDrag(dragState);
         phantomDragRef.current = dragState;
 
@@ -455,11 +454,10 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             const started: PhantomDragState = {
               ...current,
               isDragging: true,
-              currentX: ev.clientX,
-              currentY: ev.clientY,
             };
             setPhantomDrag(started);
             phantomDragRef.current = started;
+            ghostPositionRef.current = { x: ev.clientX, y: ev.clientY };
 
             // Clear hover state
             setHoveredIndex(null);
@@ -473,14 +471,12 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             return;
           }
 
-          // Update position
-          const updated: PhantomDragState = {
-            ...current,
-            currentX: ev.clientX,
-            currentY: ev.clientY,
-          };
-          setPhantomDrag(updated);
-          phantomDragRef.current = updated;
+          // Update ghost position via direct DOM mutation (no React re-render)
+          ghostPositionRef.current = { x: ev.clientX, y: ev.clientY };
+          if (ghostElRef.current) {
+            ghostElRef.current.style.left = `${ev.clientX}px`;
+            ghostElRef.current.style.top = `${ev.clientY}px`;
+          }
 
           // Show insertion gap only when ghost is over the panel and its
           // vertical midpoint is within the card row.
@@ -754,7 +750,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
 
                     return (
                       <div
-                        key={`${cardId}-${index}`}
+                        key={cardId}
                         className={`hand-panel__card${isHovered && !isDragging ? ' hand-panel__card--hovered' : ''}`}
                         style={{
                           left: `${getCardLeft(index) + shiftOffset}px`,
@@ -852,10 +848,11 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           phantomGhostUrl &&
           createPortal(
             <div
+              ref={ghostElRef}
               className="hand-panel__phantom-ghost"
               style={{
-                left: `${phantomDrag.currentX}px`,
-                top: `${phantomDrag.currentY}px`,
+                left: `${ghostPositionRef.current.x}px`,
+                top: `${ghostPositionRef.current.y}px`,
               }}
             >
               {phantomDrag.cardId && landscapeCards.has(phantomDrag.cardId) ? (

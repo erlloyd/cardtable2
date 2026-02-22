@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Card } from '@cardtable2/shared';
 
@@ -14,6 +14,14 @@ export function FullScreenCardPreview({
   onClose,
 }: FullScreenCardPreviewProps) {
   const openTimeRef = useRef(Date.now());
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   return createPortal(
     <div

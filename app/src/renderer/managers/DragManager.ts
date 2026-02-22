@@ -374,6 +374,7 @@ export class DragManager {
    */
   cancelObjectDrag(): void {
     this.isObjectDragging = false;
+    this.isPhantomDragging = false;
     this.dragState = null;
     this.isUnstackDrag = false;
   }
@@ -417,6 +418,7 @@ export class DragManager {
    */
   clear(): void {
     this.isObjectDragging = false;
+    this.isPhantomDragging = false;
     this.dragState = null;
     this.pointerDownEvent = null;
     this.isUnstackDrag = false;

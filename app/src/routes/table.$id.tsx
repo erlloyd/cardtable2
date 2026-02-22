@@ -446,13 +446,15 @@ function Table() {
 
   return (
     <div className="table">
-      <Suspense fallback={<div>Loading board...</div>}>
+      <Suspense fallback={<div className="board-fullscreen" />}>
         {!store || !isStoreReady ? (
-          <div>Initializing table state...</div>
+          <div className="board-fullscreen" />
         ) : packsLoading ? (
-          <div>Loading asset packs...</div>
+          <div className="board-fullscreen" />
         ) : packsError ? (
-          <div>Error loading packs: {packsError}</div>
+          <div className="board-fullscreen">
+            Error loading packs: {packsError}
+          </div>
         ) : (
           <Board
             ref={boardRef}

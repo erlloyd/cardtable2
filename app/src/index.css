@@ -670,7 +670,7 @@ h1 {
 /* Hand Panel */
 .hand-panel {
   flex-shrink: 0;
-  height: 160px;
+  height: 110px;
   background-color: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -816,6 +816,14 @@ h1 {
   position: relative;
   display: flex;
   min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden; /* clip card bottoms at panel edge */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.hand-panel__cards-wrapper::-webkit-scrollbar {
+  display: none;
 }
 
 .hand-panel__cards {
@@ -823,18 +831,7 @@ h1 {
   position: relative;
   padding: 0.5rem 1rem;
   overflow: visible;
-  min-height: 110px;
-}
-
-.hand-panel__cards--mobile {
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* Firefox */
-}
-
-.hand-panel__cards--mobile::-webkit-scrollbar {
-  display: none;
+  min-height: 0;
 }
 
 .hand-panel__scroll-arrow {
@@ -870,8 +867,9 @@ h1 {
 
 .hand-panel__card {
   position: absolute;
-  top: 0.5rem;
+  top: 0.75rem;
   cursor: pointer;
+  touch-action: none;
   transition:
     transform 150ms ease,
     opacity 150ms ease;
@@ -879,13 +877,20 @@ h1 {
 }
 
 .hand-panel__card--hovered {
-  transform: translateY(-20px) scale(1.05);
+  transform: translateY(-10px) scale(1.05);
   z-index: 999 !important;
 }
 
-.hand-panel__card--dragging-source {
-  opacity: 0.3;
-  transform: scale(0.9);
+.hand-panel__insertion-indicator {
+  position: absolute;
+  top: 12px;
+  width: 3px;
+  height: 66px;
+  background-color: rgba(79, 70, 229, 0.9);
+  border-radius: 2px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(79, 70, 229, 0.5);
 }
 
 .hand-panel__card-img {
@@ -933,7 +938,7 @@ h1 {
 
 .hand-panel__play-btn {
   position: absolute;
-  bottom: 4px;
+  top: 4px;
   left: 50%;
   transform: translateX(-50%);
   background-color: rgba(79, 70, 229, 0.9);
@@ -956,14 +961,10 @@ h1 {
   background-color: rgba(79, 70, 229, 1);
 }
 
-/* On touch devices at small widths, always show the play button */
-@media (hover: none) and (max-width: 767px) {
+/* On touch devices, always show the play button (no hover available) */
+@media (hover: none) {
   .hand-panel__play-btn {
     opacity: 1;
-  }
-
-  .hand-panel__card--hovered {
-    transform: none;
   }
 }
 

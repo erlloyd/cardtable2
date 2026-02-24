@@ -13,7 +13,6 @@ import {
 } from '../constants/previewSizes';
 import type { BoardHandle } from './Board';
 
-const MOBILE_BREAKPOINT = 768;
 const DOUBLE_TAP_THRESHOLD = 300;
 const SCROLL_AMOUNT_CARDS = 3;
 
@@ -47,34 +46,26 @@ export interface HandPanelProps {
 }
 
 const DRAG_SLOP = 5;
-// Cards are positioned at top: 0.5rem inside the container (8px at 16px base)
-const CARD_ROW_TOP_OFFSET = 8;
+// Cards are positioned at top: 0.75rem inside the container (12px at 16px base)
+const CARD_ROW_TOP_OFFSET = 12;
 
 /**
  * Compute how far a card at `index` should shift during a drag-reorder.
  *
- * - When `toSlot` is set (ghost over card row), the empty slot at `fromSlot`
- *   visually moves to `toSlot` by shifting cards between them.
- * - When `toSlot` is null (ghost above card row / off panel), cards after
- *   `fromSlot` shift left to close the gap.
+ * When `toSlot` is set and differs from `fromSlot`, cards between them shift
+ * to visually move the empty slot from `fromSlot` to `toSlot`.
  */
 function computeShiftOffset(
   index: number,
   fromSlot: number,
-  toSlot: number | null,
+  toSlot: number,
   slotWidth: number,
 ): number {
-  if (toSlot !== null && toSlot !== fromSlot) {
-    if (fromSlot < toSlot) {
-      // Source left of insertion — shift cards between them left
-      if (index > fromSlot && index <= toSlot) return -slotWidth;
-    } else {
-      // Source right of insertion — shift cards between them right
-      if (index >= toSlot && index < fromSlot) return slotWidth;
-    }
-  } else if (toSlot === null) {
-    // Ghost outside card row — close the gap
-    if (index > fromSlot) return -slotWidth;
+  if (toSlot === fromSlot) return 0;
+  if (fromSlot < toSlot) {
+    if (index > fromSlot && index <= toSlot) return -slotWidth;
+  } else {
+    if (index >= toSlot && index < fromSlot) return slotWidth;
   }
   return 0;
 }
@@ -111,9 +102,6 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const [failedImages, setFailedImages] = useState<Set<string>>(
       () => new Set(),
     );
-    const [isMobile, setIsMobile] = useState(
-      () => window.innerWidth < MOBILE_BREAKPOINT,
-    );
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
     const [doubleTapPreviewCard, setDoubleTapPreviewCard] =
@@ -121,6 +109,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
 
     const cardsContainerRef = useRef<HTMLDivElement>(null);
+    const cardsWrapperRef = useRef<HTMLDivElement>(null);
     const panelRootRef = useRef<HTMLDivElement>(null);
     const phantomDragRef = useRef<PhantomDragState | null>(null);
     const phantomFeedbackRef = useRef<PhantomDragFeedback | null>(null);
@@ -176,47 +165,34 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       return () => observer.disconnect();
     }, [isCollapsed]);
 
-    // Track window resize for mobile breakpoint
-    useEffect(() => {
-      const handleResize = () => {
-        setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
     // Track scroll position for arrow button visibility
     const updateScrollState = useCallback(() => {
-      const container = cardsContainerRef.current;
-      if (!container) return;
-      setCanScrollLeft(container.scrollLeft > 0);
+      const wrapper = cardsWrapperRef.current;
+      if (!wrapper) return;
+      setCanScrollLeft(wrapper.scrollLeft > 0);
       setCanScrollRight(
-        container.scrollLeft <
-          container.scrollWidth - container.clientWidth - 1,
+        wrapper.scrollLeft < wrapper.scrollWidth - wrapper.clientWidth - 1,
       );
     }, []);
 
     useEffect(() => {
-      const container = cardsContainerRef.current;
-      if (!container || !isMobile) return;
+      const wrapper = cardsWrapperRef.current;
+      if (!wrapper) return;
       updateScrollState();
-      container.addEventListener('scroll', updateScrollState);
-      return () => container.removeEventListener('scroll', updateScrollState);
-    }, [isMobile, updateScrollState]);
+      wrapper.addEventListener('scroll', updateScrollState);
+      return () => wrapper.removeEventListener('scroll', updateScrollState);
+    }, [updateScrollState]);
 
     // Update scroll arrows when cards or layout changes
     useEffect(() => {
-      if (isMobile) {
-        // Defer to next frame so DOM has updated
-        requestAnimationFrame(updateScrollState);
-      }
-    }, [cards.length, containerWidth, isMobile, updateScrollState]);
+      requestAnimationFrame(updateScrollState);
+    }, [cards.length, containerWidth, updateScrollState]);
 
     const handName = activeHandId ? store.getHandName(activeHandId) : '';
 
     // Always compute fan layout from the full card count so that centering
     // (startOffset) doesn't shift when a card is dragged out.
-    const fanLayout = computeFanLayout(cards.length, containerWidth, isMobile);
+    const fanLayout = computeFanLayout(cards.length, containerWidth);
     const fanLayoutRef = useRef(fanLayout);
     fanLayoutRef.current = fanLayout;
     const cardsRef = useRef(cards);
@@ -283,40 +259,39 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
 
     // Scroll arrow handlers
     const handleScrollLeft = useCallback(() => {
-      const container = cardsContainerRef.current;
-      if (!container) return;
+      const wrapper = cardsWrapperRef.current;
+      if (!wrapper) return;
       const scrollBy = SCROLL_AMOUNT_CARDS * (CARD_WIDTH - fanLayout.overlap);
-      container.scrollBy({ left: -scrollBy, behavior: 'smooth' });
+      wrapper.scrollBy({ left: -scrollBy, behavior: 'smooth' });
     }, [fanLayout.overlap]);
 
     const handleScrollRight = useCallback(() => {
-      const container = cardsContainerRef.current;
-      if (!container) return;
+      const wrapper = cardsWrapperRef.current;
+      if (!wrapper) return;
       const scrollBy = SCROLL_AMOUNT_CARDS * (CARD_WIDTH - fanLayout.overlap);
-      container.scrollBy({ left: scrollBy, behavior: 'smooth' });
+      wrapper.scrollBy({ left: scrollBy, behavior: 'smooth' });
     }, [fanLayout.overlap]);
 
     // Header swipe-to-scroll
     const handleHeaderPointerDown = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!isMobile) return;
-        const container = cardsContainerRef.current;
-        if (!container) return;
+        const wrapper = cardsWrapperRef.current;
+        if (!wrapper) return;
         headerSwipeRef.current = {
           startX: e.clientX,
-          scrollLeft: container.scrollLeft,
+          scrollLeft: wrapper.scrollLeft,
         };
       },
-      [isMobile],
+      [],
     );
 
     const handleHeaderPointerMove = useCallback(
       (e: React.PointerEvent<HTMLDivElement>) => {
         if (!headerSwipeRef.current) return;
-        const container = cardsContainerRef.current;
-        if (!container) return;
+        const wrapper = cardsWrapperRef.current;
+        if (!wrapper) return;
         const dx = e.clientX - headerSwipeRef.current.startX;
-        container.scrollLeft = headerSwipeRef.current.scrollLeft - dx;
+        wrapper.scrollLeft = headerSwipeRef.current.scrollLeft - dx;
       },
       [],
     );
@@ -349,6 +324,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     // Hover handlers
     const handleCardPointerEnter = useCallback(
       (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType !== 'mouse') return;
         if (phantomDragRef.current?.isDragging) return;
         setHoveredIndex(index);
         setHoveredCardRect(new DOMRect(e.clientX, e.clientY, 0, 0));
@@ -395,9 +371,10 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const computeInsertionIndex = useCallback(
       (clientX: number): number | null => {
         const container = cardsContainerRef.current;
+        const wrapper = cardsWrapperRef.current;
         if (!container) return null;
         const containerRect = container.getBoundingClientRect();
-        const scrollOffset = container.scrollLeft;
+        const scrollOffset = wrapper?.scrollLeft ?? 0;
         const relativeX = clientX - containerRect.left + scrollOffset;
         const layout = fanLayoutRef.current;
         const cardSpacing = CARD_WIDTH - layout.overlap;
@@ -468,6 +445,10 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
               type: 'phantom-drag-start',
             });
             onPhantomDragActiveChangeRef.current?.(true);
+
+            // Set initial insertion index to fromSlot so the first render
+            // doesn't flash-shift all cards (toSlot===fromSlot → no shift).
+            setInsertionIndex(current.cardIndex);
             return;
           }
 
@@ -706,8 +687,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             </div>
           </div>
 
-          <div className="hand-panel__cards-wrapper">
-            {isMobile && canScrollLeft && (
+          <div className="hand-panel__cards-wrapper" ref={cardsWrapperRef}>
+            {canScrollLeft && (
               <button
                 className="hand-panel__scroll-arrow hand-panel__scroll-arrow--left"
                 onClick={handleScrollLeft}
@@ -717,10 +698,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
               </button>
             )}
 
-            <div
-              className={`hand-panel__cards${isMobile ? ' hand-panel__cards--mobile' : ''}`}
-              ref={cardsContainerRef}
-            >
+            <div className="hand-panel__cards" ref={cardsContainerRef}>
               {cards.length === 0 ? (
                 <div className="hand-panel__empty">
                   {handIds.length === 0
@@ -732,25 +710,22 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                   const isDragging = phantomDrag?.isDragging ?? false;
                   const slotWidth = CARD_WIDTH - fanLayout.overlap;
                   const fromSlot = phantomDrag?.cardIndex ?? -1;
+                  // Default to fromSlot so the first render has no shift
+                  const toSlot = insertionIndex ?? fromSlot;
 
-                  return cards.map((cardId, index) => {
+                  const elements = cards.map((cardId, index) => {
                     // Don't render the card being dragged (it's shown as the ghost)
                     if (isDragging && index === fromSlot) return null;
 
                     const imageUrl = getCardImageUrl(cardId);
                     const isHovered = hoveredIndex === index;
                     const shiftOffset = isDragging
-                      ? computeShiftOffset(
-                          index,
-                          fromSlot,
-                          insertionIndex,
-                          slotWidth,
-                        )
+                      ? computeShiftOffset(index, fromSlot, toSlot, slotWidth)
                       : 0;
 
                     return (
                       <div
-                        key={cardId}
+                        key={`${cardId}-${index}`}
                         className={`hand-panel__card${isHovered && !isDragging ? ' hand-panel__card--hovered' : ''}`}
                         style={{
                           left: `${getCardLeft(index) + shiftOffset}px`,
@@ -807,11 +782,25 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                       </div>
                     );
                   });
+
+                  // Insertion indicator line during drag reorder
+                  if (isDragging && toSlot !== fromSlot) {
+                    const indicatorLeft = getCardLeft(toSlot);
+                    elements.push(
+                      <div
+                        key="insertion-indicator"
+                        className="hand-panel__insertion-indicator"
+                        style={{ left: `${indicatorLeft}px` }}
+                      />,
+                    );
+                  }
+
+                  return elements;
                 })()
               )}
             </div>
 
-            {isMobile && canScrollRight && (
+            {canScrollRight && (
               <button
                 className="hand-panel__scroll-arrow hand-panel__scroll-arrow--right"
                 onClick={handleScrollRight}

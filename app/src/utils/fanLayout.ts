@@ -1,14 +1,14 @@
 /**
  * Fan layout computation for overlapping card display.
  *
- * Cards are laid out horizontally with overlap when they exceed the container width.
- * Desktop: minimum 30% of each card remains visible (max 70% overlap).
- * Mobile: minimum 60% of each card remains visible (max 40% overlap) for touch targets.
+ * Cards are laid out horizontally, centered when they fit. When they exceed
+ * the container width, overlap increases smoothly up to a maximum of 70%
+ * (minimum 30% of each card remains visible). Beyond that, the container
+ * scrolls. Same behavior on all devices.
  */
 
 export const CARD_WIDTH = 72; // Approximate card width at 100px height (poker ratio ~63:88)
-const MIN_VISIBLE_RATIO_DESKTOP = 0.3;
-const MIN_VISIBLE_RATIO_MOBILE = 0.6;
+const MIN_VISIBLE_RATIO = 0.5;
 
 export interface FanLayout {
   overlap: number;
@@ -20,20 +20,7 @@ export interface FanLayout {
 export function computeFanLayout(
   cardCount: number,
   availableWidth: number,
-  isMobile?: boolean,
 ): FanLayout {
-  if (cardCount === 0) {
-    return {
-      overlap: 0,
-      startOffset: 0,
-      cardWidth: CARD_WIDTH,
-      totalContentWidth: 0,
-    };
-  }
-
-  const minVisibleRatio = isMobile
-    ? MIN_VISIBLE_RATIO_MOBILE
-    : MIN_VISIBLE_RATIO_DESKTOP;
   const totalWidth = cardCount * CARD_WIDTH;
 
   if (totalWidth <= availableWidth) {
@@ -47,7 +34,7 @@ export function computeFanLayout(
   }
 
   // Need overlap
-  const maxOverlap = CARD_WIDTH * (1 - minVisibleRatio);
+  const maxOverlap = CARD_WIDTH * (1 - MIN_VISIBLE_RATIO);
   const neededOverlap =
     cardCount > 1 ? (totalWidth - availableWidth) / (cardCount - 1) : 0;
   const overlap = Math.min(neededOverlap, maxOverlap);

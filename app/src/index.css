@@ -957,6 +957,14 @@ h1 {
   opacity: 1;
 }
 
+.hand-panel__play-btn--compact {
+  left: 2px;
+  transform: none;
+  padding: 0.0625rem 0.25rem;
+  font-size: 0.5625rem;
+  border-radius: 0.1875rem;
+}
+
 .hand-panel__play-btn:hover {
   background-color: rgba(79, 70, 229, 1);
 }

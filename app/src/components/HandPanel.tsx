@@ -769,7 +769,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                         )}
                         {!isDragging && (
                           <button
-                            className="hand-panel__play-btn"
+                            className={`hand-panel__play-btn${fanLayout.overlap > 0 ? ' hand-panel__play-btn--compact' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               handlePlayCard(index);

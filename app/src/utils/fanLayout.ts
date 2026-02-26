@@ -2,8 +2,8 @@
  * Fan layout computation for overlapping card display.
  *
  * Cards are laid out horizontally, centered when they fit. When they exceed
- * the container width, overlap increases smoothly up to a maximum of 70%
- * (minimum 30% of each card remains visible). Beyond that, the container
+ * the container width, overlap increases smoothly up to a maximum of 50%
+ * (minimum 50% of each card remains visible). Beyond that, the container
  * scrolls. Same behavior on all devices.
  */
 
@@ -21,6 +21,15 @@ export function computeFanLayout(
   cardCount: number,
   availableWidth: number,
 ): FanLayout {
+  if (cardCount === 0) {
+    return {
+      overlap: 0,
+      startOffset: 0,
+      cardWidth: CARD_WIDTH,
+      totalContentWidth: 0,
+    };
+  }
+
   const totalWidth = cardCount * CARD_WIDTH;
 
   if (totalWidth <= availableWidth) {

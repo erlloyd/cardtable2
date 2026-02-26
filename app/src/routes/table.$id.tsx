@@ -123,7 +123,7 @@ function Table() {
         (obj) => obj.yMap.get('_kind') === ObjectKind.Stack,
       );
       if (!hasStack) {
-        setIsStackDragOverHand(false);
+        if (isStackDragOverHandRef.current) setIsStackDragOverHand(false);
         return;
       }
 
@@ -137,7 +137,10 @@ function Table() {
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom;
 
-      setIsStackDragOverHand(isOverPanel);
+      // Only update state when the value actually changes
+      if (isOverPanel !== isStackDragOverHandRef.current) {
+        setIsStackDragOverHand(isOverPanel);
+      }
     };
 
     window.addEventListener('pointermove', handlePointerMove);

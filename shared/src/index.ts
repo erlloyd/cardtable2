@@ -51,7 +51,7 @@ export interface AttachmentData {
 export interface HandData {
   name: string;
   cards: string[];
-  visibility: string; // "public" | "private" (scaffold for multiplayer privacy)
+  visibility: 'public' | 'private';
 }
 
 // Position in world coordinates

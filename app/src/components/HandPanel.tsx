@@ -281,6 +281,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           startX: e.clientX,
           scrollLeft: wrapper.scrollLeft,
         };
+        // Capture so pointerup fires even if released outside the header
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
       },
       [],
     );
@@ -296,9 +298,13 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       [],
     );
 
-    const handleHeaderPointerUp = useCallback(() => {
-      headerSwipeRef.current = null;
-    }, []);
+    const handleHeaderPointerUp = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        headerSwipeRef.current = null;
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      },
+      [],
+    );
 
     // Double-tap to preview (touch devices only, matching board behavior)
     const handleCardTap = useCallback(
@@ -550,12 +556,31 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           setInsertionIndex(null);
         };
 
+        // Cancel handler — pointer lost (e.g. browser gesture takeover) or window blur
+        const handleCancel = () => {
+          const current = phantomDragRef.current;
+          if (current?.isDragging) {
+            boardRefRef.current?.current?.sendRendererMessage({
+              type: 'phantom-drag-end',
+            });
+            onPhantomDragActiveChangeRef.current?.(false);
+          }
+          cleanupDragListenersRef.current?.();
+          setPhantomDrag(null);
+          phantomDragRef.current = null;
+          setInsertionIndex(null);
+        };
+
         window.addEventListener('pointermove', handleMove);
         window.addEventListener('pointerup', handleUp);
+        window.addEventListener('pointercancel', handleCancel);
+        window.addEventListener('blur', handleCancel);
 
         cleanupDragListenersRef.current = () => {
           window.removeEventListener('pointermove', handleMove);
           window.removeEventListener('pointerup', handleUp);
+          window.removeEventListener('pointercancel', handleCancel);
+          window.removeEventListener('blur', handleCancel);
           cleanupDragListenersRef.current = null;
         };
       },
@@ -674,6 +699,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                 className="hand-panel__create-btn"
                 onClick={handleCreateHand}
                 title="Create new hand"
+                aria-label="Create new hand"
               >
                 +
               </button>

@@ -98,13 +98,17 @@ export function usePointerEvents(
         return;
       }
 
+      // Capture pointer so events continue flowing to the canvas even when
+      // the pointer moves outside its bounds (e.g., dragging over the hand panel)
+      canvasRef.current?.setPointerCapture(event.pointerId);
+
       const message: MainToRendererMessage = {
         type: 'pointer-down',
         event: serializePointerEvent(event),
       };
       renderer.sendMessage(message);
     },
-    [renderer, isCanvasInitialized, serializePointerEvent],
+    [renderer, isCanvasInitialized, serializePointerEvent, canvasRef],
   );
 
   const handlePointerMove = useCallback(

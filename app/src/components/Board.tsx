@@ -1,7 +1,15 @@
-import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import {
   ObjectKind,
+  type MainToRendererMessage,
   type PointerEventData,
   type Card,
   type StackObject,
@@ -38,6 +46,16 @@ import {
 } from './Board/components';
 import { ActionHandle } from './ActionHandle';
 import { CardPreview } from './CardPreview';
+import { FullScreenCardPreview } from './FullScreenCardPreview';
+
+export interface BoardHandle {
+  sendRendererMessage: (msg: MainToRendererMessage) => void;
+  viewportToCanvas: (
+    clientX: number,
+    clientY: number,
+  ) => { x: number; y: number } | null;
+  clearPreview: () => void;
+}
 
 export interface BoardProps {
   tableId: string;
@@ -55,25 +73,41 @@ export interface BoardProps {
   onActionExecuted?: (actionId: string) => void;
   gameAssets?: GameAssets | null;
   isMenuOpen?: boolean;
+  isPhantomDragActive?: boolean;
+  onBoardDragStart?: () => void;
+  onBoardDragEnd?: () => void;
+  onPhantomDragFeedback?: (feedback: {
+    worldX: number;
+    worldY: number;
+    snapPos?: { x: number; y: number };
+    stackTargetId?: string;
+  }) => void;
 }
 
-function Board({
-  tableId,
-  store,
-  connectionStatus,
-  showDebugUI = false,
-  onContextMenu,
-  interactionMode: externalInteractionMode,
-  onInteractionModeChange,
-  isMultiSelectMode: externalIsMultiSelectMode,
-  onMultiSelectModeChange,
-  gridSnapEnabled: externalGridSnapEnabled,
-  onGridSnapEnabledChange,
-  actionContext,
-  onActionExecuted,
-  gameAssets,
-  isMenuOpen,
-}: BoardProps) {
+const Board = forwardRef<BoardHandle, BoardProps>(function Board(
+  {
+    tableId,
+    store,
+    connectionStatus,
+    showDebugUI = false,
+    onContextMenu,
+    interactionMode: externalInteractionMode,
+    onInteractionModeChange,
+    isMultiSelectMode: externalIsMultiSelectMode,
+    onMultiSelectModeChange,
+    gridSnapEnabled: externalGridSnapEnabled,
+    onGridSnapEnabledChange,
+    actionContext,
+    onActionExecuted,
+    gameAssets,
+    isMenuOpen,
+    isPhantomDragActive,
+    onBoardDragStart,
+    onBoardDragEnd,
+    onPhantomDragFeedback,
+  },
+  ref,
+) {
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,22 +153,47 @@ function Board({
   } | null>(null);
   const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Dismiss hover preview when any menu opens
+  // Dismiss hover preview when any menu opens or phantom drag starts
   useEffect(() => {
-    if (isMenuOpen) {
+    if (isMenuOpen || isPhantomDragActive) {
       setPreviewCard(null);
       setPreviewPosition(null);
     }
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isPhantomDragActive]);
 
   // Modal preview state (mobile double-tap)
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalPreviewCard, setModalPreviewCard] = useState<Card | null>(null);
-  const modalOpenTimeRef = useRef<number>(0);
-  const IGNORE_GESTURES_MS = 300; // Match DOUBLE_TAP_THRESHOLD
 
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
+
+  // Expose imperative handle for hand-to-board phantom drag
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendRendererMessage: (msg: MainToRendererMessage) => {
+        if (renderer) {
+          renderer.sendMessage(msg);
+        }
+      },
+      viewportToCanvas: (clientX: number, clientY: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        return {
+          x: (clientX - rect.left) * dpr,
+          y: (clientY - rect.top) * dpr,
+        };
+      },
+      clearPreview: () => {
+        setPreviewCard(null);
+        setPreviewPosition(null);
+      },
+    }),
+    [renderer],
+  );
 
   const {
     isReady,
@@ -238,6 +297,9 @@ function Board({
         return;
       }
 
+      // Suppress hover preview during phantom drag
+      if (isPhantomDragActive) return;
+
       // Get the card using helper
       const card = getCardFromStack(objectId);
       if (!card || !gameAssets) {
@@ -293,7 +355,7 @@ function Board({
       setPreviewPosition({ x, y });
       setPreviewCard(card);
     },
-    [gameAssets, getCardFromStack],
+    [gameAssets, getCardFromStack, isPhantomDragActive],
   );
 
   // Handle modal preview request from renderer (mobile double-tap)
@@ -305,7 +367,6 @@ function Board({
         return;
       }
 
-      modalOpenTimeRef.current = Date.now();
       setModalPreviewCard(card);
       setIsModalVisible(true);
     },
@@ -349,6 +410,9 @@ function Board({
         animationStateCallbacks: animationStateCallbacksRef,
         throttledCursorUpdate,
         throttledDragStateUpdate,
+        onBoardDragStart,
+        onBoardDragEnd,
+        onPhantomDragFeedback,
       };
 
       // Fire and forget - message handlers are synchronous
@@ -370,6 +434,9 @@ function Board({
     setHoveredObject,
     showCardPreviewModal,
     addMessage,
+    onBoardDragStart,
+    onBoardDragEnd,
+    onPhantomDragFeedback,
   ]);
 
   // Store sync
@@ -607,72 +674,18 @@ function Board({
         }}
       />
 
-      {/* Blurred Overlay - Mobile Double-Tap (rendered via portal to escape stacking context) */}
-      {isModalVisible &&
-        createPortal(
-          <div
-            data-testid="card-preview-modal"
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99999] flex items-center justify-center"
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(4px)',
-              WebkitBackdropFilter: 'blur(4px)',
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onClick={(e) => {
-              // Close modal on backdrop click (after timing threshold to avoid gesture conflicts)
-              const elapsed = Date.now() - modalOpenTimeRef.current;
-              if (
-                elapsed > IGNORE_GESTURES_MS &&
-                e.target === e.currentTarget
-              ) {
-                setIsModalVisible(false);
-                setModalPreviewCard(null);
-              }
-            }}
-          >
-            {/* Card image */}
-            {modalPreviewCard ? (
-              <img
-                src={modalPreviewCard.face}
-                alt="Card preview"
-                style={{
-                  maxWidth: 'clamp(280px, 60vw, 450px)',
-                  maxHeight: 'clamp(392px, 60vh, 630px)',
-                  borderRadius: '8px',
-                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: '300px',
-                  height: '420px',
-                  backgroundColor: '#4a5568',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontSize: '16px',
-                }}
-              >
-                Loading...
-              </div>
-            )}
-          </div>,
-          document.body,
-        )}
+      {/* Full-screen card preview - Mobile Double-Tap */}
+      {isModalVisible && modalPreviewCard && (
+        <FullScreenCardPreview
+          card={modalPreviewCard}
+          onClose={() => {
+            setIsModalVisible(false);
+            setModalPreviewCard(null);
+          }}
+        />
+      )}
     </div>
   );
-}
+});
 
 export default Board;

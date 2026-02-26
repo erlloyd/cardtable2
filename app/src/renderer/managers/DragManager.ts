@@ -29,6 +29,7 @@ interface DragState {
  */
 export class DragManager {
   private isObjectDragging = false;
+  private isPhantomDragging = false;
   private dragState: DragState | null = null;
   private pointerDownEvent: PointerEventData | null = null;
   private isUnstackDrag = false; // Track if this is an unstack operation
@@ -60,7 +61,11 @@ export class DragManager {
    * Check if currently dragging an object.
    */
   isDragging(): boolean {
-    return this.isObjectDragging;
+    return this.isObjectDragging || this.isPhantomDragging;
+  }
+
+  setPhantomDragActive(active: boolean): void {
+    this.isPhantomDragging = active;
   }
 
   /**
@@ -369,6 +374,7 @@ export class DragManager {
    */
   cancelObjectDrag(): void {
     this.isObjectDragging = false;
+    this.isPhantomDragging = false;
     this.dragState = null;
     this.isUnstackDrag = false;
   }
@@ -412,6 +418,7 @@ export class DragManager {
    */
   clear(): void {
     this.isObjectDragging = false;
+    this.isPhantomDragging = false;
     this.dragState = null;
     this.pointerDownEvent = null;
     this.isUnstackDrag = false;

@@ -22,6 +22,7 @@ import * as objects from './handlers/objects';
 import * as awareness from './handlers/awareness';
 import * as testing from './handlers/testing';
 import * as coordinates from './handlers/coordinates';
+import * as phantom from './handlers/phantom';
 
 /**
  * Message bus for renderer
@@ -99,6 +100,14 @@ export class RendererMessageBus {
       'request-screen-coords',
       coordinates.handleRequestScreenCoords,
     );
+
+    // Phantom drag (hand-to-board)
+    this.registry.register(
+      'phantom-drag-start',
+      phantom.handlePhantomDragStart,
+    );
+    this.registry.register('phantom-drag-move', phantom.handlePhantomDragMove);
+    this.registry.register('phantom-drag-end', phantom.handlePhantomDragEnd);
   }
 
   /**

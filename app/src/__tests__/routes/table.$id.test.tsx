@@ -23,6 +23,7 @@ vi.mock('../../store/YjsStore', () => {
     YjsStore: class MockYjsStore {
       objects = mockDoc.getMap('objects');
       metadata = mockDoc.getMap('metadata');
+      hands = mockDoc.getMap('hands');
       async waitForReady() {
         return Promise.resolve();
       }
@@ -55,6 +56,21 @@ vi.mock('../../store/YjsStore', () => {
         // Immediately call with null
         callback(null);
         return () => {};
+      }
+      getHandIds() {
+        return [];
+      }
+      getHandName(_handId: string) {
+        return '';
+      }
+      getHandCards(_handId: string) {
+        return [];
+      }
+      onHandsChange(_callback: () => void) {
+        return () => {};
+      }
+      createHand(_name: string) {
+        return 'mock-hand-id';
       }
       destroy() {}
     },

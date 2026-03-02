@@ -4,6 +4,7 @@ export interface Game {
   description: string;
   version: string;
   manifestUrl: string;
+  boxArt?: string;
 }
 
 export interface GamesIndex {

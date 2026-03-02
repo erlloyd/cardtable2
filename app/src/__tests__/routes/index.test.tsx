@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act } from 'react';
 import {
@@ -21,12 +22,92 @@ const mockGamesIndex: GamesIndex = {
   ],
 };
 
+function createTestRouter() {
+  const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
+  return createRouter({
+    routeTree,
+    history: memoryHistory,
+    defaultPendingMinMs: 0,
+  });
+}
+
 describe('Index Route (GameSelect)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('loads and displays games', async () => {
+  it('shows skeleton loading state initially', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    ); // never resolves
+
+    const router = createTestRouter();
+    let container!: HTMLElement;
+    await act(async () => {
+      ({ container } = render(<RouterProvider router={router} />));
+      await router.load();
+    });
+
+    expect(container.querySelector('.skeleton--logo')).toBeInTheDocument();
+    expect(container.querySelector('.skeleton-panel')).toBeInTheDocument();
+  });
+
+  it('shows error panel when fetch fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('Network error'))),
+    );
+
+    const router = createTestRouter();
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      await router.load();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not load games')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole('button', { name: /Try again/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('retry button re-fetches games', async () => {
+    const user = userEvent.setup();
+    const mockFetch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockGamesIndex),
+      } as Response);
+
+    vi.stubGlobal('fetch', mockFetch);
+
+    const router = createTestRouter();
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      await router.load();
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /Try again/i }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Try again/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Select Fake Game' }),
+      ).toBeInTheDocument();
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows hero section with title "Cardtable"', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -37,51 +118,47 @@ describe('Index Route (GameSelect)', () => {
       ),
     );
 
-    const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
-    const router = createRouter({
-      routeTree,
-      history: memoryHistory,
-      defaultPendingMinMs: 0,
-    });
-
+    const router = createTestRouter();
     await act(async () => {
       render(<RouterProvider router={router} />);
-      // Wait for router to load
       await router.load();
     });
 
-    // Wait for games to load (may skip loading state)
     await waitFor(() => {
-      expect(screen.getByText(/Cardtable/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Cardtable' }),
+      ).toBeInTheDocument();
     });
-
-    expect(screen.getByText(/Solo-first card table/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Open Table/i }),
-    ).toBeInTheDocument();
   });
 
-  it('displays error when fetch fails', async () => {
+  it('clicking a game card navigates to /table/$id', async () => {
+    const user = userEvent.setup();
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => Promise.reject(new Error('Failed to load'))),
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockGamesIndex),
+        } as Response),
+      ),
     );
 
-    const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
-    const router = createRouter({
-      routeTree,
-      history: memoryHistory,
-      defaultPendingMinMs: 0,
-    });
-
+    const router = createTestRouter();
     await act(async () => {
       render(<RouterProvider router={router} />);
-      // Wait for router to load
       await router.load();
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Error: Failed to load/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Select Fake Game' }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Select Fake Game' }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toMatch(/^\/table\//);
     });
   });
 });

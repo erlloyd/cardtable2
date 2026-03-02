@@ -24,7 +24,6 @@ const nameConfig: Config = {
 function GameSelect() {
   const navigate = useNavigate();
   const [games, setGames] = useState<Game[]>([]);
-  const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attemptCount, setAttemptCount] = useState(0);
@@ -40,9 +39,6 @@ function GameSelect() {
         }
         const data = (await response.json()) as GamesIndex;
         setGames(data.games);
-        if (data.games.length === 1) {
-          setSelectedGame(data.games[0]);
-        }
         setLoading(false);
       } catch (err) {
         const errorMessage =
@@ -59,13 +55,12 @@ function GameSelect() {
     setAttemptCount((c) => c + 1);
   };
 
-  const handleOpenTable = () => {
-    if (!selectedGame) return;
+  const handleGameLaunch = (game: Game) => {
     const tableId = uniqueNamesGenerator(nameConfig);
     void navigate({
       to: '/table/$id',
       params: { id: tableId },
-      state: { gameId: selectedGame.id } as Record<string, unknown>,
+      state: { gameId: game.id } as Record<string, unknown>,
     });
   };
 
@@ -83,7 +78,6 @@ function GameSelect() {
             <div className="skeleton skeleton--card" />
             <div className="skeleton skeleton--card" />
           </div>
-          <div className="skeleton skeleton--button" />
         </div>
       </div>
     );
@@ -154,29 +148,7 @@ function GameSelect() {
         </header>
 
         <main className="game-select__main">
-          <GameSelector
-            games={games}
-            selectedGame={selectedGame}
-            onGameSelect={setSelectedGame}
-          />
-
-          <div className="table-launch">
-            <button
-              className="launch-button"
-              onClick={handleOpenTable}
-              disabled={!selectedGame}
-              aria-label={
-                selectedGame
-                  ? `Open table for ${selectedGame.name}`
-                  : 'Select a game to continue'
-              }
-            >
-              <span className="launch-button__label">Open Table</span>
-              <span className="launch-button__arrow" aria-hidden="true">
-                →
-              </span>
-            </button>
-          </div>
+          <GameSelector games={games} onGameLaunch={handleGameLaunch} />
         </main>
       </div>
     </div>

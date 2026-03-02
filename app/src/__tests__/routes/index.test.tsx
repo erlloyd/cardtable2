@@ -22,26 +22,6 @@ const mockGamesIndex: GamesIndex = {
   ],
 };
 
-// Two games — neither is auto-selected, so the launch button starts disabled
-const mockMultiGamesIndex: GamesIndex = {
-  games: [
-    {
-      id: 'fake-game',
-      name: 'Fake Game',
-      description: 'A placeholder game',
-      version: '1.0.0',
-      manifestUrl: '/games/fake-game/manifest.json',
-    },
-    {
-      id: 'test-game',
-      name: 'Test Game',
-      description: 'Another test game',
-      version: '1.0.0',
-      manifestUrl: '/games/test-game/manifest.json',
-    },
-  ],
-};
-
 function createTestRouter() {
   const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
   return createRouter({
@@ -71,7 +51,6 @@ describe('Index Route (GameSelect)', () => {
 
     expect(container.querySelector('.skeleton--logo')).toBeInTheDocument();
     expect(container.querySelector('.skeleton-panel')).toBeInTheDocument();
-    expect(container.querySelector('.skeleton--button')).toBeInTheDocument();
   });
 
   it('shows error panel when fetch fails', async () => {
@@ -152,32 +131,8 @@ describe('Index Route (GameSelect)', () => {
     });
   });
 
-  it('launch button is disabled when no game is selected', async () => {
-    // With 2+ games, none are auto-selected, so the button starts disabled
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockMultiGamesIndex),
-        } as Response),
-      ),
-    );
-
-    const router = createTestRouter();
-    await act(async () => {
-      render(<RouterProvider router={router} />);
-      await router.load();
-    });
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Select a game to continue' }),
-      ).toBeDisabled();
-    });
-  });
-
-  it('launch button is enabled when a game is selected', async () => {
+  it('clicking a game card navigates to /table/$id', async () => {
+    const user = userEvent.setup();
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -196,8 +151,14 @@ describe('Index Route (GameSelect)', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: 'Open table for Fake Game' }),
-      ).not.toBeDisabled();
+        screen.getByRole('button', { name: 'Select Fake Game' }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Select Fake Game' }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toMatch(/^\/table\//);
     });
   });
 });

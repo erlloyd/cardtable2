@@ -7,8 +7,12 @@ test.describe('Navigation', () => {
     // Verify we're on the GameSelect page
     await expect(page.locator('h1')).toContainText('Cardtable');
 
-    // Click the "Open Table" button
-    await page.click('text=Open Table');
+    // Wait for games to load and click the first game card
+    const firstGameCard = page
+      .getByRole('button', { name: /Select .+/ })
+      .first();
+    await expect(firstGameCard).toBeVisible();
+    await firstGameCard.click();
 
     // Wait for navigation to table route
     await page.waitForURL(/\/table\/[a-z]+-[a-z]+-[a-z]+/);
@@ -33,8 +37,12 @@ test.describe('Navigation', () => {
   test('should lazy load Board component', async ({ page }) => {
     await page.goto('/');
 
-    // Click the "Open Table" button
-    await page.click('text=Open Table');
+    // Wait for games to load and click the first game card
+    const firstGameCard = page
+      .getByRole('button', { name: /Select .+/ })
+      .first();
+    await expect(firstGameCard).toBeVisible();
+    await firstGameCard.click();
 
     // Wait for the Board component to load
     await page.waitForSelector('[data-testid="board"]');
@@ -51,8 +59,12 @@ test.describe('Navigation', () => {
   test('should show Board after lazy loading', async ({ page }) => {
     await page.goto('/');
 
-    // Click the "Open Table" button
-    await page.click('text=Open Table');
+    // Wait for games to load and click the first game card
+    const firstGameCard = page
+      .getByRole('button', { name: /Select .+/ })
+      .first();
+    await expect(firstGameCard).toBeVisible();
+    await firstGameCard.click();
 
     // Wait for the board to appear (lazy loaded)
     const board = page.locator('[data-testid="board"]');

@@ -23,7 +23,7 @@ const mockGames: Game[] = [
 
 const singleGame: Game[] = [mockGames[0]];
 
-const gameWithBoxArt = {
+const gameWithBoxArt: Game = {
   id: 'art-game',
   name: 'Art Game',
   description: 'A game with box art',
@@ -34,13 +34,7 @@ const gameWithBoxArt = {
 
 describe('GameSelector', () => {
   it('renders game cards for all provided games', () => {
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     expect(
       screen.getByRole('button', { name: 'Select Fake Game' }),
@@ -51,25 +45,13 @@ describe('GameSelector', () => {
   });
 
   it('shows search bar when games.length > 1', () => {
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     expect(screen.getByPlaceholderText('Search games...')).toBeInTheDocument();
   });
 
   it('hides search bar when games.length === 1', () => {
-    render(
-      <GameSelector
-        games={singleGame}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={singleGame} onGameLaunch={vi.fn()} />);
 
     expect(
       screen.queryByPlaceholderText('Search games...'),
@@ -78,13 +60,7 @@ describe('GameSelector', () => {
 
   it('filters games when typing in search', async () => {
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     await user.type(screen.getByPlaceholderText('Search games...'), 'Fake');
 
@@ -98,13 +74,7 @@ describe('GameSelector', () => {
 
   it('shows empty state when search has no matches', async () => {
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     await user.type(
       screen.getByPlaceholderText('Search games...'),
@@ -120,60 +90,19 @@ describe('GameSelector', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
-  it('calls onGameSelect when clicking a game card', async () => {
-    const handleSelect = vi.fn();
+  it('calls onGameLaunch when clicking a game card', async () => {
+    const handleLaunch = vi.fn();
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={handleSelect}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={handleLaunch} />);
 
     await user.click(screen.getByRole('button', { name: 'Select Fake Game' }));
 
-    expect(handleSelect).toHaveBeenCalledWith(mockGames[0]);
+    expect(handleLaunch).toHaveBeenCalledWith(mockGames[0]);
   });
 
-  it('selected game has game-card--selected class', () => {
+  it('game card shows first letter monogram when no boxArt', () => {
     const { container } = render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={mockGames[0]}
-        onGameSelect={vi.fn()}
-      />,
-    );
-
-    const selectedCard = container.querySelector('.game-card--selected');
-    expect(selectedCard).toBeInTheDocument();
-    expect(selectedCard).toHaveAttribute('aria-label', 'Select Fake Game');
-  });
-
-  it('selected game button has aria-pressed true, others false', () => {
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={mockGames[0]}
-        onGameSelect={vi.fn()}
-      />,
-    );
-
-    expect(
-      screen.getByRole('button', { name: 'Select Fake Game' }),
-    ).toHaveAttribute('aria-pressed', 'true');
-    expect(
-      screen.getByRole('button', { name: 'Select Test Game' }),
-    ).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  it('game card shows first letter monogram', () => {
-    const { container } = render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
+      <GameSelector games={mockGames} onGameLaunch={vi.fn()} />,
     );
 
     const icons = container.querySelectorAll('.game-card__icon');
@@ -181,14 +110,26 @@ describe('GameSelector', () => {
     expect(icons[1]).toHaveTextContent('T');
   });
 
-  it('renders a list container with aria-label for available games', () => {
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
+  it('renders box art image when game has boxArt', () => {
+    render(<GameSelector games={[gameWithBoxArt]} onGameLaunch={vi.fn()} />);
+
+    const img = screen.getByRole('img', { name: 'Art Game' });
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute('src', '/games/art-game/box-art.jpg');
+  });
+
+  it('shows monogram instead of image when game has no boxArt', () => {
+    const { container } = render(
+      <GameSelector games={singleGame} onGameLaunch={vi.fn()} />,
     );
+
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    const icon = container.querySelector('.game-card__icon');
+    expect(icon).toHaveTextContent('F');
+  });
+
+  it('renders a list container with aria-label for available games', () => {
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     expect(
       screen.getByRole('list', { name: 'Available games' }),
@@ -197,13 +138,7 @@ describe('GameSelector', () => {
 
   it('clear button appears only when search has text', async () => {
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     expect(
       screen.queryByRole('button', { name: 'Clear search' }),
@@ -218,13 +153,7 @@ describe('GameSelector', () => {
 
   it('clear button resets search and restores all games', async () => {
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     const input = screen.getByPlaceholderText('Search games...');
     await user.type(input, 'Fake');
@@ -246,11 +175,7 @@ describe('GameSelector', () => {
 
   it('does not use role="listbox" on the game grid', () => {
     const { container } = render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
+      <GameSelector games={mockGames} onGameLaunch={vi.fn()} />,
     );
 
     expect(container.querySelector('[role="listbox"]')).toBeNull();
@@ -258,37 +183,21 @@ describe('GameSelector', () => {
 
   it('does not use role="option" on game buttons', () => {
     const { container } = render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
+      <GameSelector games={mockGames} onGameLaunch={vi.fn()} />,
     );
 
     expect(container.querySelector('[role="option"]')).toBeNull();
   });
 
   it('renders game descriptions', () => {
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     expect(screen.getByText('A placeholder game')).toBeInTheDocument();
     expect(screen.getByText('Another test game')).toBeInTheDocument();
   });
 
   it('renders game versions', () => {
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     const versions = screen.getAllByText('v1.0.0');
     expect(versions.length).toBeGreaterThan(0);
@@ -296,13 +205,7 @@ describe('GameSelector', () => {
 
   it('empty state message includes the search query', async () => {
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     await user.type(
       screen.getByPlaceholderText('Search games...'),
@@ -312,43 +215,9 @@ describe('GameSelector', () => {
     expect(screen.getByText('xyz-missing')).toBeInTheDocument();
   });
 
-  it('renders box art image when game has boxArt', () => {
-    render(
-      <GameSelector
-        games={[gameWithBoxArt]}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
-
-    const img = screen.getByRole('img', { name: 'Art Game' });
-    expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('src', '/games/art-game/box-art.jpg');
-  });
-
-  it('shows monogram instead of image when game has no boxArt', () => {
-    const { container } = render(
-      <GameSelector
-        games={singleGame}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
-
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
-    const icon = container.querySelector('.game-card__icon');
-    expect(icon).toHaveTextContent('F');
-  });
-
   it('game list is hidden when empty search state is shown', async () => {
     const user = userEvent.setup();
-    render(
-      <GameSelector
-        games={mockGames}
-        selectedGame={null}
-        onGameSelect={vi.fn()}
-      />,
-    );
+    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
 
     await user.type(
       screen.getByPlaceholderText('Search games...'),

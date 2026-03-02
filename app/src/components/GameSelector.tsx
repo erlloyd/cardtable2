@@ -3,8 +3,7 @@ import { Game } from '../types/game';
 
 interface GameSelectorProps {
   games: Game[];
-  selectedGame: Game | null;
-  onGameSelect: (game: Game | null) => void;
+  onGameLaunch: (game: Game) => void;
 }
 
 function GameCardThumb({ game }: { game: Game }) {
@@ -29,11 +28,7 @@ function GameCardThumb({ game }: { game: Game }) {
   );
 }
 
-function GameSelector({
-  games,
-  selectedGame,
-  onGameSelect,
-}: GameSelectorProps) {
+function GameSelector({ games, onGameLaunch }: GameSelectorProps) {
   const [query, setQuery] = useState('');
 
   const filteredGames =
@@ -87,19 +82,15 @@ function GameSelector({
           {filteredGames.map((game) => (
             <button
               key={game.id}
-              className={`game-card${selectedGame?.id === game.id ? ' game-card--selected' : ''}`}
-              aria-pressed={selectedGame?.id === game.id}
+              className="game-card"
               aria-label={`Select ${game.name}`}
-              onClick={() => onGameSelect(game)}
+              onClick={() => onGameLaunch(game)}
             >
               <div className="game-card__header">
                 <GameCardThumb game={game} />
                 <div className="game-card__meta">
                   <span className="game-card__name">{game.name}</span>
                   <span className="game-card__version">v{game.version}</span>
-                </div>
-                <div className="game-card__check-icon" aria-hidden="true">
-                  ✓
                 </div>
               </div>
               <p className="game-card__description">{game.description}</p>

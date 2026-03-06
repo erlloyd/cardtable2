@@ -546,6 +546,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       metaKey: event.metaKey,
       ctrlKey: event.ctrlKey,
       shiftKey: event.shiftKey,
+      altKey: event.altKey,
     };
 
     // Convert to canvas-relative coordinates

@@ -53,3 +53,14 @@ export const MODIFIER_BAR_ALPHA = 0.85;
 /** Modifier stat default colors */
 export const MODIFIER_COLOR_POSITIVE = 0x4caf50; // Green
 export const MODIFIER_COLOR_NEGATIVE = 0xf44336; // Red
+
+// ============================================================================
+// Card-on-Card Attachment Drop Zone Constants
+// ============================================================================
+
+/** Attach zone border color (amber/gold) */
+export const ATTACH_ZONE_COLOR = 0xd4a017;
+
+/** Drop zone label styling */
+export const DROP_ZONE_LABEL_FONT_SIZE = 14;
+export const DROP_ZONE_LABEL_ALPHA = 0.7;

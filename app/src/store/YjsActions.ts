@@ -4,8 +4,11 @@ import {
   ObjectKind,
   type Position,
   type TableObject,
+  type AttachmentLayout,
+  DEFAULT_ATTACHMENT_LAYOUT,
 } from '@cardtable2/shared';
 import { getDefaultProperties } from './ObjectDefaults';
+import { computeAttachmentPositions } from './attachmentLayout';
 
 /**
  * Engine Actions for Yjs-based state manipulation (M3-T2)
@@ -151,9 +154,13 @@ export function createObject(
 export function moveObjects(
   store: YjsStore,
   updates: Array<{ id: string; pos: Position }>,
+  layout?: AttachmentLayout,
 ): void {
   // Use single transaction for atomicity
   store.getDoc().transact(() => {
+    // First pass: move the requested objects and collect parents that have attachments
+    const parentsToUpdate: Array<{ id: string; pos: Position }> = [];
+
     updates.forEach(({ id, pos }) => {
       const yMap = store.getObjectYMap(id);
       if (!yMap) {
@@ -161,9 +168,37 @@ export function moveObjects(
         return;
       }
 
-      // Update position directly on Y.Map - no conversion needed
+      // Update position directly on Y.Map
       yMap.set('_pos', pos);
+
+      // Check if this object has attached cards that need to move too
+      const attachedCardIds: string[] | undefined =
+        yMap.get('_attachedCardIds');
+      if (attachedCardIds && attachedCardIds.length > 0) {
+        parentsToUpdate.push({ id, pos });
+      }
     });
+
+    // Second pass: recompute attachment positions for parents that moved
+    for (const { id, pos } of parentsToUpdate) {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) continue;
+
+      const attachedCardIds = yMap.get('_attachedCardIds') as string[];
+      const effectiveLayout = layout ?? DEFAULT_ATTACHMENT_LAYOUT;
+      const fanPositions = computeAttachmentPositions(
+        pos,
+        attachedCardIds.length,
+        effectiveLayout,
+      );
+
+      for (let i = 0; i < attachedCardIds.length; i++) {
+        const childYMap = store.getObjectYMap(attachedCardIds[i]);
+        if (childYMap) {
+          childYMap.set('_pos', fanPositions[i]);
+        }
+      }
+    }
   });
 }
 
@@ -756,6 +791,253 @@ export function shuffleStack(store: YjsStore, stackId: string): boolean {
     `[shuffleStack] Shuffled stack ${stackId} (${cards.length} cards)`,
   );
   return true;
+}
+
+// ============================================================================
+// Card-on-Card Attachment Actions
+// ============================================================================
+
+/**
+ * Attach cards to a target stack.
+ *
+ * For each source stack:
+ * - If it has multiple cards, each card is split into individual stacks first
+ * - Each resulting single-card stack becomes an attachment on the target
+ * - Multi-card source stacks are deleted after splitting
+ *
+ * @param store - YjsStore instance
+ * @param sourceIds - IDs of stacks to attach to the target
+ * @param targetId - ID of the target stack to attach to
+ * @param layout - Attachment layout config (defaults to below, 0.25 reveal)
+ * @returns Array of attached card stack IDs
+ */
+export function attachCards(
+  store: YjsStore,
+  sourceIds: string[],
+  targetId: string,
+  layout?: AttachmentLayout,
+): string[] {
+  const targetYMap = store.getObjectYMap(targetId);
+  if (!targetYMap) {
+    console.warn(`[attachCards] Target stack ${targetId} not found`);
+    return [];
+  }
+
+  const targetKind = targetYMap.get('_kind');
+  if (targetKind !== ObjectKind.Stack) {
+    console.warn(
+      `[attachCards] Target ${targetId} is not a stack (kind: ${targetKind})`,
+    );
+    return [];
+  }
+
+  const targetPos = targetYMap.get('_pos') as Position;
+  const existingAttachments =
+    (targetYMap.get('_attachedCardIds') as string[]) ?? [];
+  const attachedIds: string[] = [];
+  const effectiveLayout = layout ?? DEFAULT_ATTACHMENT_LAYOUT;
+
+  store.getDoc().transact(() => {
+    const newAttachmentIds: string[] = [...existingAttachments];
+
+    for (const sourceId of sourceIds) {
+      if (sourceId === targetId) continue; // Can't attach to self
+
+      const sourceYMap = store.getObjectYMap(sourceId);
+      if (!sourceYMap) {
+        console.warn(`[attachCards] Source ${sourceId} not found, skipping`);
+        continue;
+      }
+
+      const sourceKind = sourceYMap.get('_kind');
+      if (sourceKind !== ObjectKind.Stack) {
+        console.warn(
+          `[attachCards] Source ${sourceId} is not a stack, skipping`,
+        );
+        continue;
+      }
+
+      // If source is already attached to something, detach it first
+      const existingParentId: string | undefined =
+        sourceYMap.get('_attachedToId');
+      if (existingParentId) {
+        const parentYMap = store.getObjectYMap(existingParentId);
+        if (parentYMap) {
+          const parentAttachments =
+            (parentYMap.get('_attachedCardIds') as string[]) ?? [];
+          parentYMap.set(
+            '_attachedCardIds',
+            parentAttachments.filter((id: string) => id !== sourceId),
+          );
+        }
+        sourceYMap.set('_attachedToId', undefined);
+      }
+
+      const sourceCards = sourceYMap.get('_cards') as string[];
+      const sourceFaceUp = sourceYMap.get('_faceUp') as boolean;
+
+      if (sourceCards && sourceCards.length > 1) {
+        // Multi-card stack: split each card into individual stacks
+        for (const cardId of sourceCards) {
+          const newStackId = createObject(store, {
+            kind: ObjectKind.Stack,
+            pos: targetPos, // Temporary position, will be recalculated
+            cards: [cardId],
+            faceUp: sourceFaceUp,
+          });
+
+          const newYMap = store.getObjectYMap(newStackId);
+          if (newYMap) {
+            newYMap.set('_attachedToId', targetId);
+          }
+          newAttachmentIds.push(newStackId);
+          attachedIds.push(newStackId);
+        }
+
+        // Delete the original multi-card source stack
+        store.deleteObject(sourceId);
+      } else {
+        // Single-card stack: attach directly
+        sourceYMap.set('_attachedToId', targetId);
+        newAttachmentIds.push(sourceId);
+        attachedIds.push(sourceId);
+      }
+    }
+
+    // Update target's attachment list
+    targetYMap.set('_attachedCardIds', newAttachmentIds);
+
+    // Compute fan positions for all attachments
+    const fanPositions = computeAttachmentPositions(
+      targetPos,
+      newAttachmentIds.length,
+      effectiveLayout,
+    );
+
+    for (let i = 0; i < newAttachmentIds.length; i++) {
+      const childYMap = store.getObjectYMap(newAttachmentIds[i]);
+      if (childYMap) {
+        childYMap.set('_pos', fanPositions[i]);
+      }
+    }
+  });
+
+  console.log(
+    `[attachCards] Attached ${attachedIds.length} card(s) to ${targetId}`,
+  );
+  return attachedIds;
+}
+
+/**
+ * Detach a single card from its parent stack.
+ *
+ * The card keeps its current position. Remaining attachments are repositioned
+ * to close the gap.
+ *
+ * @param store - YjsStore instance
+ * @param cardId - ID of the attached card stack to detach
+ * @param layout - Attachment layout config (defaults to below, 0.25 reveal)
+ * @returns true if detached successfully
+ */
+export function detachCard(
+  store: YjsStore,
+  cardId: string,
+  layout?: AttachmentLayout,
+): boolean {
+  const cardYMap = store.getObjectYMap(cardId);
+  if (!cardYMap) {
+    console.warn(`[detachCard] Card ${cardId} not found`);
+    return false;
+  }
+
+  const parentId: string | undefined = cardYMap.get('_attachedToId');
+  if (!parentId) {
+    console.warn(`[detachCard] Card ${cardId} is not attached to anything`);
+    return false;
+  }
+
+  const parentYMap = store.getObjectYMap(parentId);
+  if (!parentYMap) {
+    console.warn(`[detachCard] Parent ${parentId} not found`);
+    // Clean up the orphaned reference
+    cardYMap.set('_attachedToId', undefined);
+    return false;
+  }
+
+  const effectiveLayout = layout ?? DEFAULT_ATTACHMENT_LAYOUT;
+
+  store.getDoc().transact(() => {
+    // Remove from parent's list
+    const attachedIds = (parentYMap.get('_attachedCardIds') as string[]) ?? [];
+    const remaining = attachedIds.filter((id: string) => id !== cardId);
+    parentYMap.set(
+      '_attachedCardIds',
+      remaining.length > 0 ? remaining : undefined,
+    );
+
+    // Clear the child's reference
+    cardYMap.set('_attachedToId', undefined);
+
+    // Recompute positions for remaining attachments
+    if (remaining.length > 0) {
+      const parentPos = parentYMap.get('_pos') as Position;
+      const fanPositions = computeAttachmentPositions(
+        parentPos,
+        remaining.length,
+        effectiveLayout,
+      );
+
+      for (let i = 0; i < remaining.length; i++) {
+        const childYMap = store.getObjectYMap(remaining[i]);
+        if (childYMap) {
+          childYMap.set('_pos', fanPositions[i]);
+        }
+      }
+    }
+  });
+
+  console.log(`[detachCard] Detached card ${cardId} from ${parentId}`);
+  return true;
+}
+
+/**
+ * Detach all cards from a parent stack.
+ *
+ * Each card keeps its current position.
+ *
+ * @param store - YjsStore instance
+ * @param parentId - ID of the parent stack
+ * @returns Array of detached card stack IDs
+ */
+export function detachAllCards(store: YjsStore, parentId: string): string[] {
+  const parentYMap = store.getObjectYMap(parentId);
+  if (!parentYMap) {
+    console.warn(`[detachAllCards] Parent ${parentId} not found`);
+    return [];
+  }
+
+  const attachedIds = (parentYMap.get('_attachedCardIds') as string[]) ?? [];
+  if (attachedIds.length === 0) {
+    return [];
+  }
+
+  const detachedIds: string[] = [];
+
+  store.getDoc().transact(() => {
+    for (const cardId of attachedIds) {
+      const childYMap = store.getObjectYMap(cardId);
+      if (childYMap) {
+        childYMap.set('_attachedToId', undefined);
+        detachedIds.push(cardId);
+      }
+    }
+    parentYMap.set('_attachedCardIds', undefined);
+  });
+
+  console.log(
+    `[detachAllCards] Detached ${detachedIds.length} card(s) from ${parentId}`,
+  );
+  return detachedIds;
 }
 
 /**

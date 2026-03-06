@@ -80,6 +80,7 @@ export function usePointerEvents(
         metaKey: event.metaKey,
         ctrlKey: event.ctrlKey,
         shiftKey: event.shiftKey,
+        altKey: event.altKey,
         // Multi-select mode for touch events
         // This flag indicates selection toggling behavior without triggering rectangle selection
         multiSelectModeActive:

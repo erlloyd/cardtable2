@@ -1,4 +1,5 @@
-import type { PointerEventData } from '@cardtable2/shared';
+import type { PointerEventData, StackObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
@@ -229,6 +230,26 @@ export class DragManager {
         // Without modifier: drag only this object
         objectsToDrag.add(this.dragState.draggedObjectId);
       }
+    }
+
+    // Include attached cards as secondaries when dragging a parent
+    // This ensures attached cards move with their parent during drag
+    const attachedToInclude: string[] = [];
+    for (const objectId of objectsToDrag) {
+      const obj = sceneManager.getObject(objectId);
+      if (obj && obj._kind === ObjectKind.Stack) {
+        const stackObj = obj as StackObject;
+        if (stackObj._attachedCardIds && stackObj._attachedCardIds.length > 0) {
+          for (const attachedId of stackObj._attachedCardIds) {
+            if (!objectsToDrag.has(attachedId)) {
+              attachedToInclude.push(attachedId);
+            }
+          }
+        }
+      }
+    }
+    for (const id of attachedToInclude) {
+      objectsToDrag.add(id);
     }
 
     // Save initial positions of all objects to drag

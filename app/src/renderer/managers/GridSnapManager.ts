@@ -104,6 +104,7 @@ export class GridSnapManager {
             isHovered: false,
             isDragging: false,
             isStackTarget: false,
+            isAttachTarget: false,
             minimal: true,
             cameraScale,
             createText: visual.createText.bind(visual),

@@ -106,6 +106,8 @@ export type TableObjectProps = {
   // Stack-specific properties (when _kind === ObjectKind.Stack)
   _cards?: string[];
   _faceUp?: boolean;
+  _attachedCardIds?: string[]; // On parent: ordered list of attached card stack IDs
+  _attachedToId?: string; // On child: ID of parent stack this card is attached to
   // Token-specific properties (when _kind === ObjectKind.Token)
   // (uses _faceUp from above)
 };
@@ -115,6 +117,8 @@ export interface StackObject extends TableObject {
   _kind: ObjectKind.Stack;
   _cards: string[]; // Array of card IDs in the stack (top to bottom)
   _faceUp: boolean; // Whether stack is face-up or face-down
+  _attachedCardIds?: string[]; // On parent: ordered list of attached card stack IDs
+  _attachedToId?: string; // On child: ID of parent stack this card is attached to
 }
 
 // Token-specific properties (when _kind === ObjectKind.Token)
@@ -139,7 +143,8 @@ export interface PointerEventData {
   // Modifier keys for multi-select support
   metaKey: boolean; // Cmd on Mac, Windows key on Windows
   ctrlKey: boolean; // Ctrl key
-  shiftKey: boolean; // Shift key (for future range select)
+  shiftKey: boolean; // Shift key (force stack on drop)
+  altKey?: boolean; // Alt/Option key (force attach on drop)
   // Multi-select mode flag (for touch devices)
   // When true, touch events behave like Cmd/Ctrl is held for selection toggling
   // but should NOT trigger rectangle selection on empty space
@@ -313,6 +318,15 @@ export type RendererToMainMessage =
       worldY: number;
       snapPos?: { x: number; y: number }; // Snapped position (if grid snap active)
       stackTargetId?: string; // Stack target for merging (if hovering over one)
+    }
+  | {
+      type: 'attach-cards'; // Card-on-card attachment: attach dragged cards to target
+      ids: string[]; // Source stack IDs to attach
+      targetId: string; // Target stack ID to attach to
+    }
+  | {
+      type: 'detach-card'; // Card-on-card attachment: detach a card from its parent
+      cardId: string; // Stack ID of the attached card to detach
     };
 
 // ============================================================================

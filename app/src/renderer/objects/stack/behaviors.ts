@@ -35,6 +35,9 @@ import {
   MODIFIER_BAR_ALPHA,
   MODIFIER_COLOR_POSITIVE,
   MODIFIER_COLOR_NEGATIVE,
+  ATTACH_ZONE_COLOR,
+  DROP_ZONE_LABEL_FONT_SIZE,
+  DROP_ZONE_LABEL_ALPHA,
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
@@ -881,6 +884,124 @@ function renderIcons(
   return currentY;
 }
 
+/**
+ * Helper: Render drop zone overlay during drag (stack zone / attach zone)
+ *
+ * Shows a text label and colored border to indicate which action will occur
+ * on drop. Stack zone (top half) shows red border + "Stack" label.
+ * Attach zone (bottom half) shows amber border + "Attach" label.
+ */
+function renderDropZoneOverlay(
+  container: Container,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): void {
+  if (ctx.minimal) return;
+
+  if (ctx.isStackTarget) {
+    // "Stack" label centered on card
+    const label = ctx.createText({
+      text: 'Stack',
+      style: {
+        fontSize: DROP_ZONE_LABEL_FONT_SIZE,
+        fill: 0xffffff,
+        fontWeight: 'bold',
+      },
+    });
+    label.anchor.set(0.5, 0.5);
+    label.alpha = DROP_ZONE_LABEL_ALPHA;
+    label.rotation = counterRotation;
+    container.addChild(label);
+  }
+
+  if (ctx.isAttachTarget) {
+    // Amber/gold border around the card
+    const borderGraphic = new Graphics();
+    borderGraphic.label = 'attach-border';
+    borderGraphic.rect(
+      -STACK_WIDTH / 2,
+      -STACK_HEIGHT / 2,
+      STACK_WIDTH,
+      STACK_HEIGHT,
+    );
+    borderGraphic.stroke({
+      width: ctx.scaleStrokeWidth(4),
+      color: ATTACH_ZONE_COLOR,
+    });
+    container.addChild(borderGraphic);
+
+    // "Attach" label centered on card
+    const label = ctx.createText({
+      text: 'Attach',
+      style: {
+        fontSize: DROP_ZONE_LABEL_FONT_SIZE,
+        fill: 0xffffff,
+        fontWeight: 'bold',
+      },
+    });
+    label.anchor.set(0.5, 0.5);
+    label.alpha = DROP_ZONE_LABEL_ALPHA;
+    label.rotation = counterRotation;
+    container.addChild(label);
+  }
+}
+
+/**
+ * Helper: Render attachment count badge for cards with attached cards
+ *
+ * Shows a small badge at the bottom-center of the card indicating how many
+ * cards are attached to this parent.
+ */
+function renderAttachmentCountBadge(
+  container: Container,
+  obj: StackObject,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): void {
+  if (ctx.minimal) return;
+
+  const attachedIds = obj._attachedCardIds;
+  if (!attachedIds || attachedIds.length === 0) return;
+
+  const badgeGraphic = new Graphics();
+  badgeGraphic.label = 'attachment-count-badge';
+
+  // Badge at bottom-center, half on/half off the card
+  const badgeX = 0;
+  const badgeY = STACK_HEIGHT / 2;
+
+  badgeGraphic.roundRect(
+    badgeX - STACK_BADGE_SIZE / 2,
+    badgeY - STACK_BADGE_SIZE / 2,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_SIZE,
+    STACK_BADGE_RADIUS,
+  );
+  badgeGraphic.fill({ color: STACK_BADGE_COLOR, alpha: STACK_BADGE_ALPHA });
+  badgeGraphic.stroke({
+    width: ctx.scaleStrokeWidth(1),
+    color: 0xffffff,
+    alpha: 0.3,
+  });
+
+  container.addChild(badgeGraphic);
+
+  // Badge text (attachment count)
+  const text = ctx.createText({
+    text: attachedIds.length.toString(),
+    style: {
+      fontSize: STACK_BADGE_FONT_SIZE,
+      fill: STACK_BADGE_TEXT_COLOR,
+      fontWeight: 'bold',
+    },
+  });
+  text.label = 'attachment-badge-text';
+  text.anchor.set(0.5, 0.5);
+  text.position.set(badgeX, badgeY);
+  text.rotation = counterRotation;
+  container.addChild(text);
+}
+
 export const StackBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Container {
     const container = new Container();
@@ -902,6 +1023,12 @@ export const StackBehaviors: ObjectBehaviors = {
 
     // Layer 4: On-card attachments (tokens, status, modifiers, icons)
     renderAttachments(container, stackObj, ctx, counterRotation);
+
+    // Layer 5: Attachment count badge (for parent cards with attached cards)
+    renderAttachmentCountBadge(container, stackObj, ctx, counterRotation);
+
+    // Layer 6: Drop zone overlay (stack/attach labels during drag)
+    renderDropZoneOverlay(container, ctx, counterRotation);
 
     return container;
   },

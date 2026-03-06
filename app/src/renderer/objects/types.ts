@@ -11,6 +11,7 @@ export interface RenderContext {
   readonly isHovered: boolean; // Whether the pointer is currently over this object
   readonly isDragging: boolean; // Whether this object is being actively dragged
   readonly isStackTarget: boolean; // Whether this stack is a valid drop target for dragged stacks
+  readonly isAttachTarget: boolean; // Whether this stack is a valid drop target for card-on-card attachment
   readonly minimal?: boolean; // When true, skip decorative elements (badges, 3D effects, handles). Used for ghost previews and simplified rendering.
   readonly cameraScale: number; // Current zoom level (1.0 = 100%, 2.0 = 200%). Use for manual counter-scaling or pass to scaleStrokeWidth helper
   readonly createText: (options: TextOptions) => Text; // Helper that automatically applies zoom-aware resolution (DO NOT create Text objects directly)

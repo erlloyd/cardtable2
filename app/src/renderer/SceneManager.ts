@@ -1,5 +1,6 @@
 import RBush from 'rbush';
-import type { TableObject } from '@cardtable2/shared';
+import type { StackObject, TableObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from './objects';
 
 /**
@@ -93,22 +94,39 @@ export class SceneManager {
 
     if (candidates.length === 0) return null;
 
-    // Sort candidates by _sortKey (higher = on top)
+    // Build candidate list with object data
+    const candidateList = candidates.map((bbox) => {
+      const obj = this.objects.get(bbox.id)!;
+      return { id: bbox.id, object: obj };
+    });
+
+    // Collect IDs of all candidates for quick lookup
+    const candidateIds = new Set(candidateList.map((c) => c.id));
+
+    // Filter out attached children whose parent is also a candidate.
+    // The parent renders on top of its attachments, so it should win hit-tests
+    // in the overlap region.
+    const filtered = candidateList.filter((c) => {
+      if (c.object._kind === ObjectKind.Stack) {
+        const parentId = (c.object as StackObject)._attachedToId;
+        if (parentId && candidateIds.has(parentId)) {
+          return false; // Parent is also here — skip this child
+        }
+      }
+      return true;
+    });
+
+    // Sort remaining candidates by _sortKey (higher = on top)
     // _sortKey is a fractional index string, lexicographic sort works correctly
-    const sorted = candidates
-      .map((bbox) => {
-        const obj = this.objects.get(bbox.id)!;
-        return { id: bbox.id, object: obj };
-      })
-      .sort((a, b) => {
-        // Higher _sortKey = on top
-        if (a.object._sortKey > b.object._sortKey) return -1;
-        if (a.object._sortKey < b.object._sortKey) return 1;
-        return 0;
-      });
+    filtered.sort((a, b) => {
+      // Higher _sortKey = on top
+      if (a.object._sortKey > b.object._sortKey) return -1;
+      if (a.object._sortKey < b.object._sortKey) return 1;
+      return 0;
+    });
 
     // Return the topmost object
-    return sorted[0];
+    return filtered[0] ?? null;
   }
 
   /**

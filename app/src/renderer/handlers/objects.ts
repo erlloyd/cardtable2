@@ -5,7 +5,12 @@
  * Creates and manages PixiJS visuals for TableObjects.
  */
 
-import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
+import type {
+  MainToRendererMessage,
+  StackObject,
+  TableObject,
+} from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { Easing } from '../managers';
 import {
@@ -121,6 +126,9 @@ export function handleObjectsAdded(
     }
   }
 
+  // After adding, ensure attachment parent visuals render above their children
+  ensureAttachmentZOrder(context, message.objects);
+
   context.app.renderer.render(context.app.stage);
 }
 
@@ -138,6 +146,9 @@ export function handleObjectsUpdated(
   for (const { id, obj } of message.objects) {
     updateObjectVisual(context, id, obj);
   }
+
+  // After updates, ensure attachment parent visuals render above their children
+  ensureAttachmentZOrder(context, message.objects);
 
   context.app.renderer.render(context.app.stage);
 }
@@ -418,6 +429,49 @@ function updateObjectVisual(
   } else {
     // Small or no change - set directly
     visual.rotation = targetRotation;
+  }
+}
+
+/**
+ * Helper: Ensure attachment parent visuals render above their children.
+ *
+ * After objects are added or updated, any object with _attachedCardIds needs
+ * its visual moved above its children in the PixiJS container (which determines
+ * render order). This is needed because new child objects are added to the top
+ * of the container by default.
+ */
+function ensureAttachmentZOrder(
+  context: RendererContext,
+  objects: Array<{ id: string; obj: TableObject }>,
+): void {
+  for (const { id, obj } of objects) {
+    if (obj._kind !== ObjectKind.Stack) continue;
+    const stackObj = obj as StackObject;
+    if (!stackObj._attachedCardIds || stackObj._attachedCardIds.length === 0) {
+      continue;
+    }
+
+    // This object is a parent with attachments — move it above all its children
+    const parentVisual = context.visual.getVisual(id);
+    if (!parentVisual) continue;
+
+    // Find the highest child index in the container
+    let maxChildIndex = -1;
+    for (const childId of stackObj._attachedCardIds) {
+      const childVisual = context.visual.getVisual(childId);
+      if (childVisual) {
+        const idx = context.worldContainer.children.indexOf(childVisual);
+        if (idx > maxChildIndex) maxChildIndex = idx;
+      }
+    }
+
+    const parentIndex = context.worldContainer.children.indexOf(parentVisual);
+    if (maxChildIndex >= 0 && parentIndex < maxChildIndex) {
+      console.log(
+        `[ATTACH-DEBUG] ensureAttachmentZOrder: moving parent ${id.slice(0, 8)} from index ${parentIndex} above child at ${maxChildIndex}`,
+      );
+      context.worldContainer.setChildIndex(parentVisual, maxChildIndex);
+    }
   }
 }
 

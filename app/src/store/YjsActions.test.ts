@@ -271,8 +271,8 @@ describe('YjsActions - createObject', () => {
       });
 
       const obj = toTableObject(store.getObjectYMap(id)!);
-      // Should match format: "number|letter"
-      expect(obj?._sortKey).toMatch(/^\d+\|[a-z]+$/);
+      // Should be zero-padded 6-digit format (e.g., "000001")
+      expect(obj?._sortKey).toMatch(/^\d{6}$/);
     });
   });
 

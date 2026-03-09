@@ -115,12 +115,14 @@ export interface AttachmentLayout {
   direction: AttachmentDirection; // Fan direction for attached cards
   revealFraction: number; // 0-1, portion of attached card visible (default: 0.25)
   maxBeforeCompress?: number; // Compress spacing beyond this count (default: 5)
+  parentOnTop?: boolean; // Whether parent renders above children (default: true)
 }
 
 export const DEFAULT_ATTACHMENT_LAYOUT: AttachmentLayout = {
   direction: 'below',
   revealFraction: 0.25,
   maxBeforeCompress: 5,
+  parentOnTop: true,
 };
 
 export interface AssetPack {

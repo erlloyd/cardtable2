@@ -433,12 +433,11 @@ function updateObjectVisual(
 }
 
 /**
- * Helper: Ensure attachment parent visuals render above their children.
+ * Helper: Ensure attachment z-order is correct.
  *
- * After objects are added or updated, any object with _attachedCardIds needs
- * its visual moved above its children in the PixiJS container (which determines
- * render order). This is needed because new child objects are added to the top
- * of the container by default.
+ * Uses sortKeys to determine PixiJS render order for parent + children.
+ * SortKeys encode the full z-ordering (including parent-on-top vs children-on-top),
+ * so we just sort by sortKey and set container indices accordingly.
  */
 function ensureAttachmentZOrder(
   context: RendererContext,
@@ -451,26 +450,34 @@ function ensureAttachmentZOrder(
       continue;
     }
 
-    // This object is a parent with attachments — move it above all its children
-    const parentVisual = context.visual.getVisual(id);
-    if (!parentVisual) continue;
+    // Collect parent + all children with their sortKeys
+    const groupIds = [id, ...stackObj._attachedCardIds];
+    const groupEntries: Array<{ objectId: string; sortKey: string }> = [];
 
-    // Find the highest child index in the container
-    let maxChildIndex = -1;
-    for (const childId of stackObj._attachedCardIds) {
-      const childVisual = context.visual.getVisual(childId);
-      if (childVisual) {
-        const idx = context.worldContainer.children.indexOf(childVisual);
-        if (idx > maxChildIndex) maxChildIndex = idx;
+    for (const objectId of groupIds) {
+      const groupObj = context.sceneManager.getObject(objectId);
+      const visual = context.visual.getVisual(objectId);
+      if (groupObj && visual && visual.parent === context.worldContainer) {
+        groupEntries.push({ objectId, sortKey: groupObj._sortKey });
       }
     }
 
-    const parentIndex = context.worldContainer.children.indexOf(parentVisual);
-    if (maxChildIndex >= 0 && parentIndex < maxChildIndex) {
-      console.log(
-        `[ATTACH-DEBUG] ensureAttachmentZOrder: moving parent ${id.slice(0, 8)} from index ${parentIndex} above child at ${maxChildIndex}`,
-      );
-      context.worldContainer.setChildIndex(parentVisual, maxChildIndex);
+    // Sort by sortKey ascending (lower = renders first = behind)
+    groupEntries.sort((a, b) => {
+      if (a.sortKey < b.sortKey) return -1;
+      if (a.sortKey > b.sortKey) return 1;
+      return 0;
+    });
+
+    // Set container indices: each entry moves to top in ascending order
+    for (const { objectId } of groupEntries) {
+      const visual = context.visual.getVisual(objectId);
+      if (visual) {
+        context.worldContainer.setChildIndex(
+          visual,
+          context.worldContainer.children.length - 1,
+        );
+      }
     }
   }
 }

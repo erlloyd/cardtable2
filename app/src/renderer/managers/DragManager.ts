@@ -1,5 +1,5 @@
 import type { PointerEventData, StackObject } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, parseSortKeyPrefix } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
@@ -407,29 +407,16 @@ export class DragManager {
     sceneManager: SceneManager,
     objectsToDrag: Set<string>,
   ): void {
-    // Find the current maximum sortKey (lexicographic comparison for fractional indexing)
-    let maxSortKey = '0';
+    let maxPrefix = 0;
     for (const [, obj] of sceneManager.getAllObjects()) {
-      if (obj._sortKey > maxSortKey) {
-        maxSortKey = obj._sortKey;
-      }
+      const prefix = parseSortKeyPrefix(obj._sortKey);
+      if (prefix > maxPrefix) maxPrefix = prefix;
     }
-
-    // Generate new sortKeys for dragged cards using fractional indexing
-    // Increment the prefix to ensure new keys are lexicographically greater
-    const [prefix] = maxSortKey.split('|');
-    const newPrefix = String(Number(prefix) + 1);
-
-    let sortKeyCounter = 0;
+    const newPrefix = String(maxPrefix + 1).padStart(6, '0');
     for (const objectId of objectsToDrag) {
       const obj = sceneManager.getObject(objectId);
       if (obj) {
-        // Update logical z-order (_sortKey) using fractional indexing format
-        // TODO: Current implementation only supports up to 26 cards in a single drag operation
-        // (a-z = 97-122). For production, implement proper fractional indexing library
-        // that supports unlimited suffix generation (e.g., 'aa', 'ab', ... 'ba', 'bb').
-        // See: https://github.com/rocicorp/fractional-indexing or similar
-        obj._sortKey = `${newPrefix}|${String.fromCharCode(97 + sortKeyCounter++)}`;
+        obj._sortKey = newPrefix;
       }
     }
   }

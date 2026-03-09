@@ -6,6 +6,7 @@ import {
   type TableObject,
   type AttachmentLayout,
   DEFAULT_ATTACHMENT_LAYOUT,
+  parseSortKeyPrefix,
 } from '@cardtable2/shared';
 import { getDefaultProperties } from './ObjectDefaults';
 import { computeAttachmentPositions } from './attachmentLayout';
@@ -37,24 +38,15 @@ export interface CreateObjectOptions {
  * Refactored to work with Y.Maps directly - zero allocations.
  */
 function generateTopSortKey(store: YjsStore): string {
-  // Find the maximum sortKey by iterating Y.Maps directly
-  let maxSortKey = '0';
+  let maxPrefix = 0;
   store.forEachObject((yMap) => {
     const sortKey = yMap.get('_sortKey');
-    if (sortKey && sortKey > maxSortKey) {
-      maxSortKey = sortKey;
+    if (sortKey) {
+      const prefix = parseSortKeyPrefix(sortKey);
+      if (prefix > maxPrefix) maxPrefix = prefix;
     }
   });
-
-  // Parse the max sortKey to get prefix
-  const [prefix] = maxSortKey.split('|');
-  const prefixNum = parseInt(prefix, 10) || 0;
-
-  // Increment prefix to ensure new object is on top
-  const newPrefix = (prefixNum + 1).toString();
-
-  // Start with 'a' suffix for first object at this level
-  return `${newPrefix}|a`;
+  return String(maxPrefix + 1).padStart(6, '0');
 }
 
 /**
@@ -920,6 +912,35 @@ export function attachCards(
         childYMap.set('_pos', fanPositions[i]);
       }
     }
+
+    // Assign sortKeys so parent/child z-ordering is encoded in the key itself
+    const baseKey = targetYMap.get('_sortKey') as string;
+    // Strip any existing sub-key suffix to get the base prefix
+    const parentBaseKey = baseKey.split('|')[0];
+    const parentOnTop = effectiveLayout.parentOnTop !== false;
+    const childCount = newAttachmentIds.length;
+
+    if (parentOnTop) {
+      // Parent gets highest sub-key, children get reverse-indexed below
+      targetYMap.set('_sortKey', `${parentBaseKey}|999999`);
+      for (let i = 0; i < childCount; i++) {
+        const childYMap = store.getObjectYMap(newAttachmentIds[i]);
+        if (childYMap) {
+          const subKey = String(childCount - i).padStart(6, '0');
+          childYMap.set('_sortKey', `${parentBaseKey}|${subKey}`);
+        }
+      }
+    } else {
+      // Parent gets lowest sub-key, children get forward-indexed above
+      targetYMap.set('_sortKey', `${parentBaseKey}|000001`);
+      for (let i = 0; i < childCount; i++) {
+        const childYMap = store.getObjectYMap(newAttachmentIds[i]);
+        if (childYMap) {
+          const subKey = String(i + 2).padStart(6, '0');
+          childYMap.set('_sortKey', `${parentBaseKey}|${subKey}`);
+        }
+      }
+    }
   });
 
   console.log(
@@ -978,7 +999,12 @@ export function detachCard(
     // Clear the child's reference
     cardYMap.set('_attachedToId', undefined);
 
-    // Recompute positions for remaining attachments
+    // Give detached card a fresh top-level sortKey
+    const parentSortKey = parentYMap.get('_sortKey') as string;
+    const parentBaseKey = parentSortKey.split('|')[0];
+    cardYMap.set('_sortKey', parentBaseKey);
+
+    // Recompute positions and sortKeys for remaining attachments
     if (remaining.length > 0) {
       const parentPos = parentYMap.get('_pos') as Position;
       const fanPositions = computeAttachmentPositions(
@@ -987,12 +1013,25 @@ export function detachCard(
         effectiveLayout,
       );
 
-      for (let i = 0; i < remaining.length; i++) {
+      const parentOnTop = effectiveLayout.parentOnTop !== false;
+      const childCount = remaining.length;
+
+      for (let i = 0; i < childCount; i++) {
         const childYMap = store.getObjectYMap(remaining[i]);
         if (childYMap) {
           childYMap.set('_pos', fanPositions[i]);
+          if (parentOnTop) {
+            const subKey = String(childCount - i).padStart(6, '0');
+            childYMap.set('_sortKey', `${parentBaseKey}|${subKey}`);
+          } else {
+            const subKey = String(i + 2).padStart(6, '0');
+            childYMap.set('_sortKey', `${parentBaseKey}|${subKey}`);
+          }
         }
       }
+    } else {
+      // No children left — restore parent to base key
+      parentYMap.set('_sortKey', parentBaseKey);
     }
   });
 
@@ -1024,14 +1063,21 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
   const detachedIds: string[] = [];
 
   store.getDoc().transact(() => {
+    // Get parent's base key to assign fresh top-level sortKeys to children
+    const parentSortKey = parentYMap.get('_sortKey') as string;
+    const parentBaseKey = parentSortKey.split('|')[0];
+
     for (const cardId of attachedIds) {
       const childYMap = store.getObjectYMap(cardId);
       if (childYMap) {
         childYMap.set('_attachedToId', undefined);
+        childYMap.set('_sortKey', parentBaseKey);
         detachedIds.push(cardId);
       }
     }
     parentYMap.set('_attachedCardIds', undefined);
+    // Restore parent to base key
+    parentYMap.set('_sortKey', parentBaseKey);
   });
 
   console.log(

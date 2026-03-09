@@ -280,21 +280,16 @@ describe('namespaceDeckCards', () => {
 
 describe('generateSortKey', () => {
   it('should generate sort key from index', () => {
-    expect(generateSortKey(0)).toBe('rs'); // (0+1)*1000 = 1000 in base 36
+    expect(generateSortKey(0)).toBe('001000'); // (0+1)*1000 = 1000, zero-padded to 6
   });
 
-  it('should generate increasing numeric values', () => {
+  it('should generate lexicographically increasing keys', () => {
     const key1 = generateSortKey(0);
     const key2 = generateSortKey(1);
     const key3 = generateSortKey(2);
 
-    // Convert back to numbers for comparison
-    const val1 = parseInt(key1, 36);
-    const val2 = parseInt(key2, 36);
-    const val3 = parseInt(key3, 36);
-
-    expect(val1 < val2).toBe(true);
-    expect(val2 < val3).toBe(true);
+    expect(key1 < key2).toBe(true);
+    expect(key2 < key3).toBe(true);
   });
 
   it('should generate consistent sort keys', () => {

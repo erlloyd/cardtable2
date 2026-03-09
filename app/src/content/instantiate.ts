@@ -114,14 +114,12 @@ export function namespaceDeckCards(
 // ============================================================================
 
 /**
- * Generate a fractional sort key for z-ordering
- * Uses base-36 encoding for compact representation
+ * Generate a sort key for z-ordering.
+ * Uses zero-padded 6-digit format for correct lexicographic comparison.
  */
 export function generateSortKey(index: number): string {
-  // Generate a key based on index
-  // Use a large multiplier to leave room for insertions
   const value = (index + 1) * 1000;
-  return value.toString(36);
+  return String(value).padStart(6, '0');
 }
 
 // ============================================================================

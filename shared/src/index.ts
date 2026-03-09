@@ -377,3 +377,19 @@ export interface AwarenessState {
   };
   toolMode?: 'pan' | 'select' | 'card' | 'token' | 'zone';
 }
+
+// ============================================================================
+// Sort Key Utilities
+// ============================================================================
+
+/**
+ * Parse the top-level numeric prefix from a sortKey.
+ * Handles both new format ("000042", "000042|000003") and legacy base-36 format ("rs").
+ */
+export function parseSortKeyPrefix(sortKey: string): number {
+  const firstSegment = sortKey.split('|')[0];
+  const base10 = parseInt(firstSegment, 10);
+  if (Number.isFinite(base10)) return base10;
+  const base36 = parseInt(firstSegment, 36);
+  return Number.isFinite(base36) ? base36 : 0;
+}

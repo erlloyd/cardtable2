@@ -131,7 +131,11 @@ export class BoardMessageBus {
     // Object state
     this.registry.register('objects-moved', (msg, ctx) => {
       console.log(`[BoardMessageBus] ${msg.updates.length} object(s) moved`);
-      moveObjects(ctx.store, msg.updates);
+      const gameAssets = ctx.store.getGameAssets();
+      const layout = gameAssets?.packs.find(
+        (p) => p.attachmentLayout,
+      )?.attachmentLayout;
+      moveObjects(ctx.store, msg.updates, layout);
     });
 
     this.registry.register('stack-objects', (msg, ctx) => {

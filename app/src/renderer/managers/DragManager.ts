@@ -398,6 +398,7 @@ export class DragManager {
     this.isPhantomDragging = false;
     this.dragState = null;
     this.isUnstackDrag = false;
+    this.clearUnstackWaiting();
   }
 
   /**
@@ -434,5 +435,6 @@ export class DragManager {
     this.dragState = null;
     this.pointerDownEvent = null;
     this.isUnstackDrag = false;
+    this.clearUnstackWaiting();
   }
 }

@@ -343,8 +343,18 @@ export function handlePointerMove(
               isSelected,
               context.sceneManager,
             );
+          }
 
-            // Update visual z-order
+          // Move dragged visuals to top of container, sorted by sortKey
+          // so attachment z-order is preserved (children behind, parent on top)
+          const sortedDragIds = [...draggedIds].sort((a, b) => {
+            const objA = context.sceneManager.getObject(a);
+            const objB = context.sceneManager.getObject(b);
+            const keyA = objA?._sortKey ?? '';
+            const keyB = objB?._sortKey ?? '';
+            return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+          });
+          for (const objectId of sortedDragIds) {
             const visual = context.visual.getVisual(objectId);
             if (visual) {
               context.worldContainer.setChildIndex(
@@ -1298,6 +1308,7 @@ function detectAndShowDropZone(
   event?: { shiftKey?: boolean; altKey?: boolean },
 ): void {
   const result = detectDropZone(context, worldX, worldY, event);
+  const draggedId = context.drag.getDraggedObjectId();
 
   if (result) {
     const isSelected = context.selection.isSelected(result.targetId);
@@ -1331,6 +1342,15 @@ function detectAndShowDropZone(
         context.sceneManager,
       );
     }
+
+    // Show action preview label on the dragged card
+    if (draggedId) {
+      context.visual.updateDragActionPreview(
+        draggedId,
+        result.type,
+        context.sceneManager,
+      );
+    }
   } else {
     // Clear both feedbacks
     context.visual.updateStackTargetFeedback(
@@ -1345,5 +1365,14 @@ function detectAndShowDropZone(
       false,
       context.sceneManager,
     );
+
+    // Clear action preview on dragged card
+    if (draggedId) {
+      context.visual.updateDragActionPreview(
+        draggedId,
+        null,
+        context.sceneManager,
+      );
+    }
   }
 }

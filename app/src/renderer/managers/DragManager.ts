@@ -1,5 +1,5 @@
 import type { PointerEventData, StackObject } from '@cardtable2/shared';
-import { ObjectKind, parseSortKeyPrefix } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
@@ -404,19 +404,23 @@ export class DragManager {
    * Update z-order for all dragged objects (move to top).
    */
   private updateDraggedObjectsZOrder(
-    sceneManager: SceneManager,
+    _sceneManager: SceneManager,
     objectsToDrag: Set<string>,
   ): void {
-    let maxPrefix = 0;
-    for (const [, obj] of sceneManager.getAllObjects()) {
-      const prefix = parseSortKeyPrefix(obj._sortKey);
-      if (prefix > maxPrefix) maxPrefix = prefix;
-    }
-    const newPrefix = String(maxPrefix + 1).padStart(6, '0');
+    // Use 999999 as base key — guaranteed above all normal objects.
+    // moveObjects assigns proper keys on drag end, so this is temporary.
+    const dragBaseKey = '999999';
+
     for (const objectId of objectsToDrag) {
-      const obj = sceneManager.getObject(objectId);
-      if (obj) {
-        obj._sortKey = newPrefix;
+      const obj = _sceneManager.getObject(objectId);
+      if (!obj) continue;
+
+      // Preserve attachment sub-key structure: replace the base prefix, keep sub-keys
+      const segments = obj._sortKey.split('|');
+      if (segments.length > 1) {
+        obj._sortKey = [dragBaseKey, ...segments.slice(1)].join('|');
+      } else {
+        obj._sortKey = dragBaseKey;
       }
     }
   }

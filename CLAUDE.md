@@ -375,6 +375,7 @@ See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") 
 - ESLint + Prettier configured
 - Pre-commit hooks auto-format code
 - Pre-push hooks run typecheck
+- **Debug logging convention**: When adding temporary `console.log` statements for debugging a problem, ALL debug logs across ALL files MUST use the same prefix (e.g., `[DEBUG-ATTACH]`, `[DEBUG-DRAG]`). This lets the user filter console output with a single string. Never use different prefixes per file or per function.
 - **CRITICAL - NEVER VIOLATE THIS RULE**: Suppression comments are FORBIDDEN without explicit user approval
   - **NEVER** add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments
   - **ALWAYS** fix the underlying type/lint issue properly first

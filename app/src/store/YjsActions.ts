@@ -153,6 +153,18 @@ export function moveObjects(
     // First pass: move the requested objects and collect parents that have attachments
     const parentsToUpdate: Array<{ id: string; pos: Position }> = [];
 
+    // Bring all moved objects to the top by assigning new sortKeys
+    const movedIds = new Set(updates.map((u) => u.id));
+    let maxPrefix = 0;
+    store.forEachObject((yMap) => {
+      const sortKey = yMap.get('_sortKey');
+      if (sortKey) {
+        const prefix = parseSortKeyPrefix(sortKey);
+        if (prefix > maxPrefix) maxPrefix = prefix;
+      }
+    });
+    const newBaseKey = String(maxPrefix + 1).padStart(6, '0');
+
     updates.forEach(({ id, pos }) => {
       const yMap = store.getObjectYMap(id);
       if (!yMap) {
@@ -162,6 +174,17 @@ export function moveObjects(
 
       // Update position directly on Y.Map
       yMap.set('_pos', pos);
+
+      // Update sortKey: preserve attachment sub-key structure, replace base prefix
+      if (movedIds.has(id)) {
+        const oldKey = yMap.get('_sortKey') as string;
+        const segments = oldKey.split('|');
+        const newKey =
+          segments.length > 1
+            ? [newBaseKey, ...segments.slice(1)].join('|')
+            : newBaseKey;
+        yMap.set('_sortKey', newKey);
+      }
 
       // Check if this object has attached cards that need to move too
       const attachedCardIds: string[] | undefined =

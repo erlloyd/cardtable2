@@ -103,6 +103,7 @@ export class GridSnapManager {
             isSelected: false,
             isHovered: false,
             isDragging: false,
+            dragActionPreview: null,
             isStackTarget: false,
             isAttachTarget: false,
             minimal: true,

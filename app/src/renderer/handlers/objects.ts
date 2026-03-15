@@ -46,6 +46,9 @@ export function handleSyncObjects(
     );
   }
 
+  // Ensure attachment z-ordering after all objects are added
+  ensureAttachmentZOrder(context, message.objects);
+
   context.app.renderer.render(context.app.stage);
 }
 
@@ -254,11 +257,17 @@ function updateObjectVisual(
   // Get previous object state to detect flip changes
   const prevObj = context.sceneManager.getObject(id);
 
-  // Update scene manager
-  context.sceneManager.updateObject(id, obj);
-
   // Check if this object is being dragged (primary or secondary in multi-drag)
   const isDragging = context.drag.getDraggedObjectIds().includes(id);
+
+  // During drag, preserve the in-memory sortKey (DragManager owns z-order during drag).
+  // Store updates arrive with stale sortKeys that would overwrite DragManager's values.
+  if (isDragging && prevObj) {
+    obj._sortKey = prevObj._sortKey;
+  }
+
+  // Update scene manager
+  context.sceneManager.updateObject(id, obj);
 
   // Update visual position and rotation
   // Position is preserved during drag to avoid flashing, but rotation should always update
@@ -452,6 +461,16 @@ function ensureAttachmentZOrder(
 
     // Collect parent + all children with their sortKeys
     const groupIds = [id, ...stackObj._attachedCardIds];
+
+    // Skip groups where any member is being dragged — DragManager owns z-order during drag
+    const draggedIds = context.drag.getDraggedObjectIds();
+    if (
+      draggedIds.length > 0 &&
+      groupIds.some((gid) => draggedIds.includes(gid))
+    ) {
+      continue;
+    }
+
     const groupEntries: Array<{ objectId: string; sortKey: string }> = [];
 
     for (const objectId of groupIds) {

@@ -10,6 +10,7 @@ import {
   type StackObject,
   type TokenObject,
   type Position,
+  formatSortKey,
 } from '@cardtable2/shared';
 
 // ============================================================================
@@ -118,8 +119,7 @@ export function namespaceDeckCards(
  * Uses zero-padded 6-digit format for correct lexicographic comparison.
  */
 export function generateSortKey(index: number): string {
-  const value = (index + 1) * 1000;
-  return String(value).padStart(6, '0');
+  return formatSortKey((index + 1) * 1000);
 }
 
 // ============================================================================

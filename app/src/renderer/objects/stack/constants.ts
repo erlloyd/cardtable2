@@ -63,4 +63,3 @@ export const ATTACH_ZONE_COLOR = 0xd4a017;
 
 /** Drop zone label styling */
 export const DROP_ZONE_LABEL_FONT_SIZE = 14;
-export const DROP_ZONE_LABEL_ALPHA = 0.7;

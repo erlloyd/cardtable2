@@ -1,5 +1,5 @@
 import type { PointerEventData, StackObject } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, DRAG_SENTINEL_KEY } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
@@ -408,9 +408,9 @@ export class DragManager {
     _sceneManager: SceneManager,
     objectsToDrag: Set<string>,
   ): void {
-    // Use 999999 as base key — guaranteed above all normal objects.
+    // Use DRAG_SENTINEL_KEY as base key — guaranteed above all normal objects.
     // moveObjects assigns proper keys on drag end, so this is temporary.
-    const dragBaseKey = '999999';
+    const dragBaseKey = DRAG_SENTINEL_KEY;
 
     for (const objectId of objectsToDrag) {
       const obj = _sceneManager.getObject(objectId);

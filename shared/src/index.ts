@@ -6,6 +6,9 @@ export const CARDTABLE_VERSION = '2.0.0';
 // Content System Types (Asset Packs, Scenarios, Cards, etc.)
 export * from './content-types';
 
+// SortKey utilities for z-ordering
+export * from './sortKey';
+
 // Object types on the table
 // Note: Every card or group of cards is a 'stack' (even a single card is a stack of 1)
 // Object kind enum for type-safe comparisons
@@ -106,8 +109,18 @@ export type TableObjectProps = {
   // Stack-specific properties (when _kind === ObjectKind.Stack)
   _cards?: string[];
   _faceUp?: boolean;
-  _attachedCardIds?: string[]; // On parent: ordered list of attached card stack IDs
-  _attachedToId?: string; // On child: ID of parent stack this card is attached to
+  /**
+   * On parent stacks: ordered list of attached child stack IDs.
+   * Children fan out visually according to AttachmentLayout.
+   * Mutually exclusive with `_attachedToId` (a stack is either a parent or a child).
+   */
+  _attachedCardIds?: string[];
+  /**
+   * On child stacks: ID of the parent stack this card is attached to.
+   * Set when a card is dropped onto another card with Alt held or within attach distance.
+   * Mutually exclusive with `_attachedCardIds`.
+   */
+  _attachedToId?: string;
   // Token-specific properties (when _kind === ObjectKind.Token)
   // (uses _faceUp from above)
 };
@@ -117,8 +130,10 @@ export interface StackObject extends TableObject {
   _kind: ObjectKind.Stack;
   _cards: string[]; // Array of card IDs in the stack (top to bottom)
   _faceUp: boolean; // Whether stack is face-up or face-down
-  _attachedCardIds?: string[]; // On parent: ordered list of attached card stack IDs
-  _attachedToId?: string; // On child: ID of parent stack this card is attached to
+  /** @see TableObject._attachedCardIds */
+  _attachedCardIds?: string[];
+  /** @see TableObject._attachedToId */
+  _attachedToId?: string;
 }
 
 // Token-specific properties (when _kind === ObjectKind.Token)
@@ -144,7 +159,7 @@ export interface PointerEventData {
   metaKey: boolean; // Cmd on Mac, Windows key on Windows
   ctrlKey: boolean; // Ctrl key
   shiftKey: boolean; // Shift key (force stack on drop)
-  altKey?: boolean; // Alt/Option key (force attach on drop)
+  altKey: boolean; // Alt/Option key (force attach on drop)
   // Multi-select mode flag (for touch devices)
   // When true, touch events behave like Cmd/Ctrl is held for selection toggling
   // but should NOT trigger rectangle selection on empty space
@@ -378,18 +393,4 @@ export interface AwarenessState {
   toolMode?: 'pan' | 'select' | 'card' | 'token' | 'zone';
 }
 
-// ============================================================================
-// Sort Key Utilities
-// ============================================================================
-
-/**
- * Parse the top-level numeric prefix from a sortKey.
- * Handles both new format ("000042", "000042|000003") and legacy base-36 format ("rs").
- */
-export function parseSortKeyPrefix(sortKey: string): number {
-  const firstSegment = sortKey.split('|')[0];
-  const base10 = parseInt(firstSegment, 10);
-  if (Number.isFinite(base10)) return base10;
-  const base36 = parseInt(firstSegment, 36);
-  return Number.isFinite(base36) ? base36 : 0;
-}
+// Sort Key Utilities — re-exported from sortKey.ts (parseSortKeyPrefix, formatSortKey, etc.)

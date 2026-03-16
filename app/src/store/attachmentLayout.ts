@@ -16,7 +16,14 @@ export function computeAttachmentPositions(
 ): Position[] {
   if (attachmentCount === 0) return [];
 
-  const { direction, revealFraction, maxBeforeCompress = 5 } = layout;
+  const {
+    direction,
+    revealFraction: rawReveal,
+    maxBeforeCompress = 5,
+  } = layout;
+
+  // Clamp revealFraction to [0, 1] to guard against invalid game definitions
+  const revealFraction = Math.max(0, Math.min(1, rawReveal));
 
   // Progressive compression: reduce reveal fraction when exceeding max
   let effectiveReveal = revealFraction;

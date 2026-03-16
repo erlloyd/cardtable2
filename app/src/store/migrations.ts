@@ -1,5 +1,9 @@
 import * as Y from 'yjs';
-import { ObjectKind, parseSortKeyPrefix } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  parseSortKeyPrefix,
+  formatSortKey,
+} from '@cardtable2/shared';
 import { getDefaultProperties } from './ObjectDefaults';
 
 /**
@@ -170,7 +174,7 @@ function migrateSortKeys(objectsMap: Y.Map<Y.Map<unknown>>): void {
   // Assign new zero-padded keys preserving order
   let migratedCount = 0;
   for (let i = 0; i < entries.length; i++) {
-    const newKey = String((i + 1) * 1000).padStart(6, '0');
+    const newKey = formatSortKey((i + 1) * 1000);
     const objMap = objectsMap.get(entries[i].id);
     if (objMap) {
       const oldKey = objMap.get('_sortKey') as string;

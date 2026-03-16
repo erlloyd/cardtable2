@@ -904,6 +904,10 @@ export function attachCards(
           const newYMap = store.getObjectYMap(newStackId);
           if (newYMap) {
             newYMap.set('_attachedToId', targetId);
+          } else {
+            console.error(
+              `[attachCards] Failed to find YMap for newly created stack ${newStackId}`,
+            );
           }
           newAttachmentIds.push(newStackId);
           attachedIds.push(newStackId);
@@ -1089,12 +1093,16 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
     // Get parent's base key to assign fresh top-level sortKeys to children
     const parentSortKey = parentYMap.get('_sortKey') as string;
     const parentBaseKey = parentSortKey.split('|')[0];
+    const parentBaseNum = parseSortKeyPrefix(parentSortKey);
 
+    // Each detached child needs a unique sortKey above the parent
+    let nextKey = parentBaseNum;
     for (const cardId of attachedIds) {
       const childYMap = store.getObjectYMap(cardId);
       if (childYMap) {
         childYMap.set('_attachedToId', undefined);
-        childYMap.set('_sortKey', parentBaseKey);
+        nextKey++;
+        childYMap.set('_sortKey', String(nextKey).padStart(6, '0'));
         detachedIds.push(cardId);
       }
     }

@@ -232,9 +232,15 @@ export class BoardMessageBus {
           (p) => p.attachmentLayout,
         )?.attachmentLayout;
         const attached = attachCards(ctx.store, msg.ids, msg.targetId, layout);
-        console.log(
-          `[BoardMessageBus] Successfully attached ${attached.length} card(s)`,
-        );
+        if (attached.length === 0) {
+          ctx.addMessage(
+            'No cards were attached. Target may have been modified.',
+          );
+        } else {
+          console.log(
+            `[BoardMessageBus] Successfully attached ${attached.length} card(s)`,
+          );
+        }
       } catch (error) {
         console.error('[BoardMessageBus] Attach operation failed', {
           sourceIds: msg.ids,

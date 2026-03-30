@@ -2750,6 +2750,79 @@ describe('YjsActions - attachCards', () => {
     });
   });
 
+  describe('dangling attachment cleanup', () => {
+    it('filters out dangling IDs from existing _attachedCardIds when attaching', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const child1Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-1'],
+        faceUp: true,
+      });
+      const newChildId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['new-child'],
+        faceUp: true,
+      });
+
+      // Attach child1 normally
+      attachCards(store, [child1Id], parentId);
+
+      // Manually inject a dangling ID into the parent's attachment list
+      const parentYMap = store.getObjectYMap(parentId)!;
+      const currentIds = parentYMap.get('_attachedCardIds') as string[];
+      parentYMap.set('_attachedCardIds', [...currentIds, 'deleted-object-id']);
+
+      // Now attach another child — the dangling ID should be filtered out
+      attachCards(store, [newChildId], parentId);
+
+      const parentObj = toTableObject(parentYMap);
+      const attachedIds = (parentObj as { _attachedCardIds?: string[] })
+        ._attachedCardIds;
+
+      // Should contain child1 and newChild, but NOT the dangling ID
+      expect(attachedIds).toContain(child1Id);
+      expect(attachedIds).toContain(newChildId);
+      expect(attachedIds).not.toContain('deleted-object-id');
+    });
+
+    it('computes correct fan positions without dangling IDs', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child'],
+        faceUp: true,
+      });
+
+      // Inject a dangling ID before attaching
+      const parentYMap = store.getObjectYMap(parentId)!;
+      parentYMap.set('_attachedCardIds', ['dangling-1', 'dangling-2']);
+
+      // Attach a real child
+      attachCards(store, [childId], parentId);
+
+      const parentObj = toTableObject(parentYMap);
+      const attachedIds = (parentObj as { _attachedCardIds?: string[] })
+        ._attachedCardIds;
+
+      // Only the real child should be in the list
+      expect(attachedIds).toHaveLength(1);
+      expect(attachedIds).toContain(childId);
+    });
+  });
+
   describe('detachCard sortKeys', () => {
     it('gives detached card a fresh base sortKey', () => {
       const parentId = createObject(store, {

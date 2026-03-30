@@ -851,8 +851,11 @@ export function attachCards(
   }
 
   const targetPos = targetYMap.get('_pos') as Position;
-  const existingAttachments =
-    (targetYMap.get('_attachedCardIds') as string[]) ?? [];
+  const rawAttachments = (targetYMap.get('_attachedCardIds') as string[]) ?? [];
+  // Filter out dangling IDs (deleted objects) to prevent broken fan positioning
+  const existingAttachments = rawAttachments.filter(
+    (id) => store.getObjectYMap(id) != null,
+  );
   const attachedIds: string[] = [];
   const effectiveLayout = layout ?? DEFAULT_ATTACHMENT_LAYOUT;
 

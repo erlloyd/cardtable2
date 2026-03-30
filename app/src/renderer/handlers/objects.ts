@@ -267,8 +267,9 @@ function updateObjectVisual(
     obj._sortKey = prevObj._sortKey;
   }
 
-  // Update scene manager
-  context.sceneManager.updateObject(id, obj);
+  // Update scene manager (skip spatial index for dragged objects — their bbox is
+  // stale during drag and would block hits on objects underneath)
+  context.sceneManager.updateObject(id, obj, { skipSpatial: isDragging });
 
   // Update visual position and rotation
   // Position is preserved during drag to avoid flashing, but rotation should always update

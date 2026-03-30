@@ -267,6 +267,10 @@ export class DragManager {
     // Update z-order for all dragged objects
     this.updateDraggedObjectsZOrder(sceneManager, objectsToDrag);
 
+    // Remove dragged objects from spatial index so stale bboxes don't block
+    // hit-tests on objects underneath. Re-added in endObjectDrag via updateObject().
+    sceneManager.removeSpatialEntries(objectsToDrag);
+
     return Array.from(objectsToDrag);
   }
 

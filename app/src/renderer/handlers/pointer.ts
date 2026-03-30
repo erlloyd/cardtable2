@@ -1241,6 +1241,15 @@ function detectDropZone(
   const draggedIds = context.drag.getDraggedObjectIds();
   if (draggedIds.length === 0) return null;
 
+  // Use the primary dragged object's center for hit-test and zone detection
+  // (more intuitive than cursor position, especially when grabbing edges)
+  const primaryId = context.drag.getDraggedObjectId();
+  const primaryObj = primaryId
+    ? context.sceneManager.getObject(primaryId)
+    : null;
+  const testX = primaryObj ? primaryObj._pos.x : worldX;
+  const testY = primaryObj ? primaryObj._pos.y : worldY;
+
   // Check if all dragged objects are stacks with canStack capability
   for (const id of draggedIds) {
     const obj = context.sceneManager.getObject(id);
@@ -1248,12 +1257,12 @@ function detectDropZone(
 
     const behaviors = getBehaviors(obj._kind);
     if (!behaviors.capabilities.canStack) {
-      return null; // At least one dragged object cannot stack
+      return null;
     }
   }
 
-  // Hit-test at current position to find potential target
-  const hitResult = context.sceneManager.hitTest(worldX, worldY);
+  // Hit-test at primary object's center to find potential target
+  const hitResult = context.sceneManager.hitTest(testX, testY);
   if (!hitResult) return null;
 
   // Target must not be one of the dragged objects
@@ -1282,8 +1291,8 @@ function detectDropZone(
     return { type: 'stack', targetId: hitResult.id };
   }
 
-  // Zone detection: top half = stack, bottom half = attach
-  const isAttach = isPointInAttachZone(worldX, worldY, targetObj);
+  // Zone detection: top half = stack, bottom half = attach (based on dragged object center)
+  const isAttach = isPointInAttachZone(testX, testY, targetObj);
   return {
     type: isAttach ? 'attach' : 'stack',
     targetId: hitResult.id,

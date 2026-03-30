@@ -236,6 +236,7 @@ function clearObjects(context: RendererContext): void {
   context.selection.clearAll();
   context.hover.clearAll();
   context.drag.clear();
+  context.drag.clearUnstackWaiting(); // Full reset — also cancel pending unstack
 }
 
 /**

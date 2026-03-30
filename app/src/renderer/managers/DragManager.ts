@@ -427,7 +427,11 @@ export class DragManager {
   }
 
   /**
-   * Clear all drag state.
+   * Clear drag preparation state (pointer down, slop tracking).
+   *
+   * Does NOT clear waitingForUnstackSource — that state must survive
+   * between the unstack request and the async objects-added response.
+   * Use cancelObjectDrag() to fully abort including unstack waiting.
    */
   clear(): void {
     this.isObjectDragging = false;
@@ -435,6 +439,5 @@ export class DragManager {
     this.dragState = null;
     this.pointerDownEvent = null;
     this.isUnstackDrag = false;
-    this.clearUnstackWaiting();
   }
 }

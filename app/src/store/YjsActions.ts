@@ -1036,10 +1036,10 @@ export function detachCard(
     // Clear the child's reference
     cardYMap.set('_attachedToId', undefined);
 
-    // Give detached card a fresh top-level sortKey
+    // Give detached card a fresh top-level sortKey above all existing objects
     const parentSortKey = parentYMap.get('_sortKey') as string;
     const parentBaseKey = sortKeyBase(parentSortKey);
-    cardYMap.set('_sortKey', parentBaseKey);
+    cardYMap.set('_sortKey', generateTopSortKey(store));
 
     // Recompute positions and sortKeys for remaining attachments
     if (remaining.length > 0) {
@@ -1100,19 +1100,16 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
   const detachedIds: string[] = [];
 
   store.getDoc().transact(() => {
-    // Get parent's base key to assign fresh top-level sortKeys to children
+    // Get parent's base key to restore after detaching children
     const parentSortKey = parentYMap.get('_sortKey') as string;
     const parentBaseKey = sortKeyBase(parentSortKey);
-    const parentBaseNum = parseSortKeyPrefix(parentSortKey);
 
-    // Each detached child needs a unique sortKey above the parent
-    let nextKey = parentBaseNum;
+    // Each detached child gets a unique sortKey above all existing objects
     for (const cardId of attachedIds) {
       const childYMap = store.getObjectYMap(cardId);
       if (childYMap) {
         childYMap.set('_attachedToId', undefined);
-        nextKey++;
-        childYMap.set('_sortKey', formatSortKey(nextKey));
+        childYMap.set('_sortKey', generateTopSortKey(store));
         detachedIds.push(cardId);
       }
     }

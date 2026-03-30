@@ -2772,6 +2772,61 @@ describe('YjsActions - attachCards', () => {
       // After detach, sortKey should be a base key (no sub-segments)
       expect(childObj._sortKey).toMatch(/^\d{6}$/);
     });
+
+    it('detached card sortKey does not collide with parent', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      attachCards(store, [childId], parentId);
+      detachCard(store, childId);
+
+      const parentObj = toTableObject(store.getObjectYMap(parentId)!);
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+
+      // Detached card must have a different sortKey than the parent
+      expect(childObj._sortKey).not.toBe(parentObj._sortKey);
+    });
+
+    it('detached card sortKey is above all existing objects', () => {
+      // Create a bystander with a high sortKey to ensure detach doesn't collide
+      const bystanderId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['bystander'],
+        faceUp: true,
+      });
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      attachCards(store, [childId], parentId);
+      detachCard(store, childId);
+
+      const bystanderObj = toTableObject(store.getObjectYMap(bystanderId)!);
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+
+      // Detached card should sort above all existing objects
+      expect(childObj._sortKey > bystanderObj._sortKey).toBe(true);
+    });
   });
 
   describe('detachAllCards sortKeys', () => {
@@ -2805,6 +2860,45 @@ describe('YjsActions - attachCards', () => {
       expect(child1Obj._sortKey).toMatch(/^\d{6}$/);
       expect(child2Obj._sortKey).toMatch(/^\d{6}$/);
       expect(child1Obj._sortKey).not.toBe(child2Obj._sortKey);
+    });
+
+    it('detached children sortKeys are above all existing objects', () => {
+      // Create a bystander with a high sortKey
+      const bystanderId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['bystander'],
+        faceUp: true,
+      });
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const child1Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-1'],
+        faceUp: true,
+      });
+      const child2Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['child-2'],
+        faceUp: true,
+      });
+
+      attachCards(store, [child1Id, child2Id], parentId);
+      detachAllCards(store, parentId);
+
+      const bystanderObj = toTableObject(store.getObjectYMap(bystanderId)!);
+      const child1Obj = toTableObject(store.getObjectYMap(child1Id)!);
+      const child2Obj = toTableObject(store.getObjectYMap(child2Id)!);
+
+      // Both detached children should sort above all existing objects
+      expect(child1Obj._sortKey > bystanderObj._sortKey).toBe(true);
+      expect(child2Obj._sortKey > bystanderObj._sortKey).toBe(true);
     });
   });
 });

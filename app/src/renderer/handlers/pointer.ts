@@ -109,7 +109,7 @@ export function handlePointerDown(
   // Check if we have 2 touch pointers (pinch gesture)
   if (context.gestures.isPinchGesture(event)) {
     // Cancel any ongoing drag operations
-    context.drag.cancelObjectDrag();
+    context.drag.resetAll();
     context.rectangleSelect.clear(context.worldContainer);
 
     // M3.5.1-T6: Notify Board that zoom started (pinch)
@@ -124,7 +124,7 @@ export function handlePointerDown(
     context.selection.incrementPendingOperations();
 
     // Store pointer down event for selection logic on pointer up
-    context.drag.setPointerDownEvent(event);
+    context.gestures.setPointerDownEvent(event);
 
     // Always do hit-testing first to determine if we're over a card
     const worldPos = context.coordConverter.screenToWorld(
@@ -163,10 +163,10 @@ export function handlePointerDown(
       // Note: Not starting yet - will start once we exceed slop threshold in handlePointerMove
       context.rectangleSelect.clear(context.worldContainer); // Reset any previous state
       context.rectangleSelect.prepareRectangleSelect(worldPos.x, worldPos.y); // Save start position
-      context.drag.cancelObjectDrag();
+      context.drag.resetAll();
     } else {
       // Clicking on empty space in pan mode - prepare for camera pan
-      context.drag.cancelObjectDrag();
+      context.drag.resetAll();
       context.rectangleSelect.clear(context.worldContainer);
     }
   }
@@ -289,7 +289,7 @@ export function handlePointerMove(
             if (!context.drag.isDragging()) {
               // Don't start dragging yet - wait for objects-added
               // Clear the drag preparation so we don't try to drag the source stack
-              context.drag.clear();
+              context.drag.resetDragPrep();
             }
             return;
           }
@@ -312,15 +312,21 @@ export function handlePointerMove(
           context.postResponse({ type: 'object-drag-started' });
 
           // Start object drag (determines which objects to drag, handles selection, updates z-order)
+          const pointerDownEvent = context.gestures.getPointerDownEvent();
           const draggedIds = context.drag.startObjectDrag(
             context.sceneManager,
             context.selection,
+            pointerDownEvent
+              ? {
+                  metaKey: pointerDownEvent.metaKey,
+                  ctrlKey: pointerDownEvent.ctrlKey,
+                }
+              : undefined,
           );
 
           // Handle selection updates if needed (async)
           const isDraggedObjectSelected =
             context.selection.isSelected(draggedId);
-          const pointerDownEvent = context.drag.getPointerDownEvent();
           const isMultiSelectModifier =
             pointerDownEvent &&
             (pointerDownEvent.metaKey || pointerDownEvent.ctrlKey);
@@ -370,10 +376,9 @@ export function handlePointerMove(
           // - pan mode + modifier → rectangle select
           // - select mode + modifier → pan (Cmd/Ctrl overrides to pan)
           // - pan mode + NO modifier → pan
-          const pointerDownEvent = context.drag.getPointerDownEvent();
+          const gestureEvent = context.gestures.getPointerDownEvent();
           const modifierPressed =
-            pointerDownEvent &&
-            (pointerDownEvent.metaKey || pointerDownEvent.ctrlKey);
+            gestureEvent && (gestureEvent.metaKey || gestureEvent.ctrlKey);
           const shouldStartRectangle =
             (context.interactionMode === 'select' && !modifierPressed) ||
             (context.interactionMode === 'pan' && modifierPressed);
@@ -744,11 +749,11 @@ export function handlePointerUp(
     context.rectangleSelect.endRectangleSelect();
 
     // Determine if multi-select (keep existing selections)
-    const pointerDownEvent = context.drag.getPointerDownEvent();
+    const rectPointerDownEvent = context.gestures.getPointerDownEvent();
     const isMultiSelectModifier =
-      pointerDownEvent?.metaKey ||
-      pointerDownEvent?.ctrlKey ||
-      pointerDownEvent?.multiSelectModeActive;
+      rectPointerDownEvent?.metaKey ||
+      rectPointerDownEvent?.ctrlKey ||
+      rectPointerDownEvent?.multiSelectModeActive;
 
     // Select objects in rectangle
     selectObjects(context, selectedIds, !isMultiSelectModifier);
@@ -875,7 +880,7 @@ function handleSelectionOnPointerEnd(
   wasPanning: boolean,
 ): void {
   // Handle selection on click/tap (only if we didn't drag object or camera or rectangle select)
-  const pointerDownEvent = context.drag.getPointerDownEvent();
+  const pointerDownEvent = context.gestures.getPointerDownEvent();
 
   if (
     event.isPrimary &&
@@ -977,7 +982,7 @@ function handleSelectionOnPointerEnd(
     }
 
     // Clear stored pointer down event
-    context.drag.clearPointerDownEvent();
+    context.gestures.clearPointerDownEvent();
   }
 }
 
@@ -1142,7 +1147,7 @@ function clearDragState(
     }
 
     // Clear stored pointer down event
-    context.drag.clearPointerDownEvent();
+    context.gestures.clearPointerDownEvent();
   }
 }
 

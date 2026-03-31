@@ -193,7 +193,7 @@ export function handleObjectsRemoved(
 
     // Clear drag if this object was being dragged
     if (context.drag.getDraggedObjectId() === id) {
-      context.drag.cancelObjectDrag();
+      context.drag.resetAll();
     }
   }
 
@@ -235,8 +235,7 @@ function clearObjects(context: RendererContext): void {
   context.sceneManager.clear();
   context.selection.clearAll();
   context.hover.clearAll();
-  context.drag.clear();
-  context.drag.clearUnstackWaiting(); // Full reset — also cancel pending unstack
+  context.drag.resetAll();
 }
 
 /**

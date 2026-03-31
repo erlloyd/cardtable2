@@ -33,6 +33,7 @@ interface PointerInfo {
  */
 export class GestureRecognizer {
   private pointers: Map<number, PointerInfo> = new Map();
+  private pointerDownEvent: PointerEventData | null = null;
 
   /**
    * Track a pointer down event.
@@ -139,9 +140,31 @@ export class GestureRecognizer {
   }
 
   /**
+   * Store pointer down event for selection logic on pointer up.
+   */
+  setPointerDownEvent(event: PointerEventData): void {
+    this.pointerDownEvent = event;
+  }
+
+  /**
+   * Get stored pointer down event.
+   */
+  getPointerDownEvent(): PointerEventData | null {
+    return this.pointerDownEvent;
+  }
+
+  /**
+   * Clear stored pointer down event.
+   */
+  clearPointerDownEvent(): void {
+    this.pointerDownEvent = null;
+  }
+
+  /**
    * Clear all pointers.
    */
   clear(): void {
     this.pointers.clear();
+    this.pointerDownEvent = null;
   }
 }

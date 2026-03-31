@@ -56,7 +56,7 @@ function makeSelectionManager(selectedIds: string[] = []): SelectionManager {
   const selected = new Set(selectedIds);
   return {
     isSelected: vi.fn((id: string) => selected.has(id)),
-    getSelectedIds: vi.fn(() => selected),
+    getSelectedIds: vi.fn(() => Array.from(selected)),
   } as unknown as SelectionManager;
 }
 
@@ -187,6 +187,9 @@ describe('DragManager', () => {
 
     it('timeout calls onTimeout and clears waiting state', () => {
       vi.useFakeTimers();
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
       const onTimeout = vi.fn();
 
       drag.setWaitingForUnstackResponse('stack-1', onTimeout);
@@ -195,6 +198,7 @@ describe('DragManager', () => {
       expect(onTimeout).toHaveBeenCalledOnce();
       expect(drag.getUnstackSourceId()).toBeNull();
 
+      consoleSpy.mockRestore();
       vi.useRealTimers();
     });
 

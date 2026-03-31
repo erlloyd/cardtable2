@@ -35,6 +35,8 @@ import {
   MODIFIER_BAR_ALPHA,
   MODIFIER_COLOR_POSITIVE,
   MODIFIER_COLOR_NEGATIVE,
+  ATTACH_ZONE_COLOR,
+  DROP_ZONE_LABEL_FONT_SIZE,
 } from './constants';
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
@@ -881,6 +883,60 @@ function renderIcons(
   return currentY;
 }
 
+/**
+ * Helper: Render drop zone overlay during drag (stack zone / attach zone)
+ *
+ * Shows a text label and colored border to indicate which action will occur
+ * on drop. Stack zone (top half) shows red border + "Stack" label.
+ * Attach zone (bottom half) shows amber border + "Attach" label.
+ */
+function renderDropZoneOverlay(
+  container: Container,
+  ctx: RenderContext,
+  counterRotation: number = 0,
+): void {
+  if (ctx.minimal) return;
+
+  if (ctx.isStackTarget) {
+    // Stack target just gets visual highlight (border) — label is on the dragged card
+  }
+
+  if (ctx.isAttachTarget) {
+    // Amber/gold border around the card to indicate attach target
+    const borderGraphic = new Graphics();
+    borderGraphic.label = 'attach-border';
+    borderGraphic.rect(
+      -STACK_WIDTH / 2,
+      -STACK_HEIGHT / 2,
+      STACK_WIDTH,
+      STACK_HEIGHT,
+    );
+    borderGraphic.stroke({
+      width: ctx.scaleStrokeWidth(4),
+      color: ATTACH_ZONE_COLOR,
+    });
+    container.addChild(borderGraphic);
+  }
+
+  // Action preview label on the dragged card (above the card so it's always visible)
+  if (ctx.dragActionPreview) {
+    const labelText = ctx.dragActionPreview === 'stack' ? 'Stack' : 'Attach';
+    const label = ctx.createText({
+      text: labelText,
+      style: {
+        fontSize: DROP_ZONE_LABEL_FONT_SIZE,
+        fill: 0xffffff,
+        fontWeight: 'bold',
+        stroke: { color: 0x000000, width: 3 },
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.position.set(0, -STACK_HEIGHT / 2 - 6);
+    label.rotation = counterRotation;
+    container.addChild(label);
+  }
+}
+
 export const StackBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Container {
     const container = new Container();
@@ -902,6 +958,9 @@ export const StackBehaviors: ObjectBehaviors = {
 
     // Layer 4: On-card attachments (tokens, status, modifiers, icons)
     renderAttachments(container, stackObj, ctx, counterRotation);
+
+    // Layer 5: Drop zone overlay (stack/attach labels during drag)
+    renderDropZoneOverlay(container, ctx, counterRotation);
 
     return container;
   },

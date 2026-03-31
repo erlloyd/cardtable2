@@ -55,6 +55,13 @@ export class VisualManager {
   // Track current stack target for clearing
   private currentStackTargetId: string | null = null;
 
+  // Track current attach target for clearing
+  private currentAttachTargetId: string | null = null;
+
+  // Track current drag action preview state (shown on dragged card)
+  private currentDragActionObjectId: string | null = null;
+  private currentDragActionPreview: 'stack' | 'attach' | null = null;
+
   // Track objects hidden due to remote awareness drag (only show ghost)
   private hiddenObjectIds: Set<string> = new Set();
 
@@ -386,6 +393,78 @@ export class VisualManager {
   }
 
   /**
+   * Update attach target visual feedback - highlights a stack as a valid attach drop target.
+   */
+  updateAttachTargetFeedback(
+    objectId: string,
+    isAttachTarget: boolean,
+    isSelected: boolean,
+    sceneManager: SceneManager,
+  ): void {
+    // Clear previous attach target feedback if it's different from the new one
+    if (this.currentAttachTargetId && this.currentAttachTargetId !== objectId) {
+      const prevIsSelected =
+        sceneManager.getObject(this.currentAttachTargetId)?._selectedBy !==
+        null;
+      this.redrawVisual(this.currentAttachTargetId, sceneManager, {
+        isAttachTarget: false,
+        isSelected: prevIsSelected,
+      });
+    }
+
+    // Update current attach target ID
+    this.currentAttachTargetId = isAttachTarget ? objectId : null;
+
+    // Apply feedback to new attach target (if objectId is valid)
+    if (objectId && isAttachTarget) {
+      const visual = this.objectVisuals.get(objectId);
+      if (!visual) return;
+
+      // Redraw the visual with attach target state
+      this.redrawVisual(objectId, sceneManager, { isAttachTarget, isSelected });
+    }
+  }
+
+  /**
+   * Update drag action preview on the dragged card.
+   * Shows a label ("Stack" or "Attach") above the dragged card to preview what will happen on drop.
+   */
+  updateDragActionPreview(
+    objectId: string,
+    dragActionPreview: 'stack' | 'attach' | null,
+    sceneManager: SceneManager,
+  ): void {
+    // Skip if nothing changed
+    if (
+      this.currentDragActionObjectId === objectId &&
+      this.currentDragActionPreview === dragActionPreview
+    ) {
+      return;
+    }
+
+    // Clear previous drag action preview if on a different object
+    if (
+      this.currentDragActionObjectId &&
+      this.currentDragActionObjectId !== objectId
+    ) {
+      this.redrawVisual(this.currentDragActionObjectId, sceneManager, {
+        isDragging: true,
+        dragActionPreview: null,
+      });
+    }
+
+    this.currentDragActionObjectId = dragActionPreview ? objectId : null;
+    this.currentDragActionPreview = dragActionPreview;
+
+    if (objectId) {
+      this.redrawVisual(objectId, sceneManager, {
+        isDragging: true,
+        dragActionPreview,
+      });
+    }
+  }
+
+  /**
    * Update object visual when object data changes (e.g., _faceUp, _meta).
    * Forces a full re-render to reflect updated properties.
    */
@@ -451,7 +530,9 @@ export class VisualManager {
       isHovered?: boolean;
       isDragging?: boolean;
       isSelected?: boolean;
+      dragActionPreview?: 'stack' | 'attach' | null;
       isStackTarget?: boolean;
+      isAttachTarget?: boolean;
       preservePosition?: boolean;
       preserveScale?: boolean;
     },
@@ -461,7 +542,9 @@ export class VisualManager {
       isHovered = false,
       isDragging = false,
       isSelected = false,
+      dragActionPreview = null,
       isStackTarget = false,
+      isAttachTarget = false,
       preservePosition = false,
       preserveScale = false,
     } = options ?? {};
@@ -573,6 +656,8 @@ export class VisualManager {
       isSelected,
       isStackTarget,
       sceneManager,
+      isAttachTarget,
+      dragActionPreview,
     );
     visual.addChild(shapeGraphic);
 
@@ -611,7 +696,9 @@ export class VisualManager {
       isSelected: overrides.isSelected ?? false,
       isHovered: overrides.isHovered ?? false,
       isDragging: overrides.isDragging ?? false,
+      dragActionPreview: overrides.dragActionPreview ?? null,
       isStackTarget: overrides.isStackTarget ?? false,
+      isAttachTarget: overrides.isAttachTarget ?? false,
       minimal: overrides.minimal,
       cameraScale: overrides.cameraScale ?? this.cameraScale,
       createText: overrides.createText ?? this.createText.bind(this),
@@ -638,6 +725,8 @@ export class VisualManager {
     isSelected: boolean,
     isStackTarget: boolean,
     sceneManager: SceneManager,
+    isAttachTarget: boolean = false,
+    dragActionPreview: 'stack' | 'attach' | null = null,
   ): Container {
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(
@@ -646,6 +735,8 @@ export class VisualManager {
         objectId,
         isSelected,
         isStackTarget,
+        isAttachTarget,
+        dragActionPreview,
         onTextureLoaded: (_url: string) => {
           // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
           if (this.animationManager?.isShuffling(objectId)) {
@@ -979,5 +1070,8 @@ export class VisualManager {
 
     this.objectVisuals.clear();
     this.currentStackTargetId = null;
+    this.currentAttachTargetId = null;
+    this.currentDragActionObjectId = null;
+    this.currentDragActionPreview = null;
   }
 }

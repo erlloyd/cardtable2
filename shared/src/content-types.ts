@@ -105,6 +105,26 @@ export interface IconTypeDef {
   size?: number; // Optional size override in pixels (defaults to 16)
 }
 
+// ============================================================================
+// Card-on-Card Attachment Layout Configuration
+// ============================================================================
+
+export type AttachmentDirection = 'below' | 'above' | 'left' | 'right';
+
+export interface AttachmentLayout {
+  direction: AttachmentDirection; // Fan direction for attached cards
+  revealFraction: number; // 0-1, portion of attached card visible (default: 0.25)
+  maxBeforeCompress?: number; // Compress spacing beyond this count (default: 5)
+  parentOnTop?: boolean; // Whether parent renders above children (default: true)
+}
+
+export const DEFAULT_ATTACHMENT_LAYOUT: AttachmentLayout = {
+  direction: 'below',
+  revealFraction: 0.25,
+  maxBeforeCompress: 5,
+  parentOnTop: true,
+};
+
 export interface AssetPack {
   schema: 'ct-assets@1'; // Schema version identifier
   id: string; // Unique pack identifier
@@ -122,6 +142,8 @@ export interface AssetPack {
   statusTypes?: Record<string, StatusTypeDef>; // Status effect types (key is status type code)
   modifierStats?: Record<string, ModifierStatDef>; // Modifier stat types (key is stat code)
   iconTypes?: Record<string, IconTypeDef>; // Icon types (key is icon type code)
+  // Card-on-card attachment configuration
+  attachmentLayout?: AttachmentLayout; // Default layout for card-on-card attachments
 }
 
 // ============================================================================

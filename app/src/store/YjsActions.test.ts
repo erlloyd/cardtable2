@@ -11,11 +11,15 @@ import {
   stackObjects,
   unstackCard,
   shuffleStack,
+  attachCards,
+  detachCard,
+  detachAllCards,
 } from './YjsActions';
 import {
   ObjectKind,
   type StackObject,
   type TableObject,
+  parseSortKeyPrefix,
 } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
@@ -271,8 +275,8 @@ describe('YjsActions - createObject', () => {
       });
 
       const obj = toTableObject(store.getObjectYMap(id)!);
-      // Should match format: "number|letter"
-      expect(obj?._sortKey).toMatch(/^\d+\|[a-z]+$/);
+      // Should be zero-padded 6-digit format (e.g., "000001")
+      expect(obj?._sortKey).toMatch(/^\d{6}$/);
     });
   });
 
@@ -2622,6 +2626,352 @@ describe('Concurrent Operations', () => {
 
       // Should return null (stack not found)
       expect(result).toBeNull();
+    });
+  });
+});
+
+describe('parseSortKeyPrefix', () => {
+  it('parses zero-padded 6-digit format', () => {
+    expect(parseSortKeyPrefix('000042')).toBe(42);
+    expect(parseSortKeyPrefix('001000')).toBe(1000);
+    expect(parseSortKeyPrefix('000001')).toBe(1);
+  });
+
+  it('parses zero-padded format with sub-key segments', () => {
+    expect(parseSortKeyPrefix('000042|999999')).toBe(42);
+    expect(parseSortKeyPrefix('000042|000003|000002')).toBe(42);
+  });
+
+  it('parses legacy base-36 format', () => {
+    expect(parseSortKeyPrefix('rs')).toBe(parseInt('rs', 36));
+    expect(parseSortKeyPrefix('a')).toBe(10);
+  });
+
+  it('returns 0 for empty or invalid input', () => {
+    expect(parseSortKeyPrefix('')).toBe(0);
+  });
+});
+
+describe('YjsActions - attachCards', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore(`test-room-attach-${Date.now()}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+
+  afterEach(() => {
+    store.destroy();
+  });
+
+  describe('SortKey Assignment', () => {
+    it('assigns parent-on-top sortKeys by default', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      attachCards(store, [childId], parentId);
+
+      const parentObj = toTableObject(store.getObjectYMap(parentId)!);
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+
+      // Parent should have highest sub-key (999999)
+      expect(parentObj._sortKey).toMatch(/^\d{6}\|999999$/);
+      // Child should have lower sub-key
+      expect(childObj._sortKey).toMatch(/^\d{6}\|\d{6}$/);
+      // Parent renders on top (higher sortKey)
+      expect(parentObj._sortKey > childObj._sortKey).toBe(true);
+    });
+
+    it('assigns children-on-top sortKeys when parentOnTop is false', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      const layout = {
+        direction: 'below' as const,
+        revealFraction: 0.25,
+        parentOnTop: false,
+      };
+      attachCards(store, [childId], parentId, layout);
+
+      const parentObj = toTableObject(store.getObjectYMap(parentId)!);
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+
+      // Child renders on top (higher sortKey)
+      expect(childObj._sortKey > parentObj._sortKey).toBe(true);
+    });
+
+    it('assigns unique sortKeys to multiple children', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const child1Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-1'],
+        faceUp: true,
+      });
+      const child2Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['child-2'],
+        faceUp: true,
+      });
+
+      attachCards(store, [child1Id, child2Id], parentId);
+
+      const child1Obj = toTableObject(store.getObjectYMap(child1Id)!);
+      const child2Obj = toTableObject(store.getObjectYMap(child2Id)!);
+
+      // Children must have different sortKeys
+      expect(child1Obj._sortKey).not.toBe(child2Obj._sortKey);
+    });
+  });
+
+  describe('dangling attachment cleanup', () => {
+    it('filters out dangling IDs from existing _attachedCardIds when attaching', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const child1Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-1'],
+        faceUp: true,
+      });
+      const newChildId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['new-child'],
+        faceUp: true,
+      });
+
+      // Attach child1 normally
+      attachCards(store, [child1Id], parentId);
+
+      // Manually inject a dangling ID into the parent's attachment list
+      const parentYMap = store.getObjectYMap(parentId)!;
+      const currentIds = parentYMap.get('_attachedCardIds') as string[];
+      parentYMap.set('_attachedCardIds', [...currentIds, 'deleted-object-id']);
+
+      // Now attach another child — the dangling ID should be filtered out
+      attachCards(store, [newChildId], parentId);
+
+      const parentObj = toTableObject(parentYMap);
+      const attachedIds = (parentObj as { _attachedCardIds?: string[] })
+        ._attachedCardIds;
+
+      // Should contain child1 and newChild, but NOT the dangling ID
+      expect(attachedIds).toContain(child1Id);
+      expect(attachedIds).toContain(newChildId);
+      expect(attachedIds).not.toContain('deleted-object-id');
+    });
+
+    it('computes correct fan positions without dangling IDs', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child'],
+        faceUp: true,
+      });
+
+      // Inject a dangling ID before attaching
+      const parentYMap = store.getObjectYMap(parentId)!;
+      parentYMap.set('_attachedCardIds', ['dangling-1', 'dangling-2']);
+
+      // Attach a real child
+      attachCards(store, [childId], parentId);
+
+      const parentObj = toTableObject(parentYMap);
+      const attachedIds = (parentObj as { _attachedCardIds?: string[] })
+        ._attachedCardIds;
+
+      // Only the real child should be in the list
+      expect(attachedIds).toHaveLength(1);
+      expect(attachedIds).toContain(childId);
+    });
+  });
+
+  describe('detachCard sortKeys', () => {
+    it('gives detached card a fresh base sortKey', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      attachCards(store, [childId], parentId);
+      detachCard(store, childId);
+
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+      // After detach, sortKey should be a base key (no sub-segments)
+      expect(childObj._sortKey).toMatch(/^\d{6}$/);
+    });
+
+    it('detached card sortKey does not collide with parent', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      attachCards(store, [childId], parentId);
+      detachCard(store, childId);
+
+      const parentObj = toTableObject(store.getObjectYMap(parentId)!);
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+
+      // Detached card must have a different sortKey than the parent
+      expect(childObj._sortKey).not.toBe(parentObj._sortKey);
+    });
+
+    it('detached card sortKey is above all existing objects', () => {
+      // Create a bystander with a high sortKey to ensure detach doesn't collide
+      const bystanderId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['bystander'],
+        faceUp: true,
+      });
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const childId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-card'],
+        faceUp: true,
+      });
+
+      attachCards(store, [childId], parentId);
+      detachCard(store, childId);
+
+      const bystanderObj = toTableObject(store.getObjectYMap(bystanderId)!);
+      const childObj = toTableObject(store.getObjectYMap(childId)!);
+
+      // Detached card should sort above all existing objects
+      expect(childObj._sortKey > bystanderObj._sortKey).toBe(true);
+    });
+  });
+
+  describe('detachAllCards sortKeys', () => {
+    it('gives each detached child a unique sortKey', () => {
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const child1Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-1'],
+        faceUp: true,
+      });
+      const child2Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['child-2'],
+        faceUp: true,
+      });
+
+      attachCards(store, [child1Id, child2Id], parentId);
+      detachAllCards(store, parentId);
+
+      const child1Obj = toTableObject(store.getObjectYMap(child1Id)!);
+      const child2Obj = toTableObject(store.getObjectYMap(child2Id)!);
+
+      // Each child must have a unique base key
+      expect(child1Obj._sortKey).toMatch(/^\d{6}$/);
+      expect(child2Obj._sortKey).toMatch(/^\d{6}$/);
+      expect(child1Obj._sortKey).not.toBe(child2Obj._sortKey);
+    });
+
+    it('detached children sortKeys are above all existing objects', () => {
+      // Create a bystander with a high sortKey
+      const bystanderId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 200, y: 200, r: 0 },
+        cards: ['bystander'],
+        faceUp: true,
+      });
+      const parentId = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: ['parent-card'],
+        faceUp: true,
+      });
+      const child1Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: ['child-1'],
+        faceUp: true,
+      });
+      const child2Id = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: ['child-2'],
+        faceUp: true,
+      });
+
+      attachCards(store, [child1Id, child2Id], parentId);
+      detachAllCards(store, parentId);
+
+      const bystanderObj = toTableObject(store.getObjectYMap(bystanderId)!);
+      const child1Obj = toTableObject(store.getObjectYMap(child1Id)!);
+      const child2Obj = toTableObject(store.getObjectYMap(child2Id)!);
+
+      // Both detached children should sort above all existing objects
+      expect(child1Obj._sortKey > bystanderObj._sortKey).toBe(true);
+      expect(child2Obj._sortKey > bystanderObj._sortKey).toBe(true);
     });
   });
 });

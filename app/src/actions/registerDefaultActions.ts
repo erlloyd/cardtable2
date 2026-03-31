@@ -6,6 +6,8 @@ import {
   exhaustCards,
   resetToTestScene,
   shuffleStack,
+  detachCard,
+  detachAllCards,
 } from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
@@ -191,6 +193,51 @@ export function registerDefaultActions(): void {
     description: 'Reveal the selected card to all players',
     isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
     execute: () => console.log('Reveal card'),
+  });
+
+  // Card-on-card attachment: Detach card from parent
+  registry.register({
+    id: 'detach-card',
+    label: 'Detach Card',
+    shortLabel: 'Detach',
+    icon: '📎',
+    category: CARD_ACTIONS,
+    description: 'Detach this card from its parent',
+    isAvailable: (ctx) => {
+      if (ctx.selection.count !== 1 || !ctx.selection.hasStacks) return false;
+      const yMap = ctx.store.getObjectYMap(ctx.selection.ids[0]);
+      if (!yMap) return false;
+      return yMap.get('_attachedToId') !== undefined;
+    },
+    execute: (ctx) => {
+      const cardId = ctx.selection.ids[0];
+      const success = detachCard(ctx.store, cardId);
+      if (success) {
+        console.log(`Detached card ${cardId}`);
+      }
+    },
+  });
+
+  // Card-on-card attachment: Detach all cards from parent
+  registry.register({
+    id: 'detach-all-cards',
+    label: 'Detach All Cards',
+    shortLabel: 'Detach All',
+    icon: '📎',
+    category: CARD_ACTIONS,
+    description: 'Detach all cards attached to this card',
+    isAvailable: (ctx) => {
+      if (ctx.selection.count !== 1 || !ctx.selection.hasStacks) return false;
+      const yMap = ctx.store.getObjectYMap(ctx.selection.ids[0]);
+      if (!yMap) return false;
+      const attachedIds: string[] | undefined = yMap.get('_attachedCardIds');
+      return Array.isArray(attachedIds) && attachedIds.length > 0;
+    },
+    execute: (ctx) => {
+      const parentId = ctx.selection.ids[0];
+      const detached = detachAllCards(ctx.store, parentId);
+      console.log(`Detached ${detached.length} cards from ${parentId}`);
+    },
   });
 
   // Object action: Lock/Unlock (works on any object)

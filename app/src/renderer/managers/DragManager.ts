@@ -1,4 +1,5 @@
-import type { PointerEventData } from '@cardtable2/shared';
+import type { PointerEventData, StackObject } from '@cardtable2/shared';
+import { ObjectKind, DRAG_SENTINEL_KEY } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
@@ -231,6 +232,26 @@ export class DragManager {
       }
     }
 
+    // Include attached cards as secondaries when dragging a parent
+    // This ensures attached cards move with their parent during drag
+    const attachedToInclude: string[] = [];
+    for (const objectId of objectsToDrag) {
+      const obj = sceneManager.getObject(objectId);
+      if (obj && obj._kind === ObjectKind.Stack) {
+        const stackObj = obj as StackObject;
+        if (stackObj._attachedCardIds && stackObj._attachedCardIds.length > 0) {
+          for (const attachedId of stackObj._attachedCardIds) {
+            if (!objectsToDrag.has(attachedId)) {
+              attachedToInclude.push(attachedId);
+            }
+          }
+        }
+      }
+    }
+    for (const id of attachedToInclude) {
+      objectsToDrag.add(id);
+    }
+
     // Save initial positions of all objects to drag
     this.dragState.draggedObjectsStartPositions.clear();
     for (const objectId of objectsToDrag) {
@@ -245,6 +266,10 @@ export class DragManager {
 
     // Update z-order for all dragged objects
     this.updateDraggedObjectsZOrder(sceneManager, objectsToDrag);
+
+    // Remove dragged objects from spatial index so stale bboxes don't block
+    // hit-tests on objects underneath. Re-added in endObjectDrag via updateObject().
+    sceneManager.removeSpatialEntries(objectsToDrag);
 
     return Array.from(objectsToDrag);
   }
@@ -377,44 +402,40 @@ export class DragManager {
     this.isPhantomDragging = false;
     this.dragState = null;
     this.isUnstackDrag = false;
+    this.clearUnstackWaiting();
   }
 
   /**
    * Update z-order for all dragged objects (move to top).
    */
   private updateDraggedObjectsZOrder(
-    sceneManager: SceneManager,
+    _sceneManager: SceneManager,
     objectsToDrag: Set<string>,
   ): void {
-    // Find the current maximum sortKey (lexicographic comparison for fractional indexing)
-    let maxSortKey = '0';
-    for (const [, obj] of sceneManager.getAllObjects()) {
-      if (obj._sortKey > maxSortKey) {
-        maxSortKey = obj._sortKey;
-      }
-    }
+    // Use DRAG_SENTINEL_KEY as base key — guaranteed above all normal objects.
+    // moveObjects assigns proper keys on drag end, so this is temporary.
+    const dragBaseKey = DRAG_SENTINEL_KEY;
 
-    // Generate new sortKeys for dragged cards using fractional indexing
-    // Increment the prefix to ensure new keys are lexicographically greater
-    const [prefix] = maxSortKey.split('|');
-    const newPrefix = String(Number(prefix) + 1);
-
-    let sortKeyCounter = 0;
     for (const objectId of objectsToDrag) {
-      const obj = sceneManager.getObject(objectId);
-      if (obj) {
-        // Update logical z-order (_sortKey) using fractional indexing format
-        // TODO: Current implementation only supports up to 26 cards in a single drag operation
-        // (a-z = 97-122). For production, implement proper fractional indexing library
-        // that supports unlimited suffix generation (e.g., 'aa', 'ab', ... 'ba', 'bb').
-        // See: https://github.com/rocicorp/fractional-indexing or similar
-        obj._sortKey = `${newPrefix}|${String.fromCharCode(97 + sortKeyCounter++)}`;
+      const obj = _sceneManager.getObject(objectId);
+      if (!obj) continue;
+
+      // Preserve attachment sub-key structure: replace the base prefix, keep sub-keys
+      const segments = obj._sortKey.split('|');
+      if (segments.length > 1) {
+        obj._sortKey = [dragBaseKey, ...segments.slice(1)].join('|');
+      } else {
+        obj._sortKey = dragBaseKey;
       }
     }
   }
 
   /**
-   * Clear all drag state.
+   * Clear drag preparation state (pointer down, slop tracking).
+   *
+   * Does NOT clear waitingForUnstackSource — that state must survive
+   * between the unstack request and the async objects-added response.
+   * Use cancelObjectDrag() to fully abort including unstack waiting.
    */
   clear(): void {
     this.isObjectDragging = false;

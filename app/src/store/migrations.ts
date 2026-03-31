@@ -1,5 +1,9 @@
 import * as Y from 'yjs';
-import { ObjectKind } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  parseSortKeyPrefix,
+  formatSortKey,
+} from '@cardtable2/shared';
 import { getDefaultProperties } from './ObjectDefaults';
 
 /**
@@ -37,7 +41,10 @@ export function runMigrations(doc: Y.Doc): void {
   const typedObjectsMap = objectsMap as Y.Map<Y.Map<unknown>>;
 
   // Quick check: do we need to run migrations?
-  if (!needsMigration(typedObjectsMap)) {
+  const needsDefaults = needsMigration(typedObjectsMap);
+  const needsSortKeyFix = needsSortKeyMigration(typedObjectsMap);
+
+  if (!needsDefaults && !needsSortKeyFix) {
     console.log('[Migrations] ✓ All objects up-to-date, skipping migration');
     return;
   }
@@ -46,7 +53,8 @@ export function runMigrations(doc: Y.Doc): void {
 
   // Run migration in a single transaction for atomicity
   doc.transact(() => {
-    ensureObjectDefaults(typedObjectsMap);
+    if (needsDefaults) ensureObjectDefaults(typedObjectsMap);
+    if (needsSortKeyFix) migrateSortKeys(typedObjectsMap);
   }, 'migration'); // Origin = 'migration' for debugging
 
   console.log('[Migrations] ✓ Migration complete');
@@ -124,6 +132,63 @@ function ensureObjectDefaults(objectsMap: Y.Map<Y.Map<unknown>>): void {
     });
   } else {
     console.log('[Migrations] No objects needed migration');
+  }
+}
+
+/**
+ * Check if any objects have legacy sortKey format (not zero-padded pipe format).
+ * Legacy formats include base-36 keys like "rs" and old pipe format like "1|a".
+ */
+function needsSortKeyMigration(objectsMap: Y.Map<Y.Map<unknown>>): boolean {
+  const validFormat = /^\d{6}(\|\d{6})*$/;
+  let needsUpdate = false;
+
+  objectsMap.forEach((objMap) => {
+    const sortKey = objMap.get('_sortKey') as string | undefined;
+    if (sortKey && !validFormat.test(sortKey)) {
+      needsUpdate = true;
+    }
+  });
+
+  return needsUpdate;
+}
+
+/**
+ * Migrate legacy sortKeys to zero-padded format.
+ * Converts base-36 keys ("rs") and old pipe keys ("1|a") to "NNNNNN" format.
+ * Preserves relative ordering by parsing numeric values and re-assigning.
+ */
+function migrateSortKeys(objectsMap: Y.Map<Y.Map<unknown>>): void {
+  // Collect all objects with their parsed sort values
+  const entries: Array<{ id: string; numericValue: number }> = [];
+  objectsMap.forEach((objMap, id) => {
+    const sortKey = objMap.get('_sortKey') as string | undefined;
+    if (sortKey) {
+      entries.push({ id, numericValue: parseSortKeyPrefix(sortKey) });
+    }
+  });
+
+  // Sort by numeric value to preserve relative ordering
+  entries.sort((a, b) => a.numericValue - b.numericValue);
+
+  // Assign new zero-padded keys preserving order
+  let migratedCount = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const newKey = formatSortKey((i + 1) * 1000);
+    const objMap = objectsMap.get(entries[i].id);
+    if (objMap) {
+      const oldKey = objMap.get('_sortKey') as string;
+      if (oldKey !== newKey) {
+        objMap.set('_sortKey', newKey);
+        migratedCount++;
+      }
+    }
+  }
+
+  if (migratedCount > 0) {
+    console.log(
+      `[Migrations] ✓ Migrated ${migratedCount} sortKey(s) to zero-padded format`,
+    );
   }
 }
 

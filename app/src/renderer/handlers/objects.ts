@@ -5,7 +5,12 @@
  * Creates and manages PixiJS visuals for TableObjects.
  */
 
-import type { MainToRendererMessage, TableObject } from '@cardtable2/shared';
+import type {
+  MainToRendererMessage,
+  StackObject,
+  TableObject,
+} from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import type { RendererContext } from '../RendererContext';
 import { Easing } from '../managers';
 import {
@@ -40,6 +45,9 @@ export function handleSyncObjects(
       context.worldContainer,
     );
   }
+
+  // Ensure attachment z-ordering after all objects are added
+  ensureAttachmentZOrder(context, message.objects);
 
   context.app.renderer.render(context.app.stage);
 }
@@ -121,6 +129,9 @@ export function handleObjectsAdded(
     }
   }
 
+  // After adding, ensure attachment parent visuals render above their children
+  ensureAttachmentZOrder(context, message.objects);
+
   context.app.renderer.render(context.app.stage);
 }
 
@@ -138,6 +149,9 @@ export function handleObjectsUpdated(
   for (const { id, obj } of message.objects) {
     updateObjectVisual(context, id, obj);
   }
+
+  // After updates, ensure attachment parent visuals render above their children
+  ensureAttachmentZOrder(context, message.objects);
 
   context.app.renderer.render(context.app.stage);
 }
@@ -222,6 +236,7 @@ function clearObjects(context: RendererContext): void {
   context.selection.clearAll();
   context.hover.clearAll();
   context.drag.clear();
+  context.drag.clearUnstackWaiting(); // Full reset — also cancel pending unstack
 }
 
 /**
@@ -243,11 +258,18 @@ function updateObjectVisual(
   // Get previous object state to detect flip changes
   const prevObj = context.sceneManager.getObject(id);
 
-  // Update scene manager
-  context.sceneManager.updateObject(id, obj);
-
   // Check if this object is being dragged (primary or secondary in multi-drag)
   const isDragging = context.drag.getDraggedObjectIds().includes(id);
+
+  // During drag, preserve the in-memory sortKey (DragManager owns z-order during drag).
+  // Store updates arrive with stale sortKeys that would overwrite DragManager's values.
+  if (isDragging && prevObj) {
+    obj._sortKey = prevObj._sortKey;
+  }
+
+  // Update scene manager (skip spatial index for dragged objects — their bbox is
+  // stale during drag and would block hits on objects underneath)
+  context.sceneManager.updateObject(id, obj, { skipSpatial: isDragging });
 
   // Update visual position and rotation
   // Position is preserved during drag to avoid flashing, but rotation should always update
@@ -418,6 +440,66 @@ function updateObjectVisual(
   } else {
     // Small or no change - set directly
     visual.rotation = targetRotation;
+  }
+}
+
+/**
+ * Helper: Ensure attachment z-order is correct.
+ *
+ * Uses sortKeys to determine PixiJS render order for parent + children.
+ * SortKeys encode the full z-ordering (including parent-on-top vs children-on-top),
+ * so we just sort by sortKey and set container indices accordingly.
+ */
+function ensureAttachmentZOrder(
+  context: RendererContext,
+  objects: Array<{ id: string; obj: TableObject }>,
+): void {
+  for (const { id, obj } of objects) {
+    if (obj._kind !== ObjectKind.Stack) continue;
+    const stackObj = obj as StackObject;
+    if (!stackObj._attachedCardIds || stackObj._attachedCardIds.length === 0) {
+      continue;
+    }
+
+    // Collect parent + all children with their sortKeys
+    const groupIds = [id, ...stackObj._attachedCardIds];
+
+    // Skip groups where any member is being dragged — DragManager owns z-order during drag
+    const draggedIds = context.drag.getDraggedObjectIds();
+    if (
+      draggedIds.length > 0 &&
+      groupIds.some((gid) => draggedIds.includes(gid))
+    ) {
+      continue;
+    }
+
+    const groupEntries: Array<{ objectId: string; sortKey: string }> = [];
+
+    for (const objectId of groupIds) {
+      const groupObj = context.sceneManager.getObject(objectId);
+      const visual = context.visual.getVisual(objectId);
+      if (groupObj && visual && visual.parent === context.worldContainer) {
+        groupEntries.push({ objectId, sortKey: groupObj._sortKey });
+      }
+    }
+
+    // Sort by sortKey ascending (lower = renders first = behind)
+    groupEntries.sort((a, b) => {
+      if (a.sortKey < b.sortKey) return -1;
+      if (a.sortKey > b.sortKey) return 1;
+      return 0;
+    });
+
+    // Set container indices: each entry moves to top in ascending order
+    for (const { objectId } of groupEntries) {
+      const visual = context.visual.getVisual(objectId);
+      if (visual) {
+        context.worldContainer.setChildIndex(
+          visual,
+          context.worldContainer.children.length - 1,
+        );
+      }
+    }
   }
 }
 

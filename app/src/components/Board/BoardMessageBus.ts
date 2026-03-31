@@ -11,6 +11,8 @@ import {
   unselectObjects,
   stackObjects,
   unstackCard,
+  attachCards,
+  detachCard,
 } from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
 
@@ -129,7 +131,11 @@ export class BoardMessageBus {
     // Object state
     this.registry.register('objects-moved', (msg, ctx) => {
       console.log(`[BoardMessageBus] ${msg.updates.length} object(s) moved`);
-      moveObjects(ctx.store, msg.updates);
+      const gameAssets = ctx.store.getGameAssets();
+      const layout = gameAssets?.packs.find(
+        (p) => p.attachmentLayout,
+      )?.attachmentLayout;
+      moveObjects(ctx.store, msg.updates, layout);
     });
 
     this.registry.register('stack-objects', (msg, ctx) => {
@@ -212,6 +218,65 @@ export class BoardMessageBus {
         );
         // User feedback: Generic error message for exceptions
         ctx.addMessage('❌ Failed to unstack card. Please try again.');
+      }
+    });
+
+    this.registry.register('attach-cards', (msg, ctx) => {
+      console.log(
+        `[BoardMessageBus] Attaching ${msg.ids.length} card(s) to ${msg.targetId}`,
+      );
+      try {
+        // Use game-defined attachment layout if available
+        const gameAssets = ctx.store.getGameAssets();
+        const layout = gameAssets?.packs.find(
+          (p) => p.attachmentLayout,
+        )?.attachmentLayout;
+        const attached = attachCards(ctx.store, msg.ids, msg.targetId, layout);
+        if (attached.length === 0) {
+          ctx.addMessage(
+            'No cards were attached. Target may have been modified.',
+          );
+        } else {
+          console.log(
+            `[BoardMessageBus] Successfully attached ${attached.length} card(s)`,
+          );
+        }
+      } catch (error) {
+        console.error('[BoardMessageBus] Attach operation failed', {
+          sourceIds: msg.ids,
+          targetId: msg.targetId,
+          error:
+            error instanceof Error
+              ? { message: error.message, stack: error.stack }
+              : error,
+        });
+        ctx.addMessage('Failed to attach cards.');
+      }
+    });
+
+    this.registry.register('detach-card', (msg, ctx) => {
+      console.log(`[BoardMessageBus] Detaching card ${msg.cardId}`);
+      try {
+        const success = detachCard(ctx.store, msg.cardId);
+        if (success) {
+          console.log(
+            `[BoardMessageBus] Successfully detached card ${msg.cardId}`,
+          );
+        } else {
+          console.warn(
+            '[BoardMessageBus] Detach failed - card may not be attached',
+            { cardId: msg.cardId },
+          );
+        }
+      } catch (error) {
+        console.error('[BoardMessageBus] Detach operation failed', {
+          cardId: msg.cardId,
+          error:
+            error instanceof Error
+              ? { message: error.message, stack: error.stack }
+              : error,
+        });
+        ctx.addMessage('Failed to detach card.');
       }
     });
 

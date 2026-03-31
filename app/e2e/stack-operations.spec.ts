@@ -133,11 +133,13 @@ test.describe('Stack Operations E2E', () => {
       await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
     });
 
-    // Drag first stack onto second stack (target)
+    // Drag first stack onto second stack (target) with Shift held to force stack (not attach)
+    await page.keyboard.down('Shift');
     await page.mouse.move(stack0Pos.x, stack0Pos.y);
     await page.mouse.down();
     await page.mouse.move(stack1Pos.x, stack1Pos.y, { steps: 10 });
     await page.mouse.up();
+    await page.keyboard.up('Shift');
 
     // Wait for renderer to process stack operation
     await page.evaluate(async () => {
@@ -309,11 +311,13 @@ test.describe('Stack Operations E2E', () => {
       await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
     });
 
-    // Drag selected stacks onto third stack
+    // Drag selected stacks onto third stack with Shift to force stack (not attach)
+    await page.keyboard.down('Shift');
     await page.mouse.move(positions[0].x, positions[0].y);
     await page.mouse.down();
     await page.mouse.move(positions[2].x, positions[2].y, { steps: 10 });
     await page.mouse.up();
+    await page.keyboard.up('Shift');
 
     // Wait for renderer to process stack operation
     await page.evaluate(async () => {
@@ -388,10 +392,12 @@ test.describe('Stack Operations E2E', () => {
       await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
     });
 
+    await page.keyboard.down('Shift');
     await page.mouse.move(stack0Pos.x, stack0Pos.y);
     await page.mouse.down();
     await page.mouse.move(stack1Pos.x, stack1Pos.y, { steps: 10 });
     await page.mouse.up();
+    await page.keyboard.up('Shift');
 
     await page.evaluate(async () => {
       await (globalThis as any).__TEST_BOARD__.waitForRenderer();
@@ -736,10 +742,12 @@ test.describe('Stack Operations E2E', () => {
       await (globalThis as any).__TEST_BOARD__.waitForSelectionSettled();
     });
 
+    await page.keyboard.down('Shift');
     await page.mouse.move(sourcePos.x, sourcePos.y);
     await page.mouse.down();
     await page.mouse.move(targetPos.x, targetPos.y, { steps: 10 });
     await page.mouse.up();
+    await page.keyboard.up('Shift');
 
     // Wait for renderer to process stack merge
     await page.evaluate(async () => {

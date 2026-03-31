@@ -217,6 +217,138 @@ describe('SceneManager', () => {
     });
   });
 
+  describe('skipSpatial', () => {
+    const makeObj = (x: number, y: number, sortKey = '0|a'): TableObject => ({
+      _kind: ObjectKind.Stack,
+      _containerId: null,
+      _pos: { x, y, r: 0 },
+      _sortKey: sortKey,
+      _locked: false,
+      _selectedBy: null,
+      _meta: {},
+    });
+
+    it('addObject with skipSpatial stores data but not in spatial index', () => {
+      const obj = makeObj(0, 0);
+      sceneManager.addObject('card-1', obj, { skipSpatial: true });
+
+      // Data is accessible
+      expect(sceneManager.getObject('card-1')).toBe(obj);
+      // But not in spatial index
+      expect(sceneManager.hitTest(0, 0)).toBeNull();
+    });
+
+    it('updateObject with skipSpatial updates data but removes from spatial index', () => {
+      const obj = makeObj(0, 0);
+      sceneManager.addObject('card-1', obj);
+      expect(sceneManager.hitTest(0, 0)).not.toBeNull();
+
+      const updated = makeObj(0, 0, '0|b');
+      sceneManager.updateObject('card-1', updated, { skipSpatial: true });
+
+      // Data is updated
+      expect(sceneManager.getObject('card-1')).toBe(updated);
+      // But no longer in spatial index
+      expect(sceneManager.hitTest(0, 0)).toBeNull();
+    });
+
+    it('updateObject without skipSpatial restores spatial index after skipSpatial', () => {
+      const obj = makeObj(0, 0);
+      sceneManager.addObject('card-1', obj);
+
+      // Skip spatial (simulates mid-drag store update)
+      sceneManager.updateObject('card-1', makeObj(0, 0), {
+        skipSpatial: true,
+      });
+      expect(sceneManager.hitTest(0, 0)).toBeNull();
+
+      // Normal update restores spatial entry (simulates drag end)
+      const final = makeObj(50, 50);
+      sceneManager.updateObject('card-1', final);
+      expect(sceneManager.hitTest(50, 50)?.id).toBe('card-1');
+      // Old position no longer hits
+      expect(sceneManager.hitTest(0, 0)).toBeNull();
+    });
+
+    it('skipSpatial object does not block hits on objects underneath', () => {
+      const bottom = makeObj(0, 0, '000001');
+      const top = makeObj(0, 0, '000002');
+      sceneManager.addObject('bottom', bottom);
+      sceneManager.addObject('top', top);
+
+      // Top object wins hit test
+      expect(sceneManager.hitTest(0, 0)?.id).toBe('top');
+
+      // Remove top from spatial (simulates drag start)
+      sceneManager.removeSpatialEntries(['top']);
+
+      // Bottom object is now hit
+      expect(sceneManager.hitTest(0, 0)?.id).toBe('bottom');
+      // Top data still accessible
+      expect(sceneManager.getObject('top')).toBe(top);
+    });
+
+    it('store update during drag does not re-add to spatial index', () => {
+      const bottom = makeObj(0, 0, '000001');
+      const top = makeObj(0, 0, '000002');
+      sceneManager.addObject('bottom', bottom);
+      sceneManager.addObject('top', top);
+
+      // Simulate drag start: remove top from spatial
+      sceneManager.removeSpatialEntries(['top']);
+      expect(sceneManager.hitTest(0, 0)?.id).toBe('bottom');
+
+      // Simulate store update during drag (e.g., detach)
+      sceneManager.updateObject('top', makeObj(0, 0, '000003'), {
+        skipSpatial: true,
+      });
+
+      // Bottom still wins — top not re-added to spatial
+      expect(sceneManager.hitTest(0, 0)?.id).toBe('bottom');
+    });
+  });
+
+  describe('removeSpatialEntries', () => {
+    it('removes multiple objects from spatial index', () => {
+      const obj1: TableObject = {
+        _kind: ObjectKind.Stack,
+        _containerId: null,
+        _pos: { x: 0, y: 0, r: 0 },
+        _sortKey: '0|a',
+        _locked: false,
+        _selectedBy: null,
+        _meta: {},
+      };
+      const obj2: TableObject = {
+        _kind: ObjectKind.Stack,
+        _containerId: null,
+        _pos: { x: 100, y: 100, r: 0 },
+        _sortKey: '0|b',
+        _locked: false,
+        _selectedBy: null,
+        _meta: {},
+      };
+
+      sceneManager.addObject('card-1', obj1);
+      sceneManager.addObject('card-2', obj2);
+
+      sceneManager.removeSpatialEntries(['card-1', 'card-2']);
+
+      // Neither is hit-testable
+      expect(sceneManager.hitTest(0, 0)).toBeNull();
+      expect(sceneManager.hitTest(100, 100)).toBeNull();
+      // But data is still accessible
+      expect(sceneManager.getObject('card-1')).toBe(obj1);
+      expect(sceneManager.getObject('card-2')).toBe(obj2);
+    });
+
+    it('is a no-op for unknown IDs', () => {
+      sceneManager.removeSpatialEntries(['nonexistent']);
+      // No error thrown
+      expect(sceneManager.getAllObjects().size).toBe(0);
+    });
+  });
+
   describe('clear', () => {
     it('removes all objects from the scene', () => {
       const obj1: TableObject = {

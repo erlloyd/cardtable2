@@ -28,6 +28,32 @@ import { getCardCount } from '../objects/stack/utils';
 let lastCursorStyle: 'default' | 'pointer' | 'grab' | 'grabbing' = 'default';
 
 /**
+ * Helper: Check if a world position is in the bottom half of a stack (attach zone)
+ *
+ * Used during drag to determine if the user is hovering over the attach zone
+ * (bottom half) or the stack zone (top half) of a target card.
+ * Coordinates are transformed to the object's local space to handle rotation.
+ */
+function isPointInAttachZone(
+  worldX: number,
+  worldY: number,
+  obj: TableObject,
+): boolean {
+  // Calculate world-relative coordinates
+  const worldRelX = worldX - obj._pos.x;
+  const worldRelY = worldY - obj._pos.y;
+
+  // Transform to object's local coordinate space (apply inverse rotation)
+  const angleRad = (obj._pos.r * Math.PI) / 180;
+  const cos = Math.cos(-angleRad);
+  const sin = Math.sin(-angleRad);
+  const localY = worldRelX * sin + worldRelY * cos;
+
+  // Bottom half of card = attach zone (localY >= 0 means below center)
+  return localY >= 0;
+}
+
+/**
  * Helper: Check if a world position is within the unstack handle region of a stack
  *
  * Returns true if the stack has 2+ cards and the position is within the unstack handle bounds.
@@ -268,6 +294,20 @@ export function handlePointerMove(
             return;
           }
 
+          // Check if dragging an attached card — if so, detach it first
+          const draggedObj = context.sceneManager.getObject(draggedId);
+          if (
+            draggedObj &&
+            draggedObj._kind === ObjectKind.Stack &&
+            (draggedObj as StackObject)._attachedToId
+          ) {
+            // Detach the card from its parent before starting the drag
+            context.postResponse({
+              type: 'detach-card',
+              cardId: draggedId,
+            });
+          }
+
           // M3.5.1-T6: Notify Board that object drag started
           context.postResponse({ type: 'object-drag-started' });
 
@@ -303,8 +343,18 @@ export function handlePointerMove(
               isSelected,
               context.sceneManager,
             );
+          }
 
-            // Update visual z-order
+          // Move dragged visuals to top of container, sorted by sortKey
+          // so attachment z-order is preserved (children behind, parent on top)
+          const sortedDragIds = [...draggedIds].sort((a, b) => {
+            const objA = context.sceneManager.getObject(a);
+            const objB = context.sceneManager.getObject(b);
+            const keyA = objA?._sortKey ?? '';
+            const keyB = objB?._sortKey ?? '';
+            return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+          });
+          for (const objectId of sortedDragIds) {
             const visual = context.visual.getVisual(objectId);
             if (visual) {
               context.worldContainer.setChildIndex(
@@ -356,8 +406,8 @@ export function handlePointerMove(
           context.visual.getAllVisuals(),
         );
 
-        // Detect stack target for visual feedback
-        detectAndShowStackTarget(context, worldPos.x, worldPos.y);
+        // Detect drop zone (stack vs attach) for visual feedback
+        detectAndShowDropZone(context, worldPos.x, worldPos.y, event);
 
         // Send drag state update for awareness (M5-T1)
         const dragStateUpdate = context.drag.getDragStateUpdate(
@@ -998,17 +1048,22 @@ function clearDragState(
       // Get dragged object IDs before ending drag
       const draggedIds = context.drag.getDraggedObjectIds();
 
-      // Detect stack target at final drop position
+      // Detect drop zone at final drop position
       const worldPos = context.coordConverter.screenToWorld(
         event.clientX,
         event.clientY,
         context.worldContainer,
       );
-      const stackTargetId = detectStackTarget(context, worldPos.x, worldPos.y);
+      const dropZone = detectDropZone(context, worldPos.x, worldPos.y, event);
 
-      // Clear stack target feedback (pass empty string since we're clearing)
-      // Note: When clearing, objectId is not used, but signature requires it
+      // Clear both target feedbacks
       context.visual.updateStackTargetFeedback(
+        '',
+        false,
+        false,
+        context.sceneManager,
+      );
+      context.visual.updateAttachTargetFeedback(
         '',
         false,
         false,
@@ -1030,17 +1085,29 @@ function clearDragState(
       }
 
       // Note: Unstack operation already handled earlier (sent unstack-card on slop exceeded)
-      // So we don't need special handling here - just normal drag completion or stack merge
-      if (stackTargetId && draggedIds.length > 0) {
-        // Stack operation: merge multiple stacks
-        console.log(
-          `[RendererCore] Stacking ${draggedIds.length} object(s) onto ${stackTargetId}`,
-        );
-        context.postResponse({
-          type: 'stack-objects',
-          ids: draggedIds,
-          targetId: stackTargetId,
-        });
+      // So we don't need special handling here - just normal drag completion, stack merge, or attach
+      if (dropZone && draggedIds.length > 0) {
+        if (dropZone.type === 'stack') {
+          // Stack operation: merge multiple stacks
+          console.log(
+            `[RendererCore] Stacking ${draggedIds.length} object(s) onto ${dropZone.targetId}`,
+          );
+          context.postResponse({
+            type: 'stack-objects',
+            ids: draggedIds,
+            targetId: dropZone.targetId,
+          });
+        } else {
+          // Attach operation: attach cards to target
+          console.log(
+            `[RendererCore] Attaching ${draggedIds.length} object(s) to ${dropZone.targetId}`,
+          );
+          context.postResponse({
+            type: 'attach-cards',
+            ids: draggedIds,
+            targetId: dropZone.targetId,
+          });
+        }
       } else {
         // Normal drag: send position updates to store (M3-T2.5)
         if (positionUpdates.length > 0) {
@@ -1135,9 +1202,25 @@ function unselectObjects(context: RendererContext, ids: string[]): void {
 }
 
 /**
- * Helper: Detect if dragged objects are over a valid stack target
+ * Drop zone detection result.
+ * Determines whether the user is hovering over the stack zone (top half)
+ * or the attach zone (bottom half) of a target card.
+ */
+interface DropZoneResult {
+  type: 'stack' | 'attach';
+  targetId: string;
+}
+
+/**
+ * Helper: Detect which drop zone (stack or attach) the pointer is over
  *
- * Returns the target stack ID if valid, or null otherwise.
+ * Returns the zone type and target ID if a valid drop target is found.
+ * Zone detection:
+ * - Top half of target card = stack zone (merge cards)
+ * - Bottom half of target card = attach zone (attach card-on-card)
+ * - Shift key overrides to force stack
+ * - Alt/Option key overrides to force attach
+ *
  * A valid target must:
  * - Be a stack with canStack capability
  * - Not be one of the dragged objects
@@ -1146,15 +1229,26 @@ function unselectObjects(context: RendererContext, ids: string[]): void {
  * @param context - Renderer context
  * @param worldX - World X coordinate to test
  * @param worldY - World Y coordinate to test
- * @returns Target stack ID or null
+ * @param event - Optional pointer event for modifier key detection
+ * @returns DropZoneResult or null if no valid target
  */
-function detectStackTarget(
+function detectDropZone(
   context: RendererContext,
   worldX: number,
   worldY: number,
-): string | null {
+  event?: { shiftKey?: boolean; altKey?: boolean },
+): DropZoneResult | null {
   const draggedIds = context.drag.getDraggedObjectIds();
   if (draggedIds.length === 0) return null;
+
+  // Use the primary dragged object's center for hit-test and zone detection
+  // (more intuitive than cursor position, especially when grabbing edges)
+  const primaryId = context.drag.getDraggedObjectId();
+  const primaryObj = primaryId
+    ? context.sceneManager.getObject(primaryId)
+    : null;
+  const testX = primaryObj ? primaryObj._pos.x : worldX;
+  const testY = primaryObj ? primaryObj._pos.y : worldY;
 
   // Check if all dragged objects are stacks with canStack capability
   for (const id of draggedIds) {
@@ -1163,12 +1257,12 @@ function detectStackTarget(
 
     const behaviors = getBehaviors(obj._kind);
     if (!behaviors.capabilities.canStack) {
-      return null; // At least one dragged object cannot stack
+      return null;
     }
   }
 
-  // Hit-test at current position to find potential target
-  const hitResult = context.sceneManager.hitTest(worldX, worldY);
+  // Hit-test at primary object's center to find potential target
+  const hitResult = context.sceneManager.hitTest(testX, testY);
   if (!hitResult) return null;
 
   // Target must not be one of the dragged objects
@@ -1181,42 +1275,113 @@ function detectStackTarget(
   const targetBehaviors = getBehaviors(targetObj._kind);
   if (!targetBehaviors.capabilities.canStack) return null;
 
-  return hitResult.id;
+  // Attached cards cannot be drop targets (must detach first)
+  if (
+    targetObj._kind === ObjectKind.Stack &&
+    (targetObj as StackObject)._attachedToId
+  ) {
+    return null;
+  }
+
+  // Modifier key overrides
+  if (event?.altKey) {
+    return { type: 'attach', targetId: hitResult.id };
+  }
+  if (event?.shiftKey) {
+    return { type: 'stack', targetId: hitResult.id };
+  }
+
+  // Zone detection: top half = stack, bottom half = attach (based on dragged object center)
+  const isAttach = isPointInAttachZone(testX, testY, targetObj);
+  return {
+    type: isAttach ? 'attach' : 'stack',
+    targetId: hitResult.id,
+  };
 }
 
 /**
- * Helper: Detect and show stack target feedback during drag
+ * Helper: Detect and show drop zone feedback during drag
  *
- * Updates visual feedback to show which stack (if any) will be the target
- * when the drag ends.
+ * Updates visual feedback to show which zone (stack or attach) the pointer
+ * is over, highlighting the target card appropriately.
  *
  * @param context - Renderer context
  * @param worldX - World X coordinate
  * @param worldY - World Y coordinate
+ * @param event - Optional pointer event for modifier key detection
  */
-function detectAndShowStackTarget(
+function detectAndShowDropZone(
   context: RendererContext,
   worldX: number,
   worldY: number,
+  event?: { shiftKey?: boolean; altKey?: boolean },
 ): void {
-  const targetId = detectStackTarget(context, worldX, worldY);
+  const result = detectDropZone(context, worldX, worldY, event);
+  const draggedId = context.drag.getDraggedObjectId();
 
-  // Update stack target feedback
-  if (targetId) {
-    const isSelected = context.selection.isSelected(targetId);
-    context.visual.updateStackTargetFeedback(
-      targetId,
-      true,
-      isSelected,
-      context.sceneManager,
-    );
+  if (result) {
+    const isSelected = context.selection.isSelected(result.targetId);
+
+    if (result.type === 'stack') {
+      // Show stack target feedback, clear attach target
+      context.visual.updateStackTargetFeedback(
+        result.targetId,
+        true,
+        isSelected,
+        context.sceneManager,
+      );
+      context.visual.updateAttachTargetFeedback(
+        '',
+        false,
+        false,
+        context.sceneManager,
+      );
+    } else {
+      // Show attach target feedback, clear stack target
+      context.visual.updateAttachTargetFeedback(
+        result.targetId,
+        true,
+        isSelected,
+        context.sceneManager,
+      );
+      context.visual.updateStackTargetFeedback(
+        '',
+        false,
+        false,
+        context.sceneManager,
+      );
+    }
+
+    // Show action preview label on the dragged card
+    if (draggedId) {
+      context.visual.updateDragActionPreview(
+        draggedId,
+        result.type,
+        context.sceneManager,
+      );
+    }
   } else {
-    // Clear any existing stack target feedback
+    // Clear both feedbacks
     context.visual.updateStackTargetFeedback(
       '',
       false,
       false,
       context.sceneManager,
     );
+    context.visual.updateAttachTargetFeedback(
+      '',
+      false,
+      false,
+      context.sceneManager,
+    );
+
+    // Clear action preview on dragged card
+    if (draggedId) {
+      context.visual.updateDragActionPreview(
+        draggedId,
+        null,
+        context.sceneManager,
+      );
+    }
   }
 }

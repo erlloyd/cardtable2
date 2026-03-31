@@ -1,4 +1,4 @@
-import type { PointerEventData, StackObject } from '@cardtable2/shared';
+import type { StackObject } from '@cardtable2/shared';
 import { ObjectKind, DRAG_SENTINEL_KEY } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
@@ -32,31 +32,9 @@ export class DragManager {
   private isObjectDragging = false;
   private isPhantomDragging = false;
   private dragState: DragState | null = null;
-  private pointerDownEvent: PointerEventData | null = null;
   private isUnstackDrag = false; // Track if this is an unstack operation
   private waitingForUnstackSource: string | null = null; // Source stack ID when waiting for unstack response
   private unstackTimeoutId: NodeJS.Timeout | null = null; // Timeout for unstack operations
-
-  /**
-   * Store pointer down event for selection logic on pointer up.
-   */
-  setPointerDownEvent(event: PointerEventData): void {
-    this.pointerDownEvent = event;
-  }
-
-  /**
-   * Get stored pointer down event.
-   */
-  getPointerDownEvent(): PointerEventData | null {
-    return this.pointerDownEvent;
-  }
-
-  /**
-   * Clear stored pointer down event.
-   */
-  clearPointerDownEvent(): void {
-    this.pointerDownEvent = null;
-  }
 
   /**
    * Check if currently dragging an object.
@@ -196,6 +174,7 @@ export class DragManager {
   startObjectDrag(
     sceneManager: SceneManager,
     selectionManager: SelectionManager,
+    modifiers?: { metaKey?: boolean; ctrlKey?: boolean },
   ): string[] {
     if (!this.dragState) return [];
 
@@ -209,9 +188,7 @@ export class DragManager {
     const isDraggedObjectSelected = selectionManager.isSelected(
       this.dragState.draggedObjectId,
     );
-    const isMultiSelectModifier =
-      this.pointerDownEvent &&
-      (this.pointerDownEvent.metaKey || this.pointerDownEvent.ctrlKey);
+    const isMultiSelectModifier = modifiers?.metaKey || modifiers?.ctrlKey;
 
     if (isDraggedObjectSelected) {
       // Dragging a selected object - drag all selected objects
@@ -389,19 +366,18 @@ export class DragManager {
 
     // Clear drag state
     this.isObjectDragging = false;
+    this.isUnstackDrag = false;
     this.dragState = null;
 
     return positionUpdates;
   }
 
   /**
-   * Cancel object dragging without sending updates.
+   * Full reset of ALL DragManager state.
+   * Called on scene clear, object removal, or gesture abort.
    */
-  cancelObjectDrag(): void {
-    this.isObjectDragging = false;
-    this.isPhantomDragging = false;
-    this.dragState = null;
-    this.isUnstackDrag = false;
+  resetAll(): void {
+    this.resetDragPrep();
     this.clearUnstackWaiting();
   }
 
@@ -431,17 +407,18 @@ export class DragManager {
   }
 
   /**
-   * Clear drag preparation state (pointer down, slop tracking).
+   * Reset drag preparation state only.
+   * Called when drag prep needs to be abandoned but async operations continue.
+   * Example: After sending unstack-card, clear prep for source stack.
    *
    * Does NOT clear waitingForUnstackSource — that state must survive
    * between the unstack request and the async objects-added response.
-   * Use cancelObjectDrag() to fully abort including unstack waiting.
+   * Use resetAll() to fully reset including unstack waiting.
    */
-  clear(): void {
+  resetDragPrep(): void {
     this.isObjectDragging = false;
     this.isPhantomDragging = false;
     this.dragState = null;
-    this.pointerDownEvent = null;
     this.isUnstackDrag = false;
   }
 }

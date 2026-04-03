@@ -526,7 +526,15 @@ export function registerDefaultActions(): void {
           scenarioName: content.scenario.name,
         };
 
-        loadScenarioContent(ctx.store, content, metadata, '[Load Plugin]');
+        loadScenarioContent(
+          ctx.store,
+          content,
+          metadata,
+          '[Load Plugin]',
+          content.pluginManifest.componentSets,
+          content.pluginManifest.id,
+          '', // Local plugins don't have a remote base URL
+        );
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);

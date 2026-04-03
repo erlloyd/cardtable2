@@ -346,9 +346,13 @@ export async function loadPluginScenario(
  * }
  * ```
  */
+export interface LoadedLocalPluginContent extends LoadedContent {
+  pluginManifest: PluginManifest;
+}
+
 export async function loadLocalPluginScenario(
   scenarioFilename?: string,
-): Promise<LoadedContent> {
+): Promise<LoadedLocalPluginContent> {
   // Prompt user to select directory
   const plugin = await loadLocalPluginDirectory();
 
@@ -387,6 +391,7 @@ export async function loadLocalPluginScenario(
     scenario,
     content,
     objects,
+    pluginManifest: plugin.manifest,
   };
 }
 

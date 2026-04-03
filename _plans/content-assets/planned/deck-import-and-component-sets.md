@@ -505,64 +505,22 @@ The parser receives v2's `GameAssets` (not v1's `CardData`), so card lookups use
 5. Build obligation deck (obligation-typed cards in hero's set)
 6. Return `ComponentSet` with stacks across rows + optional tokens
 
-### Known gap: Card metadata in asset pack
-The v2 `Card` type currently only has `type` and `face`. The parser needs richer metadata
-(`setCode`, `typeCode`, `quantity`) to extract nemesis/obligation decks. This requires either:
-- Enriching the `Card` type in `shared/src/content-types.ts` with optional metadata fields
-- Or adding a separate card metadata section to the asset pack schema
-
-Until this is addressed, the parser handles the basic case (hero + main deck from slots)
-but cannot auto-extract nemesis/obligation decks.
+### Card metadata for deck import parsers
+Optional `setCode` and `typeCode` fields added to the `Card` type in `shared/src/content-types.ts`.
+These enable parsers to find related cards (nemesis decks, obligation decks) by filtering on set/type.
+Asset packs need to populate these fields for parser support — this is a data enrichment task
+per plugin, not a code change. The Spider-Man hero card has been enriched as an example.
 
 ### Acceptance criteria:
 - [x] Plugin manifest has `componentSets` with Rhino static encounter set
 - [x] Plugin manifest has API-backed set for MarvelCDB import
-- [x] Parser returns a `ComponentSet` from a MarvelCDB public decklist response (basic: hero + main deck)
-- [ ] Parser extracts nemesis and obligation stacks (blocked on card metadata enrichment)
+- [x] Parser returns a `ComponentSet` with hero + main deck from MarvelCDB response
+- [x] Parser extracts nemesis and obligation stacks when card metadata (setCode/typeCode) is present
 - [x] Parser handles edge cases: missing hero_code, empty slots
-- [ ] Tested with captured MarvelCDB API responses as fixtures
+- [ ] Tested with captured MarvelCDB API responses as fixtures (data enrichment needed first)
 - [x] Scenario updated to ct-scenario@2 format
 - [x] Static encounter set uses cardSet references with shuffle
-
----
-
-## Task 12: Arkham Horror LCG plugin — component sets + API parser
-
-**Files:** In the Arkham plugin repo (external, may need to create)
-
-Adapt from v1 source files:
-- `cardtable/src/game-modules/arkham-horror-card-game/getArkhamCards.ts`
-- `cardtable/src/game-modules/arkham-horror-card-game/ArkhamHorrorCardGameModule.ts`
-
-Same v1→v2 type mapping work as Task 11 (parser uses v2 `GameAssets`, not v1 `CardData`).
-
-### Acceptance criteria:
-- [ ] Plugin manifest has static encounter sets
-- [ ] Plugin manifest has API-backed set for ArkhamDB import
-- [ ] Parser correctly returns a `ComponentSet` from an ArkhamDB response
-- [ ] Parser extracts investigator + main deck stacks
-- [ ] Parser handles edge cases: missing investigator_code, empty slots
-- [ ] Tested with at least 2 captured ArkhamDB fixtures
-
----
-
-## Task 13: LOTR LCG plugin — component sets + API parser
-
-**Files:** In the LOTR plugin repo (external, may need to create)
-
-Adapt from v1 source files:
-- `cardtable/src/game-modules/lotr-lcg/getLOTRCards.ts`
-- `cardtable/src/game-modules/lotr-lcg/LOTRLCGGameModule.ts`
-
-Same v1→v2 type mapping work as Task 11.
-
-### Acceptance criteria:
-- [ ] Plugin manifest has static encounter/quest sets
-- [ ] Plugin manifest has API-backed set for RingsDB import
-- [ ] Parser correctly returns a `ComponentSet` from a RingsDB response
-- [ ] Parser extracts hero stack, main deck, sideboard
-- [ ] Parser handles edge cases: missing heroes, empty slots/sideslots
-- [ ] Tested with at least 2 captured RingsDB fixtures
+- [x] `Card` type enriched with optional `setCode` and `typeCode` fields
 
 ---
 
@@ -607,7 +565,6 @@ Same v1→v2 type mapping work as Task 11.
 10. **Task 10** — Dynamic action registration
 11. **Task 10b** — Wire modal into Board/ActionContext
 12. **Task 11** — Marvel Champions plugin (first real integration)
-13. **Tasks 12-13** — Arkham + LOTR plugins
 
 Tasks 4 and 6 can be developed in parallel. Tasks 7 and 8 can be developed in parallel (both depend on Task 3).
 
@@ -637,6 +594,7 @@ Tasks 4 and 6 can be developed in parallel. Tasks 7 and 8 can be developed in pa
 
 ## Future Extensions (not in scope)
 
+- Arkham Horror LCG and LOTR LCG plugin implementations
 - Deck search by name within the modal
 - Deck preview before importing
 - Deck text/code import (paste mode)

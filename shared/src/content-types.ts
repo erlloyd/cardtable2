@@ -40,6 +40,8 @@ export interface Card {
   back?: string; // Optional override of type's back image
   size?: CardSize; // Optional override of type's size
   orientation?: CardOrientation; // Optional override of type's orientation (follows inheritance: card → cardType → 'portrait')
+  setCode?: string; // Optional set/group identifier (e.g. "spider_man_nemesis") — used by deck import parsers
+  typeCode?: string; // Optional card category (e.g. "obligation", "encounter", "ally") — used by deck import parsers
 }
 
 export interface Token {

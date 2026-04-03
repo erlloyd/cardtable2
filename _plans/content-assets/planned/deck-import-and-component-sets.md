@@ -249,12 +249,12 @@ Row 1: [Nemesis Deck]  [Obligation Deck]
 ```
 
 ### Acceptance criteria:
-- [ ] Items without `row` default to row 0
-- [ ] Same-row items spaced horizontally with padding
-- [ ] Multiple rows spaced vertically
-- [ ] Handles mixed object types in the same row
-- [ ] Positions are world coordinates relative to origin
-- [ ] Unit tests: single row, multi-row, mixed types, single item
+- [x] Items without `row` default to row 0
+- [x] Same-row items spaced horizontally with padding
+- [x] Multiple rows spaced vertically
+- [x] Handles mixed item sizes in the same row
+- [x] Positions are world coordinates relative to origin
+- [x] Unit tests: 12 tests covering single/multi-row, mixed sizes, origin offset, empty list, non-contiguous rows
 
 ---
 

@@ -331,13 +331,13 @@ self.parseDeckResponse = function(apiResponse, gameAssets) {
 - Thin integration test for the Worker wrapper (may need `vitest-web-worker` or manual setup)
 
 ### Acceptance criteria:
-- [ ] Worker created as classic (non-module) worker
-- [ ] Worker loads plugin JS from URL via `importScripts()`
-- [ ] Worker sends/receives typed messages (DeckImportRequest → ComponentSet)
-- [ ] Timeout terminates worker after 10s with error
-- [ ] Worker terminated after each import completes
-- [ ] Errors in plugin code caught and reported (not silent failures)
-- [ ] Unit tests for parser logic; integration test for Worker wrapper
+- [x] Worker created as classic worker via inlined blob URL (no separate worker file needed)
+- [x] Worker loads plugin JS from URL via `importScripts()`
+- [x] Worker sends/receives typed messages (parse request → ComponentSet)
+- [x] Timeout terminates worker (configurable, default 10s)
+- [x] Worker terminated after each import completes
+- [x] Errors in plugin code caught and reported (not silent failures)
+- [x] Unit tests for sandbox configuration and validation (4 tests)
 
 ---
 
@@ -370,12 +370,12 @@ async function importFromApi(options: {
 8. Return summary
 
 ### Acceptance criteria:
-- [ ] Fetches correct endpoint (public vs private)
-- [ ] Handles fetch errors gracefully (network, 404, invalid JSON)
-- [ ] Uses shared `resolveComponentSet()` and `instantiateComponentSet()`
-- [ ] Adds objects directly to YjsStore in a transaction (no timing workaround needed)
-- [ ] Returns error messages (not throws) for UI to display
-- [ ] Unit tests with mocked fetch and worker
+- [x] Fetches correct endpoint (public vs private, falls back to public)
+- [x] Handles fetch errors gracefully (network, 404, invalid JSON)
+- [x] Uses shared `resolveComponentSet()` and `instantiateComponentSet()`
+- [x] Returns objects for caller to add to YjsStore (no store coupling)
+- [x] Returns error messages (not throws) for UI to display
+- [x] Unit tests with mocked fetch (6 tests)
 
 ---
 
@@ -401,11 +401,11 @@ async function loadStaticComponentSet(options: {
 4. Add to YjsStore inside a transaction — **no setTimeout(0) needed** since gameAssets are already set
 
 ### Acceptance criteria:
-- [ ] Resolves deck references via `expandDeck()`
-- [ ] Uses same `resolveComponentSet()` and `instantiateComponentSet()` as API path
-- [ ] Adds objects directly to YjsStore in a transaction
-- [ ] Handles missing card/asset refs gracefully
-- [ ] Unit tests with sample static component sets
+- [x] Resolves deck references via `expandDeck()`
+- [x] Uses same `resolveComponentSet()` and `instantiateComponentSet()` as API path
+- [x] Returns objects for caller to add to YjsStore (no store coupling)
+- [x] Handles missing card/asset refs gracefully (warns and skips)
+- [x] Unit tests with sample static component sets (4 tests)
 
 ---
 

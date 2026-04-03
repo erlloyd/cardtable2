@@ -314,15 +314,12 @@ export interface LayoutObject {
 }
 
 export interface Scenario {
-  schema: 'ct-scenario@1'; // Schema version identifier
+  schema: 'ct-scenario@2'; // Schema version identifier
   id: string; // Unique scenario identifier
   name: string; // Human-readable scenario name
   version: string; // Semantic version (e.g., "1.0.0")
   packs: string[]; // Asset pack IDs required for this scenario
-  decks?: Record<string, DeckDefinition>; // Named deck definitions
-  layout?: {
-    objects: LayoutObject[]; // Layout objects to instantiate
-  };
+  componentSet?: ComponentSet; // Objects to place on the table
 }
 
 // ============================================================================

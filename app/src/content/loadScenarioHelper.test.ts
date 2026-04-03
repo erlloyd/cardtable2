@@ -48,7 +48,7 @@ describe('loadScenarioContent', () => {
 
     mockContent = {
       scenario: {
-        schema: 'ct-scenario@1',
+        schema: 'ct-scenario@2',
         id: 'test-scenario',
         name: 'Test Scenario',
         version: '1.0.0',

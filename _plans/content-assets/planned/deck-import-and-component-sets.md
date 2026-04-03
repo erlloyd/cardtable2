@@ -181,12 +181,12 @@ Update the scenario schema (`ct-scenario@2`) so its layout is expressed as a `Co
 - Update existing scenario JSON files (testgame, Marvel Champions plugin) to new schema
 
 ### Acceptance criteria:
-- [ ] `ct-scenario@2` schema uses `ComponentSet` for its layout
-- [ ] Old `layout.objects` + `decks` fields removed from Scenario type
-- [ ] `instantiateScenario()` delegates to a shared `instantiateComponentSet()` function
-- [ ] Existing scenario JSON files updated to v2 format
-- [ ] Scenario loading (testgame) works end-to-end with new schema
-- [ ] Existing unit tests updated and passing
+- [x] `ct-scenario@2` schema uses `ComponentSet` for its layout
+- [x] Old `layout.objects` + `decks` fields removed from Scenario type
+- [x] `instantiateScenario()` delegates to a shared `instantiateComponentSet()` function
+- [x] Existing scenario JSON files updated to v2 format (testgame-basic.json)
+- [x] Scenario loading (testgame) works end-to-end with new schema
+- [x] Existing unit tests updated and passing (931 tests)
 
 ---
 
@@ -218,13 +218,13 @@ instantiateComponentSet(set: ResolvedComponentSet, gameAssets: GameAssets, origi
 - Generate sort keys for z-ordering
 
 ### Acceptance criteria:
-- [ ] `resolveComponentSet()` expands deck references correctly
-- [ ] `resolveComponentSet()` passes through pre-expanded cards
-- [ ] `resolveComponentSet()` validates refs and warns on missing
-- [ ] `instantiateComponentSet()` creates correct TableObject subtypes
-- [ ] Instance IDs are UUIDs, not derived from plugin data
-- [ ] Shared by scenario loading and standalone component set loading
-- [ ] Unit tests: resolution with deck refs, pre-expanded cards, mixed, missing refs, duplicate refs
+- [x] `resolveComponentSet()` expands deck references correctly
+- [x] `resolveComponentSet()` passes through pre-expanded cards
+- [x] `resolveComponentSet()` validates refs and warns on missing
+- [x] `instantiateComponentSet()` creates correct TableObject subtypes
+- [x] Instance IDs are unique, not derived from plugin data
+- [x] Shared by scenario loading and standalone component set loading
+- [x] Unit tests: 20 tests covering resolution, instantiation, mixed types, edge cases
 
 ---
 

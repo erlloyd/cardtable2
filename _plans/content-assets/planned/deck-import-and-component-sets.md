@@ -457,6 +457,28 @@ When a plugin with `componentSets` is loaded, register a "Load Components" comma
 
 ---
 
+## Task 10b: Wire ComponentSetModal into Board and ActionContext
+
+**Files:** `app/src/components/Board.tsx`, `app/src/routes/table.$id.tsx`, `app/src/content/loadScenarioHelper.ts`
+
+Connect the ComponentSetModal to the React component tree and wire the `onOpenComponentSets` callback through ActionContext so the command palette action can open it.
+
+### Changes:
+- Add `ComponentSetModal` to Board.tsx render tree (or table route layout)
+- Add state for modal open/close and the active component set entries
+- Pass `onOpenComponentSets` callback into ActionContext construction
+- Call `registerComponentSetActions()` when plugin content with componentSets loads (in loadScenarioHelper or table route)
+- Call `unregisterComponentSetActions()` on table reset
+
+### Acceptance criteria:
+- [ ] ComponentSetModal renders in the app (not orphaned)
+- [ ] "Load Components" action appears in command palette after loading a plugin with componentSets
+- [ ] Clicking the action opens the modal with the correct entries
+- [ ] Table reset removes the action
+- [ ] Modal receives correct store and gameAssets refs
+
+---
+
 ## Task 11: Marvel Champions plugin — component sets + API parser
 
 **Files:** `/Users/erlloyd/Code/cardtable-plugin-marvelchampions/` (local repo)
@@ -572,8 +594,9 @@ Same v1→v2 type mapping work as Task 11.
 8. **Task 8** — Static component set loading
 9. **Task 9** — Component Set Modal UI
 10. **Task 10** — Dynamic action registration
-11. **Task 11** — Marvel Champions plugin (first real integration)
-12. **Tasks 12-13** — Arkham + LOTR plugins
+11. **Task 10b** — Wire modal into Board/ActionContext
+12. **Task 11** — Marvel Champions plugin (first real integration)
+13. **Tasks 12-13** — Arkham + LOTR plugins
 
 Tasks 4 and 6 can be developed in parallel. Tasks 7 and 8 can be developed in parallel (both depend on Task 3).
 
@@ -596,6 +619,8 @@ Tasks 4 and 6 can be developed in parallel. Tasks 7 and 8 can be developed in pa
 | `app/src/components/ComponentSetModal.tsx` | Create — React modal UI |
 | `app/src/actions/registerDefaultActions.ts` | Modify — dynamic action registration |
 | `app/src/content/loadScenarioHelper.ts` | Modify — wire up action registration |
+| `app/src/components/Board.tsx` | Modify — render ComponentSetModal, wire ActionContext callback |
+| `app/src/routes/table.$id.tsx` | Modify — modal state, ActionContext wiring |
 
 ---
 

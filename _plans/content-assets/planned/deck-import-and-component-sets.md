@@ -426,13 +426,13 @@ A modal triggered from the command palette showing all available component sets.
 - Extensible for future search/preview features
 
 ### Acceptance criteria:
-- [ ] Modal lists all component sets with names
-- [ ] Static sets load on click via `loadStaticComponentSet()`
-- [ ] API sets show deck ID input + submit via `importFromApi()`
-- [ ] Loading state shown during both static and API loading
-- [ ] Error messages displayed inline on failure
-- [ ] Accessible: focus trap, Escape to close, keyboard nav
-- [ ] Private deck checkbox only shown when private endpoint exists
+- [x] Modal lists all component sets with names
+- [x] Static sets load on click via `loadStaticComponentSet()`
+- [x] API sets show deck ID input + submit via `importFromApi()`
+- [x] Loading state shown during both static and API loading
+- [x] Error messages displayed inline on failure
+- [x] Accessible: focus trap via Headless UI Dialog, Escape to close, keyboard nav (Enter to submit)
+- [x] Private deck checkbox only shown when private endpoint exists
 
 ---
 
@@ -450,10 +450,10 @@ When a plugin with `componentSets` is loaded, register a "Load Components" comma
 - Clear action on table reset / content unload
 
 ### Acceptance criteria:
-- [ ] Action registered dynamically when plugin has componentSets
-- [ ] Action opens ComponentSetModal with correct entries
-- [ ] Action removed on table reset
-- [ ] No action registered for plugins without componentSets
+- [x] `registerComponentSetActions()` registers action when plugin has componentSets
+- [x] Action opens ComponentSetModal via `onOpenComponentSets` callback in ActionContext
+- [x] `unregisterComponentSetActions()` removes actions (for table reset)
+- [x] No action registered for empty componentSets array
 
 ---
 

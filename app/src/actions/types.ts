@@ -1,3 +1,4 @@
+import type { ComponentSetEntry } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { TableObjectYMap } from '../store/types';
 
@@ -41,6 +42,10 @@ export interface ActionContext {
   gridSnapEnabled?: boolean; // Whether grid snapping is enabled
   onGridSnapEnabledChange?: (enabled: boolean) => void; // Toggle grid snap callback
   activeHandId?: string; // Currently active player hand
+  onOpenComponentSets?: (
+    entries: ComponentSetEntry[],
+    pluginBaseUrl: string,
+  ) => void; // Open the component set modal
 }
 
 /**

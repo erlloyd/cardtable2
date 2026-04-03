@@ -17,8 +17,9 @@ This plan introduces **Component Sets** — a reusable, always-additive collecti
 - Worker receives **full GameAssets** so parsers can reference any asset type
 - Static component sets are **pure JSON** — no code required from plugin authors
 - Initial API scope: Marvel Champions, Arkham Horror LCG, Lord of the Rings LCG
-- Direct browser fetch to external APIs (no server proxy)
+- Direct browser fetch to external APIs (no server proxy — CORS verified: all three APIs return `Access-Control-Allow-Origin: *`)
 - Command palette triggers a modal listing all available component sets + API imports
+- **Classic (non-module) Web Worker** for plugin parser sandbox — `importScripts()` is fully supported in classic workers with no deprecation planned
 
 ---
 
@@ -50,6 +51,51 @@ API import:        fetch → worker parse     → instantiate componentSet → p
                                               shared from here down
 ```
 
+### Shared Object Definition Types
+
+Object definitions are shared between scenarios (LayoutObject) and component sets. The "what to create" is separated from "where to put it":
+
+```typescript
+// Shared definitions — the "what to create" for each object kind
+interface StackDef {
+  label: string;
+  faceUp: boolean;
+  deck?: DeckDefinition;   // For static sets: { cardSets?, cards?, shuffle? }
+  cards?: string[];        // For API results: pre-expanded card codes
+  // If both deck and cards are present, cards wins (it's pre-resolved)
+}
+
+interface TokenDef {
+  ref: string;             // Key in asset pack's `tokens`
+  label?: string;
+}
+
+interface CounterDef {
+  ref: string;             // Key in asset pack's `counters`
+  label?: string;
+  value?: number;          // Override starting value
+}
+
+interface MatDef {
+  ref: string;             // Key in asset pack's `mats`
+  label?: string;
+}
+
+interface ZoneDef {
+  ref?: string;            // Key in asset pack, or inline dimensions
+  label?: string;
+  width?: number;
+  height?: number;
+}
+```
+
+These Def types are the contract between data and instantiation. Both LayoutObject and ComponentSet items build on them:
+
+- **LayoutObject** (scenarios): flat type with `type` discriminator + `pos: {x, y}` + `z`
+- **ComponentSet items**: `Def + { row?: number }` for row-based auto-layout
+
+Instantiation functions (`instantiateStack()`, `instantiateToken()`, etc.) accept the shared Def types internally, so one implementation handles both contexts.
+
 ### Component Set schema (`ComponentSet`)
 
 ```typescript
@@ -61,57 +107,43 @@ interface ComponentSet {
   zones?: ComponentSetZone[];
 }
 
-interface ComponentSetStack {
-  label: string;           // "Main Deck", "Nemesis", "Hero"
-  faceUp: boolean;
-  row?: number;            // Layout row hint (0-based, same-row = side-by-side)
-  // Card source — one of:
-  deck?: DeckDefinition;   // For static sets: { cardSets?, cards?, shuffle? }
-  cards?: string[];        // For API results: pre-expanded card codes
-}
-
-interface ComponentSetToken {
-  ref: string;             // Key in asset pack's `tokens`
-  label?: string;
-  row?: number;
-}
-
-interface ComponentSetCounter {
-  ref: string;             // Key in asset pack's `counters`
-  label?: string;
-  value?: number;          // Override starting value
-  row?: number;
-}
-
-interface ComponentSetMat {
-  ref: string;             // Key in asset pack's `mats`
-  label?: string;
-  row?: number;
-}
-
-interface ComponentSetZone {
-  ref?: string;            // Key in asset pack, or inline dimensions
-  label?: string;
-  width?: number;
-  height?: number;
-  row?: number;
-}
+// Each item extends its shared Def with row-based positioning
+interface ComponentSetStack extends StackDef     { row?: number; }
+interface ComponentSetToken extends TokenDef     { row?: number; }
+interface ComponentSetCounter extends CounterDef { row?: number; }
+interface ComponentSetMat extends MatDef         { row?: number; }
+interface ComponentSetZone extends ZoneDef       { row?: number; }
 ```
 
-Stacks have either `deck` (static, needs expansion via `expandDeck()`) or `cards` (pre-expanded, from API worker). A `resolveComponentSet()` function normalizes both forms before instantiation.
+### Object instance IDs
+
+Plugins only provide **codes and refs** (e.g. card code `"01020"`, token ref `"threat"`). Multiple instances of the same code are normal (e.g. 3 copies of a card in a deck).
+
+**Instance IDs** (the keys in the Yjs `objects` map) are generated at runtime by `instantiateComponentSet()` using UUIDs. Plugins never define or see instance IDs. This is consistent with how `_cards: string[]` on StackObjects already works — codes, not instance IDs.
+
+### Open question: Plugin developer access to shared types
+
+How do plugin authors (especially those writing API parser JS for the worker) access the shared type definitions (`ComponentSet`, `StackDef`, `GameAssets`, etc.)? Options to evaluate:
+- Published npm package with type declarations
+- TypeScript declaration file hosted alongside plugin template
+- Documentation-only (plugin authors read the types from docs)
+- To be discussed before Task 6 implementation
 
 ---
 
-## Task 1: Shared Types — ComponentSet and related contracts
+## Task 1: Shared Object Definition Types and ComponentSet contracts
 
 **Files:** `shared/src/content-types.ts`
 
-Define the `ComponentSet` schema and all sub-types. Define the plugin manifest additions and worker communication contract.
+Define the shared Def types, ComponentSet schema, plugin manifest additions, and worker communication contract.
 
 ### Types to add:
 
 ```typescript
-// The core reusable type
+// Shared object definitions
+StackDef, TokenDef, CounterDef, MatDef, ZoneDef
+
+// ComponentSet (extends Defs with row positioning)
 ComponentSet
 ComponentSetStack, ComponentSetToken, ComponentSetCounter, ComponentSetMat, ComponentSetZone
 
@@ -126,6 +158,7 @@ DeckImportRequest         // { apiResponse: unknown, gameAssets: GameAssets }
 
 ### Acceptance criteria:
 - [ ] All types exported from `@cardtable2/shared`
+- [ ] Shared Def types (`StackDef`, `TokenDef`, etc.) defined and used by both LayoutObject and ComponentSet
 - [ ] `ComponentSet` supports all five object types (stacks, tokens, counters, mats, zones)
 - [ ] `ComponentSetStack` supports both `deck` (DeckDefinition) and `cards` (string[]) sources
 - [ ] `ComponentSetEntry` discriminates between static and API-backed sets
@@ -140,17 +173,20 @@ DeckImportRequest         // { apiResponse: unknown, gameAssets: GameAssets }
 Update the scenario schema (`ct-scenario@2`) so its layout is expressed as a `ComponentSet`. Maintain backward compatibility with `ct-scenario@1`.
 
 ### Changes:
-- Scenario type gains a `componentSet: ComponentSet` field
-- Existing `layout.objects` + `decks` fields map to the new `ComponentSet` structure
+- Replace `ct-scenario@1` with `ct-scenario@2` — no backward compat needed (no released users yet)
+- Scenario type uses `componentSet: ComponentSet` instead of `layout.objects` + `decks`
+- Update `validateScenario()` in `loader.ts` for new schema
 - `instantiateScenario()` refactored to operate on `ComponentSet` (shared with standalone loading)
-- `ct-scenario@1` files still load correctly (migration/adapter in loader)
+- Instantiation functions accept shared Def types
+- Update existing scenario JSON files (testgame, Marvel Champions plugin) to new schema
 
 ### Acceptance criteria:
 - [ ] `ct-scenario@2` schema uses `ComponentSet` for its layout
-- [ ] `ct-scenario@1` files continue to load (backward compatible adapter)
+- [ ] Old `layout.objects` + `decks` fields removed from Scenario type
 - [ ] `instantiateScenario()` delegates to a shared `instantiateComponentSet()` function
-- [ ] Existing scenario loading (including testgame) still works end-to-end
-- [ ] Existing unit tests pass; new tests for the adapter layer
+- [ ] Existing scenario JSON files updated to v2 format
+- [ ] Scenario loading (testgame) works end-to-end with new schema
+- [ ] Existing unit tests updated and passing
 
 ---
 
@@ -171,22 +207,24 @@ instantiateComponentSet(set: ResolvedComponentSet, gameAssets: GameAssets, origi
 
 ### `resolveComponentSet()`:
 - For stacks with `deck`: expand via `expandDeck()` → populate `cards`
-- For stacks with `cards`: pass through
+- For stacks with `cards`: pass through (cards takes precedence over deck)
 - Validate all refs (card codes, token/counter/mat/zone refs) exist in gameAssets
 - Warn and skip missing refs
 
 ### `instantiateComponentSet()`:
-- Convert each item to the appropriate `TableObject` subtype
+- Convert each item to the appropriate `TableObject` subtype using shared Def-based instantiation functions
+- **Generate UUID instance IDs** for all objects (plugins only provide codes/refs, never instance IDs)
 - Position using row-based layout (see Task 4)
-- Generate unique IDs, sort keys
+- Generate sort keys for z-ordering
 
 ### Acceptance criteria:
 - [ ] `resolveComponentSet()` expands deck references correctly
 - [ ] `resolveComponentSet()` passes through pre-expanded cards
 - [ ] `resolveComponentSet()` validates refs and warns on missing
 - [ ] `instantiateComponentSet()` creates correct TableObject subtypes
+- [ ] Instance IDs are UUIDs, not derived from plugin data
 - [ ] Shared by scenario loading and standalone component set loading
-- [ ] Unit tests: resolution with deck refs, pre-expanded cards, mixed, missing refs
+- [ ] Unit tests: resolution with deck refs, pre-expanded cards, mixed, missing refs, duplicate refs
 
 ---
 
@@ -201,7 +239,7 @@ Position all objects from a component set using row hints.
 - Items with the same `row` placed side-by-side horizontally
 - Rows stacked vertically
 - No `row` specified → default to row 0 (single row)
-- Position relative to an origin point (viewport center by default)
+- Position relative to a configurable origin point (viewport center by default)
 - Spacing based on object dimensions from assets
 
 ### Layout example:
@@ -222,7 +260,7 @@ Row 1: [Nemesis Deck]  [Obligation Deck]
 
 ## Task 5: Plugin manifest — componentSets field
 
-**Files:** `shared/src/content-types.ts`, `app/src/content/pluginLoader.ts`
+**Files:** `app/src/content/pluginLoader.ts` (where PluginManifest type is defined)
 
 Update plugin manifest to support an optional `componentSets` array.
 
@@ -251,7 +289,7 @@ Update plugin manifest to support an optional `componentSets` array.
 ```
 
 ### Acceptance criteria:
-- [ ] `PluginManifest` type includes optional `componentSets: ComponentSetEntry[]`
+- [ ] PluginManifest type (in `pluginLoader.ts`) includes optional `componentSets: ComponentSetEntry[]`
 - [ ] `loadPlugin()` reads and returns component set entries
 - [ ] Plugins without `componentSets` continue to work unchanged
 - [ ] Static entries validated for required fields; API entries validated for endpoint + parser
@@ -259,36 +297,47 @@ Update plugin manifest to support an optional `componentSets` array.
 
 ---
 
-## Task 6: Web Worker sandbox for API parsers
+## Task 6: Classic Web Worker sandbox for API parsers
 
 **Files:** `app/src/content/deckImportWorker.ts` (new), `app/src/content/DeckImportSandbox.ts` (new)
 
 Build the Web Worker loading and communication layer for API-backed component sets.
 
 ### Design:
+- **Classic worker** (not module worker) — created with `new Worker(workerUrl, { type: 'classic' })`
+- Classic workers support `importScripts()` for loading plugin JS from external URLs
+- No Vite bundling needed — the worker is a thin shell (~15 lines)
 - `DeckImportSandbox` class manages Worker lifecycle
-- Loads plugin's parser module via `importScripts()` inside the worker
 - Sends `{ apiResponse, gameAssets }` via `postMessage`
 - Receives `ComponentSet` back from worker
 - Enforces timeout (10s) to prevent hung workers
 - Terminates worker after each import
 
 ### Worker contract (what plugin authors implement):
-```typescript
-// Plugin exports this function (runs in Worker context)
-function parseDeckResponse(
-  apiResponse: unknown,
-  gameAssets: GameAssets
-): ComponentSet
+```javascript
+// Plugin JS file (plain JS, not ES module)
+// Assigned to self so the worker shell can call it
+self.parseDeckResponse = function(apiResponse, gameAssets) {
+  // Parse API response, return ComponentSet
+  return {
+    stacks: [ ... ],
+    tokens: [ ... ],
+  };
+};
 ```
 
+### Testing strategy:
+- Test parser logic as a plain function, separate from Worker transport
+- Thin integration test for the Worker wrapper (may need `vitest-web-worker` or manual setup)
+
 ### Acceptance criteria:
+- [ ] Worker created as classic (non-module) worker
 - [ ] Worker loads plugin JS from URL via `importScripts()`
 - [ ] Worker sends/receives typed messages (DeckImportRequest → ComponentSet)
 - [ ] Timeout terminates worker after 10s with error
 - [ ] Worker terminated after each import completes
-- [ ] Errors in plugin code caught and reported (not silent)
-- [ ] Unit tests verify message passing with mock parser
+- [ ] Errors in plugin code caught and reported (not silent failures)
+- [ ] Unit tests for parser logic; integration test for Worker wrapper
 
 ---
 
@@ -312,18 +361,19 @@ async function importFromApi(options: {
 
 ### Flow:
 1. Build API URL: replace `{deckId}` in template
-2. `fetch()` the endpoint, handle errors
+2. `fetch()` the endpoint, handle network errors
 3. Create `DeckImportSandbox`, send response + gameAssets
 4. Receive `ComponentSet` from worker
 5. `resolveComponentSet()` — validate refs (shared with static path)
-6. `instantiateComponentSet()` — create TableObjects (shared with static path)
-7. Add to YjsStore inside a transaction
+6. `instantiateComponentSet()` — create TableObjects with UUID instance IDs (shared with static path)
+7. Add to YjsStore inside a transaction — **no setTimeout(0) needed** since gameAssets are already set for additive loads
 8. Return summary
 
 ### Acceptance criteria:
 - [ ] Fetches correct endpoint (public vs private)
 - [ ] Handles fetch errors gracefully (network, 404, invalid JSON)
 - [ ] Uses shared `resolveComponentSet()` and `instantiateComponentSet()`
+- [ ] Adds objects directly to YjsStore in a transaction (no timing workaround needed)
 - [ ] Returns error messages (not throws) for UI to display
 - [ ] Unit tests with mocked fetch and worker
 
@@ -347,12 +397,13 @@ async function loadStaticComponentSet(options: {
 ### Flow:
 1. Read the `ComponentSet` from the entry (it's inline JSON)
 2. `resolveComponentSet()` — expand deck refs, validate (shared)
-3. `instantiateComponentSet()` — create TableObjects (shared)
-4. Add to YjsStore inside a transaction
+3. `instantiateComponentSet()` — create TableObjects with UUID instance IDs (shared)
+4. Add to YjsStore inside a transaction — **no setTimeout(0) needed** since gameAssets are already set
 
 ### Acceptance criteria:
 - [ ] Resolves deck references via `expandDeck()`
 - [ ] Uses same `resolveComponentSet()` and `instantiateComponentSet()` as API path
+- [ ] Adds objects directly to YjsStore in a transaction
 - [ ] Handles missing card/asset refs gracefully
 - [ ] Unit tests with sample static component sets
 
@@ -365,7 +416,7 @@ async function loadStaticComponentSet(options: {
 A modal triggered from the command palette showing all available component sets.
 
 ### Design:
-- Built with Headless UI `Dialog`
+- Built with Headless UI `Dialog` (consistent with existing patterns)
 - Lists all `componentSets` from the loaded plugin
 - **Static sets**: Click to load immediately (or with confirmation)
 - **API sets**: Click reveals deck ID input field, public/private toggle, submit button
@@ -432,12 +483,13 @@ The parser receives v2's `GameAssets` (not v1's `CardData`), so card lookups use
 6. Return `ComponentSet` with stacks across rows + optional tokens
 
 ### Acceptance criteria:
-- [ ] Plugin manifest has `componentSets` with static encounter sets
+- [ ] Plugin manifest has `componentSets` with at least 2 static encounter sets
 - [ ] Plugin manifest has API-backed set for MarvelCDB import
-- [ ] Parser handles MarvelCDB public decklist response
-- [ ] Parser extracts hero, main deck, nemesis, obligation stacks with row hints
-- [ ] Parser handles edge cases (missing hero_code, empty slots)
-- [ ] Tested with captured MarvelCDB API responses as fixtures
+- [ ] Parser correctly returns a `ComponentSet` from a MarvelCDB public decklist response
+- [ ] Parser extracts hero, main deck, nemesis, and obligation stacks with row hints
+- [ ] Parser handles edge cases: missing hero_code, empty slots, unknown card codes
+- [ ] Tested with at least 3 captured MarvelCDB API responses as fixtures
+- [ ] Static encounter sets load correctly with shuffled decks
 
 ---
 
@@ -452,10 +504,12 @@ Adapt from v1 source files:
 Same v1→v2 type mapping work as Task 11 (parser uses v2 `GameAssets`, not v1 `CardData`).
 
 ### Acceptance criteria:
-- [ ] Static encounter sets defined in manifest
-- [ ] API import from ArkhamDB with parser
-- [ ] Parser extracts investigator + main deck
-- [ ] Tested with captured ArkhamDB fixtures
+- [ ] Plugin manifest has static encounter sets
+- [ ] Plugin manifest has API-backed set for ArkhamDB import
+- [ ] Parser correctly returns a `ComponentSet` from an ArkhamDB response
+- [ ] Parser extracts investigator + main deck stacks
+- [ ] Parser handles edge cases: missing investigator_code, empty slots
+- [ ] Tested with at least 2 captured ArkhamDB fixtures
 
 ---
 
@@ -470,10 +524,12 @@ Adapt from v1 source files:
 Same v1→v2 type mapping work as Task 11.
 
 ### Acceptance criteria:
-- [ ] Static encounter/quest sets defined in manifest
-- [ ] API import from RingsDB with parser
-- [ ] Parser extracts heroes, main deck, sideboard
-- [ ] Tested with captured RingsDB fixtures
+- [ ] Plugin manifest has static encounter/quest sets
+- [ ] Plugin manifest has API-backed set for RingsDB import
+- [ ] Parser correctly returns a `ComponentSet` from a RingsDB response
+- [ ] Parser extracts hero stack, main deck, sideboard
+- [ ] Parser handles edge cases: missing heroes, empty slots/sideslots
+- [ ] Tested with at least 2 captured RingsDB fixtures
 
 ---
 
@@ -483,13 +539,13 @@ Same v1→v2 type mapping work as Task 11.
 
 | Area | What to test |
 |------|-------------|
-| `resolveComponentSet()` | Deck ref expansion, pre-expanded passthrough, mixed, missing refs |
-| `instantiateComponentSet()` | Creates correct TableObject subtypes for all 5 object types |
+| `resolveComponentSet()` | Deck ref expansion, pre-expanded passthrough, mixed, missing refs, cards-takes-precedence-over-deck |
+| `instantiateComponentSet()` | Creates correct TableObject subtypes for all 5 object types; UUID instance IDs |
 | `componentSetLayout` | Row positioning: single/multi-row, mixed types, defaults |
-| `DeckImportSandbox` | Worker message passing, timeout, error handling |
+| `DeckImportSandbox` | Parser logic as plain function; Worker wrapper integration |
 | `DeckImportEngine` | Full API flow with mocked fetch + worker; error cases |
 | `loadStaticComponentSet()` | Static loading with deck refs; error cases |
-| Scenario adapter | `ct-scenario@1` → `ct-scenario@2` migration |
+| Scenario v2 loading | testgame scenario loads correctly with new schema |
 
 ### E2E Tests (Playwright) — deferred, not in initial scope
 
@@ -497,10 +553,10 @@ Same v1→v2 type mapping work as Task 11.
 
 - [ ] Import a real Marvel Champions deck from MarvelCDB — all cards present
 - [ ] Load a static encounter set — correct cards, shuffled if specified
-- [ ] Import on a table with existing objects — no overlap
+- [ ] Import on a table with existing objects — no overlap, no ID collisions
 - [ ] Import in multiplayer — appears for both players (Yjs sync)
 - [ ] Deck with cards missing from asset pack — warning shown
-- [ ] `ct-scenario@1` testgame still loads correctly
+- [ ] Testgame scenario loads correctly with v2 schema
 
 ---
 
@@ -511,7 +567,7 @@ Same v1→v2 type mapping work as Task 11.
 3. **Task 3** — ComponentSet resolution + instantiation (shared core)
 4. **Task 4** — Row-based layout positioning
 5. **Task 5** — Plugin manifest componentSets field
-6. **Task 6** — Web Worker sandbox
+6. **Task 6** — Classic Web Worker sandbox
 7. **Task 7** — API import engine
 8. **Task 8** — Static component set loading
 9. **Task 9** — Component Set Modal UI
@@ -527,16 +583,16 @@ Tasks 4 and 6 can be developed in parallel. Tasks 7 and 8 can be developed in pa
 
 | File | Action |
 |------|--------|
-| `shared/src/content-types.ts` | Modify — add ComponentSet types, PluginApiImport, update Scenario |
+| `shared/src/content-types.ts` | Modify — add shared Def types, ComponentSet types, PluginApiImport, update Scenario |
 | `app/src/content/componentSet.ts` | Create — resolveComponentSet, instantiateComponentSet |
 | `app/src/content/componentSetLayout.ts` | Create — row-based positioning |
 | `app/src/content/componentSetLoader.ts` | Create — static component set loading |
-| `app/src/content/deckImportWorker.ts` | Create — Web Worker entry point |
+| `app/src/content/deckImportWorker.ts` | Create — Classic Web Worker entry point |
 | `app/src/content/DeckImportSandbox.ts` | Create — Worker lifecycle manager |
 | `app/src/content/DeckImportEngine.ts` | Create — API import orchestration |
-| `app/src/content/instantiate.ts` | Modify — refactor to delegate to componentSet.ts |
+| `app/src/content/instantiate.ts` | Modify — refactor to use shared Def-based instantiation functions |
 | `app/src/content/loader.ts` | Modify — ct-scenario@1 adapter, scenario@2 support |
-| `app/src/content/pluginLoader.ts` | Modify — read componentSets from manifest |
+| `app/src/content/pluginLoader.ts` | Modify — read componentSets from manifest, update PluginManifest type |
 | `app/src/components/ComponentSetModal.tsx` | Create — React modal UI |
 | `app/src/actions/registerDefaultActions.ts` | Modify — dynamic action registration |
 | `app/src/content/loadScenarioHelper.ts` | Modify — wire up action registration |

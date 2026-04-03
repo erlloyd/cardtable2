@@ -476,7 +476,7 @@ Connect the ComponentSetModal to the React component tree and wire the `onOpenCo
 - [x] `loadScenarioContent` registers component set actions when plugin has componentSets
 - [x] Marvel Champions action passes plugin manifest componentSets through
 - [x] Modal receives correct store and gameAssets refs
-- [ ] Dev table route wiring (lower priority, deferred)
+- [x] Dev table route wired with same pattern
 
 ---
 

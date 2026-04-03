@@ -13,71 +13,105 @@
   "cards": {
     "01020": {
       "type": "player",
-      "face": "01020.jpg"
+      "face": "01020.jpg",
+      "setCode": "starter",
+      "typeCode": "ally"
     },
     "01021": {
       "type": "player",
-      "face": "01021.jpg"
+      "face": "01021.jpg",
+      "setCode": "starter",
+      "typeCode": "ally"
     },
     "01022": {
       "type": "player",
-      "face": "01022.jpg"
+      "face": "01022.jpg",
+      "setCode": "starter",
+      "typeCode": "event"
     },
     "01023": {
       "type": "player",
-      "face": "01023.jpg"
+      "face": "01023.jpg",
+      "setCode": "starter",
+      "typeCode": "event"
     },
     "01024": {
       "type": "player",
-      "face": "01024.jpg"
+      "face": "01024.jpg",
+      "setCode": "starter",
+      "typeCode": "upgrade"
     },
     "01025": {
       "type": "player",
-      "face": "01025.jpg"
+      "face": "01025.jpg",
+      "setCode": "encounter",
+      "typeCode": "encounter"
     },
     "01026": {
       "type": "player",
-      "face": "01026.jpg"
+      "face": "01026.jpg",
+      "setCode": "encounter",
+      "typeCode": "encounter"
     },
     "01027": {
       "type": "player",
-      "face": "01027.jpg"
+      "face": "01027.jpg",
+      "setCode": "encounter",
+      "typeCode": "encounter"
     },
     "01028": {
       "type": "player",
-      "face": "01028.jpg"
+      "face": "01028.jpg",
+      "setCode": "nemesis",
+      "typeCode": "encounter"
     },
     "01029": {
       "type": "player",
-      "face": "01029.jpg"
+      "face": "01029.jpg",
+      "setCode": "nemesis",
+      "typeCode": "encounter"
     },
     "01030": {
       "type": "player",
-      "face": "01030.jpg"
+      "face": "01030.jpg",
+      "setCode": "nemesis",
+      "typeCode": "obligation"
     },
     "01031": {
       "type": "player",
-      "face": "01031.jpg"
+      "face": "01031.jpg",
+      "setCode": "extra",
+      "typeCode": "support"
     },
     "01032": {
       "type": "player",
-      "face": "01032.jpg"
+      "face": "01032.jpg",
+      "setCode": "extra",
+      "typeCode": "support"
     },
     "01033": {
       "type": "player",
-      "face": "01033.jpg"
+      "face": "01033.jpg",
+      "setCode": "extra",
+      "typeCode": "resource"
     },
     "01034": {
       "type": "player",
-      "face": "01034.jpg"
+      "face": "01034.jpg",
+      "setCode": "extra",
+      "typeCode": "resource"
     },
     "01035": {
       "type": "player",
-      "face": "01035.jpg"
+      "face": "01035.jpg",
+      "setCode": "extra",
+      "typeCode": "resource"
     },
     "01036": {
       "type": "player",
-      "face": "01036.jpg"
+      "face": "01036.jpg",
+      "setCode": "extra",
+      "typeCode": "resource"
     }
   },
   "cardSets": {

@@ -15,12 +15,14 @@ import {
   resetToTestScene,
 } from '../store/YjsActions';
 import { ObjectKind } from '@cardtable2/shared';
+import type { ComponentSetEntry } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
 import type { TableObjectYMap } from '../store/types';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import { CommandPalette } from '../components/CommandPalette';
+import { ComponentSetModal } from '../components/ComponentSetModal';
 import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
@@ -84,6 +86,11 @@ function DevTable() {
 
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
+  const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  const [componentSetModalEntries, setComponentSetModalEntries] = useState<
+    ComponentSetEntry[]
+  >([]);
+  const [componentSetModalBaseUrl, setComponentSetModalBaseUrl] = useState('');
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -164,6 +171,15 @@ function DevTable() {
     return unsubscribe;
   }, [store]);
 
+  const handleOpenComponentSets = useCallback(
+    (entries: ComponentSetEntry[], pluginBaseUrl: string) => {
+      setComponentSetModalEntries(entries);
+      setComponentSetModalBaseUrl(pluginBaseUrl);
+      setComponentSetModalOpen(true);
+    },
+    [],
+  );
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -176,6 +192,8 @@ function DevTable() {
       `/dev/table/${id}`,
       gridSnapEnabled,
       setGridSnapEnabled,
+      undefined,
+      handleOpenComponentSets,
     );
   }, [
     store,
@@ -184,6 +202,7 @@ function DevTable() {
     id,
     gridSnapEnabled,
     setGridSnapEnabled,
+    handleOpenComponentSets,
   ]);
 
   // Enable keyboard shortcuts
@@ -320,6 +339,18 @@ function DevTable() {
         onClose={contextMenu.close}
         context={actionContext}
       />
+
+      {/* Component Set Modal */}
+      {store && (
+        <ComponentSetModal
+          isOpen={componentSetModalOpen}
+          onClose={() => setComponentSetModalOpen(false)}
+          entries={componentSetModalEntries}
+          pluginBaseUrl={componentSetModalBaseUrl}
+          store={store}
+          gameAssets={null}
+        />
+      )}
     </div>
   );
 }

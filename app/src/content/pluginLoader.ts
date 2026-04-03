@@ -5,6 +5,7 @@
  * to discover and load asset packs and scenarios.
  */
 
+import type { ComponentSetEntry } from '@cardtable2/shared';
 import {
   PLUGIN_REGISTRY_FETCH_FAILED,
   PLUGIN_REGISTRY_PARSE_FAILED,
@@ -43,6 +44,7 @@ export interface PluginManifest {
   description?: string;
   assets: string[];
   scenarios: string[];
+  componentSets?: ComponentSetEntry[];
 }
 
 export interface LoadedPlugin {

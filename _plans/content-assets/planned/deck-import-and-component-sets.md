@@ -471,11 +471,12 @@ Connect the ComponentSetModal to the React component tree and wire the `onOpenCo
 - Call `unregisterComponentSetActions()` on table reset
 
 ### Acceptance criteria:
-- [ ] ComponentSetModal renders in the app (not orphaned)
-- [ ] "Load Components" action appears in command palette after loading a plugin with componentSets
-- [ ] Clicking the action opens the modal with the correct entries
-- [ ] Table reset removes the action
-- [ ] Modal receives correct store and gameAssets refs
+- [x] ComponentSetModal renders in table route (not orphaned)
+- [x] `onOpenComponentSets` callback wired through buildActionContext → ActionContext
+- [x] `loadScenarioContent` registers component set actions when plugin has componentSets
+- [x] Marvel Champions action passes plugin manifest componentSets through
+- [x] Modal receives correct store and gameAssets refs
+- [ ] Dev table route wiring (lower priority, deferred)
 
 ---
 

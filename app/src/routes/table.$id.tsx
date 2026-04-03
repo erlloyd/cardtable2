@@ -27,6 +27,8 @@ import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
+import { ComponentSetModal } from '../components/ComponentSetModal';
+import type { ComponentSetEntry } from '@cardtable2/shared';
 import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
@@ -56,6 +58,11 @@ function Table() {
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
+  const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  const [componentSetModalEntries, setComponentSetModalEntries] = useState<
+    ComponentSetEntry[]
+  >([]);
+  const [componentSetModalBaseUrl, setComponentSetModalBaseUrl] = useState('');
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -407,6 +414,15 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
+  const handleOpenComponentSets = useCallback(
+    (entries: ComponentSetEntry[], pluginBaseUrl: string) => {
+      setComponentSetModalEntries(entries);
+      setComponentSetModalBaseUrl(pluginBaseUrl);
+      setComponentSetModalOpen(true);
+    },
+    [],
+  );
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -420,6 +436,7 @@ function Table() {
       gridSnapEnabled,
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
+      handleOpenComponentSets,
     );
 
     if (context) {
@@ -439,6 +456,7 @@ function Table() {
     gridSnapEnabled,
     setGridSnapEnabled,
     handPanel.activeHandId,
+    handleOpenComponentSets,
   ]);
 
   // Enable keyboard shortcuts
@@ -529,6 +547,18 @@ function Table() {
         onClose={contextMenu.close}
         context={actionContext}
       />
+
+      {/* Component Set Modal */}
+      {store && (
+        <ComponentSetModal
+          isOpen={componentSetModalOpen}
+          onClose={() => setComponentSetModalOpen(false)}
+          entries={componentSetModalEntries}
+          pluginBaseUrl={componentSetModalBaseUrl}
+          store={store}
+          gameAssets={gameAssets}
+        />
+      )}
     </div>
   );
 }

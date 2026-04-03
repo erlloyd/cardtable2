@@ -18,6 +18,7 @@ import {
   findGameInIndex,
   loadPluginScenario,
   loadLocalPluginScenario,
+  loadPlugin,
   type LoadedScenarioMetadata,
 } from '../content';
 import { loadScenarioContent } from '../content/loadScenarioHelper';
@@ -553,7 +554,10 @@ export function registerDefaultActions(): void {
 
       try {
         console.log('[Load Marvel Champions] Loading Rhino scenario...');
-        const content = await loadPluginScenario(pluginId, scenarioFile);
+        const [content, plugin] = await Promise.all([
+          loadPluginScenario(pluginId, scenarioFile),
+          loadPlugin(pluginId),
+        ]);
 
         // Store metadata for plugin scenarios (can auto-reload)
         const metadata: LoadedScenarioMetadata = {
@@ -569,6 +573,9 @@ export function registerDefaultActions(): void {
           content,
           metadata,
           '[Load Marvel Champions]',
+          plugin.manifest.componentSets,
+          pluginId,
+          plugin.registry.baseUrl,
         );
       } catch (error) {
         const errorMessage =

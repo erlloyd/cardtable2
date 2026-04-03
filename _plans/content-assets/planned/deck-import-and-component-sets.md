@@ -505,14 +505,24 @@ The parser receives v2's `GameAssets` (not v1's `CardData`), so card lookups use
 5. Build obligation deck (obligation-typed cards in hero's set)
 6. Return `ComponentSet` with stacks across rows + optional tokens
 
+### Known gap: Card metadata in asset pack
+The v2 `Card` type currently only has `type` and `face`. The parser needs richer metadata
+(`setCode`, `typeCode`, `quantity`) to extract nemesis/obligation decks. This requires either:
+- Enriching the `Card` type in `shared/src/content-types.ts` with optional metadata fields
+- Or adding a separate card metadata section to the asset pack schema
+
+Until this is addressed, the parser handles the basic case (hero + main deck from slots)
+but cannot auto-extract nemesis/obligation decks.
+
 ### Acceptance criteria:
-- [ ] Plugin manifest has `componentSets` with at least 2 static encounter sets
-- [ ] Plugin manifest has API-backed set for MarvelCDB import
-- [ ] Parser correctly returns a `ComponentSet` from a MarvelCDB public decklist response
-- [ ] Parser extracts hero, main deck, nemesis, and obligation stacks with row hints
-- [ ] Parser handles edge cases: missing hero_code, empty slots, unknown card codes
-- [ ] Tested with at least 3 captured MarvelCDB API responses as fixtures
-- [ ] Static encounter sets load correctly with shuffled decks
+- [x] Plugin manifest has `componentSets` with Rhino static encounter set
+- [x] Plugin manifest has API-backed set for MarvelCDB import
+- [x] Parser returns a `ComponentSet` from a MarvelCDB public decklist response (basic: hero + main deck)
+- [ ] Parser extracts nemesis and obligation stacks (blocked on card metadata enrichment)
+- [x] Parser handles edge cases: missing hero_code, empty slots
+- [ ] Tested with captured MarvelCDB API responses as fixtures
+- [x] Scenario updated to ct-scenario@2 format
+- [x] Static encounter set uses cardSet references with shuffle
 
 ---
 

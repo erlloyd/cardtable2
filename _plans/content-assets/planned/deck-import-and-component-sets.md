@@ -157,12 +157,12 @@ DeckImportRequest         // { apiResponse: unknown, gameAssets: GameAssets }
 ```
 
 ### Acceptance criteria:
-- [ ] All types exported from `@cardtable2/shared`
-- [ ] Shared Def types (`StackDef`, `TokenDef`, etc.) defined and used by both LayoutObject and ComponentSet
-- [ ] `ComponentSet` supports all five object types (stacks, tokens, counters, mats, zones)
-- [ ] `ComponentSetStack` supports both `deck` (DeckDefinition) and `cards` (string[]) sources
-- [ ] `ComponentSetEntry` discriminates between static and API-backed sets
-- [ ] Types compile cleanly (`pnpm run typecheck`)
+- [x] All types exported from `@cardtable2/shared`
+- [x] Shared Def types (`StackDef`, `TokenDef`, etc.) defined and used by both LayoutObject and ComponentSet
+- [x] `ComponentSet` supports all five object types (stacks, tokens, counters, mats, zones)
+- [x] `ComponentSetStack` supports both `deck` (DeckDefinition) and `cards` (string[]) sources
+- [x] `ComponentSetEntry` discriminates between static and API-backed sets (with `isApiComponentSetEntry` type guard)
+- [x] Types compile cleanly (`pnpm run typecheck`)
 
 ---
 

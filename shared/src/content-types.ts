@@ -147,6 +147,135 @@ export interface AssetPack {
 }
 
 // ============================================================================
+// Shared Object Definition Types
+// ============================================================================
+// These Def types define "what to create" for each object kind, shared between
+// scenario LayoutObjects (explicit positioning) and ComponentSet items (row-based).
+
+/** Stack definition — cards to place as a stack */
+export interface StackDef {
+  label: string; // Display label (e.g., "Main Deck", "Hero")
+  faceUp: boolean; // Whether stack is face-up
+  deck?: DeckDefinition; // For static sets: deck definition to expand
+  cards?: string[]; // For API results: pre-expanded card codes. Takes precedence over deck.
+}
+
+/** Token definition — references a token in the asset pack */
+export interface TokenDef {
+  ref: string; // Key in asset pack's `tokens`
+  label?: string; // Optional display label
+}
+
+/** Counter definition — references a counter in the asset pack */
+export interface CounterDef {
+  ref: string; // Key in asset pack's `counters`
+  label?: string; // Optional display label
+  value?: number; // Override starting value (defaults to counter's `start`)
+}
+
+/** Mat definition — references a mat in the asset pack */
+export interface MatDef {
+  ref: string; // Key in asset pack's `mats`
+  label?: string; // Optional display label
+}
+
+/** Zone definition — references a zone or defines inline dimensions */
+export interface ZoneDef {
+  ref?: string; // Key in asset pack (optional — can define inline)
+  label?: string; // Optional display label
+  width?: number; // Width for inline zone definitions
+  height?: number; // Height for inline zone definitions
+}
+
+// ============================================================================
+// Component Set Types
+// ============================================================================
+// A ComponentSet is a reusable, always-additive collection of game objects.
+// Used in three contexts: scenario layouts, standalone loadable sets, API imports.
+
+/** Component set item types extend shared Defs with row-based positioning */
+export interface ComponentSetStack extends StackDef {
+  row?: number; // Layout row hint (0-based, same-row items placed side-by-side)
+}
+
+export interface ComponentSetToken extends TokenDef {
+  row?: number;
+}
+
+export interface ComponentSetCounter extends CounterDef {
+  row?: number;
+}
+
+export interface ComponentSetMat extends MatDef {
+  row?: number;
+}
+
+export interface ComponentSetZone extends ZoneDef {
+  row?: number;
+}
+
+/** A collection of game objects to place on the table */
+export interface ComponentSet {
+  stacks?: ComponentSetStack[];
+  tokens?: ComponentSetToken[];
+  counters?: ComponentSetCounter[];
+  mats?: ComponentSetMat[];
+  zones?: ComponentSetZone[];
+}
+
+// ============================================================================
+// Plugin API Import Types
+// ============================================================================
+
+/** Configuration for API-backed deck import in a plugin */
+export interface PluginApiImport {
+  apiEndpoints: {
+    public: string; // URL template with {deckId} placeholder
+    private?: string; // Optional private deck endpoint
+  };
+  parserModule: string; // Filename of the parser JS (e.g., "deckImport.js")
+  labels: {
+    siteName: string; // Display name (e.g., "MarvelCDB")
+    inputPlaceholder: string; // Input field placeholder text
+  };
+}
+
+/** A static component set entry — pure JSON, no code required */
+export interface StaticComponentSetEntry extends ComponentSet {
+  id: string; // Unique identifier for this component set
+  name: string; // Display name shown in UI
+}
+
+/** An API-backed component set entry — requires parser JS */
+export interface ApiComponentSetEntry {
+  id: string; // Unique identifier
+  name: string; // Display name shown in UI
+  apiImport: PluginApiImport; // API import configuration
+}
+
+/** Discriminated union of static and API component set entries */
+export type ComponentSetEntry = StaticComponentSetEntry | ApiComponentSetEntry;
+
+/** Type guard: is this entry API-backed? */
+export function isApiComponentSetEntry(
+  entry: ComponentSetEntry,
+): entry is ApiComponentSetEntry {
+  return 'apiImport' in entry;
+}
+
+// ============================================================================
+// Worker Communication Types
+// ============================================================================
+
+/** Sent to the Web Worker for API-based deck import */
+export interface DeckImportRequest {
+  apiResponse: unknown; // Raw JSON response from the external API
+  gameAssets: GameAssets; // Full game assets for card/token lookup
+}
+
+// Worker returns: ComponentSet (same type as above)
+
+// ============================================================================
 // Scenario Types (ct-scenario@1)
 // ============================================================================
 

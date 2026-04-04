@@ -1140,6 +1140,18 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
  *
  * @param store - YjsStore instance
  */
+export function resetTable(store: YjsStore): void {
+  store.clearAllObjects();
+  store.metadata.delete('loadedScenario');
+  store.metadata.delete('gameId');
+  store.setGameAssets(null);
+}
+
+/**
+ * Reset the table and create a test scene with various object types
+ *
+ * @param store - YjsStore instance
+ */
 export function resetToTestScene(store: YjsStore): void {
   // Clear existing objects
   store.clearAllObjects();

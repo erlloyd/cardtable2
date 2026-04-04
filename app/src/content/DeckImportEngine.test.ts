@@ -45,7 +45,7 @@ describe('importFromApi', () => {
       deckId: '12345',
       isPrivate: false,
       apiImport: mockApiImport,
-      pluginBaseUrl: 'https://example.com/plugin/',
+
       gameAssets: mockGameAssets,
     });
 
@@ -63,7 +63,7 @@ describe('importFromApi', () => {
       deckId: '12345',
       isPrivate: true,
       apiImport: mockApiImport,
-      pluginBaseUrl: 'https://example.com/plugin/',
+
       gameAssets: mockGameAssets,
     });
 
@@ -86,7 +86,7 @@ describe('importFromApi', () => {
       deckId: '12345',
       isPrivate: true,
       apiImport: apiImportNoPrivate,
-      pluginBaseUrl: 'https://example.com/plugin/',
+
       gameAssets: mockGameAssets,
     });
 
@@ -104,7 +104,7 @@ describe('importFromApi', () => {
       deckId: '12345',
       isPrivate: false,
       apiImport: mockApiImport,
-      pluginBaseUrl: 'https://example.com/plugin/',
+
       gameAssets: mockGameAssets,
     });
 
@@ -123,7 +123,7 @@ describe('importFromApi', () => {
       deckId: '99999',
       isPrivate: false,
       apiImport: mockApiImport,
-      pluginBaseUrl: 'https://example.com/plugin/',
+
       gameAssets: mockGameAssets,
     });
 
@@ -145,7 +145,7 @@ describe('importFromApi', () => {
       deckId: '12345',
       isPrivate: false,
       apiImport: mockApiImport,
-      pluginBaseUrl: 'https://example.com/plugin/',
+
       gameAssets: mockGameAssets,
     });
 

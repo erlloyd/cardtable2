@@ -1,4 +1,3 @@
-import type { ComponentSetEntry } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from './types';
 import { ObjectKind } from '@cardtable2/shared';
@@ -33,10 +32,7 @@ export function buildActionContext(
   gridSnapEnabled?: boolean,
   onGridSnapEnabledChange?: (enabled: boolean) => void,
   activeHandId?: string,
-  onOpenComponentSets?: (
-    entries: ComponentSetEntry[],
-    pluginBaseUrl: string,
-  ) => void,
+  onOpenComponentSets?: () => void,
 ): ActionContext | null {
   if (!store) return null;
 

@@ -5,9 +5,9 @@ import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
 import {
-  registerComponentSetActions,
-  unregisterComponentSetActions,
-} from '../actions/componentSetActions';
+  setComponentSetEntries,
+  clearComponentSetEntries,
+} from './componentSetRegistry';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -28,8 +28,8 @@ import {
  * @param metadata - Scenario metadata to store (for reload on mount)
  * @param logPrefix - Prefix for console logs (e.g., '[Load Plugin]')
  * @param pluginComponentSets - Optional component sets from plugin manifest
- * @param pluginId - Plugin ID (required if pluginComponentSets provided)
- * @param pluginBaseUrl - Plugin base URL (required if pluginComponentSets provided)
+ * @param pluginBaseUrl - Plugin base URL (for API imports)
+ * @param blobUrls - Optional blob URL map for local plugin files (images + scripts)
  */
 export function loadScenarioContent(
   store: YjsStore,
@@ -37,8 +37,8 @@ export function loadScenarioContent(
   metadata: LoadedScenarioMetadata,
   logPrefix: string,
   pluginComponentSets?: ComponentSetEntry[],
-  pluginId?: string,
   pluginBaseUrl?: string,
+  blobUrls?: Map<string, string>,
 ): void {
   console.log(`${logPrefix} Scenario loaded:`, {
     objectCount: content.objects.size,
@@ -58,22 +58,12 @@ export function loadScenarioContent(
   registerAttachmentActions(registry, content.content);
   console.log(`${logPrefix} Registered attachment actions for loaded content`);
 
-  // Register component set actions if plugin provides them
-  unregisterComponentSetActions(registry); // Clear any previous
-  if (
-    pluginComponentSets &&
-    pluginComponentSets.length > 0 &&
-    pluginId &&
-    pluginBaseUrl
-  ) {
-    registerComponentSetActions(
-      registry,
-      pluginId,
-      pluginComponentSets,
-      pluginBaseUrl,
-    );
+  // Store component set entries for the modal
+  clearComponentSetEntries();
+  if (pluginComponentSets && pluginComponentSets.length > 0) {
+    setComponentSetEntries(pluginComponentSets, pluginBaseUrl ?? '', blobUrls);
     console.log(
-      `${logPrefix} Registered ${pluginComponentSets.length} component set actions`,
+      `${logPrefix} Registered ${pluginComponentSets.length} component sets`,
     );
   }
 

@@ -16,6 +16,7 @@ import type {
 import type { TableObject } from '@cardtable2/shared';
 import { DeckImportSandbox } from './DeckImportSandbox';
 import { resolveComponentSet, instantiateComponentSet } from './componentSet';
+import { resolveParserModuleUrl } from './componentSetRegistry';
 
 // ============================================================================
 // Types
@@ -25,7 +26,6 @@ export interface ImportFromApiOptions {
   deckId: string;
   isPrivate: boolean;
   apiImport: PluginApiImport;
-  pluginBaseUrl: string;
   gameAssets: GameAssets;
 }
 
@@ -63,7 +63,7 @@ function buildApiUrl(
 export async function importFromApi(
   options: ImportFromApiOptions,
 ): Promise<ImportResult> {
-  const { deckId, isPrivate, apiImport, pluginBaseUrl, gameAssets } = options;
+  const { deckId, isPrivate, apiImport, gameAssets } = options;
 
   // 1. Build API URL
   const apiUrl = buildApiUrl(apiImport, deckId, isPrivate);
@@ -87,7 +87,7 @@ export async function importFromApi(
   let componentSet: ComponentSet;
   const sandbox = new DeckImportSandbox();
   try {
-    const parserModuleUrl = `${pluginBaseUrl}${apiImport.parserModule}`;
+    const parserModuleUrl = resolveParserModuleUrl(apiImport.parserModule);
     componentSet = await sandbox.parse({
       parserModuleUrl,
       apiResponse,

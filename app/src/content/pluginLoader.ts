@@ -489,12 +489,12 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
     );
   }
 
-  // Create blob URLs for image files
+  // Create blob URLs for image and script files
   const imageUrls = new Map<string, string>();
-  const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.svg'];
+  const blobUrlExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.js'];
 
   for (const [filename, file] of fileMap.entries()) {
-    const hasImageExt = imageExtensions.some((ext) =>
+    const hasImageExt = blobUrlExtensions.some((ext) =>
       filename.toLowerCase().endsWith(ext),
     );
     if (hasImageExt) {

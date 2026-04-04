@@ -19,6 +19,7 @@ import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { resetTable } from '../store/YjsActions';
 import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
@@ -28,7 +29,6 @@ import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
 import { ComponentSetModal } from '../components/ComponentSetModal';
-import type { ComponentSetEntry } from '@cardtable2/shared';
 import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
@@ -59,10 +59,6 @@ function Table() {
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
   const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
-  const [componentSetModalEntries, setComponentSetModalEntries] = useState<
-    ComponentSetEntry[]
-  >([]);
-  const [componentSetModalBaseUrl, setComponentSetModalBaseUrl] = useState('');
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -414,14 +410,9 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
-  const handleOpenComponentSets = useCallback(
-    (entries: ComponentSetEntry[], pluginBaseUrl: string) => {
-      setComponentSetModalEntries(entries);
-      setComponentSetModalBaseUrl(pluginBaseUrl);
-      setComponentSetModalOpen(true);
-    },
-    [],
-  );
+  const handleOpenComponentSets = useCallback(() => {
+    setComponentSetModalOpen(true);
+  }, []);
 
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
@@ -473,8 +464,34 @@ function Table() {
         ) : packsLoading ? (
           <div className="board-fullscreen" />
         ) : packsError ? (
-          <div className="board-fullscreen">
-            Error loading packs: {packsError}
+          <div className="board-fullscreen table-error">
+            <div className="table-error-content">
+              <div className="table-error-message">{packsError}</div>
+              <div className="table-error-actions">
+                <button
+                  className="table-error-button"
+                  onClick={() => {
+                    setPacksError(null);
+                    void navigate({ to: '/' });
+                  }}
+                >
+                  Back to Games
+                </button>
+                <button
+                  className="table-error-button table-error-button-secondary"
+                  onClick={() => {
+                    if (store) {
+                      resetTable(store);
+                    }
+                    setGameAssets(null);
+                    setPacksError(null);
+                    setPacksLoading(false);
+                  }}
+                >
+                  Reset Table
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <Board
@@ -553,8 +570,6 @@ function Table() {
         <ComponentSetModal
           isOpen={componentSetModalOpen}
           onClose={() => setComponentSetModalOpen(false)}
-          entries={componentSetModalEntries}
-          pluginBaseUrl={componentSetModalBaseUrl}
           store={store}
           gameAssets={gameAssets}
         />

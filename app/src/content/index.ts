@@ -348,6 +348,7 @@ export async function loadPluginScenario(
  */
 export interface LoadedLocalPluginContent extends LoadedContent {
   pluginManifest: PluginManifest;
+  blobUrls: Map<string, string>; // filename → blob URL (for images and scripts)
 }
 
 export async function loadLocalPluginScenario(
@@ -392,6 +393,7 @@ export async function loadLocalPluginScenario(
     content,
     objects,
     pluginManifest: plugin.manifest,
+    blobUrls: plugin.imageUrls,
   };
 }
 

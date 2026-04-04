@@ -2,7 +2,6 @@ import { useState, Fragment } from 'react';
 import {
   Dialog,
   DialogPanel,
-  DialogTitle,
   Transition,
   TransitionChild,
 } from '@headlessui/react';
@@ -15,12 +14,11 @@ import { isApiComponentSetEntry } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import { loadStaticComponentSet } from '../content/componentSetLoader';
 import { importFromApi } from '../content/DeckImportEngine';
+import { getComponentSetEntries } from '../content/componentSetRegistry';
 
 interface ComponentSetModalProps {
   isOpen: boolean;
   onClose: () => void;
-  entries: ComponentSetEntry[];
-  pluginBaseUrl: string;
   store: YjsStore;
   gameAssets: GameAssets | null;
 }
@@ -30,11 +28,11 @@ type LoadingState = 'idle' | 'loading';
 export function ComponentSetModal({
   isOpen,
   onClose,
-  entries,
-  pluginBaseUrl,
   store,
   gameAssets,
 }: ComponentSetModalProps) {
+  const entries = getComponentSetEntries();
+
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [selectedApiEntry, setSelectedApiEntry] =
@@ -64,7 +62,6 @@ export function ComponentSetModal({
       return;
     }
 
-    // Add objects to store
     for (const [id, obj] of result.objects) {
       store.setObject(id, obj);
     }
@@ -90,7 +87,6 @@ export function ComponentSetModal({
       deckId: deckId.trim(),
       isPrivate,
       apiImport: selectedApiEntry,
-      pluginBaseUrl,
       gameAssets,
     });
 
@@ -100,7 +96,6 @@ export function ComponentSetModal({
       return;
     }
 
-    // Add objects to store
     for (const [id, obj] of result.objects) {
       store.setObject(id, obj);
     }
@@ -111,7 +106,8 @@ export function ComponentSetModal({
 
   return (
     <Transition show={isOpen} as={Fragment}>
-      <Dialog onClose={handleClose} className="relative z-50">
+      <Dialog as="div" className="cs-modal-dialog" onClose={handleClose}>
+        {/* Backdrop */}
         <TransitionChild
           as={Fragment}
           enter="ease-out duration-200"
@@ -121,42 +117,37 @@ export function ComponentSetModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/40" />
+          <div className="cs-modal-backdrop" />
         </TransitionChild>
 
-        <div className="fixed inset-0 flex items-start justify-center pt-[20vh]">
-          <TransitionChild
-            as={Fragment}
-            enter="ease-out duration-200"
-            enterFrom="opacity-0 scale-95"
-            enterTo="opacity-100 scale-100"
-            leave="ease-in duration-150"
-            leaveFrom="opacity-100 scale-100"
-            leaveTo="opacity-0 scale-95"
-          >
-            <DialogPanel className="w-full max-w-md rounded-xl bg-gray-900 p-6 shadow-2xl border border-gray-700">
-              <DialogTitle className="text-lg font-medium text-white mb-4">
-                Load Components
-              </DialogTitle>
+        {/* Dialog panel */}
+        <div className="cs-modal-container">
+          <div className="cs-modal-wrapper">
+            <TransitionChild
+              as={Fragment}
+              enter="ease-out duration-200"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-150"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <DialogPanel className="cs-modal-panel">
+                <div className="cs-modal-title">Load Components</div>
 
-              {error && (
-                <div className="mb-4 rounded-lg bg-red-900/50 border border-red-700 p-3 text-sm text-red-200">
-                  {error}
-                </div>
-              )}
+                {error && <div className="cs-modal-error">{error}</div>}
 
-              {selectedApiEntry ? (
-                <div>
-                  <button
-                    onClick={() => setSelectedApiEntry(null)}
-                    className="text-sm text-gray-400 hover:text-white mb-3 flex items-center gap-1"
-                  >
-                    ← Back to list
-                  </button>
+                {selectedApiEntry ? (
+                  <div className="cs-modal-space-y-3">
+                    <button
+                      onClick={() => setSelectedApiEntry(null)}
+                      className="cs-modal-back"
+                    >
+                      &larr; Back to list
+                    </button>
 
-                  <div className="space-y-3">
                     <div>
-                      <label className="block text-sm text-gray-300 mb-1">
+                      <label className="cs-modal-label">
                         {selectedApiEntry.labels.siteName} Deck ID
                       </label>
                       <input
@@ -164,7 +155,7 @@ export function ComponentSetModal({
                         value={deckId}
                         onChange={(e) => setDeckId(e.target.value)}
                         placeholder={selectedApiEntry.labels.inputPlaceholder}
-                        className="w-full rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                        className="cs-modal-input"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && deckId.trim()) {
@@ -175,12 +166,11 @@ export function ComponentSetModal({
                     </div>
 
                     {selectedApiEntry.apiEndpoints.private && (
-                      <label className="flex items-center gap-2 text-sm text-gray-300">
+                      <label className="cs-modal-checkbox-label">
                         <input
                           type="checkbox"
                           checked={isPrivate}
                           onChange={(e) => setIsPrivate(e.target.checked)}
-                          className="rounded border-gray-600 bg-gray-800"
                         />
                         Use private deck ID
                       </label>
@@ -189,47 +179,47 @@ export function ComponentSetModal({
                     <button
                       onClick={() => void handleApiImport()}
                       disabled={!deckId.trim() || loadingState === 'loading'}
-                      className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="cs-modal-submit"
                     >
                       {loadingState === 'loading'
                         ? 'Importing...'
                         : 'Import Deck'}
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {entries.map((entry) => (
-                    <button
-                      key={entry.id}
-                      onClick={() => {
-                        if (isApiComponentSetEntry(entry)) {
-                          handleApiEntryClick(entry.apiImport);
-                        } else {
-                          void handleStaticLoad(entry);
-                        }
-                      }}
-                      disabled={loadingState === 'loading'}
-                      className="w-full text-left rounded-lg bg-gray-800 hover:bg-gray-700 px-4 py-3 transition-colors disabled:opacity-50"
-                    >
-                      <div className="text-white font-medium">{entry.name}</div>
-                      <div className="text-sm text-gray-400">
-                        {isApiComponentSetEntry(entry)
-                          ? `Import from ${entry.apiImport.labels.siteName}`
-                          : 'Load preset'}
-                      </div>
-                    </button>
-                  ))}
+                ) : (
+                  <div className="cs-modal-space-y">
+                    {entries.map((entry) => (
+                      <button
+                        key={entry.id}
+                        onClick={() => {
+                          if (isApiComponentSetEntry(entry)) {
+                            handleApiEntryClick(entry.apiImport);
+                          } else {
+                            void handleStaticLoad(entry);
+                          }
+                        }}
+                        disabled={loadingState === 'loading'}
+                        className="cs-modal-entry"
+                      >
+                        <div className="cs-modal-entry-name">{entry.name}</div>
+                        <div className="cs-modal-entry-desc">
+                          {isApiComponentSetEntry(entry)
+                            ? `Import from ${entry.apiImport.labels.siteName}`
+                            : 'Load preset'}
+                        </div>
+                      </button>
+                    ))}
 
-                  {entries.length === 0 && (
-                    <p className="text-gray-400 text-sm text-center py-4">
-                      No component sets available
-                    </p>
-                  )}
-                </div>
-              )}
-            </DialogPanel>
-          </TransitionChild>
+                    {entries.length === 0 && (
+                      <p className="cs-modal-empty">
+                        No component sets available
+                      </p>
+                    )}
+                  </div>
+                )}
+              </DialogPanel>
+            </TransitionChild>
+          </div>
         </div>
       </Dialog>
     </Transition>

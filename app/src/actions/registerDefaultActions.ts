@@ -5,6 +5,7 @@ import {
   flipCards,
   exhaustCards,
   resetToTestScene,
+  resetTable,
   shuffleStack,
   detachCard,
   detachAllCards,
@@ -465,17 +466,9 @@ export function registerDefaultActions(): void {
       return ctx.selection.count === 0 && ctx.store.objects.size > 0;
     },
     execute: (ctx) => {
-      ctx.store.clearAllObjects();
-      ctx.store.metadata.delete('loadedScenario');
-      ctx.store.metadata.delete('gameId');
-      ctx.store.setGameAssets(null);
-
-      // Clear attachment actions since we have no game assets
+      resetTable(ctx.store);
       registerAttachmentActions(registry, null);
-
-      console.log(
-        '[Reset Table] Cleared all objects, metadata, game assets, and attachment actions',
-      );
+      console.log('[Reset Table] Table reset complete');
     },
   });
 
@@ -500,6 +493,24 @@ export function registerDefaultActions(): void {
           console.log('[Close Table] Navigating to game selection');
           ctx.navigate('/');
         }
+      }
+    },
+  });
+
+  // Content action: Load Components (always available)
+  registry.register({
+    id: 'load-components',
+    label: 'Load Components',
+    shortLabel: 'Components',
+    icon: '📦',
+    category: CONTENT_ACTIONS,
+    description:
+      'Load component sets (decks, encounter sets, tokens) onto the table',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 && ctx.onOpenComponentSets !== undefined,
+    execute: (ctx) => {
+      if (ctx.onOpenComponentSets) {
+        ctx.onOpenComponentSets();
       }
     },
   });
@@ -532,8 +543,8 @@ export function registerDefaultActions(): void {
           metadata,
           '[Load Plugin]',
           content.pluginManifest.componentSets,
-          content.pluginManifest.id,
           '', // Local plugins don't have a remote base URL
+          content.blobUrls,
         );
       } catch (error) {
         const errorMessage =
@@ -582,7 +593,6 @@ export function registerDefaultActions(): void {
           metadata,
           '[Load Marvel Champions]',
           plugin.manifest.componentSets,
-          pluginId,
           plugin.registry.baseUrl,
         );
       } catch (error) {

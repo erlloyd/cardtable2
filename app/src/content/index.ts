@@ -227,65 +227,31 @@ export async function findGameInIndex(
 }
 
 /**
- * Load all asset packs for a game
+ * Load all asset packs for a plugin
  *
- * Loads all asset packs referenced by the game's default scenario manifest,
- * but does NOT instantiate any scenario objects. This provides access to
- * all cards, tokens, and other assets for manual object creation.
+ * Loads ALL asset packs from the plugin manifest and merges them.
+ * This is the single code path for loading game assets — all games
+ * are plugins (including built-in test games).
  *
- * @param gameId - The game ID from gamesIndex.json
- * @returns Merged content from all packs
+ * @param pluginId - The plugin ID from pluginsIndex.json
+ * @returns Merged game assets from all packs
  *
  * @example
  * ```typescript
- * const content = await loadGameAssetPacks('testgame');
- * // Content has all cards/tokens but no scenario objects
- * const card = resolveCard('01001', content);
+ * const assets = await loadPluginAssets('testgame');
+ * // Assets has all cards/tokens from all packs in the plugin
  * ```
  */
-export async function loadGameAssetPacks(gameId: string): Promise<GameAssets> {
-  // Find the game in the index
-  const game = await findGameInIndex(gameId);
+export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
+  const plugin = await loadPlugin(pluginId);
+  const baseUrl = plugin.registry.baseUrl.replace(/\/$/, '');
 
-  // Load the scenario to get pack list (but don't instantiate)
-  let scenario;
-  try {
-    scenario = await loadScenario(game.manifestUrl);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to load scenario for game "${gameId}" from ${game.manifestUrl}: ${message}`,
-    );
-  }
+  const packUrls = plugin.manifest.assets.map(
+    (filename) => `${baseUrl}/${filename}`,
+  );
 
-  // Resolve pack URLs
-  const packUrls = scenario.packs.map((packId) => {
-    // If packId looks like a URL, use it directly
-    if (
-      packId.startsWith('http://') ||
-      packId.startsWith('https://') ||
-      packId.startsWith('/')
-    ) {
-      return packId;
-    }
-    // Otherwise, construct URL from packId
-    // Default to /packs/<packId>.json
-    return `/packs/${packId}.json`;
-  });
-
-  // Load all packs in parallel
-  let packs;
-  try {
-    packs = await loadAssetPacks(packUrls);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to load asset packs for game "${gameId}": ${message}`,
-    );
-  }
-
-  // Merge and return
-  return mergeAssetPacks(packs);
+  const packs = await loadAssetPacks(packUrls);
+  return mergeAssetPacks(packs, baseUrl);
 }
 
 // ============================================================================
@@ -317,15 +283,21 @@ export async function loadPluginScenario(
 ): Promise<LoadedContent> {
   // Load plugin manifest
   const plugin = await loadPlugin(pluginId);
-
-  // Get scenario URL
-  const scenarioUrl = getPluginScenarioUrl(plugin, scenarioFilename);
-
-  // Load scenario using existing infrastructure
-  // Pass plugin baseUrl so pack IDs can be resolved to plugin URLs
-  // Remove trailing slash for consistency with loadCompleteScenario logic
   const baseUrl = plugin.registry.baseUrl.replace(/\/$/, '');
-  return loadCompleteScenario(scenarioUrl, baseUrl);
+
+  // Load ALL asset packs from the plugin manifest (not just scenario.packs)
+  const packUrls = plugin.manifest.assets.map(
+    (filename) => `${baseUrl}/${filename}`,
+  );
+  const packs = await loadAssetPacks(packUrls);
+  const content = mergeAssetPacks(packs, baseUrl);
+
+  // Load and instantiate scenario
+  const scenarioUrl = getPluginScenarioUrl(plugin, scenarioFilename);
+  const scenario = await loadScenario(scenarioUrl);
+  const objects = instantiateScenario(scenario, content);
+
+  return { scenario, content, objects };
 }
 
 /**
@@ -363,24 +335,20 @@ export async function loadLocalPluginScenario(
     throw new Error('No scenario found in plugin manifest');
   }
 
-  // Load scenario JSON
-  const scenarioJson = await getLocalPluginFile(plugin, targetScenario);
-  const scenario = loadScenarioFromString(scenarioJson, targetScenario);
-
-  // Load all asset packs referenced by scenario
+  // Load ALL asset packs from the plugin manifest (not just scenario.packs)
   const packs: AssetPack[] = [];
-  for (const packRef of scenario.packs) {
-    // Pack references can be IDs (need .json extension) or full filenames
-    const packFilename = packRef.endsWith('.json')
-      ? packRef
-      : `${packRef}.json`;
-    const packJson = await getLocalPluginFile(plugin, packFilename);
-    const pack = loadAssetPackFromString(packJson, packFilename);
+  for (const assetFilename of plugin.manifest.assets) {
+    const packJson = await getLocalPluginFile(plugin, assetFilename);
+    const pack = loadAssetPackFromString(packJson, assetFilename);
     packs.push(pack);
   }
 
   // Merge packs
   const content = mergeAssetPacks(packs);
+
+  // Load scenario JSON
+  const scenarioJson = await getLocalPluginFile(plugin, targetScenario);
+  const scenario = loadScenarioFromString(scenarioJson, targetScenario);
 
   // Replace relative image paths with blob URLs from local filesystem
   replaceImagePathsWithBlobUrls(content, plugin.imageUrls);

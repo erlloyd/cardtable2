@@ -33,7 +33,7 @@ import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
-  loadGameAssetPacks,
+  loadPluginAssets,
   reloadScenarioFromMetadata,
   type GameAssets,
   type LoadedScenarioMetadata,
@@ -233,8 +233,8 @@ function Table() {
             return;
           }
 
-          console.log('[Table] Loading base game asset packs for:', gameId);
-          const assets = await loadGameAssetPacks(gameId);
+          console.log('[Table] Loading plugin assets for:', gameId);
+          const assets = await loadPluginAssets(gameId);
           store.setGameAssets(assets);
           registerAttachmentActions(ActionRegistry.getInstance(), assets);
         }

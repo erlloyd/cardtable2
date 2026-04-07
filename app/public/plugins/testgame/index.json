@@ -1,0 +1,8 @@
+{
+  "id": "testgame",
+  "name": "Test Game",
+  "version": "1.0.0",
+  "description": "A minimal test game for validating the content system",
+  "assets": ["testgame-core.json"],
+  "scenarios": ["testgame-basic.json"]
+}

@@ -15,8 +15,6 @@ import {
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
 import {
-  loadCompleteScenario,
-  findGameInIndex,
   loadPluginScenario,
   loadLocalPluginScenario,
   loadPlugin,
@@ -417,30 +415,40 @@ export function registerDefaultActions(): void {
     },
     execute: async (ctx) => {
       try {
-        const gameId = ctx.store.metadata.get('gameId') as string;
+        const pluginId = ctx.store.metadata.get('gameId') as string;
 
-        console.log(`[Load Scenario] Loading scenario for game: ${gameId}`);
+        console.log(`[Load Scenario] Loading scenario for plugin: ${pluginId}`);
 
-        // Find the game in the index
-        const game = await findGameInIndex(gameId);
+        // Load plugin to get its first scenario
+        const plugin = await loadPlugin(pluginId);
+        const scenarioFile = plugin.manifest.scenarios[0];
+        if (!scenarioFile) {
+          throw new Error(`Plugin "${pluginId}" has no scenarios`);
+        }
 
-        console.log(
-          `[Load Scenario] Loading scenario from: ${game.manifestUrl}`,
-        );
-
-        // Load the complete scenario
-        const content = await loadCompleteScenario(game.manifestUrl);
+        // Load scenario through plugin system (loads ALL plugin packs)
+        const content = await loadPluginScenario(pluginId, scenarioFile);
 
         console.log(
           `[Load Scenario] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
         );
 
-        // Add all objects to the store
-        for (const [objId, obj] of content.objects) {
-          ctx.store.setObject(objId, obj);
-        }
+        const metadata: LoadedScenarioMetadata = {
+          type: 'plugin',
+          pluginId,
+          scenarioFile,
+          loadedAt: Date.now(),
+          scenarioName: content.scenario.name,
+        };
 
-        console.log('[Load Scenario] Scenario loaded successfully');
+        loadScenarioContent(
+          ctx.store,
+          content,
+          metadata,
+          '[Load Scenario]',
+          plugin.manifest.componentSets,
+          plugin.registry.baseUrl,
+        );
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);

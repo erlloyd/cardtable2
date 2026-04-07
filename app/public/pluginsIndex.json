@@ -1,6 +1,13 @@
 {
   "plugins": [
     {
+      "id": "testgame",
+      "name": "Test Game",
+      "author": "CardTable",
+      "description": "A minimal test game for validating the content system",
+      "baseUrl": "/plugins/testgame/"
+    },
+    {
       "id": "marvelchampions",
       "name": "Marvel Champions",
       "author": "CardTable Community",

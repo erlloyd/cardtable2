@@ -48,13 +48,23 @@ interface WorkerOutMessage {
 // ============================================================================
 
 const WORKER_CODE = `
-self.onmessage = function(e) {
+self.onmessage = async function(e) {
   var msg = e.data;
   if (msg.type !== 'parse') return;
 
   try {
-    // Load plugin parser
-    importScripts(msg.parserModuleUrl);
+    // Fetch plugin parser as text and evaluate it
+    // (importScripts fails on URLs with non-JS MIME types like raw GitHub)
+    var response = await fetch(msg.parserModuleUrl);
+    if (!response.ok) {
+      self.postMessage({
+        type: 'error',
+        error: 'Failed to load parser module: ' + response.status + ' ' + response.statusText
+      });
+      return;
+    }
+    var scriptText = await response.text();
+    new Function(scriptText).call(self);
 
     // Call the parser function the plugin assigned to self
     if (typeof self.parseDeckResponse !== 'function') {

@@ -41,7 +41,7 @@ export interface CreateObjectOptions {
  * Uses fractional indexing format: "prefix|suffix"
  * Refactored to work with Y.Maps directly - zero allocations.
  */
-function generateTopSortKey(store: YjsStore): string {
+export function generateTopSortKey(store: YjsStore): string {
   let maxPrefix = 0;
   store.forEachObject((yMap) => {
     const sortKey = yMap.get('_sortKey');

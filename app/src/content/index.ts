@@ -438,6 +438,52 @@ export async function reloadScenarioFromMetadata(
 }
 
 /**
+ * Find a blob URL for a given image path.
+ *
+ * Tries a direct map lookup first (for relative paths like "tokens/damage.png").
+ * If that fails, scans the map for entries whose relative path is a
+ * path-boundary suffix of `imagePath` — this handles already-resolved URLs
+ * like "http://.../tokens/damage.png" matching "tokens/damage.png".
+ *
+ * The path-boundary check prevents false positives: "extra-damage.png" must
+ * not match a registered "damage.png".
+ *
+ * Exported for unit testing; see `replaceImagePathsWithBlobUrls` for the
+ * primary caller.
+ *
+ * @param imagePath - Path or URL to resolve
+ * @param imageUrls - Map of relative paths to blob URLs
+ * @returns The matching blob URL, or `undefined` if no match
+ */
+export function findBlobUrl(
+  imagePath: string,
+  imageUrls: Map<string, string>,
+): string | undefined {
+  // Try direct lookup first (for relative paths)
+  const directMatch = imageUrls.get(imagePath);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  // Try matching by checking if URL ends with any of the relative paths.
+  // This handles already-resolved URLs like "http://.../tokens/damage.png".
+  // We also verify the character before the match is a path separator (or the
+  // path is an exact match) to avoid false positives like "extra-damage.png"
+  // matching "damage.png".
+  for (const [relativePath, blobUrl] of imageUrls.entries()) {
+    if (
+      imagePath.endsWith(relativePath) &&
+      (imagePath.length === relativePath.length ||
+        imagePath[imagePath.length - relativePath.length - 1] === '/')
+    ) {
+      return blobUrl;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Replace relative image paths in GameAssets with blob URLs
  *
  * This is used for local plugin loading to replace paths like "tokens/damage.png"
@@ -450,7 +496,7 @@ export async function reloadScenarioFromMetadata(
  * @param content - Merged game assets to modify in-place
  * @param imageUrls - Map of relative paths to blob URLs
  */
-function replaceImagePathsWithBlobUrls(
+export function replaceImagePathsWithBlobUrls(
   content: GameAssets,
   imageUrls: Map<string, string>,
 ): void {
@@ -458,35 +504,9 @@ function replaceImagePathsWithBlobUrls(
   const unmatchedImages: Array<{ type: string; key: string; path: string }> =
     [];
 
-  // Helper to find blob URL for a given image path (relative or resolved)
-  const findBlobUrl = (imagePath: string): string | undefined => {
-    // Try direct lookup first (for relative paths)
-    const directMatch = imageUrls.get(imagePath);
-    if (directMatch) {
-      return directMatch;
-    }
-
-    // Try matching by checking if URL ends with any of the relative paths
-    // This handles already-resolved URLs like "http://.../tokens/damage.png"
-    // We also verify the character before the match is a path separator (or the
-    // path is an exact match) to avoid false positives like "extra-damage.png"
-    // matching "damage.png".
-    for (const [relativePath, blobUrl] of imageUrls.entries()) {
-      if (
-        imagePath.endsWith(relativePath) &&
-        (imagePath.length === relativePath.length ||
-          imagePath[imagePath.length - relativePath.length - 1] === '/')
-      ) {
-        return blobUrl;
-      }
-    }
-
-    return undefined;
-  };
-
   if (content.tokenTypes) {
     for (const [key, tokenType] of Object.entries(content.tokenTypes)) {
-      const blobUrl = findBlobUrl(tokenType.image);
+      const blobUrl = findBlobUrl(tokenType.image, imageUrls);
       if (blobUrl) {
         tokenType.image = blobUrl;
         replacementCount++;
@@ -498,7 +518,7 @@ function replaceImagePathsWithBlobUrls(
 
   if (content.statusTypes) {
     for (const [key, statusType] of Object.entries(content.statusTypes)) {
-      const blobUrl = findBlobUrl(statusType.image);
+      const blobUrl = findBlobUrl(statusType.image, imageUrls);
       if (blobUrl) {
         statusType.image = blobUrl;
         replacementCount++;
@@ -510,7 +530,7 @@ function replaceImagePathsWithBlobUrls(
 
   if (content.iconTypes) {
     for (const [key, iconType] of Object.entries(content.iconTypes)) {
-      const blobUrl = findBlobUrl(iconType.image);
+      const blobUrl = findBlobUrl(iconType.image, imageUrls);
       if (blobUrl) {
         iconType.image = blobUrl;
         replacementCount++;

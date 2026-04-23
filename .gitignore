@@ -112,6 +112,7 @@ logs
 /coverage
 test-results/
 playwright-report/
+.playwright-mcp/
 
 # Storybook build outputs
 storybook-static

@@ -1,4 +1,5 @@
 {
+  "enabledMcpjsonServers": ["beads"],
   "hooks": {
     "PreCompact": [
       {

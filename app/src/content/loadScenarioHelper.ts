@@ -1,8 +1,13 @@
+import type { ComponentSetEntry } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { LoadedContent, LoadedScenarioMetadata } from './index';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
+import {
+  setComponentSetEntries,
+  clearComponentSetEntries,
+} from './componentSetRegistry';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -22,12 +27,18 @@ import { registerAttachmentActions } from '../actions/attachmentActions';
  * @param content - Loaded scenario content (scenario, gameAssets, objects)
  * @param metadata - Scenario metadata to store (for reload on mount)
  * @param logPrefix - Prefix for console logs (e.g., '[Load Plugin]')
+ * @param pluginComponentSets - Optional component sets from plugin manifest
+ * @param pluginBaseUrl - Plugin base URL (for API imports)
+ * @param blobUrls - Optional blob URL map for local plugin files (images + scripts)
  */
 export function loadScenarioContent(
   store: YjsStore,
   content: LoadedContent,
   metadata: LoadedScenarioMetadata,
   logPrefix: string,
+  pluginComponentSets?: ComponentSetEntry[],
+  pluginBaseUrl?: string,
+  blobUrls?: Map<string, string>,
 ): void {
   console.log(`${logPrefix} Scenario loaded:`, {
     objectCount: content.objects.size,
@@ -46,6 +57,15 @@ export function loadScenarioContent(
   const registry = ActionRegistry.getInstance();
   registerAttachmentActions(registry, content.content);
   console.log(`${logPrefix} Registered attachment actions for loaded content`);
+
+  // Store component set entries for the modal
+  clearComponentSetEntries();
+  if (pluginComponentSets && pluginComponentSets.length > 0) {
+    setComponentSetEntries(pluginComponentSets, pluginBaseUrl ?? '', blobUrls);
+    console.log(
+      `${logPrefix} Registered ${pluginComponentSets.length} component sets`,
+    );
+  }
 
   // CRITICAL: Defer object addition to ensure gameAssets reach renderer first.
   //

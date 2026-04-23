@@ -88,19 +88,22 @@ const mockAssetPack2: AssetPack = {
 };
 
 const mockScenario: Scenario = {
-  schema: 'ct-scenario@1',
+  schema: 'ct-scenario@2',
   id: 'test-scenario',
   name: 'Test Scenario',
   version: '1.0.0',
   packs: ['test-pack-1', 'test-pack-2'],
-  decks: {
-    playerDeck: {
-      cardSets: ['heroes'],
-      shuffle: true,
-    },
-  },
-  layout: {
-    objects: [],
+  componentSet: {
+    stacks: [
+      {
+        label: 'Player Deck',
+        faceUp: false,
+        deck: {
+          cardSets: ['heroes'],
+          shuffle: true,
+        },
+      },
+    ],
   },
 };
 
@@ -292,7 +295,7 @@ describe('loadScenario', () => {
       ok: true,
       json: () =>
         Promise.resolve({
-          schema: 'ct-scenario@1',
+          schema: 'ct-scenario@2',
           // Missing id, name, version, packs
         }),
     });

@@ -1,0 +1,37 @@
+{
+  "schema": "ct-scenario@2",
+  "id": "testgame-basic",
+  "name": "Test Game - Basic Setup",
+  "version": "1.0.0",
+  "packs": ["testgame-core"],
+  "componentSet": {
+    "stacks": [
+      {
+        "label": "Player Deck",
+        "faceUp": false,
+        "deck": {
+          "cardSets": ["starter-deck"],
+          "shuffle": true
+        }
+      },
+      {
+        "label": "Encounter Deck",
+        "faceUp": false,
+        "deck": {
+          "cards": [
+            { "code": "01025", "count": 2 },
+            { "code": "01026", "count": 2 },
+            { "code": "01027", "count": 1 }
+          ],
+          "shuffle": true
+        }
+      }
+    ],
+    "tokens": [
+      {
+        "ref": "first-player",
+        "label": "First Player"
+      }
+    ]
+  }
+}

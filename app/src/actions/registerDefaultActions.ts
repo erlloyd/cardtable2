@@ -5,6 +5,7 @@ import {
   flipCards,
   exhaustCards,
   resetToTestScene,
+  resetTable,
   shuffleStack,
   detachCard,
   detachAllCards,
@@ -14,10 +15,9 @@ import {
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
 import {
-  loadCompleteScenario,
-  findGameInIndex,
   loadPluginScenario,
   loadLocalPluginScenario,
+  loadPlugin,
   type LoadedScenarioMetadata,
 } from '../content';
 import { loadScenarioContent } from '../content/loadScenarioHelper';
@@ -415,30 +415,40 @@ export function registerDefaultActions(): void {
     },
     execute: async (ctx) => {
       try {
-        const gameId = ctx.store.metadata.get('gameId') as string;
+        const pluginId = ctx.store.metadata.get('gameId') as string;
 
-        console.log(`[Load Scenario] Loading scenario for game: ${gameId}`);
+        console.log(`[Load Scenario] Loading scenario for plugin: ${pluginId}`);
 
-        // Find the game in the index
-        const game = await findGameInIndex(gameId);
+        // Load plugin to get its first scenario
+        const plugin = await loadPlugin(pluginId);
+        const scenarioFile = plugin.manifest.scenarios[0];
+        if (!scenarioFile) {
+          throw new Error(`Plugin "${pluginId}" has no scenarios`);
+        }
 
-        console.log(
-          `[Load Scenario] Loading scenario from: ${game.manifestUrl}`,
-        );
-
-        // Load the complete scenario
-        const content = await loadCompleteScenario(game.manifestUrl);
+        // Load scenario through plugin system (loads ALL plugin packs)
+        const content = await loadPluginScenario(pluginId, scenarioFile);
 
         console.log(
           `[Load Scenario] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
         );
 
-        // Add all objects to the store
-        for (const [objId, obj] of content.objects) {
-          ctx.store.setObject(objId, obj);
-        }
+        const metadata: LoadedScenarioMetadata = {
+          type: 'plugin',
+          pluginId,
+          scenarioFile,
+          loadedAt: Date.now(),
+          scenarioName: content.scenario.name,
+        };
 
-        console.log('[Load Scenario] Scenario loaded successfully');
+        loadScenarioContent(
+          ctx.store,
+          content,
+          metadata,
+          '[Load Scenario]',
+          plugin.manifest.componentSets,
+          plugin.registry.baseUrl,
+        );
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
@@ -464,17 +474,9 @@ export function registerDefaultActions(): void {
       return ctx.selection.count === 0 && ctx.store.objects.size > 0;
     },
     execute: (ctx) => {
-      ctx.store.clearAllObjects();
-      ctx.store.metadata.delete('loadedScenario');
-      ctx.store.metadata.delete('gameId');
-      ctx.store.setGameAssets(null);
-
-      // Clear attachment actions since we have no game assets
+      resetTable(ctx.store);
       registerAttachmentActions(registry, null);
-
-      console.log(
-        '[Reset Table] Cleared all objects, metadata, game assets, and attachment actions',
-      );
+      console.log('[Reset Table] Table reset complete');
     },
   });
 
@@ -503,6 +505,24 @@ export function registerDefaultActions(): void {
     },
   });
 
+  // Content action: Load Components (always available)
+  registry.register({
+    id: 'load-components',
+    label: 'Load Components',
+    shortLabel: 'Components',
+    icon: '📦',
+    category: CONTENT_ACTIONS,
+    description:
+      'Load component sets (decks, encounter sets, tokens) onto the table',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 && ctx.onOpenComponentSets !== undefined,
+    execute: (ctx) => {
+      if (ctx.onOpenComponentSets) {
+        ctx.onOpenComponentSets();
+      }
+    },
+  });
+
   // Content action: Load Plugin from Directory (Dev)
   registry.register({
     id: 'load-plugin-from-directory',
@@ -525,7 +545,15 @@ export function registerDefaultActions(): void {
           scenarioName: content.scenario.name,
         };
 
-        loadScenarioContent(ctx.store, content, metadata, '[Load Plugin]');
+        loadScenarioContent(
+          ctx.store,
+          content,
+          metadata,
+          '[Load Plugin]',
+          content.pluginManifest.componentSets,
+          '', // Local plugins don't have a remote base URL
+          content.blobUrls,
+        );
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
@@ -553,7 +581,10 @@ export function registerDefaultActions(): void {
 
       try {
         console.log('[Load Marvel Champions] Loading Rhino scenario...');
-        const content = await loadPluginScenario(pluginId, scenarioFile);
+        const [content, plugin] = await Promise.all([
+          loadPluginScenario(pluginId, scenarioFile),
+          loadPlugin(pluginId),
+        ]);
 
         // Store metadata for plugin scenarios (can auto-reload)
         const metadata: LoadedScenarioMetadata = {
@@ -569,6 +600,8 @@ export function registerDefaultActions(): void {
           content,
           metadata,
           '[Load Marvel Champions]',
+          plugin.manifest.componentSets,
+          plugin.registry.baseUrl,
         );
       } catch (error) {
         const errorMessage =

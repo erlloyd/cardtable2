@@ -25,7 +25,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
 
   const createMockContent = (scenarioName: string): LoadedContent => ({
     scenario: {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: scenarioName,
       version: '1.0.0',

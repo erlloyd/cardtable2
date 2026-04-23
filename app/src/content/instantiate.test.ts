@@ -4,13 +4,8 @@ import type {
   GameAssets,
   DeckDefinition,
   AssetPack,
-  LayoutObject,
 } from '@cardtable2/shared';
-import {
-  ObjectKind,
-  type StackObject,
-  type TokenObject,
-} from '@cardtable2/shared';
+import { ObjectKind, type StackObject } from '@cardtable2/shared';
 import {
   expandDeck,
   namespaceCardCode,
@@ -157,11 +152,10 @@ describe('expandDeck', () => {
       shuffle: true,
     };
 
-    // Mock Math.random to make shuffling deterministic
     const mockRandom = vi
       .spyOn(Math, 'random')
-      .mockReturnValueOnce(0.5) // First swap
-      .mockReturnValueOnce(0.3); // Second swap
+      .mockReturnValueOnce(0.5)
+      .mockReturnValueOnce(0.3);
 
     const cards = expandDeck(deckDef, mockContent);
 
@@ -169,7 +163,6 @@ describe('expandDeck', () => {
     expect(cards).toContain('01001');
     expect(cards).toContain('01002');
     expect(cards).toContain('01003');
-    // Order will be different due to shuffle
 
     mockRandom.mockRestore();
   });
@@ -252,7 +245,6 @@ describe('namespaceDeckCards', () => {
   it('should not validate cards (no-op behavior)', () => {
     const cards = ['99999'];
 
-    // Should not throw - namespacing is disabled
     const result = namespaceDeckCards(cards, mockContent);
     expect(result).toEqual(['99999']);
   });
@@ -280,7 +272,7 @@ describe('namespaceDeckCards', () => {
 
 describe('generateSortKey', () => {
   it('should generate sort key from index', () => {
-    expect(generateSortKey(0)).toBe('001000'); // (0+1)*1000 = 1000, zero-padded to 6
+    expect(generateSortKey(0)).toBe('001000');
   });
 
   it('should generate lexicographically increasing keys', () => {
@@ -303,25 +295,22 @@ describe('generateSortKey', () => {
 });
 
 // ============================================================================
-// instantiateScenario Tests
+// instantiateScenario Tests (ct-scenario@2 format)
 // ============================================================================
 
 describe('instantiateScenario', () => {
   beforeEach(() => {
-    // Mock Math.random for deterministic shuffling in tests
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
   });
 
   it('should instantiate empty scenario', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [],
-      },
+      componentSet: {},
     };
 
     const objects = instantiateScenario(scenario, mockContent);
@@ -329,9 +318,9 @@ describe('instantiateScenario', () => {
     expect(objects.size).toBe(0);
   });
 
-  it('should instantiate scenario without layout', () => {
+  it('should instantiate scenario without componentSet', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
@@ -343,31 +332,24 @@ describe('instantiateScenario', () => {
     expect(objects.size).toBe(0);
   });
 
-  it('should instantiate stack with deck', () => {
+  it('should instantiate stack with deck definition', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      decks: {
-        heroDeck: {
-          cards: [
-            { code: '01001', count: 2 },
-            { code: '01002', count: 1 },
-          ],
-          shuffle: false,
-        },
-      },
-      layout: {
-        objects: [
+      componentSet: {
+        stacks: [
           {
-            type: 'stack',
-            id: 'deck1',
-            pos: { x: 100, y: 200 },
-            z: 0,
-            deck: 'heroDeck',
+            label: 'Hero Deck',
             faceUp: false,
+            deck: {
+              cards: [
+                { code: '01001', count: 2 },
+                { code: '01002', count: 1 },
+              ],
+            },
           },
         ],
       },
@@ -376,485 +358,176 @@ describe('instantiateScenario', () => {
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const stack = objects.get('deck1')! as StackObject;
+    const stack = [...objects.values()][0] as StackObject;
 
     expect(stack._kind).toBe(ObjectKind.Stack);
-    expect(stack._pos).toEqual({ x: 100, y: 200, r: 0 });
     expect(stack._cards).toEqual(['01001', '01001', '01002']);
     expect(stack._faceUp).toBe(false);
   });
 
   it('should instantiate token', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'token',
-            ref: 'damage',
-            pos: { x: 300, y: 400 },
-            z: 5,
-            label: 'Damage Token',
-          },
-        ],
+      componentSet: {
+        tokens: [{ ref: 'damage', label: 'Damage Token' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const token = objects.get('test:token:damage')! as TokenObject;
+    const token = [...objects.values()][0];
 
     expect(token._kind).toBe(ObjectKind.Token);
-    expect(token._pos).toEqual({ x: 300, y: 400, r: 0 });
     expect(token._meta.tokenRef).toBe('damage');
     expect(token._meta.label).toBe('Damage Token');
-    expect(token._faceUp).toBe(true);
-  });
-
-  it('should instantiate mat', () => {
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'mat',
-            ref: 'playmat',
-            pos: { x: 0, y: 0 },
-            z: -100,
-          },
-        ],
-      },
-    };
-
-    const objects = instantiateScenario(scenario, mockContent);
-
-    expect(objects.size).toBe(1);
-    const mat = objects.get('test:mat:playmat')!;
-
-    expect(mat._kind).toBe(ObjectKind.Mat);
-    expect(mat._pos).toEqual({ x: 0, y: 0, r: 0 });
-    expect(mat._meta.matRef).toBe('playmat');
   });
 
   it('should instantiate counter', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'counter',
-            ref: 'threat',
-            pos: { x: 500, y: 600 },
-            z: 10,
-            label: 'Threat Counter',
-          },
-        ],
+      componentSet: {
+        counters: [{ ref: 'threat', label: 'Threat Counter' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const counter = objects.get('test:counter:threat')!;
+    const counter = [...objects.values()][0];
 
     expect(counter._kind).toBe(ObjectKind.Counter);
-    expect(counter._pos).toEqual({ x: 500, y: 600, r: 0 });
     expect(counter._meta.counterRef).toBe('threat');
-    expect(counter._meta.label).toBe('Threat Counter'); // Override
-    expect(counter._meta.value).toBe(5); // From definition
+    expect(counter._meta.label).toBe('Threat Counter');
+    expect(counter._meta.value).toBe(5);
     expect(counter._meta.min).toBe(0);
     expect(counter._meta.max).toBe(99);
   });
 
-  it('should use counter definition label if not overridden', () => {
+  it('should instantiate mat', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'counter',
-            ref: 'threat',
-            pos: { x: 500, y: 600 },
-          },
-        ],
+      componentSet: {
+        mats: [{ ref: 'playmat' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
-    const counter = objects.get('test:counter:threat')!;
-    expect(counter._meta.label).toBe('Threat'); // From definition
+    expect(objects.size).toBe(1);
+    const mat = [...objects.values()][0];
+
+    expect(mat._kind).toBe(ObjectKind.Mat);
+    expect(mat._meta.matRef).toBe('playmat');
   });
 
   it('should instantiate zone with ref', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'zone',
-            ref: 'discard',
-            pos: { x: 700, y: 800 },
-            z: -50,
-            label: 'Discard Pile',
-          },
-        ],
+      componentSet: {
+        zones: [{ ref: 'discard', label: 'Discard Pile' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const zone = objects.get('test:zone:discard')!;
+    const zone = [...objects.values()][0];
 
     expect(zone._kind).toBe(ObjectKind.Zone);
-    expect(zone._pos).toEqual({ x: 700, y: 800, r: 0 });
     expect(zone._meta.zoneRef).toBe('discard');
     expect(zone._meta.label).toBe('Discard Pile');
   });
 
-  it('should instantiate zone with id (inline)', () => {
+  it('should instantiate inline zone with dimensions', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'zone',
-            id: 'custom-zone-id',
-            pos: { x: 100, y: 200 },
-            label: 'Custom Zone',
-            width: 150,
-            height: 200,
-          },
-        ],
+      componentSet: {
+        zones: [{ label: 'Custom Zone', width: 150, height: 200 }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(1);
-    const zone = objects.get('custom-zone-id')!;
+    const zone = [...objects.values()][0];
 
     expect(zone._kind).toBe(ObjectKind.Zone);
-    expect(zone._pos).toEqual({ x: 100, y: 200, r: 0 });
     expect(zone._meta.label).toBe('Custom Zone');
     expect(zone._meta.width).toBe(150);
     expect(zone._meta.height).toBe(200);
-    expect(zone._meta.zoneRef).toBeUndefined();
   });
 
   it('should instantiate multiple objects', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      decks: {
-        heroDeck: {
-          cards: [{ code: '01001', count: 1 }],
-        },
-      },
-      layout: {
-        objects: [
+      componentSet: {
+        stacks: [
           {
-            type: 'stack',
-            id: 'deck1',
-            pos: { x: 100, y: 200 },
-            deck: 'heroDeck',
-          },
-          {
-            type: 'token',
-            ref: 'damage',
-            pos: { x: 300, y: 400 },
-          },
-          {
-            type: 'counter',
-            ref: 'threat',
-            pos: { x: 500, y: 600 },
+            label: 'Deck',
+            faceUp: false,
+            cards: ['01001'],
           },
         ],
+        tokens: [{ ref: 'damage' }],
+        counters: [{ ref: 'threat' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
     expect(objects.size).toBe(3);
-    expect(objects.has('deck1')).toBe(true);
-    expect(objects.has('test:token:damage')).toBe(true);
-    expect(objects.has('test:counter:threat')).toBe(true);
+
+    const kinds = [...objects.values()].map((o) => o._kind);
+    expect(kinds).toContain(ObjectKind.Stack);
+    expect(kinds).toContain(ObjectKind.Token);
+    expect(kinds).toContain(ObjectKind.Counter);
   });
 
-  it('should throw error for stack missing id', () => {
-    // Testing error handling for invalid object (bypassing type safety)
-
+  it('should set common object properties', () => {
     const scenario: Scenario = {
-      schema: 'ct-scenario@1',
+      schema: 'ct-scenario@2',
       id: 'test',
       name: 'Test',
       version: '1.0.0',
       packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'stack',
-            // Missing id
-            pos: { x: 100, y: 200 },
-          } as LayoutObject,
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Stack object missing required id',
-    );
-  });
-
-  it('should throw error for token missing ref', () => {
-    // Testing error handling for invalid object (bypassing type safety)
-
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'token',
-            // Missing ref
-            pos: { x: 100, y: 200 },
-          } as LayoutObject,
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Token object missing required ref',
-    );
-  });
-
-  it('should throw error for mat missing ref', () => {
-    // Testing error handling for invalid object (bypassing type safety)
-
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'mat',
-            // Missing ref
-            pos: { x: 100, y: 200 },
-          } as LayoutObject,
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Mat object missing required ref',
-    );
-  });
-
-  it('should throw error for counter missing ref', () => {
-    // Testing error handling for invalid object (bypassing type safety)
-
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'counter',
-            // Missing ref
-            pos: { x: 100, y: 200 },
-          } as LayoutObject,
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Counter object missing required ref',
-    );
-  });
-
-  it('should throw error for zone missing both id and ref', () => {
-    // Testing error handling for invalid object (bypassing type safety)
-
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'zone',
-            // Missing both id and ref
-            pos: { x: 100, y: 200 },
-          } as LayoutObject,
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Zone object must have either id or ref',
-    );
-  });
-
-  it('should throw error for deck not found', () => {
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'stack',
-            id: 'deck1',
-            pos: { x: 100, y: 200 },
-            deck: 'nonexistent',
-          },
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Deck not found: nonexistent',
-    );
-  });
-
-  it('should throw error for counter not found', () => {
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'counter',
-            ref: 'nonexistent',
-            pos: { x: 100, y: 200 },
-          },
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Counter not found: nonexistent',
-    );
-  });
-
-  it('should throw error for unknown object type', () => {
-    // Testing error handling for invalid object (bypassing type safety)
-
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'unknown',
-            pos: { x: 100, y: 200 },
-          } as unknown as LayoutObject,
-        ],
-      },
-    };
-
-    expect(() => instantiateScenario(scenario, mockContent)).toThrow(
-      'Unknown object type: unknown',
-    );
-  });
-
-  it('should use default z-index if not specified', () => {
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'token',
-            ref: 'damage',
-            pos: { x: 100, y: 200 },
-            // No z specified
-          },
-        ],
+      componentSet: {
+        tokens: [{ ref: 'damage' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
-    const token = objects.get('test:token:damage')!;
-
-    expect(token._sortKey).toBeDefined();
-  });
-
-  it('should initialize common object properties', () => {
-    const scenario: Scenario = {
-      schema: 'ct-scenario@1',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      layout: {
-        objects: [
-          {
-            type: 'token',
-            ref: 'damage',
-            pos: { x: 100, y: 200 },
-          },
-        ],
-      },
-    };
-
-    const objects = instantiateScenario(scenario, mockContent);
-    const token = objects.get('test:token:damage')!;
+    const token = [...objects.values()][0];
 
     expect(token._containerId).toBe(null);
     expect(token._locked).toBe(false);
     expect(token._selectedBy).toBe(null);
     expect(token._meta).toBeDefined();
+    expect(token._sortKey).toBeDefined();
+    expect(token._pos).toBeDefined();
   });
 });

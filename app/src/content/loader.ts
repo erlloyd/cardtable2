@@ -231,13 +231,13 @@ function validateScenario(data: unknown): Scenario {
   const obj = data as Record<string, unknown>;
 
   // Basic validation
-  if (obj.schema !== 'ct-scenario@1') {
+  if (obj.schema !== 'ct-scenario@2') {
     console.error('[Loader] Invalid scenario schema', {
       errorId: SCENARIO_INVALID_SCHEMA,
       schema: obj.schema,
     });
     throw new Error(
-      `Invalid schema: expected "ct-scenario@1", got "${String(obj.schema)}"`,
+      `Invalid schema: expected "ct-scenario@2", got "${String(obj.schema)}"`,
     );
   }
 

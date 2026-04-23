@@ -19,6 +19,7 @@ import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { resetTable } from '../store/YjsActions';
 import { buildActionContext } from '../actions/buildActionContext';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
@@ -27,11 +28,12 @@ import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
+import { ComponentSetModal } from '../components/ComponentSetModal';
 import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
-  loadGameAssetPacks,
+  loadPluginAssets,
   reloadScenarioFromMetadata,
   type GameAssets,
   type LoadedScenarioMetadata,
@@ -56,6 +58,7 @@ function Table() {
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
+  const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -230,8 +233,8 @@ function Table() {
             return;
           }
 
-          console.log('[Table] Loading base game asset packs for:', gameId);
-          const assets = await loadGameAssetPacks(gameId);
+          console.log('[Table] Loading plugin assets for:', gameId);
+          const assets = await loadPluginAssets(gameId);
           store.setGameAssets(assets);
           registerAttachmentActions(ActionRegistry.getInstance(), assets);
         }
@@ -407,6 +410,10 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
+  const handleOpenComponentSets = useCallback(() => {
+    setComponentSetModalOpen(true);
+  }, []);
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -420,6 +427,7 @@ function Table() {
       gridSnapEnabled,
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
+      handleOpenComponentSets,
     );
 
     if (context) {
@@ -439,6 +447,7 @@ function Table() {
     gridSnapEnabled,
     setGridSnapEnabled,
     handPanel.activeHandId,
+    handleOpenComponentSets,
   ]);
 
   // Enable keyboard shortcuts
@@ -455,8 +464,34 @@ function Table() {
         ) : packsLoading ? (
           <div className="board-fullscreen" />
         ) : packsError ? (
-          <div className="board-fullscreen">
-            Error loading packs: {packsError}
+          <div className="board-fullscreen table-error">
+            <div className="table-error-content">
+              <div className="table-error-message">{packsError}</div>
+              <div className="table-error-actions">
+                <button
+                  className="table-error-button"
+                  onClick={() => {
+                    setPacksError(null);
+                    void navigate({ to: '/' });
+                  }}
+                >
+                  Back to Games
+                </button>
+                <button
+                  className="table-error-button table-error-button-secondary"
+                  onClick={() => {
+                    if (store) {
+                      resetTable(store);
+                    }
+                    setGameAssets(null);
+                    setPacksError(null);
+                    setPacksLoading(false);
+                  }}
+                >
+                  Reset Table
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <Board
@@ -529,6 +564,16 @@ function Table() {
         onClose={contextMenu.close}
         context={actionContext}
       />
+
+      {/* Component Set Modal */}
+      {store && (
+        <ComponentSetModal
+          isOpen={componentSetModalOpen}
+          onClose={() => setComponentSetModalOpen(false)}
+          store={store}
+          gameAssets={gameAssets}
+        />
+      )}
     </div>
   );
 }

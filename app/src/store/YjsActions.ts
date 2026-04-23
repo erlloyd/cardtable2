@@ -41,7 +41,7 @@ export interface CreateObjectOptions {
  * Uses fractional indexing format: "prefix|suffix"
  * Refactored to work with Y.Maps directly - zero allocations.
  */
-function generateTopSortKey(store: YjsStore): string {
+export function generateTopSortKey(store: YjsStore): string {
   let maxPrefix = 0;
   store.forEachObject((yMap) => {
     const sortKey = yMap.get('_sortKey');
@@ -1137,6 +1137,18 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
  * - 2 zones in middle area
  * - 3 mats in bottom left area
  * - 2 counters in bottom right area
+ *
+ * @param store - YjsStore instance
+ */
+export function resetTable(store: YjsStore): void {
+  store.clearAllObjects();
+  store.metadata.delete('loadedScenario');
+  store.metadata.delete('gameId');
+  store.setGameAssets(null);
+}
+
+/**
+ * Reset the table and create a test scene with various object types
  *
  * @param store - YjsStore instance
  */

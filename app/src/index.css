@@ -1758,3 +1758,224 @@ h1 {
     border-color: rgba(0, 0, 0, 0.07);
   }
 }
+
+/* Table Error State */
+.table-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-error-content {
+  text-align: center;
+  max-width: 28rem;
+  padding: 2rem;
+}
+
+.table-error-message {
+  color: #f87171;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.table-error-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.table-error-button {
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  background-color: #2563eb;
+  color: white;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.table-error-button:hover {
+  background-color: #3b82f6;
+}
+
+.table-error-button-secondary {
+  background-color: #374151;
+}
+
+.table-error-button-secondary:hover {
+  background-color: #4b5563;
+}
+
+/* Component Set Modal Styles */
+.cs-modal-dialog {
+  position: relative;
+  z-index: 50;
+}
+
+.cs-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.cs-modal-container {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+}
+
+.cs-modal-wrapper {
+  display: flex;
+  min-height: 100%;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  padding-top: 20vh;
+}
+
+.cs-modal-panel {
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 0.75rem;
+  background-color: #111827;
+  padding: 1.5rem;
+  box-shadow:
+    0 20px 25px -5px rgb(0 0 0 / 0.3),
+    0 8px 10px -6px rgb(0 0 0 / 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cs-modal-title {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: white;
+  margin-bottom: 1rem;
+}
+
+.cs-modal-error {
+  margin-bottom: 1rem;
+  border-radius: 0.5rem;
+  background-color: rgba(127, 29, 29, 0.5);
+  border: 1px solid rgba(185, 28, 28, 0.7);
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #fecaca;
+}
+
+.cs-modal-entry {
+  width: 100%;
+  text-align: left;
+  border-radius: 0.5rem;
+  background-color: #1f2937;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.15s;
+}
+
+.cs-modal-entry:hover {
+  background-color: #374151;
+}
+
+.cs-modal-entry:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cs-modal-entry-name {
+  color: white;
+  font-weight: 500;
+}
+
+.cs-modal-entry-desc {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.cs-modal-back {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cs-modal-back:hover {
+  color: white;
+}
+
+.cs-modal-label {
+  display: block;
+  font-size: 0.875rem;
+  color: #d1d5db;
+  margin-bottom: 0.25rem;
+}
+
+.cs-modal-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  background-color: #1f2937;
+  border: 1px solid #4b5563;
+  padding: 0.5rem 0.75rem;
+  color: white;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.cs-modal-input:focus {
+  border-color: #3b82f6;
+}
+
+.cs-modal-input::placeholder {
+  color: #6b7280;
+}
+
+.cs-modal-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
+
+.cs-modal-submit {
+  width: 100%;
+  border-radius: 0.5rem;
+  background-color: #2563eb;
+  padding: 0.5rem 1rem;
+  color: white;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+
+.cs-modal-submit:hover {
+  background-color: #3b82f6;
+}
+
+.cs-modal-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cs-modal-empty {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.cs-modal-space-y > * + * {
+  margin-top: 0.5rem;
+}
+
+.cs-modal-space-y-3 > * + * {
+  margin-top: 0.75rem;
+}

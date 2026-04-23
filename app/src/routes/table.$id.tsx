@@ -159,6 +159,27 @@ function Table() {
     registerHandActions(ActionRegistry.getInstance());
   }, []);
 
+  // Dev-only: apply URL seed (?seed=stack-of-5) on a fresh table.
+  // No-op in production and no-op when the table already has objects.
+  useEffect(() => {
+    if (!import.meta.env.DEV && !import.meta.env.VITE_E2E) return;
+    if (!store || !isStoreReady) return;
+
+    const seedName = new URLSearchParams(location.search).get('seed');
+    if (!seedName) return;
+
+    void import('../dev/seeds').then(({ applySeed }) => {
+      const result = applySeed(store, seedName);
+      if (result.applied) {
+        console.log(
+          `[seed] applied '${seedName}' — ${result.createdIds.length} object(s) created`,
+        );
+      } else {
+        console.warn(`[seed] did not apply '${seedName}': ${result.reason}`);
+      }
+    });
+  }, [store, isStoreReady, location.search]);
+
   // Store gameId in Y.Doc metadata from location state (new table only)
   useEffect(() => {
     if (!store || !isStoreReady) {

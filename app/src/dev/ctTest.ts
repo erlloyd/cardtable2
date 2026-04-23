@@ -12,9 +12,22 @@
  *   won't lift to its pointer handlers).  The E2E suite works around this
  *   by calling `canvas.dispatchEvent('pointerdown', { ... })` with
  *   viewport-absolute `clientX/clientY`.  We mirror that pattern here.
- * - World coordinates map to canvas-relative coords as
- *   `canvasRelX = worldX + canvas.clientWidth / 2` (and likewise for y).
- *   This assumes the camera is at origin with zoom 1 — the same
+ * - World coordinates map to canvas-relative CSS coords as
+ *   `canvasCssRelX = worldX / DPR + canvas.clientWidth / 2` (and likewise
+ *   for y), then to viewport coords by adding the canvas bounding-box
+ *   offset.  The `/ DPR` divisor compensates for the app's pointer
+ *   pipeline, which multiplies `(event.clientX - rect.left)` by
+ *   `window.devicePixelRatio` before passing the value to
+ *   `CoordinateConverter.screenToWorld` (see
+ *   `app/src/hooks/usePointerEvents.ts::serializePointerEvent` and
+ *   `app/src/renderer/managers/CoordinateConverter.ts::screenToWorld`).
+ *   `worldContainer.position` is set to `(width/2, height/2)` in that
+ *   same DPR-scaled space (see
+ *   `app/src/renderer/RendererOrchestrator.ts::initializeViewport`), so
+ *   a 1-CSS-pixel pointer shift produces `DPR` world units.  Skipping
+ *   the divisor makes a drag of `{x:200,y:100}` land at world
+ *   `(200*DPR, 100*DPR)` — the bug fixed in ct-kiu.6.
+ *   This still assumes the camera is at origin with zoom 1 — the same
  *   assumption the E2E suite makes.  Call `__ctTest.resetCamera()` first
  *   if you've panned/zoomed.
  * - The bounding rect is read once per invocation because layout can
@@ -118,6 +131,22 @@ function requireCanvas(): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * Effective scale from world units to CSS pointer-pixel units.
+ *
+ * The app's pointer pipeline multiplies `(clientX - rect.left)` by the
+ * device pixel ratio before feeding it to `screenToWorld`, which divides
+ * by `cameraScale`.  Since `__ctTest` assumes camera at origin / zoom 1
+ * (see file header), the only remaining factor is DPR.  A DPR of 0 or
+ * NaN (not plausible in a real browser, but possible in a misconfigured
+ * test) falls back to 1 — the pre-fix behavior — so existing DPR=1 call
+ * sites (Playwright E2E under jsdom) are unaffected.
+ */
+function worldToCssScale(): number {
+  const dpr = window.devicePixelRatio;
+  return dpr && Number.isFinite(dpr) ? dpr : 1;
+}
+
 function worldToViewport(
   canvas: HTMLCanvasElement,
   pt: WorldPoint,
@@ -125,9 +154,10 @@ function worldToViewport(
   const rect = canvas.getBoundingClientRect();
   const cx = canvas.clientWidth / 2;
   const cy = canvas.clientHeight / 2;
+  const scale = worldToCssScale();
   return {
-    x: rect.left + pt.x + cx,
-    y: rect.top + pt.y + cy,
+    x: rect.left + pt.x / scale + cx,
+    y: rect.top + pt.y / scale + cy,
   };
 }
 
@@ -248,6 +278,10 @@ export function createCtTestApi(): CtTestApi {
       const rect = canvas.getBoundingClientRect();
       const cx = canvas.clientWidth / 2;
       const cy = canvas.clientHeight / 2;
+      // Match worldToViewport's DPR compensation so the reported
+      // `viewport` coords round-trip through the pointer pipeline back
+      // to the same world pos (ct-kiu.6).
+      const scale = worldToCssScale();
 
       const objects = store.objects;
       const results: ReturnType<CtTestApi['probeObjects']> = [];
@@ -257,7 +291,10 @@ export function createCtTestApi(): CtTestApi {
         i++;
         const kind = yMap.get('_kind') as string;
         const pos = yMap.get('_pos') as { x: number; y: number; r: number };
-        const canvasRel: ViewportPoint = { x: pos.x + cx, y: pos.y + cy };
+        const canvasRel: ViewportPoint = {
+          x: pos.x / scale + cx,
+          y: pos.y / scale + cy,
+        };
         const viewport: ViewportPoint = {
           x: rect.left + canvasRel.x,
           y: rect.top + canvasRel.y,

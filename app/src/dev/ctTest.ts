@@ -121,6 +121,33 @@ export interface CtTestApi {
 
 const DEFAULT_DRAG_STEPS = 10;
 
+/**
+ * Validate a world-space point at the public API boundary.  This is a
+ * dev helper invoked from `browser_evaluate` / the console, so typos
+ * like `click(0, 0)` (positional args) or `click(null)` are plausible.
+ * Without this check the failure surfaces from inside `PointerEvent`'s
+ * constructor as a cryptic `clientX is non-finite` error; the throw
+ * below points at the actual mistake.
+ *
+ * Per CLAUDE.md, `typeof 'object'` checks for internal type validation
+ * are discouraged — but this is a true system boundary (external input
+ * to a dev helper), where a runtime guard is the appropriate tool.
+ * `Number.isFinite` is the substantive validator; the object check
+ * just prevents a TypeError when accessing `.x` on `null`/primitives.
+ */
+function requirePoint(pt: unknown, label: string): asserts pt is WorldPoint {
+  if (
+    !pt ||
+    typeof pt !== 'object' ||
+    !Number.isFinite((pt as WorldPoint).x) ||
+    !Number.isFinite((pt as WorldPoint).y)
+  ) {
+    throw new Error(
+      `[ctTest] ${label} must be {x: number, y: number}, got: ${JSON.stringify(pt)}`,
+    );
+  }
+}
+
 function requireCanvas(): HTMLCanvasElement {
   const canvas = document.querySelector('canvas');
   if (!canvas) {
@@ -211,16 +238,19 @@ export function createCtTestApi(): CtTestApi {
     },
 
     pointerDown(pt, opts = {}) {
+      requirePoint(pt, 'pt');
       const canvas = requireCanvas();
       dispatchPointer(canvas, 'pointerdown', worldToViewport(canvas, pt), opts);
     },
 
     pointerMove(pt, opts = {}) {
+      requirePoint(pt, 'pt');
       const canvas = requireCanvas();
       dispatchPointer(canvas, 'pointermove', worldToViewport(canvas, pt), opts);
     },
 
     pointerUp(pt, opts = {}) {
+      requirePoint(pt, 'pt');
       const canvas = requireCanvas();
       dispatchPointer(canvas, 'pointerup', worldToViewport(canvas, pt), {
         ...opts,
@@ -229,11 +259,14 @@ export function createCtTestApi(): CtTestApi {
     },
 
     click(pt, opts = {}) {
+      requirePoint(pt, 'pt');
       api.pointerDown(pt, opts);
       api.pointerUp(pt, opts);
     },
 
     async drag(from, to, opts = {}) {
+      requirePoint(from, 'from');
+      requirePoint(to, 'to');
       const steps = opts.steps ?? DEFAULT_DRAG_STEPS;
       const stepDelayMs = opts.stepDelayMs ?? 0;
       const canvas = requireCanvas();

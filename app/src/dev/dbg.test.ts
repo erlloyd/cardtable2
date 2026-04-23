@@ -110,4 +110,27 @@ describe('dbg', () => {
     expect(dbgApi.isEnabled('drag')).toBe(true);
     expect(dbgApi.isEnabled('')).toBe(false);
   });
+
+  describe('comma-split parity (matches ?debug= URL param)', () => {
+    it('enable splits a single comma-delimited argument', () => {
+      dbgApi.enable('a,b,c');
+      expect(dbgApi.list()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('enable trims whitespace around comma-split names', () => {
+      dbgApi.enable('a, b , c');
+      expect(dbgApi.list()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('enable accepts a mix of positional args and comma-delimited strings', () => {
+      dbgApi.enable('a', 'b,c');
+      expect(dbgApi.list()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('disable splits on commas too', () => {
+      dbgApi.enable('a', 'b', 'c');
+      dbgApi.disable('a,b');
+      expect(dbgApi.list()).toEqual(['c']);
+    });
+  });
 });

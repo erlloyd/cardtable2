@@ -126,6 +126,55 @@ describe('ctTest', () => {
     const api = createCtTestApi();
     expect(() => api.getCanvas()).toThrow(/No <canvas> element found/);
   });
+
+  describe('input validation', () => {
+    it('pointerDown(null) throws a clear error, not a cryptic PointerEvent crash', () => {
+      const api = createCtTestApi();
+      // Cast via `unknown` because the public type disallows `null` —
+      // the runtime guard is for console/MCP callers who bypass TS.
+      expect(() =>
+        api.pointerDown(null as unknown as { x: number; y: number }),
+      ).toThrow(/\[ctTest\] pt must be \{x: number, y: number\}/);
+    });
+
+    it('pointerDown with a non-numeric x throws', () => {
+      const api = createCtTestApi();
+      expect(() =>
+        api.pointerDown({ x: 'not a number' } as unknown as {
+          x: number;
+          y: number;
+        }),
+      ).toThrow(/\[ctTest\] pt must be \{x: number, y: number\}/);
+    });
+
+    it('pointerDown with NaN x throws', () => {
+      const api = createCtTestApi();
+      expect(() => api.pointerDown({ x: NaN, y: 0 })).toThrow(
+        /\[ctTest\] pt must be \{x: number, y: number\}/,
+      );
+    });
+
+    it('drag with invalid `to` rejects with "to" in the message', async () => {
+      const api = createCtTestApi();
+      await expect(
+        api.drag({ x: 0, y: 0 }, null as unknown as { x: number; y: number }),
+      ).rejects.toThrow(/\[ctTest\] to must be \{x: number, y: number\}/);
+    });
+
+    it('drag with invalid `from` rejects with "from" in the message', async () => {
+      const api = createCtTestApi();
+      await expect(
+        api.drag(null as unknown as { x: number; y: number }, { x: 0, y: 0 }),
+      ).rejects.toThrow(/\[ctTest\] from must be \{x: number, y: number\}/);
+    });
+
+    it('valid input still dispatches (sanity check that the guard is not over-broad)', () => {
+      const api = createCtTestApi();
+      api.pointerDown({ x: 10, y: 20 });
+      expect(received).toHaveLength(1);
+      expect(received[0].type).toBe('pointerdown');
+    });
+  });
 });
 
 /**

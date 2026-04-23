@@ -82,13 +82,27 @@ function loadFromStorage(): void {
   }
 }
 
+/**
+ * Normalise a single argument into a list of subsystem names by
+ * splitting on `,` and trimming whitespace.  Shared by `enable`,
+ * `disable`, and the `?debug=` URL param so all three paths behave
+ * identically — i.e. `enable('a,b,c')`, `enable('a, b , c')`, and
+ * `enable('a', 'b', 'c')` all produce the same result as
+ * `?debug=a,b,c`.
+ */
+function splitAndTrim(arg: string): string[] {
+  return arg
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
 function loadFromUrl(): void {
   const params = new URLSearchParams(window.location.search);
   const debugParam = params.get('debug');
   if (!debugParam) return;
-  for (const name of debugParam.split(',')) {
-    const trimmed = name.trim();
-    if (trimmed.length > 0) enabled.add(trimmed);
+  for (const name of splitAndTrim(debugParam)) {
+    enabled.add(name);
   }
 }
 
@@ -110,13 +124,19 @@ dbg.isEnabled = (subsystem: string): boolean => enabled.has(subsystem);
 
 export const dbgApi: DbgApi = {
   enable(...subsystems) {
-    for (const s of subsystems) {
-      if (s && s.length > 0) enabled.add(s);
+    for (const arg of subsystems) {
+      for (const s of splitAndTrim(String(arg))) {
+        enabled.add(s);
+      }
     }
     persist();
   },
   disable(...subsystems) {
-    for (const s of subsystems) enabled.delete(s);
+    for (const arg of subsystems) {
+      for (const s of splitAndTrim(String(arg))) {
+        enabled.delete(s);
+      }
+    }
     persist();
   },
   disableAll() {

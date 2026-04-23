@@ -157,8 +157,13 @@ export function ActionHandle({
     const registry = ActionRegistry.getInstance();
     void registry.execute(actionId, actionContext);
 
-    // Collapse after action
-    setIsExpanded(false);
+    // On touch, collapse immediately after action (no hover lifecycle).
+    // On desktop, leave the menu expanded — the existing onMouseLeave
+    // handler collapses it when the cursor actually leaves, which keeps
+    // the menu visible while the cursor is still over it.
+    if (isTouch) {
+      setIsExpanded(false);
+    }
 
     // Notify parent
     onActionExecuted?.(actionId);

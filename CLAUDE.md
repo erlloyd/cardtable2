@@ -2,6 +2,57 @@
 
 This file contains important context and instructions for Claude when working on this project.
 
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+## Beads Issue Tracker
+
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+
+### Quick Reference
+
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work
+bd close <id>         # Complete work
+```
+
+### Rules
+
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+
+## Session Completion
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds on a feature branch (never auto-push to main).
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - Mandatory for feature branches, NEVER for main without explicit user confirmation:
+   - Check branch: `git branch --show-current`
+   - If on `main`: STOP. Ask the user before pushing — direct pushes to main trigger production deploys. See "Branching Strategy" below.
+   - Otherwise (feature branch), push is mandatory:
+     ```bash
+     git pull --rebase
+     bd dolt push
+     git push
+     git status  # MUST show "up to date with origin"
+     ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds on a feature branch
+- NEVER stop before pushing a feature branch - that leaves work stranded locally
+- NEVER say "ready to push when you are" on a feature branch - YOU must push
+- On `main`, the opposite applies: NEVER push without explicit user confirmation
+- If a feature-branch push fails, resolve and retry until it succeeds
+<!-- END BEADS INTEGRATION -->
+
 ## Project Overview
 
 Cardtable 2.0 is a solo-first virtual card table with optional multiplayer support. It's designed to handle any card/board game through manifest-only content (no game rules in code).
@@ -170,11 +221,10 @@ See `app/src/renderer/objects/README.md` for full documentation.
 - Located at `@cardtable2/shared`
 
 ### CI/CD & Deployment
-- **Feature branch workflow**: All development on feature branches
-- **Main branch protected**: Only merge via tested feature branches
 - **Selective deployment**: Only deploys changed packages on main
 - **PNPM filtering**: Detects which packages have changed
 - **Changes to shared**: Triggers both app and server deployments
+- See the Beads section at the top of this file for branching and push rules.
 
 #### GitHub Actions Workflows
 1. **ci.yml** - Continuous Integration checks on all PRs:
@@ -232,36 +282,9 @@ Don't look for status summaries in README files - just browse the folders to see
 
 ### Branching Strategy
 
-**CRITICAL - NEVER PUSH TO MAIN WITHOUT EXPLICIT CONFIRMATION:**
+All work goes on feature branches: `feature/{theme}-{description}` or `fix/{description}`. Feature-branch pushes are mandatory at session end (see "Session Completion" at the top of this file).
 
-1. **DEFAULT BEHAVIOR**: ALL work MUST be done on feature branches
-   - Always create a feature branch for any work
-   - Branch naming: `feature/{theme}-{description}` or `fix/{description}`
-   - Example: `feature/zoom-quality`, `fix/selection-bug`
-
-2. **BEFORE EVERY PUSH**:
-   - Check current branch with `git branch --show-current`
-   - If on `main`, STOP immediately
-   - Ask user: "I'm currently on main. Should I push to main or create a feature branch?"
-   - WAIT for explicit user confirmation before pushing to main
-
-3. **NEVER ASSUME**:
-   - Do NOT push to main just because changes look ready
-   - Do NOT push to main because tests pass
-   - Do NOT push to main because user said "push" (they might mean push feature branch)
-   - ALWAYS explicitly confirm with user if pushing to main
-
-4. **ONLY PUSH TO MAIN WHEN**:
-   - User explicitly says "push to main" or "push this to main"
-   - User confirms "yes" when you ask about pushing to main
-   - User gives unambiguous instruction to commit/push directly to main
-
-5. **AFTER FEATURE WORK**:
-   - Push feature branch to remote
-   - Let user decide when/how to merge to main
-   - CI/CD deploys automatically when main is updated
-
-**Why this matters**: Direct pushes to main trigger production deployments. Always use feature branches for safety.
+**NEVER PUSH TO MAIN WITHOUT EXPLICIT CONFIRMATION.** Before any `git push`, verify `git branch --show-current` is not `main`. If it is, STOP and ask the user. Only push to main when the user explicitly says "push to main" — "push" alone means the feature branch. Direct pushes to main trigger production deployments.
 
 ### Testing Workflow
 

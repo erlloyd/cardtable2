@@ -815,4 +815,125 @@ test.describe('ActionHandle E2E', () => {
     // ActionHandle should be hidden
     await expect(actionHandle).not.toBeVisible({ timeout: 2000 });
   });
+
+  /**
+   * Regression test for ct-hmv / ct-f1j: on desktop, clicking an action
+   * button inside the expanded ActionHandle menu should NOT collapse the
+   * menu while the cursor is still over it.  The existing onMouseLeave
+   * handler collapses it when the cursor actually leaves.
+   *
+   * The fix lives in ActionHandle.tsx's handleActionClick — this E2E
+   * exercises the real React + DOM hover lifecycle that shallow unit
+   * tests cannot reproduce faithfully.
+   */
+  test('menu stays expanded after clicking an action button on desktop (ct-hmv/ct-f1j)', async ({
+    page,
+  }) => {
+    // Select an object so the ActionHandle appears
+    const clickPos = await page.evaluate(() => {
+      const __TEST_STORE__ = (globalThis as any).__TEST_STORE__ as TestStore;
+      const canvas = document.querySelector('canvas');
+      if (!canvas) return null;
+
+      const canvasWidth = canvas.clientWidth;
+      const canvasHeight = canvas.clientHeight;
+      const objects = Array.from(__TEST_STORE__.getAllObjects().entries());
+      const [, firstObj] = objects[0];
+
+      const canvasX = firstObj._pos.x + canvasWidth / 2;
+      const canvasY = firstObj._pos.y + canvasHeight / 2;
+      const canvasBBox = canvas.getBoundingClientRect();
+
+      return {
+        viewportX: canvasBBox.x + canvasX,
+        viewportY: canvasBBox.y + canvasY,
+      };
+    });
+
+    expect(clickPos).not.toBeNull();
+
+    const canvas = page.getByTestId('board-canvas');
+
+    // Click to select the first object
+    await canvas.dispatchEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: clickPos!.viewportX,
+      clientY: clickPos!.viewportY,
+      screenX: clickPos!.viewportX,
+      screenY: clickPos!.viewportY,
+      pageX: clickPos!.viewportX,
+      pageY: clickPos!.viewportY,
+      button: 0,
+      buttons: 1,
+    });
+
+    await canvas.dispatchEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      clientX: clickPos!.viewportX,
+      clientY: clickPos!.viewportY,
+      screenX: clickPos!.viewportX,
+      screenY: clickPos!.viewportY,
+      pageX: clickPos!.viewportX,
+      pageY: clickPos!.viewportY,
+      button: 0,
+      buttons: 0,
+    });
+
+    await page.evaluate(async () => {
+      await (globalThis as any).__TEST_BOARD__.waitForRenderer();
+    });
+
+    const actionHandle = page.getByTestId('action-handle');
+    await expect(actionHandle).toBeVisible({ timeout: 2000 });
+
+    // Expand the handle by clicking it (simulate the user reaching it)
+    await actionHandle.click();
+    await expect(actionHandle).toHaveClass(/\bexpanded\b/);
+
+    // The menu should now show at least one action button.  We don't care
+    // which specific action it is — we just need to click one and assert
+    // the menu stays expanded.
+    const firstActionButton = actionHandle
+      .locator('button.action-button')
+      .first();
+    await expect(firstActionButton).toBeVisible();
+
+    // Click the action button.  Because the click happens on the button
+    // (which is inside the ActionHandle), the cursor never leaves the
+    // menu container, so onMouseLeave should not fire.
+    await firstActionButton.click();
+
+    // Give React a tick to process any state updates, but we do NOT
+    // wait the 300ms onMouseLeave delay — we expect no collapse to
+    // have been scheduled at all.
+    await page.waitForTimeout(50);
+
+    // The menu must still be expanded.  Before the ct-hmv fix this
+    // assertion failed because handleActionClick unconditionally called
+    // setIsExpanded(false).
+    await expect(actionHandle).toHaveClass(/\bexpanded\b/);
+    await expect(actionHandle).not.toHaveClass(/\bcollapsed\b/);
+
+    // And the action bar (expanded content) should still be rendered.
+    await expect(actionHandle.getByTestId('action-handle-bar')).toBeVisible();
+  });
+
+  // Note: a secondary "cursor leaves -> collapse after 300ms" scenario was
+  // explored but skipped — React's synthetic onMouseLeave does not fire
+  // from a Playwright dispatchEvent('mouseleave') on a fixed overlay, and
+  // driving it via real mouse.move requires coordinating with the
+  // underlying canvas/camera pan handlers, which made the test flaky
+  // without adding meaningful coverage beyond the existing unit test in
+  // ActionHandle.test.tsx.  The touch-immediate-collapse path is also
+  // covered by that unit test.
 });

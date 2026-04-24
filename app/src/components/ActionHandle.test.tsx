@@ -8,11 +8,14 @@ import type { ActionContext } from '../actions/types';
 import type { YjsStore } from '../store/YjsStore';
 import * as Y from 'yjs';
 import type { TableObjectYMap } from '../store/types';
+import { isTouchDevice } from '../utils/detectTouch';
 
-// Mock isTouchDevice
+// Mock isTouchDevice so we can toggle desktop / touch per test.
 vi.mock('../utils/detectTouch', () => ({
-  isTouchDevice: () => false,
+  isTouchDevice: vi.fn(() => false),
 }));
+
+const mockedIsTouchDevice = vi.mocked(isTouchDevice);
 
 describe('ActionHandle', () => {
   let mockStore: YjsStore;
@@ -33,6 +36,9 @@ describe('ActionHandle', () => {
   ];
 
   beforeEach(() => {
+    // Default to desktop for all tests; individual tests can override.
+    mockedIsTouchDevice.mockReturnValue(false);
+
     // Reset registry
     registry = ActionRegistry.getInstance();
     registry['actions'].clear();
@@ -419,7 +425,11 @@ describe('ActionHandle', () => {
       expect(handle).toHaveClass('expanded');
     });
 
-    it('should execute action and collapse when action button clicked', () => {
+    it('should execute action and stay expanded when action button clicked on desktop', () => {
+      // Regression test for ct-hmv: clicking an action button while the
+      // cursor is still over the menu should NOT collapse the menu.  The
+      // existing onMouseLeave handler will collapse it when the cursor
+      // actually leaves.
       const onActionExecuted = vi.fn();
 
       render(
@@ -441,7 +451,36 @@ describe('ActionHandle', () => {
       // Should call onActionExecuted
       expect(onActionExecuted).toHaveBeenCalledWith('test-action-1');
 
-      // Should collapse
+      // Should stay expanded on desktop (cursor is still over the menu)
+      expect(handle).toHaveClass('expanded');
+      expect(handle).not.toHaveClass('collapsed');
+    });
+
+    it('should execute action and collapse when action button clicked on touch device', () => {
+      // On touch there is no hover lifecycle, so the menu must collapse
+      // after an action tap to avoid getting stuck open.
+      mockedIsTouchDevice.mockReturnValue(true);
+
+      const onActionExecuted = vi.fn();
+
+      render(
+        <ActionHandle
+          screenCoords={defaultScreenCoords}
+          actionContext={mockActionContext}
+          onActionExecuted={onActionExecuted}
+        />,
+      );
+
+      // Expand
+      const handle = screen.getByTestId('action-handle');
+      fireEvent.click(handle);
+      expect(handle).toHaveClass('expanded');
+
+      // Tap action button
+      const actionButton = screen.getByTestId('action-button-test-action-1');
+      fireEvent.click(actionButton);
+
+      expect(onActionExecuted).toHaveBeenCalledWith('test-action-1');
       expect(handle).toHaveClass('collapsed');
     });
 

@@ -32,5 +32,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
+    // Vitest 4's default 'forks' pool dies with EPIPE on GitHub Actions
+    // runners intermittently (parent-worker IPC pipe breaks mid-run).
+    // 'threads' uses in-process worker_threads with shared memory, no
+    // IPC — stable in CI and faster locally.
+    pool: 'threads',
   },
 });

@@ -393,12 +393,85 @@ When writing E2E tests that interact with canvas elements (especially React comp
 
 See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") for a complete example.
 
+### Autonomous Browser Verification (Playwright MCP)
+
+The project exposes dev-only helpers specifically so Claude can drive a real browser against the running dev server via Playwright MCP — without user-in-the-loop log copy/paste.
+
+**When to use.** Reach for browser verification when the change is user-visible or interaction-driven:
+- UI regressions (layout, styling, visibility)
+- Interaction bugs (drag, click, selection, keyboard)
+- Render behavior (animations, z-ordering, hover previews)
+
+**Do NOT** use it for pure logic (write a Vitest unit test), type safety (run `pnpm run typecheck`), or accessibility audits (out of scope).
+
+**Session lifecycle.**
+
+1. Ensure `pnpm run dev` is running (app on `:3000`, server on `:3001`).
+2. Load the MCP tool schemas via `ToolSearch` before the first browser call — deferred tools aren't invocable until loaded:
+   ```
+   ToolSearch("select:mcp__plugin_playwright_playwright__browser_navigate,mcp__plugin_playwright_playwright__browser_evaluate,mcp__plugin_playwright_playwright__browser_console_messages,mcp__plugin_playwright_playwright__browser_snapshot,mcp__plugin_playwright_playwright__browser_take_screenshot,mcp__plugin_playwright_playwright__browser_click,mcp__plugin_playwright_playwright__browser_close")
+   ```
+3. Navigate to a fresh table. Use a unique ID so IndexedDB doesn't restore stale state. Combine with a seed (see below) for deterministic starting scenes:
+   ```
+   browser_navigate(url="http://localhost:3000/table/claude-verify-<timestamp>?seed=stack-of-5&debug=drag,attach")
+   ```
+4. `browser_snapshot()` yields the ARIA tree with clickable `ref`s — use this (not screenshots) to target DOM clicks. Screenshots are for visual regression, not interaction.
+5. Iterate: interact, read console, adjust code, reload (navigate to a new unique ID rather than relying on hot reload — HMR sometimes leaves stale closures in the renderer).
+6. `browser_close()` when done.
+
+**Canvas interaction.** `page.mouse` won't trigger React's `onPointer*` handlers on `<canvas>`. Use `window.__ctTest` (dev-only, installed in DEV builds — see `app/src/dev/ctTest.ts`):
+```typescript
+browser_evaluate(function=`async () => {
+  const pts = window.__ctTest.probeObjects(2);       // first two objects
+  await window.__ctTest.drag(pts[0].world, { x: 200, y: 100 }, { steps: 10 });
+  return pts;
+}`);
+```
+The helper handles world -> viewport coord translation, dispatches real `PointerEvent`s, and supports modifier keys (`opts.modifiers = { altKey: true }` to force-attach, etc.). See `app/src/dev/ctTest.ts` for the full API and `app/e2e/selection.spec.ts:460` for the original pattern it mirrors.
+
+**Reading logs without flooding context.** Use the subsystem-scoped debug logger (`app/src/dev/dbg.ts`) rather than ephemeral `console.log` insertion:
+
+1. Enable only the subsystems you care about. Either via URL (`?debug=drag,attach`) or at runtime:
+   ```typescript
+   browser_evaluate(function=`() => window.__dbg.enable('drag', 'selection')`);
+   ```
+2. Perform the interaction.
+3. Filter output:
+   ```
+   browser_console_messages(level="info", filter="[DEBUG][drag]")
+   ```
+4. Disable when done: `window.__dbg.disableAll()`.
+
+All logs share the `[DEBUG]` prefix (project convention) with a `[subsystem]` tag for narrower filtering. See `app/src/dev/dbg.ts` for the API and known subsystems.
+
+**Scene seeds.** Prefer URL-param seeds over manual setup clicks — the setup then can't drift. See `app/src/dev/seeds/index.ts`:
+- `?seed=empty-table` — blank slate
+- `?seed=single-card` — one face-up card at origin
+- `?seed=stack-of-5` — five-card stack at origin
+- `?seed=two-stacks` — two stacks spaced for drag/merge
+- `?seed=attachment-pair` — two single-card stacks for attach testing
+
+Seeds only apply to empty tables (won't clobber existing state) and are dev-only (tree-shaken from production). Add new ones under `SEED_REGISTRY` in `app/src/dev/seeds/index.ts` — ~10 lines per seed.
+
+**Verification discipline.**
+
+- **Prefer state queries over screenshots.** `browser_evaluate(() => window.__TEST_STORE__.objects.size)` tells you more than a pixel diff. Reserve screenshots for genuine visual regressions.
+- **New URL per iteration.** HMR sometimes preserves worker/renderer state across hot reloads. Navigating to a fresh `tableId` guarantees a clean slate.
+- **Snapshot before click.** Element `ref`s in `browser_click` come from `browser_snapshot` — always snapshot first, don't guess refs.
+- **One assertion per evaluate.** If you need multiple facts, return an object from `browser_evaluate`. Multiple sequential evaluates can interleave with other work.
+- **Known gotcha:** The `/table/$id` route passes `showDebugUI={false}`, so `window.__TEST_BOARD__` (waitForRenderer, etc.) is **not** available there — only on the dev route `/dev/table/$id` or E2E builds. If you need `waitForRenderer`, prefer the dev route.
+
 ### Code Style
 - TypeScript strict mode enabled
 - ESLint + Prettier configured
 - Pre-commit hooks auto-format code
 - Pre-push hooks run typecheck
-- **Debug logging convention**: When adding temporary `console.log` statements for debugging a problem, ALL debug logs across ALL files MUST use the same prefix (e.g., `[DEBUG-ATTACH]`, `[DEBUG-DRAG]`). This lets the user filter console output with a single string. Never use different prefixes per file or per function.
+- **Debug logging convention**: Prefer the subsystem-scoped logger in `app/src/dev/dbg.ts` over ephemeral `console.log` insertion:
+  ```typescript
+  import { dbg } from '@/dev/dbg';
+  dbg('drag', 'pointerdown at', x, y);  // emits [DEBUG][drag] ... only when enabled
+  ```
+  Enable subsystems via `window.__dbg.enable('drag')`, `?debug=drag,attach` URL param, or persistent localStorage. All messages share the `[DEBUG]` prefix so the user can filter console output with a single search term (per this project's historical convention); the `[subsystem]` tag lets you narrow further. If you must insert an ephemeral `console.log`, still use the `[DEBUG-X]` single-prefix convention so the user can filter — never use different prefixes per file or per function.
 - **CRITICAL - NEVER VIOLATE THIS RULE**: Suppression comments are FORBIDDEN without explicit user approval
   - **NEVER** add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments
   - **ALWAYS** fix the underlying type/lint issue properly first

@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
 import type { YjsStore } from './store/YjsStore';
+import type { CtTestApi } from './dev/ctTest';
+import type { DbgApi } from './dev/dbg';
 
 // Extend ImportMetaEnv for custom environment variables
 interface ImportMetaEnv {
@@ -24,5 +26,14 @@ declare global {
       ) => Promise<boolean>;
       waitForAnimationsComplete: (timeout?: number) => Promise<void>;
     };
+    /**
+     * Dev-only canvas interaction helpers for autonomous browser
+     * verification via Playwright MCP.  See `app/src/dev/ctTest.ts`.
+     */
+    __ctTest?: CtTestApi;
+    /**
+     * Dev-only subsystem-scoped debug logger.  See `app/src/dev/dbg.ts`.
+     */
+    __dbg?: DbgApi;
   }
 }

@@ -3,11 +3,13 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
 import { installCtTest } from './dev/ctTest';
+import { installCtDevTools } from './dev/ctDevTools';
 import { installDbg } from './dev/dbg';
 import './index.css';
 
 // Install dev-only helpers (no-op in production builds).
 installCtTest();
+installCtDevTools();
 installDbg();
 
 // Create the router instance

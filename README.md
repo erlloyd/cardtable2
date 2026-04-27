@@ -202,6 +202,16 @@ Pull requests automatically deploy preview environments to Railway with unique U
 - No suppression comments without approval (`@ts-ignore`, `eslint-disable`, etc.)
 - Comprehensive test coverage required
 
+## Troubleshooting
+
+If a user reports a broken table — for example, after a backwards-incompatible data-model change or other corruption — instruct them to open the browser dev tools console on the affected page and run:
+
+```js
+window.__ctDevTools.clearAllTables();
+```
+
+Then reload the page. This deletes all locally persisted IndexedDB state for Cardtable; if the table is connected to a multiplayer server with a stale doc, that may also need clearing server-side. To clear a single table only, use `window.__ctDevTools.clearTable('<tableId>')`.
+
 ## License
 
 [License information to be added]

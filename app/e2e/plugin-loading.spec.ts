@@ -5,7 +5,7 @@
  * Full integration testing of plugin loading is covered by unit tests.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 test.describe('Plugin Loading E2E', () => {
   test.beforeEach(async ({ page }, testInfo) => {
@@ -31,7 +31,6 @@ test.describe('Plugin Loading E2E', () => {
     // Wait for __TEST_BOARD__ to be available
     await page.waitForFunction(
       () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (globalThis as any).__TEST_BOARD__ !== undefined;
       },
       { timeout: 5000 },
@@ -39,7 +38,6 @@ test.describe('Plugin Loading E2E', () => {
 
     // Wait for renderer to process all messages
     await page.evaluate(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (globalThis as any).__TEST_BOARD__.waitForRenderer();
     });
   });
@@ -135,7 +133,6 @@ test.describe('Plugin Loading E2E', () => {
 
     // Verify objects were created successfully
     const objectCount = await page.evaluate(() => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const store = (globalThis as any).__TEST_STORE__;
       return store.getAllObjects().size;
     });

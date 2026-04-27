@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 test.describe('Global Menu Bar (M3.5.1-T5)', () => {
   test('should display Command Palette and Settings buttons', async ({

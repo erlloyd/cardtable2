@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 /**
  * E2E tests for camera controls (M2-T3)

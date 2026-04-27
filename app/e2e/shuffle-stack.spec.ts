@@ -1,10 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * E2E Tests for Shuffle Stack Operation
- *
- * ESLint suppression above is necessary for Playwright E2E tests.
- * We must access globalThis (typed as any) to reach test-only globals like __TEST_STORE__.
  *
  * Tests the shuffle stack workflow:
  * - Keyboard shortcut 'S' to shuffle
@@ -14,7 +9,7 @@
  * - Shuffled order persists after page refresh
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 // Define minimal interfaces for type safety in page.evaluate()
 interface TestStore {

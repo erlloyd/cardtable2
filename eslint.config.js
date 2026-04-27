@@ -111,9 +111,9 @@ export default tseslint.config(
     },
   },
 
-  // E2E test files (Playwright)
+  // E2E test files (Playwright) — includes specs and shared E2E helpers
   {
-    files: ['app/e2e/**/*.spec.{ts,tsx}'],
+    files: ['app/e2e/**/*.{ts,tsx}'],
     extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -130,7 +130,14 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/require-await': 'off',
+      // Playwright fixtures and tests reuse parameter names like `use` that
+      // trip the React Hooks heuristic; the rule is irrelevant here.
+      'react-hooks/rules-of-hooks': 'off',
     },
   },
 

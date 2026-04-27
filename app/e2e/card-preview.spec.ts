@@ -12,7 +12,7 @@
  * a loaded scenario (e.g., Marvel Champions) is recommended.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 test.describe('Card Preview - Event Handling', () => {
   test.beforeEach(async ({ page }, testInfo) => {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { ObjectKind } from '@cardtable2/shared';
 
 // Define minimal store interface for type safety in page.evaluate()
@@ -79,14 +79,6 @@ test.describe('Migrations (M3.5-T1)', () => {
     });
 
     expect(tokenAfterMigration).toHaveProperty('_faceUp', true);
-
-    // Clean up
-    await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
-      if (__TEST_STORE__) {
-        __TEST_STORE__.clearAllObjects();
-      }
-    });
   });
 
   test('should migrate old stacks to add missing _faceUp and _cards', async ({
@@ -158,14 +150,6 @@ test.describe('Migrations (M3.5-T1)', () => {
     expect(
       Array.isArray((stackAfterMigration as { _cards: unknown[] })._cards),
     ).toBe(true);
-
-    // Clean up
-    await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
-      if (__TEST_STORE__) {
-        __TEST_STORE__.clearAllObjects();
-      }
-    });
   });
 
   test('should preserve existing _faceUp values during migration', async ({
@@ -225,14 +209,6 @@ test.describe('Migrations (M3.5-T1)', () => {
     });
 
     expect(tokenAfterMigration).toHaveProperty('_faceUp', false);
-
-    // Clean up
-    await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
-      if (__TEST_STORE__) {
-        __TEST_STORE__.clearAllObjects();
-      }
-    });
   });
 
   test("should handle mixed scenarios (some need migration, some don't)", async ({
@@ -350,13 +326,5 @@ test.describe('Migrations (M3.5-T1)', () => {
     expect((objects.newStack as { _cards: string[] })._cards).toEqual([
       'card1',
     ]);
-
-    // Clean up
-    await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
-      if (__TEST_STORE__) {
-        __TEST_STORE__.clearAllObjects();
-      }
-    });
   });
 });

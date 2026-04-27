@@ -136,6 +136,17 @@ Prefer URL-param seeds over manual setup clicks — the setup then can't drift. 
 
 Seeds only apply to empty tables (won't clobber existing state) and are dev-only (tree-shaken from production). Add new ones under `SEED_REGISTRY` in `app/src/dev/seeds/index.ts` — ~10 lines per seed.
 
+### Clearing IndexedDB (`__ctDevTools`)
+
+Persisted table state lives in IndexedDB as `cardtable-<tableId>` databases (created by y-indexeddb in `YjsStore`). When stale CRDT state is interfering with a repro — or when an on-disk schema change makes old data unusable — clear it from the console. Helper installed in DEV only (tree-shaken from production); see `app/src/dev/ctDevTools.ts`:
+
+```typescript
+window.__ctDevTools.clearAllTables(): Promise<{ deleted: string[]; failed: string[] }>
+window.__ctDevTools.clearTable(tableId: string): Promise<void>
+```
+
+`clearAllTables()` enumerates IDB via `indexedDB.databases()` (not implemented in Firefox — fall back to `clearTable` there) and deletes every database whose name starts with `cardtable-`. `clearTable(tableId)` deletes a single one. Both log a "RELOAD THE PAGE" instruction on completion — the in-memory `YjsStore` for the current table is divorced from persistence after clearing, so reload is the cheapest correct action.
+
 ### Verification discipline
 
 - **Prefer state queries over screenshots.** `browser_evaluate(() => window.__TEST_STORE__.objects.size)` tells you more than a pixel diff. Reserve screenshots for genuine visual regressions.

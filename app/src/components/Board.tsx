@@ -38,6 +38,9 @@ import { useDebugHandlers } from '../hooks/useDebugHandlers';
 // Message Bus
 import { BoardMessageBus } from './Board/BoardMessageBus';
 
+// Debug logger
+import { dbg } from '../dev/dbg';
+
 // UI Components
 import {
   DebugPanel,
@@ -290,15 +293,31 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       cardScreenWidth?: number,
       cardScreenHeight?: number,
     ) => {
+      dbg(
+        'hover',
+        'Board.setHoveredObject called:',
+        'objectId=',
+        objectId,
+        'isFaceUp=',
+        isFaceUp,
+        'cardScreenWidth=',
+        cardScreenWidth,
+        'cardScreenHeight=',
+        cardScreenHeight,
+      );
       // If hover cleared or not face-up, hide preview
       if (!objectId || !isFaceUp) {
+        dbg('hover', 'Board.setHoveredObject -> CLEARING previewCard');
         setPreviewCard(null);
         setPreviewPosition(null);
         return;
       }
 
       // Suppress hover preview during phantom drag
-      if (isPhantomDragActive) return;
+      if (isPhantomDragActive) {
+        dbg('hover', 'Board.setHoveredObject -> suppressed (phantom drag)');
+        return;
+      }
 
       // Get the card using helper
       const card = getCardFromStack(objectId);
@@ -352,6 +371,13 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       x = Math.max(offset, x);
       y = Math.max(offset, y);
 
+      dbg(
+        'hover',
+        'Board.setHoveredObject -> SETTING previewCard at',
+        { x, y },
+        'for',
+        objectId,
+      );
       setPreviewPosition({ x, y });
       setPreviewCard(card);
     },
@@ -473,6 +499,44 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       canvasRef.current.style.cursor = cursorStyle;
     }
   }, [cursorStyle]);
+
+  // DEBUG (hover): attach pointerenter/pointerleave listeners on the canvas
+  // to observe DOM-level events during hover preview investigation.
+  useEffect(() => {
+    if (!(import.meta.env.DEV || import.meta.env.VITE_E2E)) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onEnter = (e: PointerEvent) => {
+      dbg(
+        'hover',
+        'canvas pointerenter',
+        'clientX=',
+        e.clientX,
+        'clientY=',
+        e.clientY,
+        'pointerType=',
+        e.pointerType,
+      );
+    };
+    const onLeave = (e: PointerEvent) => {
+      dbg(
+        'hover',
+        'canvas pointerleave',
+        'clientX=',
+        e.clientX,
+        'clientY=',
+        e.clientY,
+        'pointerType=',
+        e.pointerType,
+      );
+    };
+    canvas.addEventListener('pointerenter', onEnter);
+    canvas.addEventListener('pointerleave', onLeave);
+    return () => {
+      canvas.removeEventListener('pointerenter', onEnter);
+      canvas.removeEventListener('pointerleave', onLeave);
+    };
+  }, [isCanvasInitialized]);
 
   // Test API
   useTestAPI(

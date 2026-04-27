@@ -847,6 +847,19 @@ export function handlePointerLeave(
     context.hover.clearHover(hoveredId);
     context.app.renderer.render(context.app.stage);
   }
+
+  // ct-zqc: Notify main thread that hover cleared so React previewCard state
+  // resets. This is symmetrical with the hover-cleared/null-transition
+  // postResponse path in handlePointerMove (which posts an object-hovered
+  // message with objectId: null when hover transitions away). Without this,
+  // the next pointermove on canvas hits the null===null short-circuit in
+  // HoverManager.setHoveredObject and emits no message, leaving the preview
+  // stuck onscreen.
+  context.postResponse({
+    type: 'object-hovered',
+    objectId: null,
+    isFaceUp: false,
+  });
 }
 
 // Double-tap tracking for mobile card preview

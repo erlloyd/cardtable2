@@ -15,6 +15,7 @@ import {
   detachCard,
 } from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
+import { dbg } from '../../dev/dbg';
 
 export interface BoardHandlerContext {
   // Core dependencies
@@ -438,6 +439,14 @@ export class BoardMessageBus {
     });
 
     this.registry.register('object-hovered', (msg, ctx) => {
+      dbg(
+        'hover',
+        'BoardMessageBus received object-hovered:',
+        'objectId=',
+        msg.objectId,
+        'isFaceUp=',
+        msg.isFaceUp,
+      );
       ctx.setHoveredObject(
         msg.objectId,
         msg.isFaceUp,

@@ -1,20 +1,25 @@
 import { useState } from 'react';
-import { Game } from '../types/game';
+import type { PluginRegistryEntry } from '../content/pluginLoader';
 
 interface GameSelectorProps {
-  games: Game[];
-  onGameLaunch: (game: Game) => void;
+  games: PluginRegistryEntry[];
+  onGameLaunch: (game: PluginRegistryEntry) => void;
 }
 
-function GameCardThumb({ game }: { game: Game }) {
+function getDisplayName(game: PluginRegistryEntry): string {
+  return game.displayName ?? game.name;
+}
+
+function GameCardThumb({ game }: { game: PluginRegistryEntry }) {
   const [imgError, setImgError] = useState(false);
+  const displayName = getDisplayName(game);
 
   if (game.boxArt && !imgError) {
     return (
       <img
         className="game-card__thumb"
         src={game.boxArt}
-        alt={game.name}
+        alt={displayName}
         onError={() => setImgError(true)}
         loading="lazy"
       />
@@ -23,7 +28,7 @@ function GameCardThumb({ game }: { game: Game }) {
 
   return (
     <div className="game-card__icon" aria-hidden="true">
-      {game.name.charAt(0)}
+      {displayName.charAt(0)}
     </div>
   );
 }
@@ -34,7 +39,9 @@ function GameSelector({ games, onGameLaunch }: GameSelectorProps) {
   const filteredGames =
     query === ''
       ? games
-      : games.filter((g) => g.name.toLowerCase().includes(query.toLowerCase()));
+      : games.filter((g) =>
+          getDisplayName(g).toLowerCase().includes(query.toLowerCase()),
+        );
 
   const isMulti = games.length > 1;
 
@@ -79,23 +86,30 @@ function GameSelector({ games, onGameLaunch }: GameSelectorProps) {
           role="list"
           aria-label="Available games"
         >
-          {filteredGames.map((game) => (
-            <button
-              key={game.id}
-              className="game-card"
-              aria-label={`Select ${game.name}`}
-              onClick={() => onGameLaunch(game)}
-            >
-              <div className="game-card__header">
-                <GameCardThumb game={game} />
-                <div className="game-card__meta">
-                  <span className="game-card__name">{game.name}</span>
-                  <span className="game-card__version">v{game.version}</span>
+          {filteredGames.map((game) => {
+            const displayName = getDisplayName(game);
+            return (
+              <button
+                key={game.id}
+                className="game-card"
+                aria-label={`Select ${displayName}`}
+                onClick={() => onGameLaunch(game)}
+              >
+                <div className="game-card__header">
+                  <GameCardThumb game={game} />
+                  <div className="game-card__meta">
+                    <span className="game-card__name">{displayName}</span>
+                    {game.version && (
+                      <span className="game-card__version">
+                        v{game.version}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <p className="game-card__description">{game.description}</p>
-            </button>
-          ))}
+                <p className="game-card__description">{game.description}</p>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

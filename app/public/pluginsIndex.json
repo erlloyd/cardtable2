@@ -3,15 +3,20 @@
     {
       "id": "testgame",
       "name": "Test Game",
+      "displayName": "Test Game",
       "author": "CardTable",
       "description": "A minimal test game for validating the content system",
+      "version": "1.0.0",
       "baseUrl": "/plugins/testgame/"
     },
     {
-      "id": "marvelchampions",
+      "id": "marvel-champions",
       "name": "Marvel Champions",
+      "displayName": "Marvel Champions",
       "author": "CardTable Community",
-      "description": "Marvel Champions: The Card Game - Core Set and expansions",
+      "description": "A cooperative Living Card Game where players take on the roles of Marvel heroes to thwart the schemes of villains.",
+      "version": "1.0.0",
+      "boxArt": "/games/marvel-champions/box-art.jpg",
       "baseUrl": "https://raw.githubusercontent.com/erlloyd/cardtable-plugin-marvelchampions/main/"
     }
   ]

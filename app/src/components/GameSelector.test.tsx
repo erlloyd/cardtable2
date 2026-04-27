@@ -2,33 +2,36 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import GameSelector from './GameSelector';
-import { Game } from '../types/game';
+import type { PluginRegistryEntry } from '../content/pluginLoader';
 
-const mockGames: Game[] = [
+const mockGames: PluginRegistryEntry[] = [
   {
     id: 'fake-game',
     name: 'Fake Game',
+    author: 'Test Author',
     description: 'A placeholder game',
     version: '1.0.0',
-    manifestUrl: '/games/fake-game/manifest.json',
+    baseUrl: '/plugins/fake-game/',
   },
   {
     id: 'test-game',
     name: 'Test Game',
+    author: 'Test Author',
     description: 'Another test game',
     version: '1.0.0',
-    manifestUrl: '/games/test-game/manifest.json',
+    baseUrl: '/plugins/test-game/',
   },
 ];
 
-const singleGame: Game[] = [mockGames[0]];
+const singleGame: PluginRegistryEntry[] = [mockGames[0]];
 
-const gameWithBoxArt: Game = {
+const gameWithBoxArt: PluginRegistryEntry = {
   id: 'art-game',
   name: 'Art Game',
+  author: 'Test Author',
   description: 'A game with box art',
   version: '1.0.0',
-  manifestUrl: '/games/art-game/manifest.json',
+  baseUrl: '/plugins/art-game/',
   boxArt: '/games/art-game/box-art.jpg',
 };
 
@@ -201,6 +204,33 @@ describe('GameSelector', () => {
 
     const versions = screen.getAllByText('v1.0.0');
     expect(versions.length).toBeGreaterThan(0);
+  });
+
+  it('omits the version label when entry has no version', () => {
+    const versionless: PluginRegistryEntry = {
+      id: 'no-version',
+      name: 'No Version Game',
+      author: 'Test Author',
+      description: 'Has no version field',
+      baseUrl: '/plugins/no-version/',
+    };
+    render(<GameSelector games={[versionless]} onGameLaunch={vi.fn()} />);
+    expect(screen.queryByText(/^v/)).not.toBeInTheDocument();
+  });
+
+  it('prefers displayName over name when present', () => {
+    const withDisplay: PluginRegistryEntry = {
+      id: 'displayed',
+      name: 'internal-name',
+      displayName: 'Pretty Display Name',
+      author: 'Test Author',
+      description: 'desc',
+      baseUrl: '/plugins/displayed/',
+    };
+    render(<GameSelector games={[withDisplay]} onGameLaunch={vi.fn()} />);
+    expect(
+      screen.getByRole('button', { name: 'Select Pretty Display Name' }),
+    ).toBeInTheDocument();
   });
 
   it('empty state message includes the search query', async () => {

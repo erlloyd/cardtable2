@@ -35,6 +35,12 @@ export interface PluginRegistryEntry {
   author: string;
   description: string;
   baseUrl: string;
+  /** Optional human-friendly display name. Falls back to `name` when absent. */
+  displayName?: string;
+  /** Optional version string surfaced on the game-select UI. */
+  version?: string;
+  /** Optional box-art image URL surfaced on the game-select UI. */
+  boxArt?: string;
 }
 
 export interface PluginManifest {

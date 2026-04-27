@@ -23,6 +23,24 @@ export default tseslint.config(
   // TypeScript recommended (non-type-aware)
   ...tseslint.configs.recommended,
 
+  // Project-wide TypeScript rules
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      // Forbid inline import() types (e.g., `x: import('foo').Bar`).
+      // CLAUDE.md mandates a top-of-file `import type` instead — inline
+      // imports hide dependencies from search/IDE tooling.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TSImportType',
+          message:
+            'Do not use inline import() types. Add a top-of-file `import type { Foo } from "..."` and reference Foo by name instead.',
+        },
+      ],
+    },
+  },
+
   // Frontend/React - Type-aware linting
   {
     files: ['app/**/*.{ts,tsx}'],

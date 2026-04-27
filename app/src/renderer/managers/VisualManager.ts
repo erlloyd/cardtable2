@@ -1,4 +1,5 @@
 import { Application, Container, Graphics, BlurFilter, Text } from 'pixi.js';
+import type { TextOptions } from 'pixi.js';
 import type { TableObject, GameAssets } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
@@ -774,7 +775,7 @@ export class VisualManager {
    * WARNING: If you pass a `resolution` option, it will be OVERRIDDEN by the
    * zoom-aware resolution calculation. Let this helper manage resolution automatically.
    */
-  createText(options: import('pixi.js').TextOptions): Text {
+  createText(options: TextOptions): Text {
     // Validate text resolution multiplier
     if (
       !Number.isFinite(this.textResolutionMultiplier) ||

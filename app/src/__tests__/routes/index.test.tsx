@@ -17,8 +17,8 @@ const mockPluginRegistry: PluginRegistry = {
       name: 'Fake Game',
       author: 'Test Author',
       description: 'A placeholder game',
-      version: '1.0.0',
       baseUrl: '/plugins/fake-game/',
+      boxArt: '/plugins/fake-game/box-art.jpg',
     },
   ],
 };

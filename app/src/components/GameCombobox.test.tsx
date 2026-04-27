@@ -9,16 +9,16 @@ const mockGames: PluginRegistryEntry[] = [
     name: 'Fake Game',
     author: 'Test Author',
     description: 'A placeholder game',
-    version: '1.0.0',
     baseUrl: '/plugins/fake-game/',
+    boxArt: '/plugins/fake-game/box-art.jpg',
   },
   {
     id: 'test-game',
     name: 'Test Game',
     author: 'Test Author',
     description: 'Another test game',
-    version: '1.0.0',
     baseUrl: '/plugins/test-game/',
+    boxArt: '/plugins/test-game/box-art.jpg',
   },
 ];
 

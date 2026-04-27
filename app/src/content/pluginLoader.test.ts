@@ -21,6 +21,7 @@ const mockRegistryEntry: PluginRegistryEntry = {
   author: 'Test Author',
   description: 'A test plugin',
   baseUrl: 'https://example.com/plugins/test-plugin/',
+  boxArt: 'https://example.com/plugins/test-plugin/box-art.jpg',
 };
 
 const mockRegistry: PluginRegistry = {
@@ -32,6 +33,7 @@ const mockRegistry: PluginRegistry = {
       author: 'Another Author',
       description: 'Another test plugin',
       baseUrl: 'https://example.com/plugins/another-plugin/',
+      boxArt: 'https://example.com/plugins/another-plugin/box-art.jpg',
     },
   ],
 };

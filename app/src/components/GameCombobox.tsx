@@ -14,10 +14,6 @@ interface GameComboboxProps {
   onGameSelect: (game: PluginRegistryEntry | null) => void;
 }
 
-function getDisplayName(game: PluginRegistryEntry): string {
-  return game.displayName ?? game.name;
-}
-
 function GameCombobox({
   games,
   selectedGame,
@@ -29,7 +25,7 @@ function GameCombobox({
     query === ''
       ? games
       : games.filter((game) =>
-          getDisplayName(game).toLowerCase().includes(query.toLowerCase()),
+          game.name.toLowerCase().includes(query.toLowerCase()),
         );
 
   return (
@@ -39,7 +35,7 @@ function GameCombobox({
           <ComboboxInput
             className="combobox-input"
             displayValue={(game: PluginRegistryEntry | null) =>
-              game ? getDisplayName(game) : ''
+              game?.name ?? ''
             }
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Select a game..."
@@ -55,7 +51,7 @@ function GameCombobox({
             >
               {({ active }) => (
                 <div className={active ? 'active' : ''}>
-                  <div className="game-name">{getDisplayName(game)}</div>
+                  <div className="game-name">{game.name}</div>
                   <div className="game-description">{game.description}</div>
                 </div>
               )}

@@ -650,8 +650,18 @@ h1 {
   pointer-events: none;
 }
 
+/*
+ * Hover preview wrapper inherits pointer-events: none from .card-preview-container.
+ * This prevents the wrapper from creating a "dead zone" over the canvas, which would
+ * fire pointerleave on the canvas as the cursor crosses the preview rectangle and
+ * leave the hover-clear path stuck (see ct-zqc).
+ *
+ * Modal mode uses a different early-return path in CardPreview.tsx (line 125 hover
+ * branch returns before the modal/CardSet branches), so this rule only affects
+ * hover-mode previews.
+ */
 .card-preview-wrapper {
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .card-preview-box {

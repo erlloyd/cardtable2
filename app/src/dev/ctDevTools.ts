@@ -1,11 +1,12 @@
 /**
- * Dev-only IndexedDB management helpers.
+ * Developer-facing IndexedDB management helpers.
  *
- * Exposed at `window.__ctDevTools` when `import.meta.env.DEV` is true (see
- * `main.tsx`).  Intended for console use to clear stale persisted CRDT
- * state — useful for debugging y-indexeddb desync, exercising the
- * "fresh-load" code path, and as a manual fallback for migrations that
- * change the on-disk schema.
+ * Exposed at `window.__ctDevTools` in **all** builds (DEV and production)
+ * — see `main.tsx`.  "Dev" in the name means "developer-facing console
+ * API," not "dev-build-only": shipping it in production lets support /
+ * developers guide affected users through a reset when an on-disk schema
+ * change or other regression breaks a session.  No UI is exposed; the
+ * helper is reachable only from the browser console.
  *
  * Naming convention
  * -----------------
@@ -23,10 +24,31 @@
  * After clearing, the in-memory `YjsStore` for the current table is
  * divorced from persistence.  We log a clear "reload the page"
  * instruction so the user gets a clean slate; reloading is the cheapest
- * correct action.
+ * correct action.  A connected y-websocket session can repopulate the
+ * recreated IDB from the server — that's expected; this helper clears
+ * local persistence only.
  */
 
 const DB_PREFIX = 'cardtable-';
+
+/**
+ * Module-level flag so the destructive-action warning fires exactly once
+ * per page session — first invocation of either entry point triggers it,
+ * subsequent calls in the same load do not.  Reset on full reload, which
+ * is what we already instruct the user to do anyway.
+ */
+let warnedThisSession = false;
+
+const FIRST_CALL_WARNING =
+  '[ctDevTools] This deletes local table data.  Connected y-websocket ' +
+  'sessions can repopulate from the server.  Reload the page after this ' +
+  'completes.';
+
+function warnOnce(): void {
+  if (warnedThisSession) return;
+  warnedThisSession = true;
+  console.warn(FIRST_CALL_WARNING);
+}
 
 export interface CtDevToolsApi {
   /**
@@ -113,6 +135,7 @@ async function listOurDatabaseNames(): Promise<string[]> {
 export function createCtDevToolsApi(): CtDevToolsApi {
   return {
     async clearAllTables() {
+      warnOnce();
       const names = await listOurDatabaseNames();
       const deleted: string[] = [];
       const failed: string[] = [];
@@ -152,6 +175,7 @@ export function createCtDevToolsApi(): CtDevToolsApi {
     },
 
     async clearTable(tableId) {
+      warnOnce();
       const name = `${DB_PREFIX}${tableId}`;
       await deleteDatabase(name);
       console.log(`[ctDevTools] cleared IndexedDB database: ${name}`);
@@ -164,18 +188,25 @@ export function createCtDevToolsApi(): CtDevToolsApi {
 }
 
 /**
- * Install `window.__ctDevTools` in development builds.  Idempotent.
- * Safe to call at app startup.  Tree-shaken from production: the
- * `import.meta.env.DEV` guard collapses to `false` under Vite's prod
- * build, so the closure (and all imports referenced only from it) drop
- * out.
+ * Install `window.__ctDevTools` in all builds (DEV and production).
+ * Idempotent.  Safe to call at app startup.  Intentionally NOT gated on
+ * `import.meta.env.DEV` — see file header for rationale (developer-
+ * facing API, not dev-build-only; needed in prod for support).
  */
 export function installCtDevTools(): void {
-  if (!import.meta.env.DEV) return;
   if (window.__ctDevTools) return;
   window.__ctDevTools = createCtDevToolsApi();
   console.log(
-    '[ctDevTools] installed window.__ctDevTools (dev-only helper).  ' +
+    '[ctDevTools] installed window.__ctDevTools (developer console helper).  ' +
       'Use __ctDevTools.clearAllTables() or __ctDevTools.clearTable(id).',
   );
+}
+
+/**
+ * Test-only helper to reset the once-per-session warn flag between
+ * tests.  Not part of the public surface.
+ */
+export function __resetCtDevToolsForTests(): void {
+  warnedThisSession = false;
+  delete window.__ctDevTools;
 }

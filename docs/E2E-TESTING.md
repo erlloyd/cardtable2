@@ -138,14 +138,14 @@ Seeds only apply to empty tables (won't clobber existing state) and are dev-only
 
 ### Clearing IndexedDB (`__ctDevTools`)
 
-Persisted table state lives in IndexedDB as `cardtable-<tableId>` databases (created by y-indexeddb in `YjsStore`). When stale CRDT state is interfering with a repro — or when an on-disk schema change makes old data unusable — clear it from the console. Helper installed in DEV only (tree-shaken from production); see `app/src/dev/ctDevTools.ts`:
+Persisted table state lives in IndexedDB as `cardtable-<tableId>` databases (created by y-indexeddb in `YjsStore`). When stale CRDT state is interfering with a repro — or when an on-disk schema change makes old data unusable — clear it from the console. Helper is installed on `window.__ctDevTools` in **all builds (DEV and production)**; see `app/src/dev/ctDevTools.ts`. Production exposure is intentional so support can guide affected users through a reset; the helper has no UI and is reachable only from the console:
 
 ```typescript
 window.__ctDevTools.clearAllTables(): Promise<{ deleted: string[]; failed: string[] }>
 window.__ctDevTools.clearTable(tableId: string): Promise<void>
 ```
 
-`clearAllTables()` enumerates IDB via `indexedDB.databases()` (not implemented in Firefox — fall back to `clearTable` there) and deletes every database whose name starts with `cardtable-`. `clearTable(tableId)` deletes a single one. Both log a "RELOAD THE PAGE" instruction on completion — the in-memory `YjsStore` for the current table is divorced from persistence after clearing, so reload is the cheapest correct action.
+`clearAllTables()` enumerates IDB via `indexedDB.databases()` (not implemented in Firefox — fall back to `clearTable` there) and deletes every database whose name starts with `cardtable-`. `clearTable(tableId)` deletes a single one. The first call per page session emits a `console.warn` describing the destructive shape; both entry points then log a "RELOAD THE PAGE" instruction on completion — the in-memory `YjsStore` for the current table is divorced from persistence after clearing, so reload is the cheapest correct action. A connected y-websocket session may repopulate the recreated IDB from the server; that's expected, the helper clears local persistence only.
 
 ### Verification discipline
 

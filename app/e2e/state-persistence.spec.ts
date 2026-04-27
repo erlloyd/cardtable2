@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, skipNextAutoClear } from './_fixtures';
 import { ObjectKind } from '@cardtable2/shared';
 
 // Define minimal store interface for type safety in page.evaluate()
@@ -40,15 +40,7 @@ test.describe('State Persistence (M3-T1)', () => {
       timeout: 5000,
     });
 
-    // Clear any leftover objects from previous test runs
-    await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
-      if (__TEST_STORE__) {
-        __TEST_STORE__.clearAllObjects();
-      }
-    });
-
-    // Wait for UI to update - expect "Objects: 0" to be visible
+    // Fixture has cleared the store; UI should reflect that.
     await expect(page.getByText(/Objects: 0/)).toBeVisible({ timeout: 2000 });
 
     // Add test objects directly to the store via browser console
@@ -124,7 +116,8 @@ test.describe('State Persistence (M3-T1)', () => {
     expect(objectIds).toContain('test-stack-1');
     expect(objectIds).toContain('test-token-1');
 
-    // Clean up - clear all objects for the next test
+    // Mid-test clear verifies clearAllObjects() works on a populated table
+    // (the fixture's auto-clear runs only on navigation, so this is meaningful).
     await page.evaluate(() => {
       declare const __TEST_STORE__: TestStore;
       if (__TEST_STORE__) {
@@ -132,7 +125,7 @@ test.describe('State Persistence (M3-T1)', () => {
       }
     });
 
-    // Verify cleanup worked
+    // Verify the in-test clear worked
     await page.waitForTimeout(200);
     await expect(page.getByText(/Objects: 0/)).toBeVisible();
   });
@@ -186,7 +179,10 @@ test.describe('State Persistence (M3-T1)', () => {
     // Second table should start with 0 objects (different IndexedDB)
     await expect(page.getByText(/Objects: 0/)).toBeVisible();
 
-    // Navigate back to first table
+    // Navigate back to first table; skip auto-clear so the previously-added
+    // object survives — this test is specifically verifying cross-table
+    // persistence.
+    skipNextAutoClear(page);
     await page.goto(`/dev/table/${tableId1}`);
     await page.waitForSelector('[data-testid="board"]');
     await expect(page.getByText(/Store:.*✓ Ready/)).toBeVisible({
@@ -195,13 +191,5 @@ test.describe('State Persistence (M3-T1)', () => {
 
     // First table should still have its object
     await expect(page.getByText(/Objects: 1/)).toBeVisible();
-
-    // Clean up both tables
-    await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
-      if (__TEST_STORE__) {
-        __TEST_STORE__.clearAllObjects();
-      }
-    });
   });
 });

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * E2E Tests for ActionHandle (M3.5.1-T6)
  *
@@ -12,7 +10,7 @@
  * - Smart positioning fallback logic
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 // Define minimal interfaces for type safety in page.evaluate()
 interface TestStore {

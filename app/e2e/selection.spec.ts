@@ -1,18 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
- * ESLint suppression above is necessary for Playwright E2E tests.
+ * E2E Tests for Selection Ownership.
  *
- * Playwright's page.evaluate() runs code in the browser context where:
- * 1. We must access globalThis (typed as any) to reach test-only globals like __TEST_STORE__
- * 2. document.querySelector returns generic Element types that need unsafe access
- * 3. We cannot import type definitions into the browser sandbox
- *
- * These suppressions are standard practice for Playwright tests and don't indicate
- * actual type safety issues - TypeScript compilation passes without errors.
+ * Note: Playwright's page.evaluate() runs in the browser context, so we
+ * access `globalThis` loosely to reach test-only globals like __TEST_STORE__.
+ * The shared E2E ESLint config (see eslint.config.js) relaxes the relevant
+ * `no-unsafe-*` and `no-explicit-any` rules for this directory.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 import { dumpDebugState } from './test-helpers';
 
 // Define minimal interfaces for type safety in page.evaluate()

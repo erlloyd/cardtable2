@@ -1,20 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/require-await */
-
 /**
- * ESLint suppressions above are necessary for Playwright E2E test helpers.
+ * Playwright E2E test helpers.
  *
- * These helpers use page.evaluate() which runs code in the browser context where:
- * 1. We must access globalThis (typed as any) to reach test-only globals
- * 2. We cannot import type definitions into the browser sandbox
- * 3. Generic type parameters may be primitives or objects
- *
- * These suppressions are standard practice for Playwright tests.
+ * These helpers use `page.evaluate()` which runs code in the browser context;
+ * `globalThis` is typed loosely because we cannot import type definitions
+ * into the browser sandbox. The shared E2E ESLint config (see
+ * `eslint.config.js`) relaxes the relevant `no-unsafe-*` rules for this
+ * directory.
  */
 
 import type { Page } from '@playwright/test';

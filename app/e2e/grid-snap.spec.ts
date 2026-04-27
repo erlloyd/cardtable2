@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 test.describe('Grid Snap Mode', () => {
   test.beforeEach(async ({ page }) => {

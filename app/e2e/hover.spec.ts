@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 /**
  * E2E tests for hover feedback (M2-T4)

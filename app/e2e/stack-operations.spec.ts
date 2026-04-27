@@ -1,10 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * E2E Tests for Stack Operations
- *
- * ESLint suppression above is necessary for Playwright E2E tests.
- * We must access globalThis (typed as any) to reach test-only globals like __TEST_STORE__.
  *
  * Tests the complete stack/unstack workflow:
  * - Drag-and-drop stack merging
@@ -14,7 +9,7 @@
  * Visual feedback tests (count badge, stack target border) are deferred.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './_fixtures';
 
 // Define minimal interfaces for type safety in page.evaluate()
 interface TestStore {

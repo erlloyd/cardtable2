@@ -7,6 +7,12 @@
 
 import { test, expect } from '@playwright/test';
 
+// Define minimal store interface for type safety in page.evaluate()
+interface TestStore {
+  getAllObjects: () => Map<string, unknown>;
+  clearAllObjects: () => void;
+}
+
 test.describe('Plugin Loading E2E', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     // Navigate to dev table page with unique ID to avoid conflicts
@@ -119,6 +125,17 @@ test.describe('Plugin Loading E2E', () => {
   test('should verify test scene loads successfully', async ({ page }) => {
     // This is a sanity check to ensure basic scenario loading works
     // Reset to Test Scene uses similar infrastructure to plugin loading
+
+    // Clear any leftover objects from previous test runs.
+    // The y-websocket dev server holds doc state in memory across local runs,
+    // and testIds are hash-deterministic, so without this the next run sees the
+    // 15 objects this test just created. Mirrors state-persistence.spec.ts.
+    await page.evaluate(() => {
+      declare const __TEST_STORE__: TestStore;
+      if (__TEST_STORE__) {
+        __TEST_STORE__.clearAllObjects();
+      }
+    });
 
     // Verify table starts empty
     await expect(page.locator('text=Objects: 0')).toBeVisible({

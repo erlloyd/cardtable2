@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /**
  * E2E regression test for ct-zqc: hover preview gets stuck when cursor goes
  * stack -> preview -> empty board.
@@ -16,13 +14,9 @@
  * `gameAssets={null}`, so we use `/table/$id?seed=stack-of-5` (which has the
  * Board pull `gameAssets` from the store) and inject mock assets via
  * `__TEST_STORE__.setGameAssets(...)`.
- *
- * ESLint suppression: page.evaluate() runs in the browser context where we
- * must access globalThis (typed as any) to reach `__TEST_STORE__`. Standard
- * practice for Playwright tests, matching the pattern in selection.spec.ts.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, skipNextAutoClear } from './_fixtures';
 
 test.describe('Card Preview Hover - Dismiss Path (ct-zqc)', () => {
   test('preview dismisses when cursor goes stack -> preview -> empty board', async ({
@@ -37,6 +31,10 @@ test.describe('Card Preview Hover - Dismiss Path (ct-zqc)', () => {
     // Use the non-dev table route so the Board picks up gameAssets from the
     // store. Seed a single 5-card face-up stack at world (0,0) (canvas center).
     const tableId = `zqc-${test.info().testId.replace(/[^a-z0-9]/gi, '-')}`;
+    // Opt out of the fixture's auto-clear: this test relies on the
+    // ?seed=stack-of-5 URL param to populate the store at mount time, and
+    // the fixture's poll-clear can race with seed application.
+    skipNextAutoClear(page);
     await page.goto(`/table/${tableId}?seed=stack-of-5`);
 
     // Wait for canvas to be initialized. The non-dev `/table/$id` route

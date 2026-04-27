@@ -1,6 +1,6 @@
 # Claude Development Context
 
-This file contains important context and instructions for Claude when working on this project.
+Cardtable 2.0: solo-first virtual card table with optional multiplayer. Manifest-only content (no game rules in code). React 19 + TypeScript + PixiJS frontend, Node 24 + y-websocket backend, PNPM monorepo.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
@@ -53,483 +53,118 @@ bd close <id>         # Complete work
 - If a feature-branch push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
 
-## Project Overview
-
-Cardtable 2.0 is a solo-first virtual card table with optional multiplayer support. It's designed to handle any card/board game through manifest-only content (no game rules in code).
-
-### Architecture
-- **Frontend**: React 19 + TypeScript + PixiJS (Vite 7)
-- **Backend**: Node 24 + Express 5 + y-websocket
-- **Shared**: Common TypeScript types
-- **Monorepo**: PNPM workspaces
-
-### Technology Stack
-- **Node.js**: v24 (LTS Krypton)
-- **React**: 19.2.0
-- **TanStack Router**: 1.136.1
-- **Vite**: 7.2.2
-- **Vitest**: 4.0.8
-- **Playwright**: 1.56.1
-- **Headless UI**: 2.2.9
-- **PixiJS**: 8.14.1
-- **Express**: 5.1.0
-- **Yjs (app)**: 13.6.27
-- **Yjs (server)**: 13.6.20
-- **y-websocket**: 3.0.0
-- **TypeScript**: 5.7.2
-- **ESLint**: 9.15.0
-- **Prettier**: 3.4.1
-
-## Project Structure
-
-```
-/
-├── _plans/               # Planning documents organized by theme and status
-├── shared/              # Shared types & utilities
-│   └── src/
-│       └── index.ts    # ObjectKind, TableObject types
-├── app/                # Frontend (React + PixiJS)
-│   ├── src/
-│   │   ├── pages/      # Route pages (GameSelect, Table)
-│   │   ├── components/ # React components (Board, GameCombobox)
-│   │   └── types/      # TypeScript types
-│   ├── e2e/            # Playwright E2E tests
-│   ├── public/         # Static assets (gamesIndex.json)
-│   ├── vite.config.ts
-│   └── playwright.config.ts
-├── server/             # Backend (Node + y-websocket)
-│   ├── src/
-│   │   └── index.ts    # Express + WebSocket server
-│   └── Dockerfile      # Production container image
-└── .github/
-    └── workflows/
-        ├── ci.yml           # CI/CD checks (lint, test, typecheck)
-        ├── deploy.yml       # Production deployment (GitHub Pages + Railway)
-        ├── pr-deploy.yml    # PR preview deployments
-        └── cleanup-pr.yml   # PR environment cleanup
-```
-
-## Development Commands
-
-```bash
-# Install dependencies
-pnpm install
-
-# Start development servers (app on :3000, server on :3001)
-pnpm run dev
-
-# Build for production
-pnpm run build
-
-# Run tests (unit tests)
-pnpm run test
-
-# Run E2E tests (Playwright)
-cd app && pnpm run test:e2e
-
-# Run E2E tests with UI
-cd app && pnpm run test:e2e:ui
-
-# Run linting
-pnpm run lint
-
-# Run type checking
-pnpm run typecheck
-
-# Run full validation (lint, typecheck, test, build)
-pnpm run validate
-
-# Format code
-pnpm run format
-```
-
-## Verification Requirements
-
-**CRITICAL - ALWAYS VERIFY BEFORE STATING FACTS:**
-
-1. **Background Tasks**: Before claiming how many tasks are running or their status, ALWAYS run `/tasks` or check the actual task list
-2. **File Contents**: Before claiming what's in a file, ALWAYS read it first
-3. **Command Output**: Before claiming what a command will output, ALWAYS run it first
-4. **Test Results**: Before claiming tests pass, ALWAYS run them first
-5. **Code Behavior**: Before claiming how code behaves, ALWAYS trace through it or test it
-
-**Never say:**
-- "There is only one X" without checking
-- "This will do Y" without verifying
-- "The file contains Z" without reading it
-- "X should work" without testing it
-
-**Always say:**
-- "Let me check..." then verify
-- "Let me run..." then execute
-- "Let me read..." then examine
-- If you make a claim and are proven wrong, immediately acknowledge the error and correct it
-
-## Key Design Decisions
-
-### Data Model
-- All table objects use `_` prefixed properties for system fields
-- Every card or group of cards is a "stack" (even single cards)
-- Object types: `stack`, `token`, `zone`, `mat`, `counter`
-- Yjs for CRDT-based multiplayer sync
-
-### Rendering Architecture
-- Dual-mode rendering: Worker-based (OffscreenCanvas) OR Main-thread (regular canvas)
-- Worker mode for best performance on desktop/modern mobile (60fps with 300+ objects)
-- Main-thread mode for maximum compatibility (iOS 16.x, debugging, user preference)
-- Shared core logic (SceneManager, HitTester, InputHandler, RenderCore)
-- User-toggleable in settings (auto-detect, force mode, debug tools)
-- See `_plans/board-rendering/completed/` for detailed architecture documentation
-
-#### PixiJS Ticker Management
-- **CRITICAL**: PixiJS is configured with `autoStart: false` to prevent iOS worker crashes
-- Any code that uses animations via `app.ticker` **must manually start the ticker**:
-  ```typescript
-  this.app.ticker.add(callback);
-  if (!this.app.ticker.started) {
-    this.app.ticker.start();
-  }
-  ```
-- This is intentional for performance: ticker only runs when animations are active
-- Ticker should be stopped when animations complete to save CPU cycles
-
-### Object Architecture
-- **Registry Pattern**: Object behaviors mapped by `ObjectKind` (no switch statements)
-- **Modular Structure**: Each object type has dedicated directory in `app/src/renderer/objects/`
-- **Behavior Interface**: Three methods per type: `render()`, `getBounds()`, `getShadowConfig()`
-- **Event System**: Default handlers with type-specific overrides (onHover, onClick, onDrag, onDrop, onDoubleClick)
-- **Plain Data Model**: Objects remain plain `TableObject` data (Yjs-compatible, no class instances)
-- **Type Safety**: TypeScript interfaces ensure correct implementations
-- **Extensibility**: Add new object types without modifying core renderer code
-
-To add a new object type:
-1. Create directory in `app/src/renderer/objects/newtype/`
-2. Implement behaviors (render, getBounds, getShadowConfig)
-3. Register in `objects/index.ts`
-4. Add to `ObjectKind` enum in `shared/src/index.ts`
-
-See `app/src/renderer/objects/README.md` for full documentation.
-
-#### High-Frequency Event Handlers (pointermove, scroll, etc.)
-- **Be suspicious of any work done on every pointer move.** Pointer events fire 60-120+ times/second — only do work per-move if there is no better alternative.
-- Prefer direct DOM mutation (via refs) over React state for values that change at pointer frequency
-- Prefer checks that bail out early (e.g., "has the value actually changed?") over unconditional updates
-
-### Shared Package
-- Direct TypeScript imports (no build step)
-- Contains common types used by both app and server
-- Located at `@cardtable2/shared`
-
-### CI/CD & Deployment
-- **Selective deployment**: Only deploys changed packages on main
-- **PNPM filtering**: Detects which packages have changed
-- **Changes to shared**: Triggers both app and server deployments
-- See the Beads section at the top of this file for branching and push rules.
-
-#### GitHub Actions Workflows
-1. **ci.yml** - Continuous Integration checks on all PRs:
-   - Linting (ESLint)
-   - Type checking (TypeScript)
-   - Format checking (Prettier)
-   - Unit tests (Vitest)
-   - E2E tests (Playwright)
-   - Build verification
-
-2. **deploy.yml** - Production deployment (main branch only):
-   - **App**: Deploys to GitHub Pages at `beta.card-table.app`
-   - **Server**: Builds Docker image and deploys to Railway at `cardtable2-server-production.up.railway.app`
-   - **Image registry**: Pushes to GitHub Container Registry (GHCR)
-   - **Selective deployment**: Only builds/deploys changed components
-
-3. **pr-deploy.yml** - PR preview environments:
-   - Creates Railway preview services per PR
-   - Builds Docker images for both app and server
-   - Provides unique URLs for testing (e.g., `cardtable2-pr-123.up.railway.app`)
-   - Only builds on first PR build or when package changes
-
-4. **cleanup-pr.yml** - Resource cleanup:
-   - Automatically removes Railway services when PR is closed
-   - Keeps infrastructure costs manageable
-
-#### Production Hosting
-- **Railway (https://railway.app/)** - Current production platform:
-  - WebSocket support for y-websocket backend
-  - Automatic PR preview deployments for both app and server
-  - Single platform for full-stack deployment
-  - Container-based deployment using Docker
-  - Cost-effective usage-based pricing
-  - Environment variables managed via Railway CLI and GitHub Actions
-
-## Performance Targets
-- 60 fps on mobile/desktop
-- Sub-2ms hit-testing
-- 300-500 object scenes
-- 30Hz awareness updates
-
-## Project Status & Planning
-
-**The folder structure is the source of truth.**
-
-Plans are organized by **theme** with **status** subfolders:
-- **Themes**: core-infrastructure, board-rendering, data-layer, object-interactions, multiplayer, content-assets, ux-polish, performance, production, architecture
-- **Status folders**: completed/, in-progress/, planned/, future/, reference/
-- **Find work status**: Browse `_plans/{theme}/{status}/` directly - the folder location tells you the status
-- **Structure overview**: See `_plans/README.md` for workflow and conventions
-
-Don't look for status summaries in README files - just browse the folders to see what's completed, in-progress, planned, or future.
-
-## Important Notes
-
-### Branching Strategy
-
-All work goes on feature branches: `feature/{theme}-{description}` or `fix/{description}`. Feature-branch pushes are mandatory at session end (see "Session Completion" at the top of this file).
-
-**NEVER PUSH TO MAIN WITHOUT EXPLICIT CONFIRMATION.** Before any `git push`, verify `git branch --show-current` is not `main`. If it is, STOP and ask the user. Only push to main when the user explicitly says "push to main" — "push" alone means the feature branch. Direct pushes to main trigger production deployments.
-
-### Testing Workflow
-
-**CRITICAL: Always test before committing!**
-
-Before attempting to commit code, you MUST run tests to ensure they pass:
-
-```bash
-# Run unit tests for specific modules
-pnpm --filter @cardtable2/app test <pattern>   # e.g., "migrations", "ObjectDefaults"
-
-# Run all unit tests
-pnpm run test
-
-# Run E2E tests (takes longer, run after unit tests pass)
-cd app && pnpm run test:e2e
-```
-
-**Why this matters:**
-- Pre-commit hooks run linting/formatting checks that often fail if tests weren't run first
-- Type errors and lint issues are caught earlier when tests run first
-- Saves time by catching issues before the commit hook runs
-- Avoids frustrating commit failures and git stash cycles
-
-**Best Practice Workflow:**
-1. Write/modify code
-2. Run relevant unit tests: `pnpm --filter @cardtable2/app test <module>`
-3. Fix any test failures
-4. Run linting: `pnpm run lint`
-5. Run type check: `pnpm run typecheck`
-6. If all pass, attempt commit
-7. Run E2E tests before pushing: `cd app && pnpm run test:e2e`
-
-### Testing
-- Unit tests use Vitest
-- E2E tests use Playwright
-- All tests must pass before merge to main
-
-### Pre-Push Checklist
-
-Before pushing to remote, the following checks MUST pass (enforced by Git hooks and CI):
-
-**Git Hooks:**
-- **pre-commit**: `npx lint-staged` (auto-formats staged files)
-- **pre-push**:
-  - `pnpm run typecheck` (TypeScript type checking)
-  - `pnpm run format:check` (Prettier formatting verification)
-
-**CI Checks** (run on pull requests):
-1. **Lint**: `pnpm run lint` (ESLint)
-2. **Type Check**: `pnpm run typecheck` (TypeScript)
-3. **Format Check**: `pnpm run format:check` (Prettier)
-4. **Unit Tests**: `pnpm run test` (Vitest)
-5. **E2E Tests**: `cd app && pnpm run test:e2e` (Playwright)
-6. **Build**: `pnpm --filter @cardtable2/app build` + `pnpm --filter @cardtable2/server build`
-
-**Quick validation before pushing:**
-```bash
-pnpm run validate  # Runs: lint + typecheck + test + build
-```
-
-**Fix common issues:**
-```bash
-pnpm run format      # Auto-fix formatting issues
-pnpm run lint        # Check for lint errors
-pnpm run typecheck   # Check for type errors
-```
-
-#### E2E Testing Best Practices
-
-**Testing Pointer Events on Canvas:**
-When writing E2E tests that interact with canvas elements (especially React components with `onPointerDown/Up/Move` handlers):
-
-1. **Don't use `page.mouse`** - It dispatches `mousedown/mousemove/mouseup` events, which won't trigger React's `onPointer*` handlers
-2. **Use `canvas.dispatchEvent()`** instead:
-   ```typescript
-   await canvas.dispatchEvent('pointerdown', {
-     bubbles: true,
-     cancelable: true,
-     composed: true,
-     pointerId: 1,
-     pointerType: 'mouse',
-     isPrimary: true,
-     clientX: viewportX,
-     clientY: viewportY,
-     screenX: viewportX,
-     screenY: viewportY,
-     pageX: viewportX,
-     pageY: viewportY,
-     button: 0,
-     buttons: 1,
-   });
-   ```
-3. **Coordinate Systems Matter**:
-   - World coordinates: Object positions in the game/scene space
-   - Canvas-relative: `worldX + canvasWidth/2, worldY + canvasHeight/2`
-   - Viewport-absolute: Canvas-relative + canvas bounding box offset
-   - `clientX/clientY` in pointer events are **viewport-absolute**, not canvas-relative
-4. **Always query canvas position dynamically**:
-   ```typescript
-   const canvasBBox = await canvas.boundingBox();
-   const viewportX = canvasBBox.x + canvasRelativeX;
-   const viewportY = canvasBBox.y + canvasRelativeY;
-   ```
-5. **Why this matters**: Canvas position in the viewport can change due to layout, responsive design, or viewport size. Dynamic queries ensure tests remain robust.
-
-See `e2e/selection.spec.ts:362` ("clicking on an unselected object selects it") for a complete example.
-
-### Autonomous Browser Verification (Playwright MCP)
-
-The project exposes dev-only helpers specifically so Claude can drive a real browser against the running dev server via Playwright MCP — without user-in-the-loop log copy/paste.
-
-**When to use.** Reach for browser verification when the change is user-visible or interaction-driven:
-- UI regressions (layout, styling, visibility)
-- Interaction bugs (drag, click, selection, keyboard)
-- Render behavior (animations, z-ordering, hover previews)
-
-**Do NOT** use it for pure logic (write a Vitest unit test), type safety (run `pnpm run typecheck`), or accessibility audits (out of scope).
-
-**Session lifecycle.**
-
-1. Ensure `pnpm run dev` is running (app on `:3000`, server on `:3001`).
-2. Load the MCP tool schemas via `ToolSearch` before the first browser call — deferred tools aren't invocable until loaded:
-   ```
-   ToolSearch("select:mcp__plugin_playwright_playwright__browser_navigate,mcp__plugin_playwright_playwright__browser_evaluate,mcp__plugin_playwright_playwright__browser_console_messages,mcp__plugin_playwright_playwright__browser_snapshot,mcp__plugin_playwright_playwright__browser_take_screenshot,mcp__plugin_playwright_playwright__browser_click,mcp__plugin_playwright_playwright__browser_close")
-   ```
-3. Navigate to a fresh table. Use a unique ID so IndexedDB doesn't restore stale state. Combine with a seed (see below) for deterministic starting scenes:
-   ```
-   browser_navigate(url="http://localhost:3000/table/claude-verify-<timestamp>?seed=stack-of-5&debug=drag,attach")
-   ```
-4. `browser_snapshot()` yields the ARIA tree with clickable `ref`s — use this (not screenshots) to target DOM clicks. Screenshots are for visual regression, not interaction.
-5. Iterate: interact, read console, adjust code, reload (navigate to a new unique ID rather than relying on hot reload — HMR sometimes leaves stale closures in the renderer).
-6. `browser_close()` when done.
-
-**Canvas interaction.** `page.mouse` won't trigger React's `onPointer*` handlers on `<canvas>`. Use `window.__ctTest` (dev-only, installed in DEV builds — see `app/src/dev/ctTest.ts`):
+## Where to look
+
+CLAUDE.md is the focused rule-set. Detailed reference content lives in `docs/` and is loaded on demand:
+
+- **Architecture / tech stack / project structure / design decisions / performance targets / planning** → `docs/ARCHITECTURE.md`
+- **Dev commands / testing flow / pre-push checklist / container deployment** → `docs/WORKFLOW.md`
+- **E2E tests, canvas pointer events, autonomous browser verification with Playwright MCP, dev-only `__ctTest` / `__dbg` helpers, scene seeds, debug logging** → `docs/E2E-TESTING.md`
+- **GitHub Actions workflows, Railway, GHCR** → `docs/CI-CD.md`
+
+Read the relevant doc before working in that area.
+
+## Behavioral rules (non-negotiable)
+
+These were previously stored as bd memories and silently truncated when `bd prime` exceeded the Claude Code SessionStart hook's 10 KB cap. They live here so they're loaded verbatim every turn.
+
+### Orchestrator default — top-level Claude delegates bd work
+
+**Role check first.** If you are a sub-agent spawned for a specific bd issue (`beads:task-agent`, `general-purpose`, etc.), implement your assigned task directly — don't spawn further agents unless the work genuinely exceeds your issue's scope (in which case file a follow-up bd issue and flag to the orchestrator).
+
+**This rule is for the top-level Claude session acting as orchestrator:** default to delegation over direct work — use `beads:task-agent` for bd-tracked work, `Explore`/research agents for lookup, direct action only for trivial (<50 lines, single-concern) edits, merge-resolution strategy, final push, and human-facing summaries.
+
+Parallelize independent bd issues in a single message with multiple `Agent` tool_use blocks.
+
+Signals the orchestrator is slipping: writing body-text files, running `bd create` by hand for many issues, editing project code when a bd issue exists. Watch for agents bailing early — mid-sentence "final reports" with <10 tool uses and no commits — resume via `SendMessage`.
+
+### bd prime scope — pass guidance to sub-agents inline
+
+`bd prime` and the memories it injects fire only on the top-level Claude Code session via the SessionStart hook. **Sub-agents spawned via the `Agent` tool do NOT receive `bd prime` output in their initial context.** If a sub-agent needs a memory's guidance, include the rule inline in the spawn prompt OR instruct the agent to run `bd memories` / `bd recall <key>` at the start of its work. Memories are accessible on-demand but not auto-injected.
+
+### CLAUDE.md overrides defaults
+
+CLAUDE.md project instructions override the default Claude Code auto-memory system and any other default behavior. When the system prompt documents a procedure (e.g., "auto-memory: write to MEMORY.md files") but CLAUDE.md explicitly forbids it (e.g., "do NOT use MEMORY.md files, use `bd remember`"), the CLAUDE.md rule wins every time. Check CLAUDE.md for overrides BEFORE following any procedural default.
+
+### No `sed`, no `cat <<EOF`, no `echo >` for files
+
+Use `Read` for file viewing, `Edit` for in-place modifications, `Write` for creates and full rewrites. **No `sed` for any operation.** No `cat > file <<EOF`, no `echo >`, no `printf >`. The dedicated tools are always available; shell-based file I/O is a workaround that bypasses the harness's file-state tracking and review surface. Only acceptable if `Write` genuinely cannot do it (e.g., piping live command output to a file).
+
+### E2E auto-clean fixture
+
+E2E tests get a clean `__TEST_STORE__` automatically via the fixture at `app/e2e/_fixtures.ts`. **Import `test` and `expect` from `./_fixtures`, NOT from `@playwright/test` directly** — the fixture wraps `page.goto` so navigations to `/table/*` or `/dev/table/*` auto-call `clearAllObjects()` after the page hydrates. Do NOT add a manual `clearAllObjects()` at test start; it's redundant. To opt out, call `skipNextAutoClear(page)` before the navigation. Full convention in `docs/E2E-TESTING.md`.
+
+### E2E consideration when filing bd issues
+
+When creating bd issues or epics, **always pause to ask whether an E2E test would add value** — don't skip the question. E2E is often valuable when the fix involves: time-based behavior (delays, animations, state over time), hover/pointer lifecycle, integration across DOM + canvas + store, or user workflows spanning multiple components. Unit tests alone typically suffice when the fix is in pure logic, a hook, or a reducer with no timing semantics. When E2E is valuable, **spell out the concrete scenario in the issue description** — don't leave "pick what fits" to agent judgment; the agent will almost always pick the cheaper unit test.
+
+## Verification before stating facts
+
+ALWAYS verify before making claims:
+
+1. **Background tasks**: before claiming task count or status, run `/tasks` or check the actual task list.
+2. **File contents**: before claiming what's in a file, read it.
+3. **Command output**: before claiming what a command will output, run it.
+4. **Test results**: before claiming tests pass, run them.
+5. **Code behavior**: before claiming how code behaves, trace it or test it.
+
+Never say "there is only one X", "this will do Y", "the file contains Z", or "X should work" without checking. Say "let me check…", "let me run…", "let me read…" then verify. If a claim is proven wrong, acknowledge the error immediately and correct it.
+
+## Branching
+
+All work goes on feature branches: `feature/{theme}-{description}` or `fix/{description}`. Feature-branch pushes are mandatory at session end (see Session Completion in the BEADS INTEGRATION section above).
+
+**NEVER PUSH TO MAIN WITHOUT EXPLICIT CONFIRMATION.** Before any `git push`, verify `git branch --show-current` is not `main`. If it is, STOP and ask the user. "Push" alone means the feature branch — only push to main when the user explicitly says "push to main". Direct pushes to main trigger production deployments.
+
+## Code style — non-negotiable rules
+
+TypeScript strict mode, ESLint + Prettier, pre-commit hooks auto-format, pre-push hooks run typecheck.
+
+### NEVER suppress lint or type errors
+
+Suppression comments are FORBIDDEN without explicit user approval.
+
+- **NEVER** add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments.
+- **ALWAYS** fix the underlying type/lint issue properly first.
+- Common solutions: type assertions, proper type imports, type guards and narrowing, refactoring to satisfy type safety.
+- **Only if** a proper fix is impossible: stop, ask the user for permission, explain why, wait for explicit approval.
+- Adding a suppression comment without asking first is a failure.
+
+### NEVER use `typeof` for internal type validation
+
+- **NEVER** use `typeof x === 'string'`, `typeof x === 'number'`, `typeof x === 'boolean'`, etc. for internal validation.
+- **NEVER** use `'propertyName' in obj` as a type guard pattern internally.
+- Trust the type system. If TypeScript types say a value should exist and be of a certain type, trust it.
+- If data could genuinely be missing/corrupt, that's a data integrity issue — log it, handle it properly, don't silently default.
+- Better solutions: proper TypeScript type assertions, type guards at system boundaries (user input, external APIs, deserialization), validation libraries (Zod, io-ts), fix the root cause so data is always in the correct state.
+- **`typeof` IS acceptable** at system boundaries (parsing user input, external API responses), in proper validation libraries, or when explicitly requested.
+- Using `typeof` for internal type validation is a failure.
+
+### NEVER use inline `import()` casts
+
+- **NEVER** use patterns like `as import('@module').Type`.
+- **ALWAYS** add proper import statements at the top of the file.
+
 ```typescript
-browser_evaluate(function=`async () => {
-  const pts = window.__ctTest.probeObjects(2);       // first two objects
-  await window.__ctTest.drag(pts[0].world, { x: 200, y: 100 }, { steps: 10 });
-  return pts;
-}`);
+// Good
+import type { StackObject } from '@cardtable2/shared';
+const stackObj = obj as StackObject;
+
+// Bad
+const stackObj = obj as import('@cardtable2/shared').StackObject;
 ```
-The helper handles world -> viewport coord translation, dispatches real `PointerEvent`s, and supports modifier keys (`opts.modifiers = { altKey: true }` to force-attach, etc.). See `app/src/dev/ctTest.ts` for the full API and `app/e2e/selection.spec.ts:460` for the original pattern it mirrors.
 
-**Reading logs without flooding context.** Use the subsystem-scoped debug logger (`app/src/dev/dbg.ts`) rather than ephemeral `console.log` insertion:
+### Debug logging
 
-1. Enable only the subsystems you care about. Either via URL (`?debug=drag,attach`) or at runtime:
-   ```typescript
-   browser_evaluate(function=`() => window.__dbg.enable('drag', 'selection')`);
-   ```
-2. Perform the interaction.
-3. Filter output:
-   ```
-   browser_console_messages(level="info", filter="[DEBUG][drag]")
-   ```
-4. Disable when done: `window.__dbg.disableAll()`.
+Prefer the subsystem-scoped logger at `app/src/dev/dbg.ts` over ephemeral `console.log`:
 
-All logs share the `[DEBUG]` prefix (project convention) with a `[subsystem]` tag for narrower filtering. See `app/src/dev/dbg.ts` for the API and known subsystems.
+```typescript
+import { dbg } from '@/dev/dbg';
+dbg('drag', 'pointerdown at', x, y); // emits [DEBUG][drag] ... only when enabled
+```
 
-**Scene seeds.** Prefer URL-param seeds over manual setup clicks — the setup then can't drift. See `app/src/dev/seeds/index.ts`:
-- `?seed=empty-table` — blank slate
-- `?seed=single-card` — one face-up card at origin
-- `?seed=stack-of-5` — five-card stack at origin
-- `?seed=two-stacks` — two stacks spaced for drag/merge
-- `?seed=attachment-pair` — two single-card stacks for attach testing
+If you must insert an ephemeral `console.log`, use the `[DEBUG-X]` single-prefix convention so the user can filter — never use different prefixes per file or per function. Full convention in `docs/E2E-TESTING.md`.
 
-Seeds only apply to empty tables (won't clobber existing state) and are dev-only (tree-shaken from production). Add new ones under `SEED_REGISTRY` in `app/src/dev/seeds/index.ts` — ~10 lines per seed.
+## Planning
 
-**Verification discipline.**
-
-- **Prefer state queries over screenshots.** `browser_evaluate(() => window.__TEST_STORE__.objects.size)` tells you more than a pixel diff. Reserve screenshots for genuine visual regressions.
-- **New URL per iteration.** HMR sometimes preserves worker/renderer state across hot reloads. Navigating to a fresh `tableId` guarantees a clean slate.
-- **Snapshot before click.** Element `ref`s in `browser_click` come from `browser_snapshot` — always snapshot first, don't guess refs.
-- **One assertion per evaluate.** If you need multiple facts, return an object from `browser_evaluate`. Multiple sequential evaluates can interleave with other work.
-- **Known gotcha:** The `/table/$id` route passes `showDebugUI={false}`, so `window.__TEST_BOARD__` (waitForRenderer, etc.) is **not** available there — only on the dev route `/dev/table/$id` or E2E builds. If you need `waitForRenderer`, prefer the dev route.
-
-### Code Style
-- TypeScript strict mode enabled
-- ESLint + Prettier configured
-- Pre-commit hooks auto-format code
-- Pre-push hooks run typecheck
-- **Debug logging convention**: Prefer the subsystem-scoped logger in `app/src/dev/dbg.ts` over ephemeral `console.log` insertion:
-  ```typescript
-  import { dbg } from '@/dev/dbg';
-  dbg('drag', 'pointerdown at', x, y);  // emits [DEBUG][drag] ... only when enabled
-  ```
-  Enable subsystems via `window.__dbg.enable('drag')`, `?debug=drag,attach` URL param, or persistent localStorage. All messages share the `[DEBUG]` prefix so the user can filter console output with a single search term (per this project's historical convention); the `[subsystem]` tag lets you narrow further. If you must insert an ephemeral `console.log`, still use the `[DEBUG-X]` single-prefix convention so the user can filter — never use different prefixes per file or per function.
-- **CRITICAL - NEVER VIOLATE THIS RULE**: Suppression comments are FORBIDDEN without explicit user approval
-  - **NEVER** add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments
-  - **ALWAYS** fix the underlying type/lint issue properly first
-  - Common solutions:
-    - Type assertions: `import('module') as { export: Type }`
-    - Proper type imports: `import type { Type } from 'module'`
-    - Type guards and narrowing
-    - Refactoring to satisfy type safety
-  - **ONLY IF** a proper fix is impossible:
-    1. Stop and ask the user for permission
-    2. Explain why suppression is necessary
-    3. Wait for explicit approval before proceeding
-  - If you add a suppression comment without asking first, you have failed
-- **CRITICAL - AVOID TYPEOF CHECKS**: Do NOT use `typeof` or string comparisons for type validation as the default solution
-  - **NEVER** use `typeof x === 'string'`, `typeof x === 'number'`, `typeof x === 'boolean'`, etc. without explicit justification
-  - **NEVER** use string comparisons for property names like `'propertyName' in obj` as a type guard pattern
-  - **Trust the type system**: If TypeScript types indicate a value should exist and be of a certain type, trust it
-  - If data could genuinely be missing/corrupt, that's a data integrity issue - log it, handle it properly, don't silently default
-  - Better solutions:
-    - Proper TypeScript type assertions when you know the type
-    - Type guards for legitimate runtime checks at system boundaries (user input, external APIs, deserialization)
-    - Validation libraries (Zod, io-ts) for complex validation needs
-    - Fix the root cause: ensure data is always in the correct state
-  - **WHEN typeof IS ACCEPTABLE**:
-    - At system boundaries (parsing user input, external API responses)
-    - When using proper validation libraries that abstract the typeof checks
-    - When the User explicitly requests runtime type checking
-  - If you use typeof for internal type validation, you have failed
-- **CRITICAL - NEVER USE INLINE IMPORTS**: Do NOT use inline `import()` expressions for type casting without explicit user approval
-  - **NEVER** use patterns like `as import('@module').Type`
-  - **ALWAYS** add proper import statements at the top of the file
-  - Inline imports make code harder to read, harder to search, and bypass IDE tooling
-  - **Proper approach**:
-    ```typescript
-    // At top of file
-    import type { StackObject } from '@cardtable2/shared';
-
-    // In code
-    const stackObj = obj as StackObject;
-    ```
-  - **Bad approach**:
-    ```typescript
-    const stackObj = obj as import('@cardtable2/shared').StackObject;
-    ```
-  - If you use inline imports without asking first, you have failed
-
-### Container Deployment
-- **Docker support**: Multi-stage Dockerfiles for production builds
-- **Base image**: Node.js 24-slim for minimal footprint
-- **Process manager**: Tini for proper signal handling and zombie reaping
-- **Registry**: Images pushed to GitHub Container Registry (ghcr.io)
-- **Production runtime**: Railway container platform
-
-## Planning & Documentation
-
-When asked to plan something, always ask if it should be saved in the `_plans/` folder.
-
-Plans are organized by theme with status subfolders:
-- Place new plans in the appropriate theme folder (`object-interactions/`, `multiplayer/`, etc.)
-- Use status subfolders: `planned/` for ready work, `in-progress/` for active work, `completed/` for finished work
-- See `_plans/README.md` for the complete structure and guidelines
+When asked to plan something, ask if it should be saved in `_plans/`. See `docs/ARCHITECTURE.md` for the planning structure.

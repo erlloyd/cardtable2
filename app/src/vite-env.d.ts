@@ -2,6 +2,7 @@
 
 import type { YjsStore } from './store/YjsStore';
 import type { CtTestApi } from './dev/ctTest';
+import type { CtDevToolsApi } from './dev/ctDevTools';
 import type { DbgApi } from './dev/dbg';
 
 // Extend ImportMetaEnv for custom environment variables
@@ -35,5 +36,10 @@ declare global {
      * Dev-only subsystem-scoped debug logger.  See `app/src/dev/dbg.ts`.
      */
     __dbg?: DbgApi;
+    /**
+     * Dev-only IndexedDB management helpers (clear stale persisted CRDT
+     * state).  See `app/src/dev/ctDevTools.ts`.
+     */
+    __ctDevTools?: CtDevToolsApi;
   }
 }

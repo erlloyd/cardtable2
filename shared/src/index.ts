@@ -1,5 +1,7 @@
 // Shared types and utilities will go here
 
+import type { GameAssets } from './content-types';
+
 // Example: Common types that will be shared between app and server
 export const CARDTABLE_VERSION = '2.0.0';
 
@@ -200,7 +202,7 @@ export type MainToRendererMessage =
   | { type: 'set-grid-snap-enabled'; enabled: boolean }
   | {
       type: 'set-game-assets';
-      assets: import('./content-types').GameAssets | null;
+      assets: GameAssets | null;
     }
   | { type: 'pointer-down'; event: PointerEventData }
   | { type: 'pointer-move'; event: PointerEventData }

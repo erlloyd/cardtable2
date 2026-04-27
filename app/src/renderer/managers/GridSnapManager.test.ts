@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Container, Text } from 'pixi.js';
+import type { TextOptions } from 'pixi.js';
 import { GridSnapManager } from './GridSnapManager';
 import type { SceneManager } from '../SceneManager';
 import { ObjectKind } from '@cardtable2/shared';
@@ -52,9 +53,7 @@ describe('GridSnapManager', () => {
 
     // Mock visual manager
     mockVisualManager = {
-      createText: vi.fn(
-        (options: import('pixi.js').TextOptions) => new Text(options),
-      ),
+      createText: vi.fn((options: TextOptions) => new Text(options)),
       createKindLabel: vi.fn((text: string) => {
         const label = new Text({ text });
         label.anchor.set(0.5);

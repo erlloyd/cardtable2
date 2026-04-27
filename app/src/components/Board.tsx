@@ -503,6 +503,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // DEBUG (hover): attach pointerenter/pointerleave listeners on the canvas
   // to observe DOM-level events during hover preview investigation.
   useEffect(() => {
+    if (!(import.meta.env.DEV || import.meta.env.VITE_E2E)) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const onEnter = (e: PointerEvent) => {

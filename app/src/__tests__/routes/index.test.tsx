@@ -8,16 +8,17 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 import { routeTree } from '../../routeTree.gen';
-import { GamesIndex } from '../../types/game';
+import type { PluginRegistry } from '../../content/pluginLoader';
 
-const mockGamesIndex: GamesIndex = {
-  games: [
+const mockPluginRegistry: PluginRegistry = {
+  plugins: [
     {
       id: 'fake-game',
       name: 'Fake Game',
+      author: 'Test Author',
       description: 'A placeholder game',
-      version: '1.0.0',
-      manifestUrl: '/games/fake-game/manifest.json',
+      baseUrl: '/plugins/fake-game/',
+      boxArt: '/plugins/fake-game/box-art.jpg',
     },
   ],
 };
@@ -80,7 +81,7 @@ describe('Index Route (GameSelect)', () => {
       .mockRejectedValueOnce(new Error('Network error'))
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockGamesIndex),
+        json: () => Promise.resolve(mockPluginRegistry),
       } as Response);
 
     vi.stubGlobal('fetch', mockFetch);
@@ -113,7 +114,7 @@ describe('Index Route (GameSelect)', () => {
       vi.fn(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockGamesIndex),
+          json: () => Promise.resolve(mockPluginRegistry),
         } as Response),
       ),
     );
@@ -138,7 +139,7 @@ describe('Index Route (GameSelect)', () => {
       vi.fn(() =>
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockGamesIndex),
+          json: () => Promise.resolve(mockPluginRegistry),
         } as Response),
       ),
     );

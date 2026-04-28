@@ -576,7 +576,7 @@ export function registerDefaultActions(): void {
     description: 'Load the Marvel Champions Rhino scenario from GitHub',
     isAvailable: (ctx) => ctx.selection.count === 0,
     execute: async (ctx) => {
-      const pluginId: string = 'marvelchampions';
+      const pluginId: string = 'marvel-champions';
       const scenarioFile: string = 'marvelchampions-rhino-scenario.json';
 
       try {

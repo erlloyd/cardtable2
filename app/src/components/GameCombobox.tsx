@@ -6,12 +6,12 @@ import {
   ComboboxOption,
   ComboboxButton,
 } from '@headlessui/react';
-import { Game } from '../types/game';
+import type { PluginRegistryEntry } from '../content/pluginLoader';
 
 interface GameComboboxProps {
-  games: Game[];
-  selectedGame: Game | null;
-  onGameSelect: (game: Game | null) => void;
+  games: PluginRegistryEntry[];
+  selectedGame: PluginRegistryEntry | null;
+  onGameSelect: (game: PluginRegistryEntry | null) => void;
 }
 
 function GameCombobox({
@@ -34,7 +34,9 @@ function GameCombobox({
         <div className="combobox-wrapper">
           <ComboboxInput
             className="combobox-input"
-            displayValue={(game: Game | null) => game?.name ?? ''}
+            displayValue={(game: PluginRegistryEntry | null) =>
+              game?.name ?? ''
+            }
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Select a game..."
           />

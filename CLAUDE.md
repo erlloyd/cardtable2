@@ -78,6 +78,28 @@ Parallelize independent bd issues in a single message with multiple `Agent` tool
 
 Signals the orchestrator is slipping: writing body-text files, running `bd create` by hand for many issues, editing project code when a bd issue exists. Watch for agents bailing early — mid-sentence "final reports" with <10 tool uses and no commits — resume via `SendMessage`.
 
+### Sub-agents: file investigation beads on deviation, not in PR text
+
+When you (a sub-agent) make a non-trivial judgment call mid-implementation, deviate from the issue's stated scope (even minor), or observe behavior worth follow-up (pre-existing flakes, harness oddities, suspicious patterns in adjacent code), **file a bd issue at decision-time** — don't bury it in your final report or PR body.
+
+This is a stronger form of "file a follow-up if you hit a blocker": blockers are obvious. Non-blocker deviations get caught only if the orchestrator carefully reviews the report — a slow and lossy review channel that has already missed real issues.
+
+How to file:
+
+- Title prefix `Investigate:` (so the orchestrator can filter).
+- Description: what you observed/decided, what the alternative was, why you chose what you chose, what the investigation should resolve.
+- Type `task`, priority `P3` by default — the orchestrator re-prioritizes.
+- Link to your in-progress bd issue with `bd dep add <new-id> <your-issue>` (the relationship type is your call; `related` works if no other fits).
+
+Triggers (file a bead, don't bury in PR text):
+
+- You shipped a field, type, or API differently from the issue's spec (e.g. optional vs required, extra/missing fields) — investigate whether the choice is correct.
+- You touched a file outside the listed scope to keep the build green — investigate whether the cleanup belongs where you put it.
+- You observed a flake, timeout, or odd behavior in an unrelated area — investigate whether it's a real bug.
+- The harness, tooling, or CI did something unexpected — investigate the harness behavior, not just your workaround.
+
+Why: investigation beads decouple implementation from decision review. The orchestrator (or another sub-agent) can pick up the investigation in parallel rather than blocking on the orchestrator catching the deviation in review. PR text is not a bug tracker.
+
 ### bd prime scope — pass guidance to sub-agents inline
 
 `bd prime` and the memories it injects fire only on the top-level Claude Code session via the SessionStart hook. **Sub-agents spawned via the `Agent` tool do NOT receive `bd prime` output in their initial context.** If a sub-agent needs a memory's guidance, include the rule inline in the spawn prompt OR instruct the agent to run `bd memories` / `bd recall <key>` at the start of its work. Memories are accessible on-demand but not auto-injected.

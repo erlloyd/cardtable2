@@ -180,53 +180,6 @@ export async function loadScenarioMetadata(
 }
 
 /**
- * Find a game in the games index by ID
- *
- * @param gameId - The game ID to look up
- * @returns Game entry with id, name (optional), and manifestUrl
- * @throws Error if games index cannot be loaded or game is not found
- *
- * @example
- * ```typescript
- * const game = await findGameInIndex('testgame');
- * console.log(game.manifestUrl); // '/scenarios/testgame-basic.json'
- * ```
- */
-export async function findGameInIndex(
-  gameId: string,
-): Promise<{ id: string; name?: string; manifestUrl: string }> {
-  // Load games index
-  let response;
-  try {
-    response = await fetch('/gamesIndex.json');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Network error loading games index: ${message}`);
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to load games index: HTTP ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const gamesIndex = (await response.json()) as {
-    games: Array<{ id: string; name?: string; manifestUrl: string }>;
-  };
-
-  const game = gamesIndex.games.find((g) => g.id === gameId);
-
-  if (!game) {
-    const availableGames = gamesIndex.games.map((g) => g.id).join(', ');
-    throw new Error(
-      `Game "${gameId}" not found. Available games: ${availableGames}`,
-    );
-  }
-
-  return game;
-}
-
-/**
  * Load all asset packs for a plugin
  *
  * Loads ALL asset packs from the plugin manifest and merges them.
@@ -270,7 +223,7 @@ export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
  *
  * @example
  * ```typescript
- * const content = await loadPluginScenario('marvelchampions', 'marvelchampions-rhino-scenario.json');
+ * const content = await loadPluginScenario('marvel-champions', 'marvelchampions-rhino-scenario.json');
  * // Add objects to Y.Doc
  * for (const [id, obj] of content.objects) {
  *   store.addObject(id, obj);

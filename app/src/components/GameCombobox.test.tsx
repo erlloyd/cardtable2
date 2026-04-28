@@ -1,22 +1,24 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import GameCombobox from './GameCombobox';
-import { Game } from '../types/game';
+import type { PluginRegistryEntry } from '../content/pluginLoader';
 
-const mockGames: Game[] = [
+const mockGames: PluginRegistryEntry[] = [
   {
     id: 'fake-game',
     name: 'Fake Game',
+    author: 'Test Author',
     description: 'A placeholder game',
-    version: '1.0.0',
-    manifestUrl: '/games/fake-game/manifest.json',
+    baseUrl: '/plugins/fake-game/',
+    boxArt: '/plugins/fake-game/box-art.jpg',
   },
   {
     id: 'test-game',
     name: 'Test Game',
+    author: 'Test Author',
     description: 'Another test game',
-    version: '1.0.0',
-    manifestUrl: '/games/test-game/manifest.json',
+    baseUrl: '/plugins/test-game/',
+    boxArt: '/plugins/test-game/box-art.jpg',
   },
 ];
 

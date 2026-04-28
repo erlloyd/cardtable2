@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Game } from '../types/game';
+import type { PluginRegistryEntry } from '../content/pluginLoader';
 
 interface GameSelectorProps {
-  games: Game[];
-  onGameLaunch: (game: Game) => void;
+  games: PluginRegistryEntry[];
+  onGameLaunch: (game: PluginRegistryEntry) => void;
 }
 
-function GameCardThumb({ game }: { game: Game }) {
+function GameCardThumb({ game }: { game: PluginRegistryEntry }) {
   const [imgError, setImgError] = useState(false);
 
-  if (game.boxArt && !imgError) {
+  if (!imgError) {
     return (
       <img
         className="game-card__thumb"
@@ -90,7 +90,6 @@ function GameSelector({ games, onGameLaunch }: GameSelectorProps) {
                 <GameCardThumb game={game} />
                 <div className="game-card__meta">
                   <span className="game-card__name">{game.name}</span>
-                  <span className="game-card__version">v{game.version}</span>
                 </div>
               </div>
               <p className="game-card__description">{game.description}</p>

@@ -35,6 +35,8 @@ export interface PluginRegistryEntry {
   author: string;
   description: string;
   baseUrl: string;
+  /** Box-art image URL surfaced on the game-select UI. */
+  boxArt: string;
 }
 
 export interface PluginManifest {

@@ -8,7 +8,10 @@ import {
 } from 'unique-names-generator';
 import { useState, useEffect } from 'react';
 import GameSelector from '../components/GameSelector';
-import { Game, GamesIndex } from '../types/game';
+import {
+  loadPluginRegistry,
+  type PluginRegistryEntry,
+} from '../content/pluginLoader';
 
 export const Route = createFileRoute('/')({
   component: GameSelect,
@@ -23,7 +26,7 @@ const nameConfig: Config = {
 
 function GameSelect() {
   const navigate = useNavigate();
-  const [games, setGames] = useState<Game[]>([]);
+  const [games, setGames] = useState<PluginRegistryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attemptCount, setAttemptCount] = useState(0);
@@ -33,12 +36,8 @@ function GameSelect() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch('/gamesIndex.json');
-        if (!response.ok) {
-          throw new Error('Failed to load games index');
-        }
-        const data = (await response.json()) as GamesIndex;
-        setGames(data.games);
+        const registry = await loadPluginRegistry();
+        setGames(registry.plugins);
         setLoading(false);
       } catch (err) {
         const errorMessage =
@@ -55,7 +54,7 @@ function GameSelect() {
     setAttemptCount((c) => c + 1);
   };
 
-  const handleGameLaunch = (game: Game) => {
+  const handleGameLaunch = (game: PluginRegistryEntry) => {
     const tableId = uniqueNamesGenerator(nameConfig);
     void navigate({
       to: '/table/$id',
@@ -126,7 +125,7 @@ function GameSelect() {
             <div className="error-panel__icon">◇</div>
             <h2 className="error-panel__title">No games found</h2>
             <p className="error-panel__message">
-              Add games to your gamesIndex.json to get started.
+              Add plugins to your pluginsIndex.json to get started.
             </p>
           </div>
         </div>

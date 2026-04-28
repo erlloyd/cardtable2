@@ -1,36 +1,29 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import GameSelector from './GameSelector';
-import { Game } from '../types/game';
+import type { PluginRegistryEntry } from '../content/pluginLoader';
 
-const mockGames: Game[] = [
+const mockGames: PluginRegistryEntry[] = [
   {
     id: 'fake-game',
     name: 'Fake Game',
+    author: 'Test Author',
     description: 'A placeholder game',
-    version: '1.0.0',
-    manifestUrl: '/games/fake-game/manifest.json',
+    baseUrl: '/plugins/fake-game/',
+    boxArt: '/plugins/fake-game/box-art.jpg',
   },
   {
     id: 'test-game',
     name: 'Test Game',
+    author: 'Test Author',
     description: 'Another test game',
-    version: '1.0.0',
-    manifestUrl: '/games/test-game/manifest.json',
+    baseUrl: '/plugins/test-game/',
+    boxArt: '/plugins/test-game/box-art.jpg',
   },
 ];
 
-const singleGame: Game[] = [mockGames[0]];
-
-const gameWithBoxArt: Game = {
-  id: 'art-game',
-  name: 'Art Game',
-  description: 'A game with box art',
-  version: '1.0.0',
-  manifestUrl: '/games/art-game/manifest.json',
-  boxArt: '/games/art-game/box-art.jpg',
-};
+const singleGame: PluginRegistryEntry[] = [mockGames[0]];
 
 describe('GameSelector', () => {
   it('renders game cards for all provided games', () => {
@@ -100,28 +93,21 @@ describe('GameSelector', () => {
     expect(handleLaunch).toHaveBeenCalledWith(mockGames[0]);
   });
 
-  it('game card shows first letter monogram when no boxArt', () => {
-    const { container } = render(
-      <GameSelector games={mockGames} onGameLaunch={vi.fn()} />,
-    );
+  it('renders box art image with correct src and alt', () => {
+    render(<GameSelector games={singleGame} onGameLaunch={vi.fn()} />);
 
-    const icons = container.querySelectorAll('.game-card__icon');
-    expect(icons[0]).toHaveTextContent('F');
-    expect(icons[1]).toHaveTextContent('T');
-  });
-
-  it('renders box art image when game has boxArt', () => {
-    render(<GameSelector games={[gameWithBoxArt]} onGameLaunch={vi.fn()} />);
-
-    const img = screen.getByRole('img', { name: 'Art Game' });
+    const img = screen.getByRole('img', { name: 'Fake Game' });
     expect(img).toBeInTheDocument();
-    expect(img).toHaveAttribute('src', '/games/art-game/box-art.jpg');
+    expect(img).toHaveAttribute('src', '/plugins/fake-game/box-art.jpg');
   });
 
-  it('shows monogram instead of image when game has no boxArt', () => {
+  it('falls back to first-letter monogram when boxArt fails to load', () => {
     const { container } = render(
       <GameSelector games={singleGame} onGameLaunch={vi.fn()} />,
     );
+
+    const img = screen.getByRole('img', { name: 'Fake Game' });
+    fireEvent.error(img);
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
     const icon = container.querySelector('.game-card__icon');
@@ -194,13 +180,6 @@ describe('GameSelector', () => {
 
     expect(screen.getByText('A placeholder game')).toBeInTheDocument();
     expect(screen.getByText('Another test game')).toBeInTheDocument();
-  });
-
-  it('renders game versions', () => {
-    render(<GameSelector games={mockGames} onGameLaunch={vi.fn()} />);
-
-    const versions = screen.getAllByText('v1.0.0');
-    expect(versions.length).toBeGreaterThan(0);
   });
 
   it('empty state message includes the search query', async () => {

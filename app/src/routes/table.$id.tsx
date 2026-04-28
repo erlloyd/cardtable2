@@ -180,29 +180,41 @@ function Table() {
     });
   }, [store, isStoreReady, location.search]);
 
-  // Store gameId in Y.Doc metadata from location state (new table only)
+  // Store pluginId in Y.Doc metadata from location state (new table only).
+  // Reads still tolerate the legacy 'gameId' key — IndexedDB migration is
+  // Phase 4's responsibility, not Phase 2.
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;
     }
 
-    const gameIdFromState =
-      typeof location.state === 'object' &&
-      location.state !== null &&
-      'gameId' in location.state &&
-      typeof location.state.gameId === 'string'
-        ? location.state.gameId
-        : undefined;
-    const storedGameId = store.metadata.get('gameId') as string | undefined;
+    const stateRecord =
+      typeof location.state === 'object' && location.state !== null
+        ? (location.state as unknown as Record<string, unknown>)
+        : null;
+    const pluginIdFromStateRaw = stateRecord?.pluginId;
+    const gameIdFromStateRaw = stateRecord?.gameId;
+    const pluginIdFromState =
+      typeof pluginIdFromStateRaw === 'string'
+        ? pluginIdFromStateRaw
+        : typeof gameIdFromStateRaw === 'string'
+          ? gameIdFromStateRaw
+          : undefined;
+    const storedPluginId =
+      (store.metadata.get('pluginId') as string | undefined) ??
+      (store.metadata.get('gameId') as string | undefined);
 
-    // New table: store gameId from navigation state
-    if (gameIdFromState && !storedGameId) {
-      console.log(`[Table] Storing gameId in metadata: ${gameIdFromState}`);
-      store.metadata.set('gameId', gameIdFromState);
+    // New table: store pluginId from navigation state under the canonical key.
+    if (pluginIdFromState && !storedPluginId) {
+      console.log(`[Table] Storing pluginId in metadata: ${pluginIdFromState}`);
+      store.metadata.set('pluginId', pluginIdFromState);
     }
   }, [location.state, store, isStoreReady]);
 
-  // Load content on mount: either reload scenario from metadata or load base game assets
+  // Load content on mount: a plugin is a property of the table, not of a
+  // scenario. Always load the plugin's assets first (eagerly + cached via
+  // pluginLoader), then optionally restore a previously loaded scenario.
+  //
   // Note: Dependencies are [store, isStoreReady] only - we intentionally do NOT
   // depend on store.metadata because it's set once on mount and never changes
   // during the session. Depending on metadata would cause unnecessary reloads when
@@ -218,46 +230,49 @@ function Table() {
       setPacksError(null);
 
       try {
-        // Check if there's a previously loaded scenario to restore
+        // Reads tolerate the legacy 'gameId' key for now; Phase 4 migrates.
+        const pluginId =
+          (store.metadata.get('pluginId') as string | undefined) ??
+          (store.metadata.get('gameId') as string | undefined);
+
+        if (!pluginId) {
+          console.log('[Table] No pluginId in metadata, skipping pack loading');
+          // Blank state (no plugin, no scenario) — nothing to load.
+          setPacksError(null);
+          setPacksLoading(false);
+          return;
+        }
+
+        // Always load plugin assets first, unconditionally. The plugin loader's
+        // in-flight cache dedupes any concurrent callers (e.g. Load Scenario).
+        console.log('[Table] Loading plugin assets for:', pluginId);
+        const assets = await loadPluginAssets(pluginId);
+        store.setGameAssets(assets);
+        registerAttachmentActions(ActionRegistry.getInstance(), assets);
+
+        // If a scenario was previously loaded, instantiate it on top of the
+        // plugin assets. (Phase 3 will avoid the redundant pack refetch
+        // currently done inside reloadScenarioFromMetadata.)
         const loadedScenario = store.metadata.get('loadedScenario') as
           | LoadedScenarioMetadata
           | undefined;
-
         if (loadedScenario) {
-          // Reload scenario from metadata (for persistence and multiplayer)
           console.log('[Table] Reloading scenario from metadata:', {
             type: loadedScenario.type,
             scenarioName: loadedScenario.scenarioName,
           });
-
           const content = await reloadScenarioFromMetadata(loadedScenario);
-
-          // On reload: Only restore gameAssets, NOT objects
-          // Objects are already persisted in IndexedDB with their current state.
-          // Re-adding them would overwrite user modifications (moved stacks, etc.)
+          // On reload: Only restore gameAssets, NOT objects. Objects are
+          // already persisted in IndexedDB with their current state; re-adding
+          // them would overwrite user modifications.
           console.log(
-            '[Table] Restoring gameAssets only (objects already in IndexedDB)',
+            '[Table] Restoring gameAssets from scenario (objects already in IndexedDB)',
           );
           store.setGameAssets(content.content);
           registerAttachmentActions(
             ActionRegistry.getInstance(),
             content.content,
           );
-        } else {
-          // No scenario loaded - fall back to loading base game asset packs
-          const gameId = store.metadata.get('gameId') as string | undefined;
-          if (!gameId) {
-            console.log('[Table] No gameId in metadata, skipping pack loading');
-            // Clear error when in blank state (no gameId, no scenario)
-            setPacksError(null);
-            setPacksLoading(false);
-            return;
-          }
-
-          console.log('[Table] Loading plugin assets for:', gameId);
-          const assets = await loadPluginAssets(gameId);
-          store.setGameAssets(assets);
-          registerAttachmentActions(ActionRegistry.getInstance(), assets);
         }
       } catch (err) {
         const errorMessage =
@@ -274,10 +289,11 @@ function Table() {
     // Observe metadata changes to detect when table is reset
     const observer = () => {
       const loadedScenario = store.metadata.get('loadedScenario');
-      const gameId = store.metadata.get('gameId');
+      const pluginId =
+        store.metadata.get('pluginId') ?? store.metadata.get('gameId');
 
       // If both are cleared (table reset), clear error
-      if (!loadedScenario && !gameId) {
+      if (!loadedScenario && !pluginId) {
         console.log('[Table] Metadata cleared, clearing error state');
         setPacksError(null);
       }

@@ -409,13 +409,18 @@ export function registerDefaultActions(): void {
     category: 'Global Actions',
     description: 'Load the first scenario for the current game',
     isAvailable: (ctx) => {
-      // Only available when nothing selected and gameId exists
-      const gameId = ctx.store.metadata.get('gameId') as string | undefined;
-      return ctx.selection.count === 0 && gameId !== undefined;
+      // Only available when nothing selected and a plugin is bound to the
+      // table. Reads tolerate the legacy 'gameId' key (Phase 4 migrates).
+      const pluginId =
+        (ctx.store.metadata.get('pluginId') as string | undefined) ??
+        (ctx.store.metadata.get('gameId') as string | undefined);
+      return ctx.selection.count === 0 && pluginId !== undefined;
     },
     execute: async (ctx) => {
       try {
-        const pluginId = ctx.store.metadata.get('gameId') as string;
+        const pluginId =
+          (ctx.store.metadata.get('pluginId') as string | undefined) ??
+          (ctx.store.metadata.get('gameId') as string);
 
         console.log(`[Load Scenario] Loading scenario for plugin: ${pluginId}`);
 
@@ -454,7 +459,9 @@ export function registerDefaultActions(): void {
           error instanceof Error ? error.message : String(error);
         console.error('[Load Scenario] Failed to load scenario', {
           errorId: ACTION_LOAD_SCENARIO_FAILED,
-          gameId: ctx.store.metadata.get('gameId'),
+          pluginId:
+            ctx.store.metadata.get('pluginId') ??
+            ctx.store.metadata.get('gameId'),
           error: errorMessage,
         });
         alert(`Failed to load scenario: ${errorMessage}`);

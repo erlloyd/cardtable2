@@ -1143,6 +1143,8 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
 export function resetTable(store: YjsStore): void {
   store.clearAllObjects();
   store.metadata.delete('loadedScenario');
+  store.metadata.delete('pluginId');
+  // Also clear legacy key on pre-migration tables.
   store.metadata.delete('gameId');
   store.setGameAssets(null);
 }

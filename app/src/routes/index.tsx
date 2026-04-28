@@ -59,7 +59,7 @@ function GameSelect() {
     void navigate({
       to: '/table/$id',
       params: { id: tableId },
-      state: { gameId: game.id } as Record<string, unknown>,
+      state: { pluginId: game.id } as Record<string, unknown>,
     });
   };
 

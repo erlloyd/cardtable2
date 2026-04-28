@@ -15,6 +15,12 @@ daemon.*
 # Interactions log (runtime, not versioned)
 interactions.jsonl
 
+# Issue export (Dolt is the source of truth in Dolt-sync mode; this jsonl
+# is a derived export that diverges non-deterministically across branches
+# and produces spurious merge conflicts. Use `bd export -o .beads/issues.jsonl`
+# locally if you need a snapshot. See bd issues #797 and #1379.)
+issues.jsonl
+
 # Push state (runtime, per-machine)
 push-state.json
 

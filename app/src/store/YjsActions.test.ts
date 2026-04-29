@@ -14,6 +14,7 @@ import {
   attachCards,
   detachCard,
   detachAllCards,
+  resetTable,
 } from './YjsActions';
 import {
   ObjectKind,
@@ -2973,5 +2974,95 @@ describe('YjsActions - attachCards', () => {
       expect(child1Obj._sortKey > bystanderObj._sortKey).toBe(true);
       expect(child2Obj._sortKey > bystanderObj._sortKey).toBe(true);
     });
+  });
+});
+
+// ============================================================================
+// resetTable Tests
+// ============================================================================
+
+describe('YjsActions - resetTable', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-reset-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  it('clears placed objects', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    expect(store.getObjectYMap(stackId)).toBeDefined();
+    expect(store.objects.size).toBeGreaterThan(0);
+
+    resetTable(store);
+
+    expect(store.objects.size).toBe(0);
+  });
+
+  it('clears loadedScenario metadata', () => {
+    store.metadata.set('loadedScenario', {
+      type: 'plugin',
+      pluginId: 'test-plugin',
+      scenarioFile: 'scenario-1.json',
+      loadedAt: 1234,
+      scenarioName: 'Test',
+    });
+
+    expect(store.metadata.get('loadedScenario')).toBeDefined();
+
+    resetTable(store);
+
+    expect(store.metadata.get('loadedScenario')).toBeUndefined();
+  });
+
+  it('preserves pluginId metadata (the table is still bound to the plugin)', () => {
+    store.metadata.set('pluginId', 'test-plugin');
+    store.metadata.set('loadedScenario', {
+      type: 'plugin',
+      pluginId: 'test-plugin',
+      scenarioFile: 'scenario-1.json',
+      loadedAt: 1234,
+      scenarioName: 'Test',
+    });
+
+    resetTable(store);
+
+    // pluginId is the table's identity for its plugin — must survive reset.
+    expect(store.metadata.get('pluginId')).toBe('test-plugin');
+  });
+
+  it('preserves store.gameAssets (still valid for the bound plugin)', () => {
+    const assets = {
+      packs: [],
+      cardTypes: {},
+      cards: {},
+      cardSets: {},
+      tokens: {},
+      counters: {},
+      mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
+    };
+    store.setGameAssets(assets);
+    expect(store.getGameAssets()).toBe(assets);
+
+    resetTable(store);
+
+    // gameAssets stay loaded — no reason to invalidate the renderer's caches.
+    expect(store.getGameAssets()).toBe(assets);
   });
 });

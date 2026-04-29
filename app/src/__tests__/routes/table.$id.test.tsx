@@ -91,7 +91,6 @@ vi.mock('../../store/YjsStore', () => {
 // Mock the content module to capture loadPluginAssets calls without doing
 // real network IO.
 const loadPluginAssetsMock = vi.fn<(pluginId: string) => Promise<GameAssets>>();
-const reloadScenarioFromMetadataMock = vi.fn();
 
 const emptyAssets: GameAssets = {
   packs: [],
@@ -113,9 +112,6 @@ vi.mock('../../content', async () => {
     ...actual,
     loadPluginAssets: (pluginId: string): Promise<GameAssets> =>
       loadPluginAssetsMock(pluginId),
-    reloadScenarioFromMetadata: (
-      metadata: ContentModule.LoadedScenarioMetadata,
-    ): unknown => reloadScenarioFromMetadataMock(metadata),
   };
 });
 
@@ -127,7 +123,6 @@ describe('Table Route', () => {
     }
     setGameAssetsMock.mockClear();
     loadPluginAssetsMock.mockReset();
-    reloadScenarioFromMetadataMock.mockReset();
     loadPluginAssetsMock.mockResolvedValue(emptyAssets);
   });
 
@@ -178,8 +173,6 @@ describe('Table Route', () => {
 
     expect(loadPluginAssetsMock).toHaveBeenCalledTimes(1);
     expect(loadPluginAssetsMock).toHaveBeenCalledWith('test-plugin');
-    // No scenario metadata was set, so reloadScenarioFromMetadata must not run.
-    expect(reloadScenarioFromMetadataMock).not.toHaveBeenCalled();
     // setGameAssets called exactly once on the no-scenario happy path.
     expect(setGameAssetsMock).toHaveBeenCalledTimes(1);
     expect(setGameAssetsMock).toHaveBeenCalledWith(emptyAssets);

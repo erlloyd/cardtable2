@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { findBlobUrl, replaceImagePathsWithBlobUrls } from './index';
-import type { GameAssets } from '@cardtable2/shared';
+import {
+  findBlobUrl,
+  loadScenarioFromPlugin,
+  replaceImagePathsWithBlobUrls,
+} from './index';
+import { __resetPluginCacheForTests } from './pluginLoader';
+import type { GameAssets, Scenario } from '@cardtable2/shared';
 
 /**
  * Helper: build a minimal GameAssets for testing.
@@ -351,5 +356,170 @@ describe('replaceImagePathsWithBlobUrls', () => {
       key: 'extra',
       path: 'tokens/extra-damage.png',
     });
+  });
+});
+
+// ============================================================================
+// loadScenarioFromPlugin Tests
+// ============================================================================
+
+describe('loadScenarioFromPlugin', () => {
+  let originalFetch: typeof global.fetch;
+
+  const pluginRegistry = {
+    plugins: [
+      {
+        id: 'test-plugin',
+        name: 'Test Plugin',
+        author: 'Test',
+        description: 'desc',
+        baseUrl: 'https://example.com/plugins/test/',
+        boxArt: 'https://example.com/plugins/test/box.png',
+      },
+    ],
+  };
+
+  const pluginManifest = {
+    id: 'test-plugin',
+    name: 'Test Plugin',
+    version: '1.0.0',
+    assets: ['pack-a.json', 'pack-b.json'],
+    scenarios: ['scenario-1.json'],
+  };
+
+  const scenarioJson: Scenario = {
+    schema: 'ct-scenario@2',
+    id: 'scenario-1',
+    name: 'Test Scenario',
+    version: '1.0.0',
+    packs: [],
+  };
+
+  beforeEach(() => {
+    __resetPluginCacheForTests();
+    originalFetch = global.fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('does not fetch or merge asset packs', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/pluginsIndex.json') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(pluginRegistry),
+        });
+      }
+      if (url.endsWith('index.json')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(pluginManifest),
+        });
+      }
+      if (url.endsWith('scenario-1.json')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(scenarioJson),
+        });
+      }
+      throw new Error(
+        `Unexpected fetch in loadScenarioFromPlugin test: ${url}`,
+      );
+    });
+    global.fetch = fetchMock;
+
+    const gameAssets: GameAssets = {
+      packs: [],
+      cardTypes: {},
+      cards: {},
+      cardSets: {},
+      tokens: {},
+      counters: {},
+      mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
+    };
+
+    const result = await loadScenarioFromPlugin(
+      'test-plugin',
+      'scenario-1.json',
+      gameAssets,
+    );
+
+    // Returned content reuses the supplied gameAssets reference (no new merge).
+    expect(result.content).toBe(gameAssets);
+    expect(result.scenario).toEqual(scenarioJson);
+
+    // No pack URLs were fetched. Allowed: registry, manifest, scenario JSON.
+    // This is the whole point of the split — scenario load is pure.
+    const fetchedUrls = fetchMock.mock.calls.map((call) => call[0] as string);
+    const packUrls = fetchedUrls.filter((u) => u.includes('pack-'));
+    expect(packUrls).toHaveLength(0);
+
+    // The exact set of fetches should be: registry + plugin manifest + scenario.
+    expect(fetchedUrls).toHaveLength(3);
+    expect(fetchedUrls).toContain('/pluginsIndex.json');
+    expect(
+      fetchedUrls.some(
+        (u) => u === 'https://example.com/plugins/test/index.json',
+      ),
+    ).toBe(true);
+    expect(
+      fetchedUrls.some(
+        (u) => u === 'https://example.com/plugins/test/scenario-1.json',
+      ),
+    ).toBe(true);
+  });
+
+  it('returns objects produced by instantiateScenario over the supplied gameAssets', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url === '/pluginsIndex.json') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(pluginRegistry),
+        });
+      }
+      if (url.endsWith('index.json')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(pluginManifest),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(scenarioJson),
+      });
+    });
+
+    const gameAssets: GameAssets = {
+      packs: [],
+      cardTypes: {},
+      cards: {},
+      cardSets: {},
+      tokens: {},
+      counters: {},
+      mats: {},
+      tokenTypes: {},
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
+    };
+
+    const result = await loadScenarioFromPlugin(
+      'test-plugin',
+      'scenario-1.json',
+      gameAssets,
+    );
+
+    // Empty `packs` in the scenario means instantiateScenario produces no
+    // objects — the contract here is that it ran and returned a Map. The
+    // important behavior is verified in the previous test: no pack fetches.
+    expect(result.objects).toBeInstanceOf(Map);
+    // gameAssets reference is preserved.
+    expect(result.content).toBe(gameAssets);
   });
 });

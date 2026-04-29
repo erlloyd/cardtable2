@@ -212,45 +212,46 @@ export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
 // ============================================================================
 
 /**
- * Load a scenario from a plugin
+ * Load a scenario from a plugin against already-resident game assets.
  *
- * This loads a scenario from a plugin repository, fetching all required
- * asset packs and instantiating the scenario objects.
+ * This is the pure scenario-load path: fetch the scenario JSON, instantiate
+ * objects against the supplied `gameAssets`. It does NOT fetch asset packs.
  *
- * @param pluginId - The plugin ID from pluginsIndex.json
+ * Callers are expected to have already loaded the plugin's assets (e.g. via
+ * `loadPluginAssets` on table mount, served from the plugin cache). On the
+ * happy path this is a single network request — the scenario JSON — plus a
+ * synchronous `instantiateScenario` call.
+ *
+ * @param pluginId - The plugin ID from pluginsIndex.json (used to resolve the
+ *   scenario URL via the plugin registry)
  * @param scenarioFilename - The scenario filename from the plugin manifest
- * @returns Complete loaded content ready to be added to Y.Doc
+ * @param gameAssets - Already-loaded game assets the scenario instantiates
+ *   against
+ * @returns Complete loaded content; `content` is the same `gameAssets`
+ *   reference passed in (no merge happens here)
  *
  * @example
  * ```typescript
- * const content = await loadPluginScenario('marvel-champions', 'marvelchampions-rhino-scenario.json');
- * // Add objects to Y.Doc
+ * const gameAssets = store.getGameAssets() ?? await loadPluginAssets(pluginId);
+ * const content = await loadScenarioFromPlugin(pluginId, 'rhino-scenario.json', gameAssets);
  * for (const [id, obj] of content.objects) {
- *   store.addObject(id, obj);
+ *   store.setObject(id, obj);
  * }
  * ```
  */
-export async function loadPluginScenario(
+export async function loadScenarioFromPlugin(
   pluginId: string,
   scenarioFilename: string,
+  gameAssets: GameAssets,
 ): Promise<LoadedContent> {
-  // Load plugin manifest
+  // Plugin lookup is served from the in-flight cache on the happy path.
   const plugin = await loadPlugin(pluginId);
-  const baseUrl = plugin.registry.baseUrl.replace(/\/$/, '');
 
-  // Load ALL asset packs from the plugin manifest (not just scenario.packs)
-  const packUrls = plugin.manifest.assets.map(
-    (filename) => `${baseUrl}/${filename}`,
-  );
-  const packs = await loadAssetPacks(packUrls);
-  const content = mergeAssetPacks(packs, baseUrl);
-
-  // Load and instantiate scenario
   const scenarioUrl = getPluginScenarioUrl(plugin, scenarioFilename);
   const scenario = await loadScenario(scenarioUrl);
-  const objects = instantiateScenario(scenario, content);
+  const objects = instantiateScenario(scenario, gameAssets);
 
-  return { scenario, content, objects };
+  return { scenario, content: gameAssets, objects };
 }
 
 /**
@@ -316,78 +317,6 @@ export async function loadLocalPluginScenario(
     pluginManifest: plugin.manifest,
     blobUrls: plugin.imageUrls,
   };
-}
-
-/**
- * Reload a scenario from stored metadata
- *
- * This function is called on table mount to restore previously loaded scenarios.
- * It reads the metadata from Y.Doc and reloads the appropriate scenario type.
- *
- * Note: 'local-dev' type scenarios cannot be reloaded (require user interaction)
- *
- * @param metadata - Loaded scenario metadata from Y.Doc
- * @returns Complete loaded content ready to be set as gameAssets
- * @throws Error if scenario cannot be reloaded or metadata is invalid
- *
- * @example
- * ```typescript
- * const metadata = store.metadata.get('loadedScenario');
- * if (metadata) {
- *   const content = await reloadScenarioFromMetadata(metadata);
- *   setGameAssets(content.content);
- * }
- * ```
- */
-export async function reloadScenarioFromMetadata(
-  metadata: LoadedScenarioMetadata,
-): Promise<LoadedContent> {
-  console.log('[Content] Reloading scenario from metadata:', {
-    type: metadata.type,
-    scenarioName: metadata.scenarioName,
-    loadedAt: new Date(metadata.loadedAt).toISOString(),
-  });
-
-  switch (metadata.type) {
-    case 'plugin':
-      // Type system guarantees pluginId and scenarioFile are present
-      return loadPluginScenario(metadata.pluginId, metadata.scenarioFile);
-
-    case 'builtin':
-      // Type system guarantees scenarioUrl is present
-      return loadCompleteScenario(metadata.scenarioUrl);
-
-    case 'local-dev':
-      console.error('[Content] Cannot reload local-dev scenario', {
-        errorId: 'CONTENT_RELOAD_LOCAL_DEV_UNSUPPORTED',
-        metadata,
-      });
-      throw new Error(
-        'Cannot automatically reload local-dev scenarios (requires user interaction)',
-      );
-
-    default: {
-      // TypeScript exhaustiveness checking means metadata is 'never' here.
-      // However, since metadata comes from Y.Doc (potentially corrupted/stale),
-      // we handle unexpected runtime values defensively.
-      const unknownMetadata = metadata as { type?: unknown };
-      const typeValue = unknownMetadata.type;
-      const unknownType =
-        typeof typeValue === 'string' ||
-        typeof typeValue === 'number' ||
-        typeof typeValue === 'boolean'
-          ? String(typeValue)
-          : 'undefined';
-      console.error('[Content] Unknown metadata type during scenario reload', {
-        errorId: 'CONTENT_RELOAD_UNKNOWN_TYPE',
-        receivedType: unknownType,
-        metadata: unknownMetadata,
-      });
-      throw new Error(
-        `Cannot reload scenario: unknown metadata type "${unknownType}".`,
-      );
-    }
-  }
 }
 
 /**

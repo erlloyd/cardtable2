@@ -181,8 +181,6 @@ function Table() {
   }, [store, isStoreReady, location.search]);
 
   // Store pluginId in Y.Doc metadata from location state (new table only).
-  // Reads still tolerate the legacy 'gameId' key — IndexedDB migration is
-  // Phase 4's responsibility, not Phase 2.
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;
@@ -193,18 +191,13 @@ function Table() {
         ? (location.state as unknown as Record<string, unknown>)
         : null;
     const pluginIdFromStateRaw = stateRecord?.pluginId;
-    const gameIdFromStateRaw = stateRecord?.gameId;
     const pluginIdFromState =
       typeof pluginIdFromStateRaw === 'string'
         ? pluginIdFromStateRaw
-        : typeof gameIdFromStateRaw === 'string'
-          ? gameIdFromStateRaw
-          : undefined;
-    const storedPluginId =
-      (store.metadata.get('pluginId') as string | undefined) ??
-      (store.metadata.get('gameId') as string | undefined);
+        : undefined;
+    const storedPluginId = store.metadata.get('pluginId') as string | undefined;
 
-    // New table: store pluginId from navigation state under the canonical key.
+    // New table: store pluginId from navigation state.
     if (pluginIdFromState && !storedPluginId) {
       console.log(`[Table] Storing pluginId in metadata: ${pluginIdFromState}`);
       store.metadata.set('pluginId', pluginIdFromState);
@@ -230,10 +223,7 @@ function Table() {
       setPacksError(null);
 
       try {
-        // Reads tolerate the legacy 'gameId' key for now; Phase 4 migrates.
-        const pluginId =
-          (store.metadata.get('pluginId') as string | undefined) ??
-          (store.metadata.get('gameId') as string | undefined);
+        const pluginId = store.metadata.get('pluginId') as string | undefined;
 
         if (!pluginId) {
           console.log('[Table] No pluginId in metadata, skipping pack loading');
@@ -289,8 +279,7 @@ function Table() {
     // Observe metadata changes to detect when table is reset
     const observer = () => {
       const loadedScenario = store.metadata.get('loadedScenario');
-      const pluginId =
-        store.metadata.get('pluginId') ?? store.metadata.get('gameId');
+      const pluginId = store.metadata.get('pluginId');
 
       // If both are cleared (table reset), clear error
       if (!loadedScenario && !pluginId) {

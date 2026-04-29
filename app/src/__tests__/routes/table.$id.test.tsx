@@ -185,12 +185,11 @@ describe('Table Route', () => {
     expect(setGameAssetsMock).toHaveBeenCalledWith(emptyAssets);
   });
 
-  it('tolerates legacy gameId metadata key for plugin lookup', async () => {
-    // Pre-migration table: only the legacy 'gameId' key is present.
-    mockMetadata.set('gameId', 'legacy-plugin');
+  it('skips plugin loading when no pluginId metadata is set', async () => {
+    // No pluginId set — blank table state.
 
     const memoryHistory = createMemoryHistory({
-      initialEntries: ['/table/legacy-table'],
+      initialEntries: ['/table/blank-table'],
     });
     const router = createRouter({
       routeTree,
@@ -205,6 +204,7 @@ describe('Table Route', () => {
 
     await screen.findByTestId('board');
 
-    expect(loadPluginAssetsMock).toHaveBeenCalledWith('legacy-plugin');
+    expect(loadPluginAssetsMock).not.toHaveBeenCalled();
+    expect(setGameAssetsMock).not.toHaveBeenCalled();
   });
 });

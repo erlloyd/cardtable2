@@ -24,12 +24,23 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'pnpm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    env: {
-      VITE_E2E: 'true', // Disable antialias during E2E tests
+  // Start both the vite dev server (port 3000) and the y-websocket server
+  // (port 3001) so multi-context tests like e2e/multiplayer-join.spec.ts can
+  // synchronize across browser contexts. The Playwright cwd is `app/`, but
+  // pnpm `--filter` resolves workspaces from the monorepo root regardless.
+  webServer: [
+    {
+      command: 'pnpm --filter "@cardtable2/app" run dev',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env.CI,
+      env: {
+        VITE_E2E: 'true', // Disable antialias during E2E tests
+      },
     },
-  },
+    {
+      command: 'pnpm --filter "@cardtable2/server" run dev',
+      url: 'http://localhost:3001/health',
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

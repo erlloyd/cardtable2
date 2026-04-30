@@ -296,13 +296,28 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
-  // Observe metadata changes for multiplayer scenario loading
+  // Observe metadata changes for multiplayer asset loading.
   //
-  // When a remote player loads a scenario on a table where this client has
-  // not yet loaded plugin assets (e.g. they joined the table after the
-  // pluginId arrived but before the mount effect's plugin fetch finished, or
-  // the pluginId itself was pushed remotely), we load the plugin's assets
-  // here so this client can render objects that the CRDT just synced in.
+  // Two remote-driven paths reach here:
+  //
+  // 1. Bare-pluginId arrival (multiplayer JOIN). Player A creates a fresh
+  //    table and writes `pluginId` to metadata; Player B joins the same URL
+  //    with empty IndexedDB. B's mount effect runs at `isStoreReady` and sees
+  //    no `pluginId` (IndexedDB had nothing to hydrate); the WebSocket then
+  //    syncs `pluginId` in afterwards. Without this observer reacting to the
+  //    bare `pluginId` write, B's `gameAssets` would stay null and any
+  //    CRDT-synced objects would render without their plugin assets.
+  //
+  // 2. Remote scenario load. Another player loads a scenario; we need plugin
+  //    assets locally to render the objects that the CRDT just synced in.
+  //    `loadedScenario.pluginId` is authoritative for which plugin to load,
+  //    and the `loadedAt` timestamp guards against a stale-load race when the
+  //    scenario changes mid-fetch.
+  //
+  // Both paths converge on the same load primitive (`loadPluginAssets`). The
+  // pluginLoader's in-flight cache dedupes concurrent calls, so there's no
+  // harm if both an early `pluginId` and a later `loadedScenario` arrive in
+  // separate transactions for the same plugin.
   //
   // We do NOT re-instantiate scenario objects here: the remote already added
   // them to Y.Doc and they sync via the CRDT. We only need the plugin
@@ -313,10 +328,6 @@ function Table() {
   // - Storing them in Y.Doc would cause excessive sync overhead for every change
   // - Y.Doc is optimized for operational transforms on structured data, not large immutable objects
   // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and load assets per-client
-  //
-  // Race condition handling:
-  // - If scenario changes while loading, we compare loadedAt timestamps
-  // - Stale gameAssets are discarded to prevent incorrect rendering
   useEffect(() => {
     if (!store || !isStoreReady) return;
 
@@ -327,11 +338,14 @@ function Table() {
       // Only react to remote changes (from other players)
       if (transaction.local) return;
 
+      // If we already have assets, nothing to do.
+      if (store.getGameAssets()) return;
+
       const loadedScenario = store.metadata.get('loadedScenario') as
         | LoadedScenarioMetadata
         | undefined;
 
-      // Validate metadata structure
+      // Validate scenario metadata structure when present.
       if (
         loadedScenario &&
         (typeof loadedScenario !== 'object' || !loadedScenario.type)
@@ -343,26 +357,51 @@ function Table() {
         return;
       }
 
-      // Only the 'plugin' branch is reachable here: 'builtin' is unused by app
-      // code, and 'local-dev' cannot be reloaded without user interaction.
-      if (
-        loadedScenario &&
-        loadedScenario.type === 'plugin' &&
-        !store.getGameAssets()
-      ) {
-        const pluginId = loadedScenario.pluginId;
-        console.log(
-          '[Table] Remote player loaded scenario; loading plugin assets',
-        );
-        setPacksLoading(true);
-        setPacksError(null);
+      // Resolve which pluginId to load and whether we need stale-load
+      // race-checking. Scenario path is authoritative when present (carries a
+      // `loadedAt` timestamp); bare-pluginId path is set-once-on-create so no
+      // race-check is required.
+      //
+      // Only the 'plugin' branch of `loadedScenario` is reachable in app code:
+      // 'builtin' is unused, and 'local-dev' cannot be reloaded without user
+      // interaction.
+      let pluginId: string | undefined;
+      let metadataTimestamp: number | undefined;
+      let source: 'scenario' | 'pluginId';
 
-        // Capture metadata timestamp to detect stale scenarios
-        const metadataTimestamp = loadedScenario.loadedAt;
+      if (loadedScenario && loadedScenario.type === 'plugin') {
+        pluginId = loadedScenario.pluginId;
+        metadataTimestamp = loadedScenario.loadedAt;
+        source = 'scenario';
+      } else if (!loadedScenario) {
+        const bare = store.metadata.get('pluginId') as string | undefined;
+        if (bare) {
+          pluginId = bare;
+          source = 'pluginId';
+        } else {
+          return;
+        }
+      } else {
+        // loadedScenario present but type !== 'plugin' (builtin/local-dev) —
+        // not handled by this observer.
+        return;
+      }
 
-        void loadPluginAssets(pluginId)
-          .then((assets) => {
-            // Check if scenario metadata changed while loading (race condition)
+      if (!pluginId) return;
+
+      console.log(
+        `[Table] Remote ${source === 'scenario' ? 'scenario load' : 'pluginId arrival'}; loading plugin assets`,
+        { pluginId, source },
+      );
+      setPacksLoading(true);
+      setPacksError(null);
+
+      void loadPluginAssets(pluginId)
+        .then((assets) => {
+          // Stale-load race-check applies only to scenario-driven loads,
+          // where the scenario can change mid-fetch. For bare-pluginId we
+          // skip the check (pluginId is set-once on table create).
+          if (source === 'scenario') {
             const currentMetadata = store.metadata.get('loadedScenario') as
               | LoadedScenarioMetadata
               | undefined;
@@ -374,7 +413,10 @@ function Table() {
               console.log(
                 '[Table] Scenario changed during load, discarding stale assets',
                 {
-                  loadedScenario: loadedScenario.scenarioName,
+                  loadedScenario:
+                    loadedScenario && loadedScenario.type === 'plugin'
+                      ? loadedScenario.scenarioName
+                      : undefined,
                   loadedAt: metadataTimestamp,
                   currentScenario: currentMetadata?.scenarioName,
                   currentLoadedAt: currentMetadata?.loadedAt,
@@ -382,33 +424,39 @@ function Table() {
               );
               return;
             }
+          }
 
-            // Metadata still matches - safe to set gameAssets
-            store.setGameAssets(assets);
-            registerAttachmentActions(ActionRegistry.getInstance(), assets);
-            console.log(
-              '[Table] Remote scenario assets loaded:',
-              loadedScenario.scenarioName,
-            );
-          })
-          .catch((err: unknown) => {
-            const errorMessage =
-              err instanceof Error
-                ? err.message
-                : 'Failed to load remote scenario';
-            const errorObject =
-              err instanceof Error ? err : new Error(String(err));
-            console.error('[Table] Remote scenario loading error:', {
-              error: errorObject,
-              errorMessage,
-              metadata: loadedScenario,
-            });
-            setPacksError(errorMessage);
-          })
-          .finally(() => {
-            setPacksLoading(false);
+          // If another path already populated assets while we were loading,
+          // skip — the in-flight cache made our promise cheap, but
+          // double-registering attachment actions is wasted work.
+          if (store.getGameAssets()) return;
+
+          store.setGameAssets(assets);
+          registerAttachmentActions(ActionRegistry.getInstance(), assets);
+          console.log('[Table] Remote plugin assets loaded:', {
+            pluginId,
+            source,
           });
-      }
+        })
+        .catch((err: unknown) => {
+          const errorMessage =
+            err instanceof Error
+              ? err.message
+              : 'Failed to load remote scenario';
+          const errorObject =
+            err instanceof Error ? err : new Error(String(err));
+          console.error('[Table] Remote plugin asset loading error:', {
+            error: errorObject,
+            errorMessage,
+            pluginId,
+            source,
+            metadata: loadedScenario,
+          });
+          setPacksError(errorMessage);
+        })
+        .finally(() => {
+          setPacksLoading(false);
+        });
     };
 
     store.metadata.observe(observer);

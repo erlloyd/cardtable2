@@ -6,6 +6,7 @@ import {
   loadPlugin,
   loadLocalPluginDirectory,
   getLocalPluginFile,
+  __resetPluginCacheForTests,
   type PluginRegistry,
   type PluginManifest,
   type PluginRegistryEntry,
@@ -465,6 +466,7 @@ describe('loadPlugin', () => {
 
   beforeEach(() => {
     originalFetch = global.fetch;
+    __resetPluginCacheForTests();
   });
 
   afterEach(() => {
@@ -524,6 +526,124 @@ describe('loadPlugin', () => {
     });
 
     await expect(loadPlugin('test-plugin')).rejects.toThrow();
+  });
+});
+
+// ============================================================================
+// loadPlugin Cache Tests
+// ============================================================================
+
+describe('loadPlugin cache', () => {
+  let originalFetch: typeof global.fetch;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    __resetPluginCacheForTests();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('should dedupe two concurrent calls into a single fetch', async () => {
+    // Use a deferred promise so both callers are guaranteed to be in-flight
+    // when the fetch resolves.
+    let resolveRegistryFetch!: (value: unknown) => void;
+    const registryFetchGate = new Promise<unknown>((resolve) => {
+      resolveRegistryFetch = resolve;
+    });
+
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/pluginsIndex.json') {
+        return registryFetchGate.then((data) => ({
+          ok: true,
+          json: () => Promise.resolve(data),
+        }));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockManifest),
+      });
+    });
+    global.fetch = fetchMock;
+
+    // Kick off two concurrent calls — both should share one in-flight fetch.
+    const p1 = loadPlugin('test-plugin');
+    const p2 = loadPlugin('test-plugin');
+
+    // The cache stores the SAME Promise — verify referential identity.
+    // (This is the property the implementation must preserve to dedupe.)
+    expect(p1).toBe(p2);
+
+    // Now release the registry fetch.
+    resolveRegistryFetch(mockRegistry);
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(r1).toBe(r2);
+    // Exactly one registry fetch and one manifest fetch despite two callers.
+    const registryCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === '/pluginsIndex.json',
+    );
+    expect(registryCalls).toHaveLength(1);
+    const manifestCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] !== '/pluginsIndex.json',
+    );
+    expect(manifestCalls).toHaveLength(1);
+  });
+
+  it('should serve completed entries from cache without re-fetching', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url === '/pluginsIndex.json') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRegistry),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockManifest),
+      });
+    });
+    global.fetch = fetchMock;
+
+    const r1 = await loadPlugin('test-plugin');
+    const callsAfterFirst = fetchMock.mock.calls.length;
+
+    const r2 = await loadPlugin('test-plugin');
+
+    expect(r2).toBe(r1);
+    // No additional fetches on the second call.
+    expect(fetchMock.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it('should evict failed entries so subsequent callers can retry', async () => {
+    // First call: registry fetch fails.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Server Error',
+    });
+
+    await expect(loadPlugin('test-plugin')).rejects.toThrow();
+
+    // Second call: registry fetch succeeds. Should NOT replay the cached
+    // failure.
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url === '/pluginsIndex.json') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRegistry),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(mockManifest),
+      });
+    });
+
+    const result = await loadPlugin('test-plugin');
+    expect(result.registry.id).toBe('test-plugin');
   });
 });
 

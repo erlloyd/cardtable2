@@ -34,7 +34,6 @@ import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
   loadPluginAssets,
-  reloadScenarioFromMetadata,
   type GameAssets,
   type LoadedScenarioMetadata,
 } from '../content';
@@ -180,29 +179,34 @@ function Table() {
     });
   }, [store, isStoreReady, location.search]);
 
-  // Store gameId in Y.Doc metadata from location state (new table only)
+  // Store pluginId in Y.Doc metadata from location state (new table only).
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;
     }
 
-    const gameIdFromState =
-      typeof location.state === 'object' &&
-      location.state !== null &&
-      'gameId' in location.state &&
-      typeof location.state.gameId === 'string'
-        ? location.state.gameId
+    const stateRecord =
+      typeof location.state === 'object' && location.state !== null
+        ? (location.state as unknown as Record<string, unknown>)
+        : null;
+    const pluginIdFromStateRaw = stateRecord?.pluginId;
+    const pluginIdFromState =
+      typeof pluginIdFromStateRaw === 'string'
+        ? pluginIdFromStateRaw
         : undefined;
-    const storedGameId = store.metadata.get('gameId') as string | undefined;
+    const storedPluginId = store.metadata.get('pluginId') as string | undefined;
 
-    // New table: store gameId from navigation state
-    if (gameIdFromState && !storedGameId) {
-      console.log(`[Table] Storing gameId in metadata: ${gameIdFromState}`);
-      store.metadata.set('gameId', gameIdFromState);
+    // New table: store pluginId from navigation state.
+    if (pluginIdFromState && !storedPluginId) {
+      console.log(`[Table] Storing pluginId in metadata: ${pluginIdFromState}`);
+      store.metadata.set('pluginId', pluginIdFromState);
     }
   }, [location.state, store, isStoreReady]);
 
-  // Load content on mount: either reload scenario from metadata or load base game assets
+  // Load content on mount: a plugin is a property of the table, not of a
+  // scenario. Always load the plugin's assets first (eagerly + cached via
+  // pluginLoader), then optionally restore a previously loaded scenario.
+  //
   // Note: Dependencies are [store, isStoreReady] only - we intentionally do NOT
   // depend on store.metadata because it's set once on mount and never changes
   // during the session. Depending on metadata would cause unnecessary reloads when
@@ -218,46 +222,37 @@ function Table() {
       setPacksError(null);
 
       try {
-        // Check if there's a previously loaded scenario to restore
+        const pluginId = store.metadata.get('pluginId') as string | undefined;
+
+        if (!pluginId) {
+          console.log('[Table] No pluginId in metadata, skipping pack loading');
+          // Blank state (no plugin, no scenario) — nothing to load.
+          setPacksError(null);
+          setPacksLoading(false);
+          return;
+        }
+
+        // Always load plugin assets first, unconditionally. The plugin loader's
+        // in-flight cache dedupes any concurrent callers (e.g. Load Scenario).
+        console.log('[Table] Loading plugin assets for:', pluginId);
+        const assets = await loadPluginAssets(pluginId);
+        store.setGameAssets(assets);
+        registerAttachmentActions(ActionRegistry.getInstance(), assets);
+
+        // If scenario metadata was previously stored, only log its presence.
+        // On reload we deliberately do NOT fetch the scenario JSON or
+        // re-instantiate scenario objects — `gameAssets` were already
+        // restored by `loadPluginAssets` above, and the objects themselves
+        // are persisted in IndexedDB with their current state (re-adding
+        // them would overwrite user modifications).
         const loadedScenario = store.metadata.get('loadedScenario') as
           | LoadedScenarioMetadata
           | undefined;
-
-        if (loadedScenario) {
-          // Reload scenario from metadata (for persistence and multiplayer)
-          console.log('[Table] Reloading scenario from metadata:', {
+        if (loadedScenario && loadedScenario.type === 'plugin') {
+          console.log('[Table] Reloaded scenario metadata present:', {
             type: loadedScenario.type,
             scenarioName: loadedScenario.scenarioName,
           });
-
-          const content = await reloadScenarioFromMetadata(loadedScenario);
-
-          // On reload: Only restore gameAssets, NOT objects
-          // Objects are already persisted in IndexedDB with their current state.
-          // Re-adding them would overwrite user modifications (moved stacks, etc.)
-          console.log(
-            '[Table] Restoring gameAssets only (objects already in IndexedDB)',
-          );
-          store.setGameAssets(content.content);
-          registerAttachmentActions(
-            ActionRegistry.getInstance(),
-            content.content,
-          );
-        } else {
-          // No scenario loaded - fall back to loading base game asset packs
-          const gameId = store.metadata.get('gameId') as string | undefined;
-          if (!gameId) {
-            console.log('[Table] No gameId in metadata, skipping pack loading');
-            // Clear error when in blank state (no gameId, no scenario)
-            setPacksError(null);
-            setPacksLoading(false);
-            return;
-          }
-
-          console.log('[Table] Loading plugin assets for:', gameId);
-          const assets = await loadPluginAssets(gameId);
-          store.setGameAssets(assets);
-          registerAttachmentActions(ActionRegistry.getInstance(), assets);
         }
       } catch (err) {
         const errorMessage =
@@ -271,14 +266,15 @@ function Table() {
 
     void loadContent();
 
-    // Observe metadata changes to detect when table is reset
+    // Observe metadata changes to detect when table is reset.
+    // resetTable() clears `loadedScenario` but preserves `pluginId` and the
+    // store's gameAssets — the table is still bound to its plugin after a
+    // reset, just with no objects placed.
     const observer = () => {
       const loadedScenario = store.metadata.get('loadedScenario');
-      const gameId = store.metadata.get('gameId');
 
-      // If both are cleared (table reset), clear error
-      if (!loadedScenario && !gameId) {
-        console.log('[Table] Metadata cleared, clearing error state');
+      if (!loadedScenario) {
+        console.log('[Table] loadedScenario cleared, clearing error state');
         setPacksError(null);
       }
     };
@@ -302,13 +298,21 @@ function Table() {
 
   // Observe metadata changes for multiplayer scenario loading
   //
-  // When a remote player loads a scenario, we need to reload it locally to get gameAssets.
+  // When a remote player loads a scenario on a table where this client has
+  // not yet loaded plugin assets (e.g. they joined the table after the
+  // pluginId arrived but before the mount effect's plugin fetch finished, or
+  // the pluginId itself was pushed remotely), we load the plugin's assets
+  // here so this client can render objects that the CRDT just synced in.
+  //
+  // We do NOT re-instantiate scenario objects here: the remote already added
+  // them to Y.Doc and they sync via the CRDT. We only need the plugin
+  // assets (cards, tokens, attachments) to render them.
   //
   // Why gameAssets aren't in Y.Doc:
   // - gameAssets contain large data structures (card definitions, image URLs, etc.)
   // - Storing them in Y.Doc would cause excessive sync overhead for every change
   // - Y.Doc is optimized for operational transforms on structured data, not large immutable objects
-  // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and reload on each client
+  // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and load assets per-client
   //
   // Race condition handling:
   // - If scenario changes while loading, we compare loadedAt timestamps
@@ -339,17 +343,25 @@ function Table() {
         return;
       }
 
-      // If a remote player loaded a scenario, reload it locally to get gameAssets
-      if (loadedScenario && !store.getGameAssets()) {
-        console.log('[Table] Remote player loaded scenario, reloading locally');
+      // Only the 'plugin' branch is reachable here: 'builtin' is unused by app
+      // code, and 'local-dev' cannot be reloaded without user interaction.
+      if (
+        loadedScenario &&
+        loadedScenario.type === 'plugin' &&
+        !store.getGameAssets()
+      ) {
+        const pluginId = loadedScenario.pluginId;
+        console.log(
+          '[Table] Remote player loaded scenario; loading plugin assets',
+        );
         setPacksLoading(true);
         setPacksError(null);
 
         // Capture metadata timestamp to detect stale scenarios
         const metadataTimestamp = loadedScenario.loadedAt;
 
-        void reloadScenarioFromMetadata(loadedScenario)
-          .then((content) => {
+        void loadPluginAssets(pluginId)
+          .then((assets) => {
             // Check if scenario metadata changed while loading (race condition)
             const currentMetadata = store.metadata.get('loadedScenario') as
               | LoadedScenarioMetadata
@@ -372,10 +384,11 @@ function Table() {
             }
 
             // Metadata still matches - safe to set gameAssets
-            store.setGameAssets(content.content);
+            store.setGameAssets(assets);
+            registerAttachmentActions(ActionRegistry.getInstance(), assets);
             console.log(
-              '[Table] Remote scenario loaded successfully:',
-              content.scenario.name,
+              '[Table] Remote scenario assets loaded:',
+              loadedScenario.scenarioName,
             );
           })
           .catch((err: unknown) => {
@@ -504,7 +517,6 @@ function Table() {
                     if (store) {
                       resetTable(store);
                     }
-                    setGameAssets(null);
                     setPacksError(null);
                     setPacksLoading(false);
                   }}

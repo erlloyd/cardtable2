@@ -15,7 +15,8 @@ import {
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
 import {
-  loadPluginScenario,
+  loadPluginAssets,
+  loadScenarioFromPlugin,
   loadLocalPluginScenario,
   loadPlugin,
   type LoadedScenarioMetadata,
@@ -409,25 +410,42 @@ export function registerDefaultActions(): void {
     category: 'Global Actions',
     description: 'Load the first scenario for the current game',
     isAvailable: (ctx) => {
-      // Only available when nothing selected and gameId exists
-      const gameId = ctx.store.metadata.get('gameId') as string | undefined;
-      return ctx.selection.count === 0 && gameId !== undefined;
+      // Only available when nothing selected and a plugin is bound to the
+      // table.
+      const pluginId = ctx.store.metadata.get('pluginId') as string | undefined;
+      return ctx.selection.count === 0 && pluginId !== undefined;
     },
     execute: async (ctx) => {
       try {
-        const pluginId = ctx.store.metadata.get('gameId') as string;
+        const pluginId = ctx.store.metadata.get('pluginId') as string;
 
         console.log(`[Load Scenario] Loading scenario for plugin: ${pluginId}`);
 
-        // Load plugin to get its first scenario
+        // Load plugin manifest (cached) to get its first scenario.
         const plugin = await loadPlugin(pluginId);
         const scenarioFile = plugin.manifest.scenarios[0];
         if (!scenarioFile) {
           throw new Error(`Plugin "${pluginId}" has no scenarios`);
         }
 
-        // Load scenario through plugin system (loads ALL plugin packs)
-        const content = await loadPluginScenario(pluginId, scenarioFile);
+        // Use already-loaded plugin assets from the store (cached on table
+        // mount). Defensive fallback to loadPluginAssets — should be a cache
+        // hit on the happy path because the table-mount effect already
+        // populated the cache.
+        let gameAssets = ctx.store.getGameAssets();
+        if (!gameAssets) {
+          console.log(
+            '[Load Scenario] No gameAssets in store; loading plugin assets',
+          );
+          gameAssets = await loadPluginAssets(pluginId);
+        }
+
+        // Pure scenario load: fetches scenario JSON only, no asset packs.
+        const content = await loadScenarioFromPlugin(
+          pluginId,
+          scenarioFile,
+          gameAssets,
+        );
 
         console.log(
           `[Load Scenario] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
@@ -454,7 +472,7 @@ export function registerDefaultActions(): void {
           error instanceof Error ? error.message : String(error);
         console.error('[Load Scenario] Failed to load scenario', {
           errorId: ACTION_LOAD_SCENARIO_FAILED,
-          gameId: ctx.store.metadata.get('gameId'),
+          pluginId: ctx.store.metadata.get('pluginId'),
           error: errorMessage,
         });
         alert(`Failed to load scenario: ${errorMessage}`);
@@ -581,10 +599,23 @@ export function registerDefaultActions(): void {
 
       try {
         console.log('[Load Marvel Champions] Loading Rhino scenario...');
-        const [content, plugin] = await Promise.all([
-          loadPluginScenario(pluginId, scenarioFile),
-          loadPlugin(pluginId),
-        ]);
+
+        // Plugin lookup served from cache after first load.
+        const plugin = await loadPlugin(pluginId);
+
+        // Reuse already-loaded plugin assets if available; otherwise hit the
+        // plugin cache to load + merge them. Either way, NO duplicate
+        // pack-fetches inside the scenario load.
+        let gameAssets = ctx.store.getGameAssets();
+        if (!gameAssets) {
+          gameAssets = await loadPluginAssets(pluginId);
+        }
+
+        const content = await loadScenarioFromPlugin(
+          pluginId,
+          scenarioFile,
+          gameAssets,
+        );
 
         // Store metadata for plugin scenarios (can auto-reload)
         const metadata: LoadedScenarioMetadata = {

@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act } from 'react';
 import {
   createMemoryHistory,
@@ -8,6 +8,16 @@ import {
 } from '@tanstack/react-router';
 import { routeTree } from '../../routeTree.gen';
 import * as Y from 'yjs';
+import type { GameAssets } from '@cardtable2/shared';
+import type * as ContentModule from '../../content';
+
+// ---------------------------------------------------------------------------
+// Shared mock state (so tests can pre-set metadata before mount)
+// ---------------------------------------------------------------------------
+
+const mockDoc = new Y.Doc();
+const mockMetadata = mockDoc.getMap<unknown>('metadata');
+const setGameAssetsMock = vi.fn();
 
 // Mock the Board component since it's lazy loaded
 vi.mock('../../components/Board', () => ({
@@ -18,11 +28,10 @@ vi.mock('../../components/Board', () => ({
 
 // Mock YjsStore since it's used by the Table route (M3.6-T5)
 vi.mock('../../store/YjsStore', () => {
-  const mockDoc = new Y.Doc();
   return {
     YjsStore: class MockYjsStore {
       objects = mockDoc.getMap('objects');
-      metadata = mockDoc.getMap('metadata');
+      metadata = mockMetadata;
       hands = mockDoc.getMap('hands');
       async waitForReady() {
         return Promise.resolve();
@@ -48,7 +57,9 @@ vi.mock('../../store/YjsStore', () => {
       getActorId() {
         return 'test-actor-id';
       }
-      setGameAssets(_assets: unknown) {}
+      setGameAssets(assets: unknown) {
+        setGameAssetsMock(assets);
+      }
       getGameAssets() {
         return null;
       }
@@ -77,7 +88,44 @@ vi.mock('../../store/YjsStore', () => {
   };
 });
 
+// Mock the content module to capture loadPluginAssets calls without doing
+// real network IO.
+const loadPluginAssetsMock = vi.fn<(pluginId: string) => Promise<GameAssets>>();
+
+const emptyAssets: GameAssets = {
+  packs: [],
+  cardTypes: {},
+  cards: {},
+  cardSets: {},
+  tokens: {},
+  counters: {},
+  mats: {},
+  tokenTypes: {},
+  statusTypes: {},
+  modifierStats: {},
+  iconTypes: {},
+};
+
+vi.mock('../../content', async () => {
+  const actual = await vi.importActual<typeof ContentModule>('../../content');
+  return {
+    ...actual,
+    loadPluginAssets: (pluginId: string): Promise<GameAssets> =>
+      loadPluginAssetsMock(pluginId),
+  };
+});
+
 describe('Table Route', () => {
+  beforeEach(() => {
+    // Clear shared metadata between tests
+    for (const key of Array.from(mockMetadata.keys())) {
+      mockMetadata.delete(key);
+    }
+    setGameAssetsMock.mockClear();
+    loadPluginAssetsMock.mockReset();
+    loadPluginAssetsMock.mockResolvedValue(emptyAssets);
+  });
+
   it('renders with table ID from route', async () => {
     const memoryHistory = createMemoryHistory({
       initialEntries: ['/table/happy-clever-elephant'],
@@ -100,5 +148,56 @@ describe('Table Route', () => {
     expect(
       screen.getByText(/Board: happy-clever-elephant/i),
     ).toBeInTheDocument();
+  });
+
+  it('always loads plugin assets on mount when pluginId metadata is set', async () => {
+    // Pre-seed pluginId metadata BEFORE mount so the mount effect sees it.
+    mockMetadata.set('pluginId', 'test-plugin');
+
+    const memoryHistory = createMemoryHistory({
+      initialEntries: ['/table/eager-load-table'],
+    });
+    const router = createRouter({
+      routeTree,
+      history: memoryHistory,
+      defaultPendingMinMs: 0,
+    });
+
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      await router.load();
+    });
+
+    // Wait until Board renders (which happens after pack loading completes)
+    await screen.findByTestId('board');
+
+    expect(loadPluginAssetsMock).toHaveBeenCalledTimes(1);
+    expect(loadPluginAssetsMock).toHaveBeenCalledWith('test-plugin');
+    // setGameAssets called exactly once on the no-scenario happy path.
+    expect(setGameAssetsMock).toHaveBeenCalledTimes(1);
+    expect(setGameAssetsMock).toHaveBeenCalledWith(emptyAssets);
+  });
+
+  it('skips plugin loading when no pluginId metadata is set', async () => {
+    // No pluginId set — blank table state.
+
+    const memoryHistory = createMemoryHistory({
+      initialEntries: ['/table/blank-table'],
+    });
+    const router = createRouter({
+      routeTree,
+      history: memoryHistory,
+      defaultPendingMinMs: 0,
+    });
+
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      await router.load();
+    });
+
+    await screen.findByTestId('board');
+
+    expect(loadPluginAssetsMock).not.toHaveBeenCalled();
+    expect(setGameAssetsMock).not.toHaveBeenCalled();
   });
 });

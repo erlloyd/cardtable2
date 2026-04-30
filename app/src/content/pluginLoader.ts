@@ -268,12 +268,34 @@ export async function loadAllPlugins(): Promise<LoadedPlugin[]> {
   return loaded;
 }
 
+// ============================================================================
+// Plugin Cache
+// ============================================================================
+
 /**
- * Load a single plugin by ID
+ * In-flight + completed plugin cache, keyed by pluginId.
  *
- * @throws {Error} If plugin not found in registry or loading fails
+ * Stores `Promise<LoadedPlugin>` (not the resolved value) so concurrent callers
+ * with the same pluginId share a single underlying fetch — including the
+ * "mount effect kicks off plugin load → user immediately triggers Load
+ * Scenario" race.
+ *
+ * If the underlying load fails the rejected entry is evicted so subsequent
+ * callers retry rather than getting a permanently-cached error.
+ *
+ * Module-level scope is intentional: plugins are immutable for a session and
+ * sharing across route changes / store instances is desirable.
  */
-export async function loadPlugin(pluginId: string): Promise<LoadedPlugin> {
+const pluginCache = new Map<string, Promise<LoadedPlugin>>();
+
+/**
+ * Reset the plugin cache. Test-only helper; do not call from app code.
+ */
+export function __resetPluginCacheForTests(): void {
+  pluginCache.clear();
+}
+
+async function fetchPluginFresh(pluginId: string): Promise<LoadedPlugin> {
   const registry = await loadPluginRegistry();
   const entry = registry.plugins.find((p) => p.id === pluginId);
 
@@ -288,6 +310,35 @@ export async function loadPlugin(pluginId: string): Promise<LoadedPlugin> {
 
   const manifest = await loadPluginManifest(entry.baseUrl);
   return { registry: entry, manifest };
+}
+
+/**
+ * Load a single plugin by ID, deduping concurrent calls via an in-flight
+ * cache.
+ *
+ * The cache stores the in-flight Promise so two near-simultaneous callers
+ * (e.g. the mount effect and an immediate Load-Scenario click) share one
+ * fetch. Successful results stay cached for the session; rejections are
+ * evicted so callers can retry.
+ *
+ * @throws {Error} If plugin not found in registry or loading fails
+ */
+export function loadPlugin(pluginId: string): Promise<LoadedPlugin> {
+  const cached = pluginCache.get(pluginId);
+  if (cached) {
+    return cached;
+  }
+
+  const promise = fetchPluginFresh(pluginId).catch((err: unknown) => {
+    // Evict failed entries so subsequent callers retry.
+    if (pluginCache.get(pluginId) === promise) {
+      pluginCache.delete(pluginId);
+    }
+    throw err;
+  });
+
+  pluginCache.set(pluginId, promise);
+  return promise;
 }
 
 // ============================================================================

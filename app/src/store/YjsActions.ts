@@ -1141,10 +1141,14 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
  * @param store - YjsStore instance
  */
 export function resetTable(store: YjsStore): void {
+  // Clear placed objects and the loaded-scenario marker, but PRESERVE the
+  // table's identity:
+  // - `pluginId`: a table belongs to a plugin (game) for its lifetime; reset
+  //   means "clear the placed objects", not "change games".
+  // - `gameAssets`: still valid for the plugin still bound to the table; no
+  //   reason to invalidate the renderer's asset cache.
   store.clearAllObjects();
   store.metadata.delete('loadedScenario');
-  store.metadata.delete('gameId');
-  store.setGameAssets(null);
 }
 
 /**

@@ -239,17 +239,12 @@ function Table() {
         store.setGameAssets(assets);
         registerAttachmentActions(ActionRegistry.getInstance(), assets);
 
-        // If a scenario was previously loaded, re-instantiate it on top of the
-        // already-loaded plugin assets. We only need the scenario JSON — packs
-        // are not refetched here (Phase 3).
-        //
-        // Objects themselves are already persisted in IndexedDB with their
-        // current state, so we deliberately do NOT re-add them; doing so would
-        // overwrite user modifications. The scenario fetch is currently kept
-        // for future use (e.g. metadata refresh) and to keep parity with the
-        // pre-refactor behavior, but on reload only `gameAssets` are restored
-        // — and those came from `loadPluginAssets` above, not from the
-        // scenario.
+        // If scenario metadata was previously stored, only log its presence.
+        // On reload we deliberately do NOT fetch the scenario JSON or
+        // re-instantiate scenario objects — `gameAssets` were already
+        // restored by `loadPluginAssets` above, and the objects themselves
+        // are persisted in IndexedDB with their current state (re-adding
+        // them would overwrite user modifications).
         const loadedScenario = store.metadata.get('loadedScenario') as
           | LoadedScenarioMetadata
           | undefined;

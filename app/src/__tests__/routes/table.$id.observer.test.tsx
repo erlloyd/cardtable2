@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-misused-promises */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { YjsStore } from '../store/YjsStore';
-import type { LoadedScenarioMetadata, LoadedContent } from '../content';
-import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
+import type { GameAssets } from '@cardtable2/shared';
+import type { YjsStore } from '../../store/YjsStore';
+import type { LoadedScenarioMetadata } from '../../content';
+import { CONTENT_RELOAD_INVALID_METADATA } from '../../constants/errorIds';
 
 /**
  * Tests for multiplayer observer logic in table.$id.tsx
@@ -14,56 +13,59 @@ import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
  * - Validates metadata structure
  * - Detects and discards stale scenario loads (race condition handling)
  * - Reloads scenarios when remote players trigger loads
+ *
+ * NOTE: This file simulates the observer in a closure (`createObserver`) so
+ * the unit tests can drive its branches deterministically without mounting
+ * the route or wiring Yjs transactions. The closure mirrors the shape of the
+ * production observer in `app/src/routes/table.$id.tsx`. End-to-end mount
+ * coverage of the route lives in `table.$id.test.tsx` next to this file.
  */
 describe('table.$id.tsx - Multiplayer Observer', () => {
   let mockStore: YjsStore;
-  let mockReloadScenario: ReturnType<typeof vi.fn>;
-  let mockSetPacksLoading: ReturnType<typeof vi.fn>;
-  let mockSetPacksError: ReturnType<typeof vi.fn>;
-  let consoleLogSpy: ReturnType<typeof vi.fn>;
-  let consoleErrorSpy: ReturnType<typeof vi.fn>;
+  let mockLoadPluginAssets: ReturnType<
+    typeof vi.fn<(pluginId: string) => Promise<GameAssets>>
+  >;
+  let mockSetPacksLoading: ReturnType<typeof vi.fn<(loading: boolean) => void>>;
+  let mockSetPacksError: ReturnType<
+    typeof vi.fn<(error: string | null) => void>
+  >;
+  let consoleLogSpy: ReturnType<
+    typeof vi.fn<(message: string, context?: unknown) => void>
+  >;
+  let consoleErrorSpy: ReturnType<
+    typeof vi.fn<(message: string, context?: unknown) => void>
+  >;
 
-  const createMockContent = (scenarioName: string): LoadedContent => ({
-    scenario: {
-      schema: 'ct-scenario@2',
-      id: 'test',
-      name: scenarioName,
-      version: '1.0.0',
-      packs: [],
-    },
-    content: {
-      packs: [],
-      cardTypes: {},
-      cards: {},
-      cardSets: {},
-      tokens: {},
-      counters: {},
-      mats: {},
-      tokenTypes: {},
-      statusTypes: {},
-      modifierStats: {},
-      iconTypes: {},
-    },
-    objects: new Map(),
+  const createMockAssets = (): GameAssets => ({
+    packs: [],
+    cardTypes: {},
+    cards: {},
+    cardSets: {},
+    tokens: {},
+    counters: {},
+    mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
   });
 
   const createObserver = (): ((
     _event: unknown,
     transaction: { local: boolean },
   ) => void) => {
-    // Capture mocks with proper types to use in the returned closure
-    const reloadScenario = mockReloadScenario as (
-      ...args: unknown[]
-    ) => Promise<LoadedContent>;
-    const setPacksLoading = mockSetPacksLoading as (...args: unknown[]) => void;
-    const setPacksError = mockSetPacksError as (...args: unknown[]) => void;
-    const logSpy = consoleLogSpy as (...args: unknown[]) => void;
-    const errorSpy = consoleErrorSpy as (...args: unknown[]) => void;
-    // This simulates the observer function from table.$id.tsx — see the
-    // comment block on the metadata-observe useEffect for behavioural detail.
-    // Both the bare-pluginId path (multiplayer JOIN with empty IndexedDB) and
-    // the scenario-load path converge on the same loader; the test uses a
-    // single `reloadScenario` mock to stand in for `loadPluginAssets`.
+    // Snapshot mocks into the closure so each test sees the post-beforeEach
+    // instances (mirrors how the production observer captures store + setters
+    // from its enclosing useEffect).
+    const loadPluginAssets = mockLoadPluginAssets;
+    const setPacksLoading = mockSetPacksLoading;
+    const setPacksError = mockSetPacksError;
+    const log = consoleLogSpy;
+    const errorLog = consoleErrorSpy;
+    // Simulates the observer function from table.$id.tsx — see the comment
+    // block on the metadata-observe useEffect for behavioural detail. Both
+    // the bare-pluginId path (multiplayer JOIN with empty IndexedDB) and the
+    // scenario-load path converge on `loadPluginAssets(pluginId)`.
     return (_event: unknown, transaction: { local: boolean }): void => {
       if (transaction.local) return;
 
@@ -78,7 +80,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
         loadedScenario &&
         (typeof loadedScenario !== 'object' || !loadedScenario.type)
       ) {
-        errorSpy('[Table] Invalid loadedScenario metadata from remote', {
+        errorLog('[Table] Invalid loadedScenario metadata from remote', {
           errorId: CONTENT_RELOAD_INVALID_METADATA,
           metadata: loadedScenario,
         });
@@ -109,16 +111,17 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
 
       if (!pluginId) return;
 
-      logSpy(
+      const resolvedPluginId = pluginId;
+
+      log(
         `[Table] Remote ${source === 'scenario' ? 'scenario load' : 'pluginId arrival'}; loading plugin assets`,
-        { pluginId, source },
+        { pluginId: resolvedPluginId, source },
       );
       setPacksLoading(true);
       setPacksError(null);
 
-      void reloadScenario(loadedScenario ?? { pluginId, source })
-        .then((content: LoadedContent) => {
-          const log = logSpy;
+      void loadPluginAssets(resolvedPluginId)
+        .then((assets): void => {
           if (source === 'scenario') {
             const currentMetadata = mockStore.metadata.get('loadedScenario') as
               | LoadedScenarioMetadata
@@ -145,30 +148,30 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
           }
 
           if (mockStore.getGameAssets()) return;
-          mockStore.setGameAssets(content.content);
-          log('[Table] Remote plugin assets loaded:', { pluginId, source });
+          mockStore.setGameAssets(assets);
+          log('[Table] Remote plugin assets loaded:', {
+            pluginId: resolvedPluginId,
+            source,
+          });
         })
-        .catch((err: unknown) => {
-          const error = errorSpy;
-          const setPacks = setPacksError;
+        .catch((err: unknown): void => {
           const errorMessage =
             err instanceof Error
               ? err.message
               : 'Failed to load remote scenario';
           const errorObject =
             err instanceof Error ? err : new Error(String(err));
-          error('[Table] Remote plugin asset loading error:', {
+          errorLog('[Table] Remote plugin asset loading error:', {
             error: errorObject,
             errorMessage,
-            pluginId,
+            pluginId: resolvedPluginId,
             source,
             metadata: loadedScenario,
           });
-          setPacks(errorMessage);
+          setPacksError(errorMessage);
         })
-        .finally(() => {
-          const setLoading = setPacksLoading;
-          setLoading(false);
+        .finally((): void => {
+          setPacksLoading(false);
         });
     };
   };
@@ -180,11 +183,11 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       setGameAssets: vi.fn(),
     } as unknown as YjsStore;
 
-    mockReloadScenario = vi.fn();
-    mockSetPacksLoading = vi.fn();
-    mockSetPacksError = vi.fn();
-    consoleLogSpy = vi.fn();
-    consoleErrorSpy = vi.fn();
+    mockLoadPluginAssets = vi.fn<(pluginId: string) => Promise<GameAssets>>();
+    mockSetPacksLoading = vi.fn<(loading: boolean) => void>();
+    mockSetPacksError = vi.fn<(error: string | null) => void>();
+    consoleLogSpy = vi.fn<(message: string, context?: unknown) => void>();
+    consoleErrorSpy = vi.fn<(message: string, context?: unknown) => void>();
   });
 
   describe('transaction filtering', () => {
@@ -204,7 +207,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       observer(null, { local: true });
 
       // Should not reload
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
       expect(mockSetPacksLoading).not.toHaveBeenCalled();
     });
 
@@ -219,14 +222,14 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(createMockContent('Test Scenario'));
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       // Trigger with remote transaction
       observer(null, { local: false });
 
-      // Should start reload
+      // Should start reload — production calls loadPluginAssets(pluginId).
       expect(mockSetPacksLoading).toHaveBeenCalledWith(true);
-      expect(mockReloadScenario).toHaveBeenCalledWith(metadata);
+      expect(mockLoadPluginAssets).toHaveBeenCalledWith('test-plugin');
     });
   });
 
@@ -249,7 +252,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
           metadata: 'invalid',
         }),
       );
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
     });
 
     it('should reject metadata without type field', () => {
@@ -268,7 +271,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
           errorId: CONTENT_RELOAD_INVALID_METADATA,
         }),
       );
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
     });
 
     it('should accept valid plugin metadata', () => {
@@ -282,11 +285,11 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(createMockContent('Test Scenario'));
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
-      expect(mockReloadScenario).toHaveBeenCalledWith(metadata);
+      expect(mockLoadPluginAssets).toHaveBeenCalledWith('test-plugin');
     });
 
     it('should ignore builtin metadata (not reachable in app code)', () => {
@@ -301,13 +304,11 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(
-        createMockContent('Builtin Scenario'),
-      );
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
       expect(mockSetPacksLoading).not.toHaveBeenCalled();
     });
 
@@ -322,13 +323,11 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(
-        createMockContent('Local Dev Scenario'),
-      );
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
       expect(mockSetPacksLoading).not.toHaveBeenCalled();
     });
   });
@@ -347,24 +346,14 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       mockStore.metadata.set('loadedScenario', metadata);
 
       // Mock store already has gameAssets
-      (mockStore.getGameAssets as ReturnType<typeof vi.fn>).mockReturnValue({
-        packs: [],
-        cardTypes: {},
-        cards: {},
-        cardSets: {},
-        tokens: {},
-        counters: {},
-        mats: {},
-        tokenTypes: {},
-        statusTypes: {},
-        modifierStats: {},
-        iconTypes: {},
-      });
+      (mockStore.getGameAssets as ReturnType<typeof vi.fn>).mockReturnValue(
+        createMockAssets(),
+      );
 
       observer(null, { local: false });
 
       // Should not reload
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
       expect(mockSetPacksLoading).not.toHaveBeenCalled();
     });
 
@@ -379,13 +368,13 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(createMockContent('Test Scenario'));
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
       // Should start reload
       expect(mockSetPacksLoading).toHaveBeenCalledWith(true);
-      expect(mockReloadScenario).toHaveBeenCalledWith(metadata);
+      expect(mockLoadPluginAssets).toHaveBeenCalledWith('test-plugin');
     });
   });
 
@@ -404,21 +393,19 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       // pluginId present, loadedScenario absent.
       mockStore.metadata.set('pluginId', 'test-plugin');
 
-      const mockContent = createMockContent('Test Scenario');
-      mockReloadScenario.mockResolvedValue(mockContent);
+      const mockAssets = createMockAssets();
+      mockLoadPluginAssets.mockResolvedValue(mockAssets);
 
       observer(null, { local: false });
 
       expect(mockSetPacksLoading).toHaveBeenCalledWith(true);
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalledWith('test-plugin');
       });
 
       await vi.waitFor(() => {
-        expect(mockStore.setGameAssets).toHaveBeenCalledWith(
-          mockContent.content,
-        );
+        expect(mockStore.setGameAssets).toHaveBeenCalledWith(mockAssets);
       });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
@@ -438,29 +425,29 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       // If a scenario load lands during the bare-pluginId fetch, the bare
       // path must NOT discard the asset just because loadedScenario appeared
       // — there's no `loadedAt` to race against; pluginId is set-once.
-      const mockContent = createMockContent('Late Scenario');
-      mockReloadScenario.mockImplementation(() => {
-        const lateMeta: LoadedScenarioMetadata = {
-          type: 'plugin',
-          pluginId: 'test-plugin',
-          scenarioFile: 's.json',
-          loadedAt: 9999,
-          scenarioName: 'Late Scenario',
-        };
-        mockStore.metadata.set('loadedScenario', lateMeta);
-        return Promise.resolve(mockContent);
-      });
+      const mockAssets = createMockAssets();
+      mockLoadPluginAssets.mockImplementation(
+        (_pluginId: string): Promise<GameAssets> => {
+          const lateMeta: LoadedScenarioMetadata = {
+            type: 'plugin',
+            pluginId: 'test-plugin',
+            scenarioFile: 's.json',
+            loadedAt: 9999,
+            scenarioName: 'Late Scenario',
+          };
+          mockStore.metadata.set('loadedScenario', lateMeta);
+          return Promise.resolve(mockAssets);
+        },
+      );
 
       observer(null, { local: false });
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalledWith('test-plugin');
       });
 
       await vi.waitFor(() => {
-        expect(mockStore.setGameAssets).toHaveBeenCalledWith(
-          mockContent.content,
-        );
+        expect(mockStore.setGameAssets).toHaveBeenCalledWith(mockAssets);
       });
 
       // No "discarding stale" log on the bare path.
@@ -476,7 +463,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       // Empty metadata — neither key set.
       observer(null, { local: false });
 
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
       expect(mockSetPacksLoading).not.toHaveBeenCalled();
     });
 
@@ -492,7 +479,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
 
       mockStore.metadata.set('loadedScenario', scenario);
       mockStore.metadata.set('pluginId', 'bare-plugin');
-      mockReloadScenario.mockResolvedValue(createMockContent('Test Scenario'));
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
@@ -501,6 +488,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
         expect.stringContaining('scenario load'),
         expect.objectContaining({ pluginId: 'scenario-plugin' }),
       );
+      expect(mockLoadPluginAssets).toHaveBeenCalledWith('scenario-plugin');
     });
 
     it('should skip when pluginId is empty string', () => {
@@ -510,7 +498,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
 
       observer(null, { local: false });
 
-      expect(mockReloadScenario).not.toHaveBeenCalled();
+      expect(mockLoadPluginAssets).not.toHaveBeenCalled();
       expect(mockSetPacksLoading).not.toHaveBeenCalled();
     });
   });
@@ -529,25 +517,27 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       mockStore.metadata.set('loadedScenario', initialMetadata);
 
       // Mock delayed reload
-      mockReloadScenario.mockImplementation(() => {
-        // Simulate metadata changing during load
-        const newMetadata: LoadedScenarioMetadata = {
-          type: 'plugin',
-          pluginId: 'test-plugin',
-          scenarioFile: 'scenario2.json',
-          loadedAt: 2000,
-          scenarioName: 'New Scenario',
-        };
-        mockStore.metadata.set('loadedScenario', newMetadata);
+      mockLoadPluginAssets.mockImplementation(
+        (_pluginId: string): Promise<GameAssets> => {
+          // Simulate metadata changing during load
+          const newMetadata: LoadedScenarioMetadata = {
+            type: 'plugin',
+            pluginId: 'test-plugin',
+            scenarioFile: 'scenario2.json',
+            loadedAt: 2000,
+            scenarioName: 'New Scenario',
+          };
+          mockStore.metadata.set('loadedScenario', newMetadata);
 
-        return Promise.resolve(createMockContent('Initial Scenario'));
-      });
+          return Promise.resolve(createMockAssets());
+        },
+      );
 
       observer(null, { local: false });
 
       // Wait for async operations
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       // Assets should be discarded due to timestamp mismatch
@@ -577,20 +567,18 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      const mockContent = createMockContent('Test Scenario');
-      mockReloadScenario.mockResolvedValue(mockContent);
+      const mockAssets = createMockAssets();
+      mockLoadPluginAssets.mockResolvedValue(mockAssets);
 
       observer(null, { local: false });
 
       // Wait for async operations
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       await vi.waitFor(() => {
-        expect(mockStore.setGameAssets).toHaveBeenCalledWith(
-          mockContent.content,
-        );
+        expect(mockStore.setGameAssets).toHaveBeenCalledWith(mockAssets);
       });
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
@@ -614,16 +602,18 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
 
       mockStore.metadata.set('loadedScenario', metadata);
 
-      mockReloadScenario.mockImplementation(() => {
-        // Metadata removed during load
-        mockStore.metadata.delete('loadedScenario');
-        return Promise.resolve(createMockContent('Test Scenario'));
-      });
+      mockLoadPluginAssets.mockImplementation(
+        (_pluginId: string): Promise<GameAssets> => {
+          // Metadata removed during load
+          mockStore.metadata.delete('loadedScenario');
+          return Promise.resolve(createMockAssets());
+        },
+      );
 
       observer(null, { local: false });
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       await vi.waitFor(() => {
@@ -651,12 +641,12 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       mockStore.metadata.set('loadedScenario', metadata);
 
       const testError = new Error('Network failure');
-      mockReloadScenario.mockRejectedValue(testError);
+      mockLoadPluginAssets.mockRejectedValue(testError);
 
       observer(null, { local: false });
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       await vi.waitFor(() => {
@@ -686,12 +676,12 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockRejectedValue('String error');
+      mockLoadPluginAssets.mockRejectedValue('String error');
 
       observer(null, { local: false });
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       await vi.waitFor(() => {
@@ -722,7 +712,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockRejectedValue(new Error('Test error'));
+      mockLoadPluginAssets.mockRejectedValue(new Error('Test error'));
 
       observer(null, { local: false });
 
@@ -748,7 +738,7 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(createMockContent('Test Scenario'));
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
@@ -767,12 +757,12 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
       };
 
       mockStore.metadata.set('loadedScenario', metadata);
-      mockReloadScenario.mockResolvedValue(createMockContent('Test Scenario'));
+      mockLoadPluginAssets.mockResolvedValue(createMockAssets());
 
       observer(null, { local: false });
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       await vi.waitFor(() => {
@@ -792,21 +782,23 @@ describe('table.$id.tsx - Multiplayer Observer', () => {
 
       mockStore.metadata.set('loadedScenario', initialMetadata);
 
-      mockReloadScenario.mockImplementation(() => {
-        // Change metadata during load
-        const newMetadata: LoadedScenarioMetadata = {
-          ...initialMetadata,
-          loadedAt: 2000,
-          scenarioName: 'New Scenario',
-        };
-        mockStore.metadata.set('loadedScenario', newMetadata);
-        return Promise.resolve(createMockContent('Initial Scenario'));
-      });
+      mockLoadPluginAssets.mockImplementation(
+        (_pluginId: string): Promise<GameAssets> => {
+          // Change metadata during load
+          const newMetadata: LoadedScenarioMetadata = {
+            ...initialMetadata,
+            loadedAt: 2000,
+            scenarioName: 'New Scenario',
+          };
+          mockStore.metadata.set('loadedScenario', newMetadata);
+          return Promise.resolve(createMockAssets());
+        },
+      );
 
       observer(null, { local: false });
 
       await vi.waitFor(() => {
-        expect(mockReloadScenario).toHaveBeenCalled();
+        expect(mockLoadPluginAssets).toHaveBeenCalled();
       });
 
       await vi.waitFor(() => {

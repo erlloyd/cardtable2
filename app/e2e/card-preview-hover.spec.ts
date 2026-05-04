@@ -199,9 +199,23 @@ test.describe('Card Preview Hover - Dismiss Path (ct-zqc)', () => {
       buttons: 0,
     });
 
-    // Preview must dismiss. Allow up to 1s for the message round-trip
-    // (renderer -> postResponse -> Board.setHoveredObject -> setPreviewCard).
-    await expect(preview).not.toBeVisible({ timeout: 1000 });
+    // Preview must dismiss. The dismiss path is:
+    //   renderer.handlePointerMove (worker)
+    //   -> postResponse({ type: 'object-hovered', objectId: null })
+    //   -> Board.setHoveredObject(null)
+    //   -> setPreviewCard(null)
+    //   -> React re-render unmounts CardPreview
+    //
+    // Under the full E2E suite (workers=2 on CI, more locally), the worker
+    // thread, main thread, and React commit phase contend with other browser
+    // contexts, vite HMR housekeeping, and y-websocket dev-server traffic.
+    // The dismiss eventually wins, but not always within a tight 1s window
+    // (ct-uft observed a single full-suite failure where it took longer
+    // than 1s; isolated and follow-up CI runs were green). Match the 2s
+    // budget used by the appearance assertion above (line 125) for symmetry
+    // — both ends of the lifecycle are subject to the same scheduling
+    // pressure, so giving them the same headroom is the principled choice.
+    await expect(preview).not.toBeVisible({ timeout: 2000 });
 
     // No errors should have been thrown during the interaction.
     expect(errors).toEqual([]);

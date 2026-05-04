@@ -55,6 +55,32 @@ export interface LoadedPlugin {
 }
 
 // ============================================================================
+// Typed Errors
+// ============================================================================
+
+/**
+ * Thrown when a `pluginId` is requested but does not appear in
+ * `pluginsIndex.json`.
+ *
+ * Distinct from generic load failures (network, parse, validation) so callers
+ * can render a specific UI when a saved table references a plugin that has
+ * since been removed from the registry. See ct-f7f.
+ */
+export class PluginNotFoundError extends Error {
+  /** The pluginId that was looked up but missing from the registry. */
+  readonly pluginId: string;
+  /** IDs present in the registry at lookup time, for diagnostics. */
+  readonly availablePluginIds: string[];
+
+  constructor(pluginId: string, availablePluginIds: string[]) {
+    super(`Plugin not found: ${pluginId}`);
+    this.name = 'PluginNotFoundError';
+    this.pluginId = pluginId;
+    this.availablePluginIds = availablePluginIds;
+  }
+}
+
+// ============================================================================
 // Plugin Registry Loading
 // ============================================================================
 
@@ -300,12 +326,13 @@ async function fetchPluginFresh(pluginId: string): Promise<LoadedPlugin> {
   const entry = registry.plugins.find((p) => p.id === pluginId);
 
   if (!entry) {
+    const availablePluginIds = registry.plugins.map((p) => p.id);
     console.error('[PluginLoader] Plugin not found in registry', {
       errorId: PLUGIN_NOT_FOUND,
       pluginId,
-      availablePlugins: registry.plugins.map((p) => p.id),
+      availablePlugins: availablePluginIds,
     });
-    throw new Error(`Plugin not found: ${pluginId}`);
+    throw new PluginNotFoundError(pluginId, availablePluginIds);
   }
 
   const manifest = await loadPluginManifest(entry.baseUrl);

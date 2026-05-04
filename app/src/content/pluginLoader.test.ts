@@ -6,6 +6,7 @@ import {
   loadPlugin,
   loadLocalPluginDirectory,
   getLocalPluginFile,
+  PluginNotFoundError,
   __resetPluginCacheForTests,
   type PluginRegistry,
   type PluginManifest,
@@ -502,6 +503,26 @@ describe('loadPlugin', () => {
     await expect(loadPlugin('nonexistent-plugin')).rejects.toThrow(
       'Plugin not found: nonexistent-plugin',
     );
+  });
+
+  it('throws PluginNotFoundError carrying pluginId and registry IDs', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockRegistry),
+    });
+
+    let caught: unknown;
+    try {
+      await loadPlugin('nonexistent-plugin');
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(PluginNotFoundError);
+    const typed = caught as PluginNotFoundError;
+    expect(typed.pluginId).toBe('nonexistent-plugin');
+    expect(typed.availablePluginIds).toEqual(['test-plugin', 'another-plugin']);
+    expect(typed.name).toBe('PluginNotFoundError');
   });
 
   it('should throw when registry fetch fails', async () => {

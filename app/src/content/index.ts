@@ -35,6 +35,7 @@ import {
   getPluginScenarioUrl,
   loadLocalPluginDirectory,
   getLocalPluginFile,
+  PluginNotFoundError,
   type LoadedPlugin,
   type LocalPlugin,
   type PluginManifest,
@@ -64,6 +65,7 @@ export {
   loadAllPlugins,
   loadPlugin,
   loadLocalPluginDirectory,
+  PluginNotFoundError,
 };
 
 // ============================================================================

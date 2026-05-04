@@ -34,11 +34,35 @@ import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
   loadPluginAssets,
+  PluginNotFoundError,
   type GameAssets,
   type LoadedScenarioMetadata,
 } from '../content';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind } from '@cardtable2/shared';
+
+/**
+ * Discriminated error state for the table-load path.
+ *
+ * The 'plugin-not-found' variant drives the explicit "this table's plugin is
+ * no longer available" UI (ct-f7f); 'generic' is the catch-all for network /
+ * parse / validation failures we can't usefully disambiguate.
+ */
+type PacksError =
+  | { kind: 'plugin-not-found'; pluginId: string; message: string }
+  | { kind: 'generic'; message: string };
+
+function toPacksError(err: unknown, fallbackMessage: string): PacksError {
+  if (err instanceof PluginNotFoundError) {
+    return {
+      kind: 'plugin-not-found',
+      pluginId: err.pluginId,
+      message: err.message,
+    };
+  }
+  const message = err instanceof Error ? err.message : fallbackMessage;
+  return { kind: 'generic', message };
+}
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -64,7 +88,7 @@ function Table() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [gridSnapEnabled, setGridSnapEnabled] = useState(false);
   const [packsLoading, setPacksLoading] = useState(false);
-  const [packsError, setPacksError] = useState<string | null>(null);
+  const [packsError, setPacksError] = useState<PacksError | null>(null);
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
 
   // Hand panel state
@@ -255,10 +279,8 @@ function Table() {
           });
         }
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : 'Failed to load content';
         console.error('[Table] Content loading error:', err);
-        setPacksError(errorMessage);
+        setPacksError(toPacksError(err, 'Failed to load content'));
       } finally {
         setPacksLoading(false);
       }
@@ -439,20 +461,16 @@ function Table() {
           });
         })
         .catch((err: unknown) => {
-          const errorMessage =
-            err instanceof Error
-              ? err.message
-              : 'Failed to load remote scenario';
           const errorObject =
             err instanceof Error ? err : new Error(String(err));
           console.error('[Table] Remote plugin asset loading error:', {
             error: errorObject,
-            errorMessage,
+            errorMessage: errorObject.message,
             pluginId,
             source,
             metadata: loadedScenario,
           });
-          setPacksError(errorMessage);
+          setPacksError(toPacksError(err, 'Failed to load remote scenario'));
         })
         .finally(() => {
           setPacksLoading(false);
@@ -546,12 +564,42 @@ function Table() {
         ) : packsLoading ? (
           <div className="board-fullscreen" />
         ) : packsError ? (
-          <div className="board-fullscreen table-error">
+          <div
+            className="board-fullscreen table-error"
+            data-testid={
+              packsError.kind === 'plugin-not-found'
+                ? 'table-error-plugin-not-found'
+                : 'table-error-generic'
+            }
+          >
             <div className="table-error-content">
-              <div className="table-error-message">{packsError}</div>
+              {packsError.kind === 'plugin-not-found' ? (
+                <div
+                  className="table-error-message"
+                  data-testid="table-error-message"
+                >
+                  This table&apos;s plugin (
+                  <span
+                    className="table-error-plugin-id"
+                    data-testid="table-error-plugin-id"
+                  >
+                    &quot;{packsError.pluginId}&quot;
+                  </span>
+                  ) is no longer available. Choose a different game or load a
+                  local plugin.
+                </div>
+              ) : (
+                <div
+                  className="table-error-message"
+                  data-testid="table-error-message"
+                >
+                  {packsError.message}
+                </div>
+              )}
               <div className="table-error-actions">
                 <button
                   className="table-error-button"
+                  data-testid="table-error-back-to-games"
                   onClick={() => {
                     setPacksError(null);
                     void navigate({ to: '/' });
@@ -561,6 +609,7 @@ function Table() {
                 </button>
                 <button
                   className="table-error-button table-error-button-secondary"
+                  data-testid="table-error-dismiss"
                   onClick={() => {
                     if (store) {
                       resetTable(store);

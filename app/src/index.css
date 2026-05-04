@@ -1790,6 +1790,14 @@ h1 {
   line-height: 1.5;
 }
 
+.table-error-plugin-id {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  font-weight: 600;
+  color: #fca5a5;
+}
+
 .table-error-actions {
   display: flex;
   gap: 0.75rem;

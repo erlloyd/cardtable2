@@ -12,10 +12,6 @@ import type { Card, GameAssets, OrientationRule } from '@cardtable2/shared';
  *     rule and the walk continues to the next rule.
  *  3. Fallback `'portrait'`.
  *
- * The cardType-keyed orientation lookup that previously sat between (1) and
- * (3) has been removed. Plugin authors migrate any `cardTypes.X.orientation`
- * setting to a rule like `{ match: { type: 'X' }, orientation: '...' }`.
- *
  * Note: `'auto'` is not yet auto-detected from image aspect ratio; it simply
  * means "this layer has no opinion, defer to the next layer".
  */

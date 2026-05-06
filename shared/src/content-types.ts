@@ -34,8 +34,7 @@ export type CardOrientation = 'portrait' | 'landscape' | 'auto';
  * The `match` object is a record of card field-name → expected-value;
  * a card matches the rule only when ALL keys match (AND semantics).
  * Match field names can be any field on the `Card` type — `type`, `typeCode`,
- * `setCode`, etc. — letting plugins classify orientation more finely than the
- * (deprecated) cardType-keyed lookup allowed.
+ * `setCode`, etc. — letting plugins classify orientation finely.
  *
  * Runtime walks `gameAssets.orientationRules` in declared order; the first rule
  * whose match-object satisfies the card returns its `orientation`. A rule with
@@ -50,15 +49,6 @@ export interface OrientationRule {
 export interface CardType {
   back?: string; // Default card back image URL
   size?: CardSize; // Default size for this card type
-  /**
-   * @deprecated Use `AssetPack.orientationRules` instead. The runtime no longer
-   * reads this field as of the orientation-rules migration; it is retained on
-   * the schema solely so existing plugins do not fail to load while they
-   * migrate. A one-time console warning is emitted on plugin load if this
-   * field is still set. Remove once all consuming plugins (notably
-   * cardtable-plugin-marvelchampions) have migrated.
-   */
-  orientation?: CardOrientation;
 }
 
 export interface Card {

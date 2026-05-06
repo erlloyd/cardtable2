@@ -288,26 +288,15 @@ export function mergeAssetPacks(
     orientationRules: [],
   };
 
-  // Track which packs still set the deprecated cardType.orientation field so we
-  // can emit a single warning per merge call (one entry per offending pack).
-  const deprecatedOrientationPacks: string[] = [];
-
   // Merge each pack in order (later packs override earlier ones)
   // For cards and cardTypes, create new objects with resolved URLs (no mutation)
   for (const pack of packs) {
     // Merge cardTypes with URL resolution
     if (pack.cardTypes) {
-      let packHasDeprecatedOrientation = false;
       for (const [typeCode, cardType] of Object.entries(pack.cardTypes)) {
-        if (cardType.orientation !== undefined) {
-          packHasDeprecatedOrientation = true;
-        }
         merged.cardTypes[typeCode] = cardType.back
           ? { ...cardType, back: resolveAssetUrl(cardType.back, pack.baseUrl) }
           : cardType;
-      }
-      if (packHasDeprecatedOrientation) {
-        deprecatedOrientationPacks.push(pack.id);
       }
     }
 
@@ -379,17 +368,6 @@ export function mergeAssetPacks(
         };
       }
     }
-  }
-
-  // Deprecation: cardType.orientation is no longer read by the runtime —
-  // plugins must migrate to `orientationRules`. Warn once per pack-load with
-  // the offending pack ids so the plugin author sees an actionable message.
-  if (deprecatedOrientationPacks.length > 0) {
-    console.warn(
-      `[Loader] cardType.orientation is deprecated and ignored by the runtime. ` +
-        `Migrate to AssetPack.orientationRules (e.g. { match: { type: 'main_scheme' }, orientation: 'landscape' }). ` +
-        `Affected pack(s): ${deprecatedOrientationPacks.join(', ')}.`,
-    );
   }
 
   return merged;

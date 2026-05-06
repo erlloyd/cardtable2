@@ -283,24 +283,6 @@ describe('getCardOrientation', () => {
       );
     });
 
-    it('IGNORES the deprecated cardType.orientation field', () => {
-      // The old cardType-keyed lookup is gone. A pre-migration plugin that
-      // still sets cardTypes.X.orientation gets portrait (the runtime warns
-      // separately via mergeAssetPacks; this test pins the resolver behavior).
-      const gameAssets = createGameAssets(
-        {
-          main_scheme: { orientation: 'landscape' }, // deprecated, ignored
-        },
-        {
-          card: { type: 'main_scheme', face: 'm.jpg' },
-        },
-      );
-
-      expect(getCardOrientation(gameAssets.cards['card'], gameAssets)).toBe(
-        'portrait',
-      );
-    });
-
     it('returns portrait when card has no orientation and no rules match', () => {
       const gameAssets = createGameAssets(
         {},

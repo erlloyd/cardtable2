@@ -57,11 +57,6 @@
               }
             ],
             "description": "Default size for all cards of this type (defaults to 'standard': 180x252px)"
-          },
-          "orientation": {
-            "type": "string",
-            "enum": ["portrait", "landscape", "auto"],
-            "description": "DEPRECATED. Ignored by the runtime — use top-level orientationRules instead. Retained on the schema for backwards compatibility while plugins migrate; a console warning is emitted on plugin load if this field is still set."
           }
         },
         "additionalProperties": false

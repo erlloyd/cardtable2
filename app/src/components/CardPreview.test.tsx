@@ -10,7 +10,12 @@ import {
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { CardPreview } from './CardPreview';
-import type { Card, CardType, GameAssets } from '@cardtable2/shared';
+import type {
+  Card,
+  CardType,
+  GameAssets,
+  OrientationRule,
+} from '@cardtable2/shared';
 
 // Mock the useImage hook to control image loading
 vi.mock('use-image', () => ({
@@ -21,6 +26,7 @@ describe('CardPreview', () => {
   const createGameAssets = (
     cardTypes: Record<string, CardType> = {},
     cards: Record<string, Card> = {},
+    orientationRules: OrientationRule[] = [],
   ): GameAssets => ({
     packs: [],
     cardTypes,
@@ -33,6 +39,7 @@ describe('CardPreview', () => {
     statusTypes: {},
     modifierStats: {},
     iconTypes: {},
+    orientationRules,
   });
 
   const mockOnClose = vi.fn();
@@ -303,13 +310,14 @@ describe('CardPreview', () => {
 
     it('swaps dimensions for landscape cards', () => {
       const gameAssets = createGameAssets(
-        { villain: { orientation: 'landscape' } },
+        {},
         {
           rhino: {
             type: 'villain',
             face: 'rhino.jpg',
           },
         },
+        [{ match: { type: 'villain' }, orientation: 'landscape' }],
       );
 
       render(
@@ -330,13 +338,14 @@ describe('CardPreview', () => {
     it('applies rotation transform when image orientation does not match metadata', () => {
       // Landscape metadata but portrait image (300x400) -> should rotate
       const gameAssets = createGameAssets(
-        { villain: { orientation: 'landscape' } },
+        {},
         {
           rhino: {
             type: 'villain',
             face: 'rhino.jpg',
           },
         },
+        [{ match: { type: 'villain' }, orientation: 'landscape' }],
       );
 
       // Mock portrait image that doesn't match landscape metadata
@@ -360,13 +369,14 @@ describe('CardPreview', () => {
     it('does not apply rotation when rotationEnabled is false', () => {
       // Landscape metadata but portrait image -> would rotate, but rotationEnabled is false
       const gameAssets = createGameAssets(
-        { villain: { orientation: 'landscape' } },
+        {},
         {
           rhino: {
             type: 'villain',
             face: 'rhino.jpg',
           },
         },
+        [{ match: { type: 'villain' }, orientation: 'landscape' }],
       );
 
       // Mock portrait image that doesn't match landscape metadata
@@ -390,13 +400,14 @@ describe('CardPreview', () => {
     it('does not apply rotation when image matches metadata orientation', () => {
       // Portrait metadata and portrait image -> no rotation needed
       const gameAssets = createGameAssets(
-        { hero: { orientation: 'portrait' } },
+        {},
         {
           spiderman: {
             type: 'hero',
             face: 'spiderman.jpg',
           },
         },
+        [{ match: { type: 'hero' }, orientation: 'portrait' }],
       );
 
       // Mock portrait image that matches portrait metadata
@@ -420,13 +431,14 @@ describe('CardPreview', () => {
     it('does not apply rotation for landscape image with landscape metadata', () => {
       // Landscape metadata and landscape image -> no rotation needed
       const gameAssets = createGameAssets(
-        { villain: { orientation: 'landscape' } },
+        {},
         {
           rhino: {
             type: 'villain',
             face: 'rhino.jpg',
           },
         },
+        [{ match: { type: 'villain' }, orientation: 'landscape' }],
       );
 
       // Mock landscape image that matches landscape metadata

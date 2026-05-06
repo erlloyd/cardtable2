@@ -285,6 +285,7 @@ export function mergeAssetPacks(
     statusTypes: {},
     modifierStats: {},
     iconTypes: {},
+    orientationRules: [],
   };
 
   // Merge each pack in order (later packs override earlier ones)
@@ -297,6 +298,15 @@ export function mergeAssetPacks(
           ? { ...cardType, back: resolveAssetUrl(cardType.back, pack.baseUrl) }
           : cardType;
       }
+    }
+
+    // Merge orientation rules (pack load order is preserved; first match wins
+    // at lookup time, so earlier packs take precedence over later ones).
+    if (pack.orientationRules && pack.orientationRules.length > 0) {
+      // merged.orientationRules is initialized to [] above; the optional `?`
+      // on the type is a backwards-compat convenience for callers, not a real
+      // possibility here.
+      (merged.orientationRules ??= []).push(...pack.orientationRules);
     }
 
     // Merge cards with URL resolution

@@ -1,44 +1,74 @@
-import type { Card, GameAssets } from '@cardtable2/shared';
+import type { Card, GameAssets, OrientationRule } from '@cardtable2/shared';
 
 /**
- * Get the display orientation for a card
+ * Get the display orientation for a card.
  *
- * Follows inheritance chain:
- * 1. Check card.orientation (explicit override)
- * 2. Check cardType.orientation (type default)
- * 3. Default to 'portrait'
+ * Resolution order:
+ *  1. `card.orientation` — explicit per-card override (highest priority).
+ *     A value of `'auto'` is treated as "no opinion" and falls through to (2).
+ *  2. `gameAssets.orientationRules` — plugin-declared rules walked in order.
+ *     The first rule whose `match` object's keys ALL match this card's fields
+ *     wins. A rule resolving to `'auto'` is treated as "no opinion" for that
+ *     rule and the walk continues to the next rule.
+ *  3. Fallback `'portrait'`.
  *
- * Note: 'auto' is treated as 'portrait' for now.
- * Future enhancement: detect from image aspect ratio.
- *
- * @param card - Card data from GameAssets
- * @param gameAssets - All loaded game assets
- * @returns 'portrait' or 'landscape'
- *
- * @example
- * ```typescript
- * const orientation = getCardOrientation(card, gameAssets);
- * // Returns 'landscape' if card or its type specifies landscape
- * // Otherwise returns 'portrait'
- * ```
+ * Note: `'auto'` is not yet auto-detected from image aspect ratio; it simply
+ * means "this layer has no opinion, defer to the next layer".
  */
 export function getCardOrientation(
   card: Card,
   gameAssets: GameAssets,
 ): 'portrait' | 'landscape' {
-  // Check card-level override (explicit)
+  // Layer 1 — per-card override
   if (card.orientation && card.orientation !== 'auto') {
     return card.orientation;
   }
 
-  // Check card type default
-  const cardType = gameAssets.cardTypes[card.type];
-  if (cardType?.orientation && cardType.orientation !== 'auto') {
-    return cardType.orientation;
+  // Layer 2 — plugin-declared orientation rules. Walk in declared order; the
+  // first rule whose match object satisfies the card AND resolves to a
+  // concrete orientation wins. A rule with `orientation: 'auto'` is treated
+  // as "no opinion" — even when the match object fires, the walk continues
+  // to the next rule (mirroring the per-card 'auto' fallthrough).
+  const resolved = walkOrientationRules(card, gameAssets.orientationRules);
+  if (resolved) {
+    return resolved;
   }
 
-  // Default to portrait
+  // Layer 3 — fallback
   return 'portrait';
+}
+
+/**
+ * Walk `rules` in declared order; return the orientation of the first rule
+ * whose `match` object is satisfied by `card` AND whose `orientation` is a
+ * concrete value (`'portrait'` or `'landscape'`). Rules resolving to `'auto'`
+ * are treated as "no opinion" — the walk skips them even when they match
+ * structurally. Returns `null` when no rule produces a concrete answer.
+ */
+function walkOrientationRules(
+  card: Card,
+  rules: OrientationRule[] | undefined,
+): 'portrait' | 'landscape' | null {
+  if (!rules || rules.length === 0) {
+    return null;
+  }
+  // Treat the card as a plain field-name → value lookup. Card field values
+  // we match on are strings (type, typeCode, setCode, etc.); rule values are
+  // declared `Record<string, string>`, so a strict equality check is correct.
+  const cardFields = card as unknown as Record<string, unknown>;
+  for (const rule of rules) {
+    let allMatch = true;
+    for (const [field, expected] of Object.entries(rule.match)) {
+      if (cardFields[field] !== expected) {
+        allMatch = false;
+        break;
+      }
+    }
+    if (allMatch && rule.orientation !== 'auto') {
+      return rule.orientation;
+    }
+  }
+  return null;
 }
 
 /**
@@ -54,7 +84,7 @@ export function getCardOrientation(
  * @example
  * ```typescript
  * const orientation = getCardOrientationByCode('mc01_rhino', gameAssets);
- * // Returns 'landscape' if rhino card or villain type is landscape
+ * // Returns 'landscape' if a rule matches the rhino card, else 'portrait'
  * ```
  */
 export function getCardOrientationByCode(

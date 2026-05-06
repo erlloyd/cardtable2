@@ -2708,7 +2708,7 @@ describe('YjsActions - attachCards', () => {
       });
 
       const layout = {
-        direction: 'below' as const,
+        direction: 'bottom' as const,
         revealFraction: 0.25,
         parentOnTop: false,
       };

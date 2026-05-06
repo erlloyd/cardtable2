@@ -14,7 +14,7 @@
  * 1.  Navigate to a fresh `/dev/table/:id` and seed two single-card
  *     stacks via `__TEST_STORE__.setObject` (deterministic IDs and
  *     positions, no plugin needed).
- * 2.  Set the override to `'top-right'` via `__ctTest.setAttachmentDirection`.
+ * 2.  Set the override to `'top-right'` via `__ctDevTools.setAttachmentDirection`.
  * 3.  Drive a real Alt-drag from the would-be-child stack onto the
  *     would-be-parent stack.  Alt held forces the renderer's pointer
  *     handler to emit `attach-cards` (not `stack-objects`) — see
@@ -61,7 +61,7 @@ interface PageTestStore {
   getAllObjects: () => Map<string, { _kind: string; _pos: Pos }>;
 }
 
-interface PageCtTest {
+interface PageCtDevTools {
   setAttachmentDirection: (dir: AttachmentDirection | null) => void;
 }
 
@@ -72,7 +72,7 @@ interface PageTestBoard {
 
 interface PageGlobals {
   __TEST_STORE__?: PageTestStore;
-  __ctTest?: PageCtTest;
+  __ctDevTools?: PageCtDevTools;
   __TEST_BOARD__?: PageTestBoard;
 }
 
@@ -167,7 +167,7 @@ test.describe('Attachment direction override (ct-t1c)', () => {
     });
     await page.waitForFunction(() => {
       const globals = globalThis as unknown as PageGlobals;
-      return Boolean(globals.__ctTest);
+      return Boolean(globals.__ctDevTools);
     });
 
     // Make sure no override leaked from a prior run on the same dev
@@ -175,7 +175,7 @@ test.describe('Attachment direction override (ct-t1c)', () => {
     // of `__TEST_STORE__`, so the auto-clear fixture does not touch it.
     await page.evaluate(() => {
       const globals = globalThis as unknown as PageGlobals;
-      globals.__ctTest?.setAttachmentDirection(null);
+      globals.__ctDevTools?.setAttachmentDirection(null);
     });
   });
 
@@ -184,7 +184,7 @@ test.describe('Attachment direction override (ct-t1c)', () => {
     // the next test.
     await page.evaluate(() => {
       const globals = globalThis as unknown as PageGlobals;
-      globals.__ctTest?.setAttachmentDirection(null);
+      globals.__ctDevTools?.setAttachmentDirection(null);
     });
   });
 
@@ -204,7 +204,7 @@ test.describe('Attachment direction override (ct-t1c)', () => {
     // BoardMessageBus reads it inside the `attach-cards` handler.
     await page.evaluate(() => {
       const globals = globalThis as unknown as PageGlobals;
-      globals.__ctTest?.setAttachmentDirection('top-right');
+      globals.__ctDevTools?.setAttachmentDirection('top-right');
     });
 
     // Click the child stack to select it (matches the pattern used by
@@ -287,8 +287,8 @@ test.describe('Attachment direction override (ct-t1c)', () => {
     // direction (which is `'bottom'` per `DEFAULT_ATTACHMENT_LAYOUT`).
     await page.evaluate(() => {
       const globals = globalThis as unknown as PageGlobals;
-      globals.__ctTest?.setAttachmentDirection('top-right');
-      globals.__ctTest?.setAttachmentDirection(null);
+      globals.__ctDevTools?.setAttachmentDirection('top-right');
+      globals.__ctDevTools?.setAttachmentDirection(null);
     });
 
     await page.mouse.click(seeded.childViewport.x, seeded.childViewport.y);

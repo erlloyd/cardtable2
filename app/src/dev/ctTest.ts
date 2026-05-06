@@ -38,9 +38,6 @@
  * original dispatch pattern this mirrors.
  */
 
-import type { AttachmentDirection } from '@cardtable2/shared';
-import { setAttachmentDirectionOverride } from './attachmentOverride';
-
 export interface WorldPoint {
   x: number;
   y: number;
@@ -120,28 +117,6 @@ export interface CtTestApi {
     canvas: ViewportPoint;
     viewport: ViewportPoint;
   }>;
-
-  /**
-   * Force the card-on-card attachment direction for any subsequent
-   * `attach-cards` operation, regardless of the active plugin's
-   * `attachmentLayout.direction`.  Pass `null` to clear the override and
-   * restore the plugin/default behavior.
-   *
-   * This exists so an E2E (or a manual MCP session) can exercise the
-   * full attach pipeline for non-default directions — no shipped plugin
-   * currently sets `direction` to a non-default value, so the only way
-   * to lock in regression coverage for the path
-   * `plugin manifest -> BoardMessageBus -> attachCards ->
-   *  computeAttachmentPositions -> _pos` for, say, `'top-right'` is via
-   * this dev override (see ct-t1c).
-   *
-   * The override is read inside `BoardMessageBus`'s `attach-cards`
-   * handler — see `app/src/components/Board/BoardMessageBus.ts`.  In
-   * production this setter is unreachable (the whole `__ctTest` API is
-   * gated behind `import.meta.env.DEV`/`VITE_E2E` in `installCtTest`),
-   * so the read site sees `null` and the override path is dead code.
-   */
-  setAttachmentDirection(dir: AttachmentDirection | null): void;
 }
 
 const DEFAULT_DRAG_STEPS = 10;
@@ -323,10 +298,6 @@ export function createCtTestApi(): CtTestApi {
         ...opts,
         buttons: opts.buttons ?? 0,
       });
-    },
-
-    setAttachmentDirection(dir) {
-      setAttachmentDirectionOverride(dir);
     },
 
     probeObjects(limit = 10) {

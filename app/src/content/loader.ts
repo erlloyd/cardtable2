@@ -4,6 +4,8 @@ import type {
   GameAssets,
   ResolvedCard,
   CardSize,
+  Card,
+  CardType,
 } from '@cardtable2/shared';
 import { getBackendUrl } from '@/utils/backend';
 import {
@@ -423,6 +425,53 @@ export function resolveAssetUrl(url: string, baseUrl?: string): string {
 // ============================================================================
 
 /**
+ * Resolve the back-image URL for a card, applying the full resolution chain.
+ *
+ * Precedence (highest first):
+ *   1. `card.back`                — explicit per-card back image override
+ *   2. partner card's `face`      — when `card.back_code` points to another
+ *                                   card, render that partner's face when this
+ *                                   card is face-down (two-sided cards: hero/
+ *                                   alter-ego pairs, multi-stage main schemes,
+ *                                   multi-back treacheries, etc.)
+ *   3. `cardType.back`            — generic back for the card's cardType
+ *
+ * Returns `undefined` if no back image can be resolved (caller decides whether
+ * that's an error). If `back_code` points at an unknown card code, logs a
+ * warning and falls through to `cardType.back` rather than throwing — soft
+ * failure, so a typo in one card's metadata doesn't break the whole table.
+ *
+ * URLs returned from this helper are assumed to already be absolute: cards
+ * passed in via `gameAssets.cards` and `cardType.back` have been processed by
+ * `mergeAssetPacks`, which resolves all asset URLs against each pack's
+ * `baseUrl` at load time. Cross-pack `back_code` therefore works correctly:
+ * the partner's `face` was resolved against the partner's pack, not the
+ * current card's.
+ */
+export function resolveCardBackUrl(
+  cardCode: string,
+  card: Card,
+  cardType: CardType,
+  content: GameAssets,
+): string | undefined {
+  if (card.back) {
+    return card.back;
+  }
+  if (card.back_code) {
+    const partner = content.cards[card.back_code];
+    if (partner) {
+      return partner.face;
+    }
+    console.warn('[Loader] back_code references unknown card; falling back', {
+      cardCode,
+      backCode: card.back_code,
+    });
+    return cardType.back;
+  }
+  return cardType.back;
+}
+
+/**
  * Resolve a card by applying type inheritance and URL resolution
  */
 export function resolveCard(
@@ -457,14 +506,15 @@ export function resolveCard(
   // Resolve size (card override > type default > standard)
   const size: CardSize = card.size ?? cardType.size ?? 'standard';
 
-  // Resolve back image (card override > type default)
-  const backUrl = card.back ?? cardType.back;
+  // Resolve back image via shared chain (card.back > back_code partner > cardType.back).
+  const backUrl = resolveCardBackUrl(cardCode, card, cardType, content);
   if (!backUrl) {
     console.error('[Loader] No back image defined for card', {
       errorId: CARD_IMAGE_NO_BACK,
       cardCode,
       cardType: card.type,
       hasCardBack: !!card.back,
+      hasBackCode: !!card.back_code,
       hasTypeBack: !!cardType.back,
     });
     throw new Error(
@@ -476,6 +526,9 @@ export function resolveCard(
     code: cardCode,
     type: card.type,
     face: resolveAssetUrl(card.face, baseUrl),
+    // resolveAssetUrl is idempotent for absolute URLs; the back URL is already
+    // resolved (mergeAssetPacks resolves card.back, cardType.back, and partner
+    // card faces at load time), so this call is a no-op for the common path.
     back: resolveAssetUrl(backUrl, baseUrl),
     size,
   };

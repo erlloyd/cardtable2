@@ -762,4 +762,207 @@ describe('CardPreview', () => {
       expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
   });
+
+  // ==========================================================================
+  // Face-down back-image preview: show resolved back when non-default,
+  // suppress when default cardType.back. Mirrors hover/modal behavior.
+  // ==========================================================================
+  describe('Face-down back-image resolution', () => {
+    const playerCardType: CardType = {
+      back: 'https://example.com/generic-back.png',
+      size: 'standard',
+    };
+
+    it('shows partner face URL when face-down card has back_code pointing at an existing card', () => {
+      const card: Card = {
+        type: 'main_scheme',
+        face: 'https://example.com/01097a.jpg',
+        back_code: '01097b',
+      };
+      const partner: Card = {
+        type: 'main_scheme',
+        face: 'https://example.com/01097b.jpg',
+      };
+      const gameAssets = createGameAssets(
+        {
+          main_scheme: {
+            back: 'https://example.com/generic-scheme-back.png',
+            size: 'standard',
+          },
+        },
+        { '01097a': card, '01097b': partner },
+      );
+
+      render(
+        <CardPreview
+          card={card}
+          cardCode="01097a"
+          faceUp={false}
+          gameAssets={gameAssets}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      const img = screen.getByAltText<HTMLImageElement>('Card preview');
+      expect(img.src).toBe('https://example.com/01097b.jpg');
+    });
+
+    it('shows explicit card.back URL when face-down with no back_code', () => {
+      const card: Card = {
+        type: 'player',
+        face: 'https://example.com/face.jpg',
+        back: 'https://example.com/explicit-back.jpg',
+      };
+      const gameAssets = createGameAssets(
+        { player: playerCardType },
+        { card1: card },
+      );
+
+      render(
+        <CardPreview
+          card={card}
+          cardCode="card1"
+          faceUp={false}
+          gameAssets={gameAssets}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      const img = screen.getByAltText<HTMLImageElement>('Card preview');
+      expect(img.src).toBe('https://example.com/explicit-back.jpg');
+    });
+
+    it('renders nothing when face-down card resolves to the generic cardType.back', () => {
+      const card: Card = {
+        type: 'player',
+        face: 'https://example.com/face.jpg',
+      };
+      const gameAssets = createGameAssets(
+        { player: playerCardType },
+        { card1: card },
+      );
+
+      const { container } = render(
+        <CardPreview
+          card={card}
+          cardCode="card1"
+          faceUp={false}
+          gameAssets={gameAssets}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      expect(container.firstChild).toBeNull();
+    });
+
+    it('renders nothing when face-down card has back_code pointing at a missing card', () => {
+      const card: Card = {
+        type: 'player',
+        face: 'https://example.com/face.jpg',
+        back_code: 'NONEXISTENT',
+      };
+      const gameAssets = createGameAssets(
+        { player: playerCardType },
+        { card1: card },
+      );
+
+      // Suppress the expected resolver warn so it doesn't pollute output
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
+
+      const { container } = render(
+        <CardPreview
+          card={card}
+          cardCode="card1"
+          faceUp={false}
+          gameAssets={gameAssets}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      expect(container.firstChild).toBeNull();
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('shows the face when faceUp is true, regardless of back_code', () => {
+      const card: Card = {
+        type: 'main_scheme',
+        face: 'https://example.com/01097a.jpg',
+        back_code: '01097b',
+      };
+      const partner: Card = {
+        type: 'main_scheme',
+        face: 'https://example.com/01097b.jpg',
+      };
+      const gameAssets = createGameAssets(
+        {
+          main_scheme: {
+            back: 'https://example.com/generic-scheme-back.png',
+            size: 'standard',
+          },
+        },
+        { '01097a': card, '01097b': partner },
+      );
+
+      render(
+        <CardPreview
+          card={card}
+          cardCode="01097a"
+          faceUp={true}
+          gameAssets={gameAssets}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      const img = screen.getByAltText<HTMLImageElement>('Card preview');
+      expect(img.src).toBe('https://example.com/01097a.jpg');
+    });
+
+    it('falls back to legacy face-only behavior when cardCode is omitted', () => {
+      // Legacy callers that haven't migrated to the new shape should keep
+      // working: face is shown unconditionally.
+      const card: Card = {
+        type: 'main_scheme',
+        face: 'https://example.com/01097a.jpg',
+        back_code: '01097b',
+      };
+      const partner: Card = {
+        type: 'main_scheme',
+        face: 'https://example.com/01097b.jpg',
+      };
+      const gameAssets = createGameAssets(
+        {
+          main_scheme: {
+            back: 'https://example.com/generic-scheme-back.png',
+            size: 'standard',
+          },
+        },
+        { '01097a': card, '01097b': partner },
+      );
+
+      render(
+        <CardPreview
+          card={card}
+          gameAssets={gameAssets}
+          mode="hover"
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+        />,
+      );
+
+      const img = screen.getByAltText<HTMLImageElement>('Card preview');
+      expect(img.src).toBe('https://example.com/01097a.jpg');
+    });
+  });
 });

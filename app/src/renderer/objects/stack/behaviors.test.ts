@@ -1357,4 +1357,165 @@ describe('Stack Behaviors - Visual Rendering', () => {
       });
     });
   });
+
+  // =========================================================================
+  // ct-vxu regression: don't re-attempt load() once a URL has failed
+  // =========================================================================
+  // Bug: when a card image 404s, the renderer's catch fires onTextureLoaded,
+  // which redrawVisual triggers a re-render, which hits the same load() path,
+  // which (past TextureLoader's retry limit) throws synchronously, which
+  // re-fires the catch, which fires onTextureLoaded again — infinite loop,
+  // browser locks. Fix: skip the load() call when textureLoader.hasFailed(url)
+  // is already true. These tests pin the guard so it can't regress silently.
+  describe('ct-vxu: failed-URL guard prevents render-load loop', () => {
+    function makeAssets(): RenderContext['gameAssets'] {
+      return {
+        packs: [],
+        cards: {
+          card1: {
+            type: 'player',
+            face: '/api/card-image/pack1/card1-face.jpg',
+          },
+        },
+        cardTypes: {
+          player: { back: '/api/card-image/pack1/player-back.jpg' },
+        },
+        cardSets: {},
+        tokens: {},
+        counters: {},
+        mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
+      };
+    }
+
+    it('does not call load() when textureLoader.hasFailed returns true (main card path)', () => {
+      const loadMock = vi.fn(() =>
+        Promise.reject(new Error('should not be called')),
+      );
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: loadMock,
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => true),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => true),
+      };
+      const ctx = {
+        ...mockContext,
+        gameAssets: makeAssets(),
+        textureLoader: textureLoader as TextureLoader,
+        onTextureLoaded: vi.fn(),
+      } as RenderContext;
+
+      const stack = createTestStack({ _cards: ['card1'], _faceUp: true });
+
+      // Render many times — like the redrawVisual cascade would.
+      for (let i = 0; i < 50; i++) {
+        StackBehaviors.render(stack, ctx);
+      }
+
+      expect(loadMock).not.toHaveBeenCalled();
+      expect(textureLoader.hasFailed).toHaveBeenCalled();
+    });
+
+    it('calls load() exactly once across renders, when hasFailed flips to true after first failure', () => {
+      const loadMock = vi.fn(() => Promise.reject(new Error('boom')));
+      let hasFailedReturn = false;
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: loadMock,
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => false),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => hasFailedReturn),
+      };
+      const ctx = {
+        ...mockContext,
+        gameAssets: makeAssets(),
+        textureLoader: textureLoader as TextureLoader,
+        onTextureLoaded: vi.fn(),
+      } as RenderContext;
+
+      const stack = createTestStack({ _cards: ['card1'], _faceUp: true });
+
+      // First render kicks off load().
+      StackBehaviors.render(stack, ctx);
+      expect(loadMock).toHaveBeenCalledTimes(1);
+
+      // Simulate the load having failed: failedUrls now records this URL,
+      // so hasFailed() flips to true. Subsequent renders must NOT call load.
+      hasFailedReturn = true;
+      for (let i = 0; i < 50; i++) {
+        StackBehaviors.render(stack, ctx);
+      }
+
+      expect(loadMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call load() for status/token/icon images when hasFailed is true', () => {
+      const loadMock = vi.fn(() =>
+        Promise.reject(new Error('should not be called')),
+      );
+      const textureLoader: Partial<RenderContext['textureLoader']> = {
+        load: loadMock,
+        get: vi.fn(() => undefined),
+        has: vi.fn(() => false),
+        shouldShowFallback: vi.fn(() => false),
+        isSlowLoading: vi.fn(() => false),
+        hasFailed: vi.fn(() => true),
+      };
+      const ctx = {
+        ...mockContext,
+        gameAssets: {
+          packs: [],
+          cards: {
+            card1: {
+              type: 'player',
+              face: '/api/card-image/pack1/card1-face.jpg',
+            },
+          },
+          cardTypes: {
+            player: { back: '/api/card-image/pack1/player-back.jpg' },
+          },
+          cardSets: {},
+          tokens: {},
+          counters: {},
+          mats: {},
+          tokenTypes: {
+            damage: { name: 'Damage', image: '/tokens/damage.png' },
+          },
+          statusTypes: {
+            stunned: { name: 'Stunned', image: '/status/stunned.png' },
+          },
+          modifierStats: {},
+          iconTypes: {
+            attack: { name: 'Attack', image: '/icons/attack.png' },
+          },
+        },
+        textureLoader: textureLoader as TextureLoader,
+        onTextureLoaded: vi.fn(),
+      } as RenderContext;
+
+      const stack = createTestStack({
+        _cards: ['card1'],
+        _faceUp: true,
+        _meta: {
+          card1: {
+            tokens: { damage: 1 },
+            statuses: ['stunned'],
+            icons: ['attack'],
+          },
+        },
+      });
+
+      for (let i = 0; i < 20; i++) {
+        StackBehaviors.render(stack, ctx);
+      }
+
+      expect(loadMock).not.toHaveBeenCalled();
+    });
+  });
 });

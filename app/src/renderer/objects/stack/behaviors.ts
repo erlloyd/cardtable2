@@ -41,6 +41,7 @@ import {
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
 import { shouldRotateCard } from '../../../content/cardRotation';
+import { resolveCardBackUrl } from '../../../content/loader';
 import {
   TEXTURE_LOAD_FAILED,
   ATTACHMENT_IMAGE_LOAD_FAILED,
@@ -113,15 +114,16 @@ function getCardImageUrl(
     );
     return { success: false, reason: 'no-face', cardId: topCardId };
   } else {
-    // Face down - show card back (from card override or card type default)
-    if (card.back) {
-      return { success: true, url: card.back };
-    }
-
-    // Fall back to card type's back image
+    // Face down - show card back. Uses the shared resolver so two-sided
+    // cards (back_code) flip to the partner's face, not the generic
+    // cardType back. Resolution chain: card.back > partner.face > cardType.back.
     const cardType = ctx.gameAssets.cardTypes[card.type];
-    if (cardType?.back) {
-      return { success: true, url: cardType.back };
+    const backUrl = cardType
+      ? resolveCardBackUrl(topCardId, card, cardType, ctx.gameAssets)
+      : (card.back ?? undefined);
+
+    if (backUrl) {
+      return { success: true, url: backUrl };
     }
 
     console.error(
@@ -131,6 +133,7 @@ function getCardImageUrl(
         cardId: topCardId,
         cardType: card.type,
         hasCardBack: !!card.back,
+        hasBackCode: !!card.back_code,
         hasTypeBack: !!cardType?.back,
         stackObjectId: ctx.objectId,
       },
@@ -270,10 +273,21 @@ function renderMainCard(
       container.addChild(text);
     }
 
-    // Start async texture load and trigger re-render when done
-    // Note: TextureLoader tracks slow loads internally via isSlowLoading()
-    // We rely on periodic re-renders (e.g., from user interaction) to check shouldShowFallback()
-    if (imageUrl && ctx.textureLoader && ctx.onTextureLoaded) {
+    // Start async texture load and trigger re-render when done.
+    // Critical: bail out if this URL has already failed. Without this guard,
+    // a permanently-broken URL produces an infinite render loop (ct-vxu):
+    //   load() rejects -> .catch fires onTextureLoaded -> redrawVisual ->
+    //   re-render hits this same path -> load() rejects synchronously past
+    //   the retry limit -> .catch -> onTextureLoaded -> redrawVisual -> ...
+    // The first failure already incremented failedUrls; subsequent renders
+    // see hasFailed=true and stop. The placeholder + fallback text from the
+    // first re-render is what the user sees; no further updates needed.
+    if (
+      imageUrl &&
+      ctx.textureLoader &&
+      ctx.onTextureLoaded &&
+      !ctx.textureLoader.hasFailed(imageUrl)
+    ) {
       ctx.textureLoader
         .load(imageUrl)
         .then(() => {
@@ -618,8 +632,13 @@ function renderStatus(
 
       currentY += cachedTexture.height * scale + 2;
     } else {
-      // Start async load
-      if (ctx.textureLoader && ctx.onTextureLoaded) {
+      // Start async load. Skip if already known broken (ct-vxu) — every
+      // render would otherwise re-attempt the same failing URL.
+      if (
+        ctx.textureLoader &&
+        ctx.onTextureLoaded &&
+        !ctx.textureLoader.hasFailed(statusDef.image)
+      ) {
         ctx.textureLoader
           .load(statusDef.image)
           .then(() => {
@@ -789,8 +808,12 @@ function renderTokens(
 
       currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
     } else {
-      // Start async load
-      if (ctx.textureLoader && ctx.onTextureLoaded) {
+      // Start async load. Skip if already known broken (ct-vxu).
+      if (
+        ctx.textureLoader &&
+        ctx.onTextureLoaded &&
+        !ctx.textureLoader.hasFailed(tokenDef.image)
+      ) {
         ctx.textureLoader
           .load(tokenDef.image)
           .then(() => {
@@ -858,8 +881,12 @@ function renderIcons(
 
       currentY += sprite.height + ATTACHMENT_VERTICAL_SPACING;
     } else {
-      // Start async load
-      if (ctx.textureLoader && ctx.onTextureLoaded) {
+      // Start async load. Skip if already known broken (ct-vxu).
+      if (
+        ctx.textureLoader &&
+        ctx.onTextureLoaded &&
+        !ctx.textureLoader.hasFailed(iconDef.image)
+      ) {
         ctx.textureLoader
           .load(iconDef.image)
           .then(() => {

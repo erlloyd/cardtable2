@@ -8,6 +8,7 @@ import {
 import useImage from 'use-image';
 import type { Card, GameAssets } from '@cardtable2/shared';
 import { getCardOrientation } from '../content/utils';
+import { resolveCardBackUrl } from '../content/loader';
 import {
   getPreviewDimensions,
   getLandscapeDimensions,
@@ -18,7 +19,21 @@ import {
 export interface CardPreviewProps {
   /** Card data to preview */
   card: Card | null;
-  /** Game assets for orientation lookup */
+  /**
+   * Card code (key in gameAssets.cards). Only required to resolve back-image
+   * URLs via back_code (i.e., when `faceUp` is false). When omitted, the
+   * component shows the face — preserves the legacy "always show face"
+   * behavior for callers that haven't migrated.
+   */
+  cardCode?: string | null;
+  /**
+   * Whether the card on the table is face-up. Defaults to true (face-up =
+   * legacy behavior). When false, the back is resolved via card.back / the
+   * back_code partner / cardType.back; the preview is suppressed entirely if
+   * the resolved back is the generic cardType.back.
+   */
+  faceUp?: boolean;
+  /** Game assets for orientation lookup and back-image resolution */
   gameAssets: GameAssets | null;
   /** Display mode: hover (positioned) or modal (centered) */
   mode: 'hover' | 'modal';
@@ -35,6 +50,38 @@ export interface CardPreviewProps {
 }
 
 /**
+ * Decide whether to render any preview at all for a face-down card.
+ *
+ * A card whose back is just the generic `cardType.back` (the same image every
+ * card of that type shows when face-down) is uninteresting to preview — the
+ * user already sees that exact image on the table. We only render a preview
+ * when the back is non-default: an explicit `card.back` URL, or a resolved
+ * `back_code` partner. The resolver compared against `cardType.back` is the
+ * authoritative source-of-truth for "is this back interesting?"
+ *
+ * Returns the URL to render, or `null` if no preview should be shown.
+ */
+function resolvePreviewImageUrl(
+  card: Card,
+  cardCode: string,
+  faceUp: boolean,
+  gameAssets: GameAssets,
+): string | null {
+  if (faceUp) {
+    return card.face;
+  }
+  const cardType = gameAssets.cardTypes[card.type];
+  if (!cardType) {
+    return null;
+  }
+  const backUrl = resolveCardBackUrl(cardCode, card, cardType, gameAssets);
+  if (!backUrl || backUrl === cardType.back) {
+    return null;
+  }
+  return backUrl;
+}
+
+/**
  * CardPreview - Display card image in larger size
  *
  * Supports two modes:
@@ -45,6 +92,8 @@ export interface CardPreviewProps {
  */
 export function CardPreview({
   card,
+  cardCode = null,
+  faceUp = true,
   gameAssets,
   mode,
   position = { x: 0, y: 0 },
@@ -53,13 +102,23 @@ export function CardPreview({
   rotationEnabled = DEFAULT_ROTATION_ENABLED,
   onClose,
 }: CardPreviewProps) {
-  const isOpen = card !== null && gameAssets !== null;
+  // Determine the URL to render. For face-up: card.face. For face-down: the
+  // resolved back URL via card.back / back_code, but only if it's *non-default*
+  // (the generic cardType.back returns null — no preview, since the user already
+  // sees that exact image on the table). When cardCode is omitted, fall back
+  // to the legacy "show face" behavior — back-resolution requires the code.
+  const imageUrl =
+    card === null || gameAssets === null
+      ? null
+      : faceUp || cardCode === null
+        ? card.face
+        : resolvePreviewImageUrl(card, cardCode, faceUp, gameAssets);
+  const isOpen = imageUrl !== null;
 
-  // Image URL (always show face for preview)
-  const imageUrl = card?.face ?? '';
-
-  // Load image with hook (must be called unconditionally)
-  const [image, status] = useImage(imageUrl);
+  // Load image with hook (must be called unconditionally — useImage takes a
+  // string; empty string is the loader's "no-op" sentinel, used when there's
+  // nothing to preview).
+  const [image, status] = useImage(imageUrl ?? '');
 
   // Log image loading failures for debugging
   useEffect(() => {
@@ -121,8 +180,15 @@ export function CardPreview({
     return { dimensions, needsRotation, rotationTransform };
   }, [card, gameAssets, rotationEnabled, image, size, customDimensions]);
 
+  // Nothing to render: missing inputs, or face-down card whose back resolves
+  // to the generic cardType.back (no point previewing what's already on the
+  // table).
+  if (!card || !gameAssets || imageUrl === null) {
+    return null;
+  }
+
   // Early return for hover mode
-  if (card && gameAssets && mode === 'hover') {
+  if (mode === 'hover') {
     const { dimensions, rotationTransform } = getCardDisplayProps();
 
     return (
@@ -169,10 +235,6 @@ export function CardPreview({
         </div>
       </div>
     );
-  }
-
-  if (!card || !gameAssets) {
-    return null;
   }
 
   // Calculate rotation and dimensions for modal mode

@@ -104,8 +104,10 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     );
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
-    const [doubleTapPreviewCard, setDoubleTapPreviewCard] =
-      useState<Card | null>(null);
+    const [doubleTapPreviewCard, setDoubleTapPreviewCard] = useState<{
+      card: Card;
+      cardCode: string;
+    } | null>(null);
     const [insertionIndex, setInsertionIndex] = useState<number | null>(null);
 
     const cardsContainerRef = useRef<HTMLDivElement>(null);
@@ -316,8 +318,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           const cardId = cards[index];
           const card =
             cardId && gameAssets ? (gameAssets.cards[cardId] ?? null) : null;
-          if (card) {
-            setDoubleTapPreviewCard(card);
+          if (card && cardId) {
+            setDoubleTapPreviewCard({ card, cardCode: cardId });
           }
           lastTapTimeRef.current.delete(index);
         } else {
@@ -644,9 +646,11 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       };
     })();
 
+    const hoveredCardCode =
+      hoveredIndex !== null ? (cards[hoveredIndex] ?? null) : null;
     const hoveredCard =
-      hoveredIndex !== null && gameAssets
-        ? (gameAssets.cards[cards[hoveredIndex]] ?? null)
+      hoveredCardCode && gameAssets
+        ? (gameAssets.cards[hoveredCardCode] ?? null)
         : null;
 
     // Phantom drag ghost image URL
@@ -846,6 +850,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             <div style={{ pointerEvents: 'none' }}>
               <CardPreview
                 card={hoveredCard}
+                cardCode={hoveredCardCode}
+                faceUp={true}
                 gameAssets={gameAssets}
                 mode="hover"
                 position={previewPosition}
@@ -890,10 +896,14 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             document.body,
           )}
 
-        {/* Full-screen card preview — touch double-tap */}
-        {doubleTapPreviewCard && (
+        {/* Full-screen card preview — touch double-tap. Hand cards are
+            always face-up, so the preview always shows the face. */}
+        {doubleTapPreviewCard && gameAssets && (
           <FullScreenCardPreview
-            card={doubleTapPreviewCard}
+            card={doubleTapPreviewCard.card}
+            cardCode={doubleTapPreviewCard.cardCode}
+            faceUp={true}
+            gameAssets={gameAssets}
             onClose={() => setDoubleTapPreviewCard(null)}
           />
         )}

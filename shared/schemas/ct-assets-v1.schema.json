@@ -57,6 +57,11 @@
               }
             ],
             "description": "Default size for all cards of this type (defaults to 'standard': 180x252px)"
+          },
+          "orientation": {
+            "type": "string",
+            "enum": ["portrait", "landscape", "auto"],
+            "description": "DEPRECATED. Ignored by the runtime — use top-level orientationRules instead. Retained on the schema for backwards compatibility while plugins migrate; a console warning is emitted on plugin load if this field is still set."
           }
         },
         "additionalProperties": false
@@ -209,6 +214,29 @@
               }
             ],
             "description": "Mat size (defaults to 'playmat' if omitted: 1920x1080px)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "orientationRules": {
+      "type": "array",
+      "description": "Plugin-declared orientation rules. Walked in declared order; the first rule whose match-object keys all match a given card returns its orientation. A rule resolving to 'auto' is treated as 'no opinion' and the walk continues to the next rule. Match field names can be any field on the Card object (type, typeCode, setCode, etc.).",
+      "items": {
+        "type": "object",
+        "required": ["match", "orientation"],
+        "properties": {
+          "match": {
+            "type": "object",
+            "description": "Card field-name -> expected-value pairs (AND-ed; all must match for the rule to fire).",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "orientation": {
+            "type": "string",
+            "enum": ["portrait", "landscape", "auto"],
+            "description": "Resolved orientation when this rule matches. 'auto' falls through to the next rule."
           }
         },
         "additionalProperties": false

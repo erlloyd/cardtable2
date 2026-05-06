@@ -28,10 +28,37 @@ export type MatSize =
 
 export type CardOrientation = 'portrait' | 'landscape' | 'auto';
 
+/**
+ * Plugin-declared rule mapping card metadata to a render orientation.
+ *
+ * The `match` object is a record of card field-name → expected-value;
+ * a card matches the rule only when ALL keys match (AND semantics).
+ * Match field names can be any field on the `Card` type — `type`, `typeCode`,
+ * `setCode`, etc. — letting plugins classify orientation more finely than the
+ * (deprecated) cardType-keyed lookup allowed.
+ *
+ * Runtime walks `gameAssets.orientationRules` in declared order; the first rule
+ * whose match-object satisfies the card returns its `orientation`. A rule with
+ * `orientation: 'auto'` is treated as "no opinion" — the walk continues to the
+ * next rule, matching the existing per-card 'auto' semantics.
+ */
+export interface OrientationRule {
+  match: Record<string, string>; // Card field-name → expected-value (AND-ed)
+  orientation: CardOrientation; // Resolved orientation (or 'auto' to skip)
+}
+
 export interface CardType {
   back?: string; // Default card back image URL
   size?: CardSize; // Default size for this card type
-  orientation?: CardOrientation; // Default orientation for this card type (defaults to 'portrait')
+  /**
+   * @deprecated Use `AssetPack.orientationRules` instead. The runtime no longer
+   * reads this field as of the orientation-rules migration; it is retained on
+   * the schema solely so existing plugins do not fail to load while they
+   * migrate. A one-time console warning is emitted on plugin load if this
+   * field is still set. Remove once all consuming plugins (notably
+   * cardtable-plugin-marvelchampions) have migrated.
+   */
+  orientation?: CardOrientation;
 }
 
 export interface Card {
@@ -161,6 +188,8 @@ export interface AssetPack {
   iconTypes?: Record<string, IconTypeDef>; // Icon types (key is icon type code)
   // Card-on-card attachment configuration
   attachmentLayout?: AttachmentLayout; // Default layout for card-on-card attachments
+  // Orientation rules — see OrientationRule for semantics
+  orientationRules?: OrientationRule[]; // Plugin-declared orientation rules (walked in order, first match wins)
 }
 
 // ============================================================================
@@ -356,6 +385,9 @@ export interface GameAssets {
   statusTypes: Record<string, StatusTypeDef>; // Merged status types
   modifierStats: Record<string, ModifierStatDef>; // Merged modifier stats
   iconTypes: Record<string, IconTypeDef>; // Merged icon types
+  // Orientation rules merged from all packs (pack load order is preserved; first match wins at lookup time).
+  // Optional so existing test fixtures and pre-migration callers stay valid; mergeAssetPacks always populates an array.
+  orientationRules?: OrientationRule[];
 }
 
 // ============================================================================

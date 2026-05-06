@@ -28,11 +28,16 @@ import { getCardCount } from '../objects/stack/utils';
 let lastCursorStyle: 'default' | 'pointer' | 'grab' | 'grabbing' = 'default';
 
 /**
- * Helper: Check if a world position is in the bottom half of a stack (attach zone)
+ * Helper: Check if a world position is in the bottom third of a stack (attach zone)
  *
  * Used during drag to determine if the user is hovering over the attach zone
- * (bottom half) or the stack zone (top half) of a target card.
+ * (bottom third) or the stack zone (top two-thirds) of a target card.
  * Coordinates are transformed to the object's local space to handle rotation.
+ *
+ * Local Y spans [-STACK_HEIGHT/2, +STACK_HEIGHT/2]. The boundary at
+ * +STACK_HEIGHT/6 places the attach zone in the lowest third of the card,
+ * giving stack the dominant gesture (top 2/3) and reserving attach for
+ * deliberate hovers near the bottom edge.
  */
 function isPointInAttachZone(
   worldX: number,
@@ -49,8 +54,8 @@ function isPointInAttachZone(
   const sin = Math.sin(-angleRad);
   const localY = worldRelX * sin + worldRelY * cos;
 
-  // Bottom half of card = attach zone (localY >= 0 means below center)
-  return localY >= 0;
+  // Bottom third of card = attach zone
+  return localY >= STACK_HEIGHT / 6;
 }
 
 /**
@@ -1221,8 +1226,8 @@ function unselectObjects(context: RendererContext, ids: string[]): void {
 
 /**
  * Drop zone detection result.
- * Determines whether the user is hovering over the stack zone (top half)
- * or the attach zone (bottom half) of a target card.
+ * Determines whether the user is hovering over the stack zone (top two-thirds)
+ * or the attach zone (bottom third) of a target card.
  */
 interface DropZoneResult {
   type: 'stack' | 'attach';
@@ -1234,8 +1239,8 @@ interface DropZoneResult {
  *
  * Returns the zone type and target ID if a valid drop target is found.
  * Zone detection:
- * - Top half of target card = stack zone (merge cards)
- * - Bottom half of target card = attach zone (attach card-on-card)
+ * - Top two-thirds of target card = stack zone (merge cards)
+ * - Bottom third of target card = attach zone (attach card-on-card)
  * - Shift key overrides to force stack
  * - Alt/Option key overrides to force attach
  *
@@ -1309,7 +1314,7 @@ function detectDropZone(
     return { type: 'stack', targetId: hitResult.id };
   }
 
-  // Zone detection: top half = stack, bottom half = attach (based on dragged object center)
+  // Zone detection: top 2/3 = stack, bottom 1/3 = attach (based on dragged object center)
   const isAttach = isPointInAttachZone(testX, testY, targetObj);
   return {
     type: isAttach ? 'attach' : 'stack',

@@ -887,8 +887,8 @@ function renderIcons(
  * Helper: Render drop zone overlay during drag (stack zone / attach zone)
  *
  * Shows a text label and colored border to indicate which action will occur
- * on drop. Stack zone (top half) shows red border + "Stack" label.
- * Attach zone (bottom half) shows amber border + "Attach" label.
+ * on drop. Stack zone (top two-thirds) shows red border + "Stack" label.
+ * Attach zone (bottom third) shows amber border + "Attach" label.
  */
 function renderDropZoneOverlay(
   container: Container,

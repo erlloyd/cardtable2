@@ -55,6 +55,7 @@ export interface Card {
   type: string; // References a cardType key
   face: string; // Card face image URL
   back?: string; // Optional override of type's back image
+  back_code?: string; // Optional partner card code; when face-down, render the partner's `face` (used for two-sided cards like hero/alter-ego pairs and multi-stage main schemes). Resolution order: card.back > partner.face > cardType.back.
   size?: CardSize; // Optional override of type's size
   orientation?: CardOrientation; // Optional override of type's orientation (follows inheritance: card → cardType → 'portrait')
   setCode?: string; // Optional set/group identifier (e.g. "spider_man_nemesis") — used by deck import parsers

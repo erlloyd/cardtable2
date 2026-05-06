@@ -81,6 +81,10 @@
             "type": "string",
             "description": "Optional card back image URL (overrides type default)"
           },
+          "back_code": {
+            "type": "string",
+            "description": "Optional partner card code; when face-down, render the partner's `face` (used for two-sided cards like hero/alter-ego pairs and multi-stage main schemes). Resolution order: card.back > partner.face > cardType.back."
+          },
           "size": {
             "oneOf": [
               {

@@ -551,6 +551,232 @@ describe('resolveCard', () => {
     const resolved = resolveCard('custom', contentWithCustomSize);
     expect(resolved.size).toEqual([300, 400]);
   });
+
+  // ==========================================================================
+  // back_code resolution (two-sided cards)
+  // ==========================================================================
+
+  describe('back_code resolution', () => {
+    it('should use partner card face as back when back_code points at an existing card', () => {
+      const pack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'mc',
+        name: 'MC',
+        version: '1.0.0',
+        baseUrl: 'https://example.com/mc/',
+        cardTypes: {
+          mainScheme: { back: 'main_scheme_back.jpg', size: 'standard' },
+        },
+        cards: {
+          '01097a': {
+            type: 'mainScheme',
+            face: '01097a.jpg',
+            back_code: '01097',
+          },
+          '01097': {
+            type: 'mainScheme',
+            face: '01097.jpg',
+            back_code: '01097a',
+          },
+        },
+      };
+      const merged = mergeAssetPacks([pack]);
+
+      const resolvedA = resolveCard('01097a', merged);
+      expect(resolvedA.back).toBe('https://example.com/mc/01097.jpg');
+
+      const resolvedB = resolveCard('01097', merged);
+      expect(resolvedB.back).toBe('https://example.com/mc/01097a.jpg');
+    });
+
+    it('should fall through to cardType.back and warn when back_code points at a missing card', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const pack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'mc',
+        name: 'MC',
+        version: '1.0.0',
+        baseUrl: 'https://example.com/mc/',
+        cardTypes: {
+          encounter: { back: 'encounter_back.jpg', size: 'standard' },
+        },
+        cards: {
+          orphan: {
+            type: 'encounter',
+            face: 'orphan.jpg',
+            back_code: 'does_not_exist',
+          },
+        },
+      };
+      const merged = mergeAssetPacks([pack]);
+
+      const resolved = resolveCard('orphan', merged);
+      expect(resolved.back).toBe('https://example.com/mc/encounter_back.jpg');
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const warnArgs = warnSpy.mock.calls[0];
+      expect(warnArgs[0]).toContain('back_code references unknown card');
+      expect(warnArgs[1]).toMatchObject({
+        cardCode: 'orphan',
+        backCode: 'does_not_exist',
+      });
+
+      warnSpy.mockRestore();
+    });
+
+    it('should prefer card.back over back_code (per-card explicit override wins)', () => {
+      const pack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'mc',
+        name: 'MC',
+        version: '1.0.0',
+        baseUrl: 'https://example.com/mc/',
+        cardTypes: {
+          mainScheme: { back: 'main_scheme_back.jpg', size: 'standard' },
+        },
+        cards: {
+          '01097a': {
+            type: 'mainScheme',
+            face: '01097a.jpg',
+            back: 'explicit_back.jpg',
+            back_code: '01097',
+          },
+          '01097': {
+            type: 'mainScheme',
+            face: '01097.jpg',
+          },
+        },
+      };
+      const merged = mergeAssetPacks([pack]);
+
+      const resolved = resolveCard('01097a', merged);
+      expect(resolved.back).toBe('https://example.com/mc/explicit_back.jpg');
+    });
+
+    it('should fall through to cardType.back when neither back nor back_code is provided (current behavior preserved)', () => {
+      const pack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'mc',
+        name: 'MC',
+        version: '1.0.0',
+        baseUrl: 'https://example.com/mc/',
+        cardTypes: {
+          hero: { back: 'hero_back.jpg', size: 'standard' },
+        },
+        cards: {
+          plain: { type: 'hero', face: 'plain.jpg' },
+        },
+      };
+      const merged = mergeAssetPacks([pack]);
+
+      const resolved = resolveCard('plain', merged);
+      expect(resolved.back).toBe('https://example.com/mc/hero_back.jpg');
+    });
+
+    it('should resolve back_code across packs (partner in a different pack with different baseUrl)', () => {
+      const corePack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'core',
+        name: 'Core',
+        version: '1.0.0',
+        baseUrl: 'https://cdn-a.example.com/core/',
+        cardTypes: {
+          hero: { back: 'hero_back.jpg', size: 'standard' },
+        },
+        cards: {
+          spider_man: {
+            type: 'hero',
+            face: 'spider_man.jpg',
+            back_code: 'peter_parker',
+          },
+        },
+      };
+      const expansionPack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'expansion',
+        name: 'Expansion',
+        version: '1.0.0',
+        baseUrl: 'https://cdn-b.example.com/expansion/',
+        cards: {
+          peter_parker: {
+            type: 'hero',
+            face: 'peter_parker.jpg',
+          },
+        },
+      };
+      const merged = mergeAssetPacks([corePack, expansionPack]);
+
+      const resolved = resolveCard('spider_man', merged);
+      // Partner's face was resolved against expansionPack's baseUrl, not corePack's.
+      expect(resolved.back).toBe(
+        'https://cdn-b.example.com/expansion/peter_parker.jpg',
+      );
+    });
+
+    it('should support asymmetric pairs: only one side declares back_code', () => {
+      // Hero declares back_code pointing at alter-ego; alter-ego does NOT
+      // declare back_code. Hero side should still flip correctly. Alter-ego
+      // side falls through to cardType.back.
+      const pack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'mc',
+        name: 'MC',
+        version: '1.0.0',
+        baseUrl: 'https://example.com/mc/',
+        cardTypes: {
+          hero: { back: 'generic_hero_back.jpg', size: 'standard' },
+        },
+        cards: {
+          spider_man: {
+            type: 'hero',
+            face: 'spider_man.jpg',
+            back_code: 'peter_parker',
+          },
+          peter_parker: {
+            type: 'hero',
+            face: 'peter_parker.jpg',
+            // No back_code declared — asymmetric.
+          },
+        },
+      };
+      const merged = mergeAssetPacks([pack]);
+
+      const resolvedHero = resolveCard('spider_man', merged);
+      expect(resolvedHero.back).toBe('https://example.com/mc/peter_parker.jpg');
+
+      const resolvedAlterEgo = resolveCard('peter_parker', merged);
+      expect(resolvedAlterEgo.back).toBe(
+        'https://example.com/mc/generic_hero_back.jpg',
+      );
+    });
+
+    it('should support self-referencing back_code (single-image two-sided card)', () => {
+      // A card pointing at itself via back_code should render its own face on
+      // both sides. Edge case but valid — no need to special-case it.
+      const pack: AssetPack = {
+        schema: 'ct-assets@1',
+        id: 'mc',
+        name: 'MC',
+        version: '1.0.0',
+        baseUrl: 'https://example.com/mc/',
+        cardTypes: {
+          treachery: { back: 'treachery_back.jpg', size: 'standard' },
+        },
+        cards: {
+          self_ref: {
+            type: 'treachery',
+            face: 'self_ref.jpg',
+            back_code: 'self_ref',
+          },
+        },
+      };
+      const merged = mergeAssetPacks([pack]);
+
+      const resolved = resolveCard('self_ref', merged);
+      expect(resolved.back).toBe('https://example.com/mc/self_ref.jpg');
+    });
+  });
 });
 
 // ============================================================================

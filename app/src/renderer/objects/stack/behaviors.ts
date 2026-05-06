@@ -41,6 +41,7 @@ import {
 import { getStackColor, getCardCount } from './utils';
 import { renderStackPopIcon } from '../../graphics/stackPop';
 import { shouldRotateCard } from '../../../content/cardRotation';
+import { resolveCardBackUrl } from '../../../content/loader';
 import {
   TEXTURE_LOAD_FAILED,
   ATTACHMENT_IMAGE_LOAD_FAILED,
@@ -113,15 +114,16 @@ function getCardImageUrl(
     );
     return { success: false, reason: 'no-face', cardId: topCardId };
   } else {
-    // Face down - show card back (from card override or card type default)
-    if (card.back) {
-      return { success: true, url: card.back };
-    }
-
-    // Fall back to card type's back image
+    // Face down - show card back. Uses the shared resolver so two-sided
+    // cards (back_code) flip to the partner's face, not the generic
+    // cardType back. Resolution chain: card.back > partner.face > cardType.back.
     const cardType = ctx.gameAssets.cardTypes[card.type];
-    if (cardType?.back) {
-      return { success: true, url: cardType.back };
+    const backUrl = cardType
+      ? resolveCardBackUrl(topCardId, card, cardType, ctx.gameAssets)
+      : (card.back ?? undefined);
+
+    if (backUrl) {
+      return { success: true, url: backUrl };
     }
 
     console.error(
@@ -131,6 +133,7 @@ function getCardImageUrl(
         cardId: topCardId,
         cardType: card.type,
         hasCardBack: !!card.back,
+        hasBackCode: !!card.back_code,
         hasTypeBack: !!cardType?.back,
         stackObjectId: ctx.objectId,
       },

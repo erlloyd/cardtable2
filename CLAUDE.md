@@ -78,6 +78,20 @@ Parallelize independent bd issues in a single message with multiple `Agent` tool
 
 Signals the orchestrator is slipping: writing body-text files, running `bd create` by hand for many issues, editing project code when a bd issue exists. Watch for agents bailing early — mid-sentence "final reports" with <10 tool uses and no commits — resume via `SendMessage`.
 
+### Orchestrator drift patterns — name the rationalization, then resist it
+
+The orchestrator-default rule above is unambiguous. It still drifts. The drift always wears a plausible-sounding rationalization. Name them so you catch yourself:
+
+- **"User said do it now" — file bd anyway.** Urgency is about the work's priority, not the tracking discipline. The bd issue exists for review, resumption, and git-blame archaeology, all of which outlast the moment of urgency. Filing bd is ~10 seconds; skipping it costs review legibility that's hard to recover. **First move on any "do it" / "fix this" / "change it" command from the user is `bd create` (or `bd update --claim` on an existing issue), THEN decide agent-vs-direct, THEN implement.**
+
+- **"I already have the context" — delegate anyway.** The agent default protects two things, only one of which is your context window. The other is review legibility: a sub-agent's prompt + report becomes the durable record of how the work was approached. Doing it inline buries that record in conversational scrollback. Multi-file or >50-line work belongs in an agent even when you've been deep in the area for an hour.
+
+- **"It's all one feature, so it's single-concern" — count files, not features.** The trivial threshold is "<50 lines, single-concern." When tempted to count a 4-file refactor as "single-concern" because it conceptually does one thing, it's not. Files are the unit of review surface. >2 files crosses the threshold; default to agent.
+
+- **"I'll file the bd after, with the closure" — no, file first.** A bd issue filed after the fact is a status report, not a tracking record. The point of file-first is that the issue's *description* — written before you've made the implementation choices — locks in scope and is later compared against what landed. Post-hoc bd filing erases that loop.
+
+Reference incident (2026-05-06): the orchestrator did ct-vxu (P0 lockup), the ct-r1p back-preview refactor (4 files, ~382 net lines, no bd filed at all), and ct-j3t (component-set registry fix, bd filed AFTER implementation) directly when at least two should have been delegated. The user caught it explicitly and pushed for course-correction. Each violation wore one of the rationalizations above. Do not re-make this mistake.
+
 ### Sub-agents: file investigation beads on deviation, not in PR text
 
 When you (a sub-agent) make a non-trivial judgment call mid-implementation, deviate from the issue's stated scope (even minor), or observe behavior worth follow-up (pre-existing flakes, harness oddities, suspicious patterns in adjacent code), **file a bd issue at decision-time** — don't bury it in your final report or PR body.

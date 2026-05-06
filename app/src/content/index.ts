@@ -29,6 +29,7 @@ import {
   namespaceCardCode,
   instantiateScenario,
 } from './instantiate';
+import { setComponentSetEntries } from './componentSetRegistry';
 import {
   loadAllPlugins,
   loadPlugin,
@@ -206,7 +207,28 @@ export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
   );
 
   const packs = await loadAssetPacks(packUrls);
-  return mergeAssetPacks(packs, baseUrl);
+  const assets = mergeAssetPacks(packs, baseUrl);
+
+  // Populate the component-set registry from the plugin manifest. The Load
+  // Components modal reads from this registry at click time. Before this
+  // line existed the registry was only populated by `loadScenarioContent`
+  // (called when a user explicitly loaded a scenario), so a user navigating
+  // to a fresh table — which now eagerly loads plugin assets without auto-
+  // loading a scenario (ct-4wk) — saw an empty modal. Calling this here
+  // makes any plugin-load path populate the registry idempotently;
+  // subsequent scenario loads pass the same data through the same setter,
+  // so no duplication concerns.
+  if (
+    plugin.manifest.componentSets &&
+    plugin.manifest.componentSets.length > 0
+  ) {
+    setComponentSetEntries(
+      plugin.manifest.componentSets,
+      plugin.registry.baseUrl,
+    );
+  }
+
+  return assets;
 }
 
 // ============================================================================

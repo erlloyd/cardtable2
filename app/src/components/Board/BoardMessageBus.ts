@@ -15,6 +15,7 @@ import {
   detachCard,
 } from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
+import { resolveEffectiveAttachmentLayout } from '../../store/attachmentLayout';
 import { dbg } from '../../dev/dbg';
 
 export interface BoardHandlerContext {
@@ -132,11 +133,11 @@ export class BoardMessageBus {
     // Object state
     this.registry.register('objects-moved', (msg, ctx) => {
       console.log(`[BoardMessageBus] ${msg.updates.length} object(s) moved`);
-      const gameAssets = ctx.store.getGameAssets();
-      const layout = gameAssets?.packs.find(
-        (p) => p.attachmentLayout,
-      )?.attachmentLayout;
-      moveObjects(ctx.store, msg.updates, layout);
+      moveObjects(
+        ctx.store,
+        msg.updates,
+        resolveEffectiveAttachmentLayout(ctx.store),
+      );
     });
 
     this.registry.register('stack-objects', (msg, ctx) => {
@@ -227,12 +228,12 @@ export class BoardMessageBus {
         `[BoardMessageBus] Attaching ${msg.ids.length} card(s) to ${msg.targetId}`,
       );
       try {
-        // Use game-defined attachment layout if available
-        const gameAssets = ctx.store.getGameAssets();
-        const layout = gameAssets?.packs.find(
-          (p) => p.attachmentLayout,
-        )?.attachmentLayout;
-        const attached = attachCards(ctx.store, msg.ids, msg.targetId, layout);
+        const attached = attachCards(
+          ctx.store,
+          msg.ids,
+          msg.targetId,
+          resolveEffectiveAttachmentLayout(ctx.store),
+        );
         if (attached.length === 0) {
           ctx.addMessage(
             'No cards were attached. Target may have been modified.',
@@ -258,7 +259,11 @@ export class BoardMessageBus {
     this.registry.register('detach-card', (msg, ctx) => {
       console.log(`[BoardMessageBus] Detaching card ${msg.cardId}`);
       try {
-        const success = detachCard(ctx.store, msg.cardId);
+        const success = detachCard(
+          ctx.store,
+          msg.cardId,
+          resolveEffectiveAttachmentLayout(ctx.store),
+        );
         if (success) {
           console.log(
             `[BoardMessageBus] Successfully detached card ${msg.cardId}`,

@@ -29,6 +29,9 @@
  * local persistence only.
  */
 
+import type { AttachmentDirection } from '@cardtable2/shared';
+import { setAttachmentDirectionOverride } from './attachmentOverride';
+
 const DB_PREFIX = 'cardtable-';
 
 /**
@@ -69,6 +72,22 @@ export interface CtDevToolsApi {
    *   `cardtable-` prefix internally.
    */
   clearTable(tableId: string): Promise<void>;
+
+  /**
+   * Force the card-on-card attachment direction for any subsequent
+   * `attach-cards` operation, regardless of the active plugin's
+   * `attachmentLayout.direction`.  Pass `null` to clear the override and
+   * restore plugin/default behavior.
+   *
+   * Lives on `__ctDevTools` (not `__ctTest`) so it is reachable from
+   * deployed PR/preview builds — manual verification of non-default
+   * directions is the entire reason the override exists, and no shipped
+   * plugin currently sets a non-default `direction`.  See ct-t1c.
+   *
+   * The override is read inside `BoardMessageBus`'s `attach-cards`
+   * handler — see `app/src/components/Board/BoardMessageBus.ts`.
+   */
+  setAttachmentDirection(dir: AttachmentDirection | null): void;
 }
 
 /**
@@ -183,6 +202,19 @@ export function createCtDevToolsApi(): CtDevToolsApi {
         '[ctDevTools] RELOAD THE PAGE to get a clean in-memory store ' +
           '— the current YjsStore is now divorced from persistence.',
       );
+    },
+
+    setAttachmentDirection(dir) {
+      setAttachmentDirectionOverride(dir);
+      if (dir === null) {
+        console.log(
+          '[ctDevTools] attachment direction override cleared — plugin/default behavior restored.',
+        );
+      } else {
+        console.log(
+          `[ctDevTools] attachment direction override set to "${dir}" — next attach-cards operation will use this direction regardless of plugin config.`,
+        );
+      }
     },
   };
 }

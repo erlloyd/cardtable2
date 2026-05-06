@@ -1,12 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   DEFAULT_ATTACHMENT_LAYOUT,
   type AssetPack,
   type AttachmentDirection,
   type AttachmentLayout,
+  type GameAssets,
 } from '@cardtable2/shared';
-import { computeAttachmentPositions } from './attachmentLayout';
+import {
+  computeAttachmentPositions,
+  resolveEffectiveAttachmentLayout,
+} from './attachmentLayout';
 import { STACK_HEIGHT, STACK_WIDTH } from '../renderer/objects/stack/constants';
+import {
+  setAttachmentDirectionOverride,
+  __resetAttachmentOverrideForTests,
+} from '../dev/attachmentOverride';
+import type { YjsStore } from './YjsStore';
 
 describe('computeAttachmentPositions', () => {
   const parentPos = { x: 100, y: 200, r: 0 };
@@ -321,5 +330,105 @@ describe('attachmentLayout: plugin config flow', () => {
 
     const resolved = resolveAttachmentLayout(packs);
     expect(resolved).toBe(first);
+  });
+});
+
+// ============================================================================
+// resolveEffectiveAttachmentLayout: single source of truth for the layout
+// that initial-attach AND parent-drag-follow paths both consume (ct-0b6).
+// ============================================================================
+
+describe('resolveEffectiveAttachmentLayout', () => {
+  function makeStore(
+    packs: Pick<AssetPack, 'attachmentLayout'>[] | null,
+  ): YjsStore {
+    return {
+      getGameAssets: () =>
+        packs === null ? undefined : ({ packs } as unknown as GameAssets),
+    } as unknown as YjsStore;
+  }
+
+  beforeEach(() => {
+    __resetAttachmentOverrideForTests();
+  });
+
+  it('returns the plugin layout when one is configured and no override is set', () => {
+    const layout: AttachmentLayout = {
+      direction: 'left',
+      revealFraction: 0.3,
+    };
+    const store = makeStore([{ attachmentLayout: layout }]);
+
+    expect(resolveEffectiveAttachmentLayout(store)).toBe(layout);
+  });
+
+  it('returns undefined when no plugin layout and no override (downstream callers fall back to DEFAULT_ATTACHMENT_LAYOUT inside attachCards/moveObjects)', () => {
+    const store = makeStore([{}]);
+    expect(resolveEffectiveAttachmentLayout(store)).toBeUndefined();
+  });
+
+  it('returns undefined when there are no game assets at all and no override', () => {
+    const store = makeStore(null);
+    expect(resolveEffectiveAttachmentLayout(store)).toBeUndefined();
+  });
+
+  it('overrides the direction on the plugin layout while preserving other fields', () => {
+    const layout: AttachmentLayout = {
+      direction: 'left',
+      revealFraction: 0.3,
+      maxBeforeCompress: 4,
+      parentOnTop: false,
+    };
+    const store = makeStore([{ attachmentLayout: layout }]);
+    setAttachmentDirectionOverride('top-right');
+
+    const resolved = resolveEffectiveAttachmentLayout(store);
+    expect(resolved).toEqual({
+      direction: 'top-right',
+      revealFraction: 0.3,
+      maxBeforeCompress: 4,
+      parentOnTop: false,
+    });
+    // Must be a fresh object — must not mutate the plugin's layout.
+    expect(resolved).not.toBe(layout);
+    expect(layout.direction).toBe('left');
+  });
+
+  it('falls back to DEFAULT_ATTACHMENT_LAYOUT (with overridden direction) when no plugin layout exists', () => {
+    const store = makeStore([{}]);
+    setAttachmentDirectionOverride('bottom-right');
+
+    const resolved = resolveEffectiveAttachmentLayout(store);
+    expect(resolved).toEqual({
+      ...DEFAULT_ATTACHMENT_LAYOUT,
+      direction: 'bottom-right',
+    });
+  });
+
+  it('falls back to DEFAULT_ATTACHMENT_LAYOUT (with overridden direction) when game assets are missing', () => {
+    const store = makeStore(null);
+    setAttachmentDirectionOverride('top-left');
+
+    const resolved = resolveEffectiveAttachmentLayout(store);
+    expect(resolved).toEqual({
+      ...DEFAULT_ATTACHMENT_LAYOUT,
+      direction: 'top-left',
+    });
+  });
+
+  it('returns the plugin layout unchanged after the override is cleared', () => {
+    const layout: AttachmentLayout = {
+      direction: 'left',
+      revealFraction: 0.3,
+    };
+    const store = makeStore([{ attachmentLayout: layout }]);
+
+    setAttachmentDirectionOverride('top-right');
+    expect(resolveEffectiveAttachmentLayout(store)?.direction).toBe(
+      'top-right',
+    );
+
+    setAttachmentDirectionOverride(null);
+    expect(resolveEffectiveAttachmentLayout(store)).toBe(layout);
   });
 });

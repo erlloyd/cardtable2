@@ -1,5 +1,40 @@
 import type { Position, AttachmentLayout } from '@cardtable2/shared';
+import { DEFAULT_ATTACHMENT_LAYOUT } from '@cardtable2/shared';
 import { STACK_WIDTH, STACK_HEIGHT } from '../renderer/objects/stack/constants';
+import { getAttachmentDirectionOverride } from '../dev/attachmentOverride';
+import type { YjsStore } from './YjsStore';
+
+/**
+ * Resolve the attachment layout to use for a given store, applying any
+ * active dev override on top of the plugin's configured layout.
+ *
+ * Single source of truth for "which `AttachmentLayout` should the next
+ * attach-or-reposition operation use?" — both the `attach-cards` handler
+ * (initial placement) and the `objects-moved` handler (children
+ * following a parent drag) must consult this so the override sticks
+ * across both lifecycle phases (ct-0b6).  Without this consolidation,
+ * each new consumer of `attachmentLayout` had to remember to read the
+ * override, and the `objects-moved` path silently snapped children back
+ * to the plugin/default direction the moment the parent moved.
+ *
+ * In production builds the override is unreachable (the setter sits on
+ * `__ctDevTools.setAttachmentDirection`, but no code path inside the
+ * shipped app ever calls it), so this function reduces to the plain
+ * `gameAssets.packs.find(...)?.attachmentLayout` lookup.
+ */
+export function resolveEffectiveAttachmentLayout(
+  store: YjsStore,
+): AttachmentLayout | undefined {
+  const layout = store
+    .getGameAssets()
+    ?.packs.find((p) => p.attachmentLayout)?.attachmentLayout;
+  const overrideDir = getAttachmentDirectionOverride();
+  if (overrideDir === null) return layout;
+  return {
+    ...(layout ?? DEFAULT_ATTACHMENT_LAYOUT),
+    direction: overrideDir,
+  };
+}
 
 /**
  * Compute world positions for attached cards fanning out from a parent.

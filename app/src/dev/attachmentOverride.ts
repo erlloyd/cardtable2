@@ -13,11 +13,13 @@
  * -----
  * `getAttachmentDirectionOverride()` returns the current override (or
  * `null` if unset).  It is always shipped — the read site in
- * `BoardMessageBus.attach-cards` simply reads `null` in production where
- * nothing can call the setter (the setter is exposed via `__ctTest`,
- * which is dev/E2E-build only — see `app/src/dev/ctTest.ts` and
- * `app/src/main.tsx`).  When `null`, the override path is dead and the
- * behavior is identical to today.
+ * `attachmentLayout.resolveEffectiveAttachmentLayout` simply reads `null`
+ * in production where nothing inside the shipped app calls the setter.
+ * The setter is exposed via `__ctDevTools.setAttachmentDirection`, which
+ * is reachable from any build (DEV or production-deployed PR previews)
+ * but is only invoked manually from the developer console — see
+ * `app/src/dev/ctDevTools.ts` and `app/src/main.tsx`.  When `null`, the
+ * override path is dead and behavior is identical to today.
  *
  * `setAttachmentDirectionOverride(dir | null)` writes; `null` clears.
  *

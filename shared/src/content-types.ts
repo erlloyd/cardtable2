@@ -111,17 +111,32 @@ export interface IconTypeDef {
 // Card-on-Card Attachment Layout Configuration
 // ============================================================================
 
-export type AttachmentDirection = 'below' | 'above' | 'left' | 'right';
+/**
+ * Direction in which attached cards fan out from a parent card.
+ *
+ * Eight supported values: 4 sides (top, bottom, left, right) and 4 corners
+ * (top-left, top-right, bottom-left, bottom-right). Corner directions use a
+ * symmetric offset on both axes derived from `revealFraction`.
+ */
+export type AttachmentDirection =
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right'
+  | 'top-left'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-right';
 
 export interface AttachmentLayout {
-  direction: AttachmentDirection; // Fan direction for attached cards
-  revealFraction: number; // 0-1, portion of attached card visible (default: 0.25)
+  direction: AttachmentDirection; // Fan direction for attached cards (4 sides + 4 corners)
+  revealFraction: number; // 0-1, portion of attached card visible per axis (default: 0.25). Corners use this for both axes.
   maxBeforeCompress?: number; // Compress spacing beyond this count (default: 5)
   parentOnTop?: boolean; // Whether parent renders above children (default: true)
 }
 
 export const DEFAULT_ATTACHMENT_LAYOUT: AttachmentLayout = {
-  direction: 'below',
+  direction: 'bottom',
   revealFraction: 0.25,
   maxBeforeCompress: 5,
   parentOnTop: true,

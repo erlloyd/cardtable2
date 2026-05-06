@@ -32,21 +32,40 @@ export function computeAttachmentPositions(
     effectiveReveal = (revealFraction * maxBeforeCompress) / attachmentCount;
   }
 
-  // Determine offset per card based on direction
+  // Determine offset per card based on direction.
+  // Corner directions use a symmetric offset reusing effectiveReveal on both axes.
+  const dx = STACK_WIDTH * effectiveReveal;
+  const dy = STACK_HEIGHT * effectiveReveal;
   let baseDx = 0;
   let baseDy = 0;
   switch (direction) {
-    case 'below':
-      baseDy = STACK_HEIGHT * effectiveReveal;
+    case 'top':
+      baseDy = -dy;
       break;
-    case 'above':
-      baseDy = -STACK_HEIGHT * effectiveReveal;
+    case 'bottom':
+      baseDy = dy;
       break;
     case 'left':
-      baseDx = -STACK_WIDTH * effectiveReveal;
+      baseDx = -dx;
       break;
     case 'right':
-      baseDx = STACK_WIDTH * effectiveReveal;
+      baseDx = dx;
+      break;
+    case 'top-left':
+      baseDx = -dx;
+      baseDy = -dy;
+      break;
+    case 'top-right':
+      baseDx = dx;
+      baseDy = -dy;
+      break;
+    case 'bottom-left':
+      baseDx = -dx;
+      baseDy = dy;
+      break;
+    case 'bottom-right':
+      baseDx = dx;
+      baseDy = dy;
       break;
   }
 

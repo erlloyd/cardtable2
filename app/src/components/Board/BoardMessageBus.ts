@@ -1,6 +1,10 @@
 import { MessageHandlerRegistry } from '../../messaging/MessageHandlerRegistry';
-import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
-import { isValidPosition } from '@cardtable2/shared';
+import type {
+  AttachmentLayout,
+  RendererToMainMessage,
+  TableObject,
+} from '@cardtable2/shared';
+import { DEFAULT_ATTACHMENT_LAYOUT, isValidPosition } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
 import { toTableObject } from '../../store/YjsStore';
@@ -16,6 +20,7 @@ import {
 } from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
 import { dbg } from '../../dev/dbg';
+import { getAttachmentDirectionOverride } from '../../dev/attachmentOverride';
 
 export interface BoardHandlerContext {
   // Core dependencies
@@ -232,7 +237,29 @@ export class BoardMessageBus {
         const layout = gameAssets?.packs.find(
           (p) => p.attachmentLayout,
         )?.attachmentLayout;
-        const attached = attachCards(ctx.store, msg.ids, msg.targetId, layout);
+
+        // Dev/E2E-only direction override (ct-t1c).  Lets a test or MCP
+        // session force a non-default direction without authoring a
+        // throwaway plugin, so we have regression coverage for the full
+        // attach pipeline at directions like `'top-right'`.  In
+        // production the override is always `null` (the setter sits
+        // behind `__ctTest`, which is dev/E2E-build only) so this branch
+        // is dead and behavior is identical to today.
+        const overrideDir = getAttachmentDirectionOverride();
+        const effectiveLayout: AttachmentLayout | undefined =
+          overrideDir !== null
+            ? {
+                ...(layout ?? DEFAULT_ATTACHMENT_LAYOUT),
+                direction: overrideDir,
+              }
+            : layout;
+
+        const attached = attachCards(
+          ctx.store,
+          msg.ids,
+          msg.targetId,
+          effectiveLayout,
+        );
         if (attached.length === 0) {
           ctx.addMessage(
             'No cards were attached. Target may have been modified.',

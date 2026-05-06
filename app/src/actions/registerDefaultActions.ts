@@ -14,6 +14,7 @@ import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
+import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
 import {
   loadPluginAssets,
   loadScenarioFromPlugin,
@@ -212,7 +213,11 @@ export function registerDefaultActions(): void {
     },
     execute: (ctx) => {
       const cardId = ctx.selection.ids[0];
-      const success = detachCard(ctx.store, cardId);
+      const success = detachCard(
+        ctx.store,
+        cardId,
+        resolveEffectiveAttachmentLayout(ctx.store),
+      );
       if (success) {
         console.log(`Detached card ${cardId}`);
       }

@@ -259,7 +259,11 @@ export class BoardMessageBus {
     this.registry.register('detach-card', (msg, ctx) => {
       console.log(`[BoardMessageBus] Detaching card ${msg.cardId}`);
       try {
-        const success = detachCard(ctx.store, msg.cardId);
+        const success = detachCard(
+          ctx.store,
+          msg.cardId,
+          resolveEffectiveAttachmentLayout(ctx.store),
+        );
         if (success) {
           console.log(
             `[BoardMessageBus] Successfully detached card ${msg.cardId}`,

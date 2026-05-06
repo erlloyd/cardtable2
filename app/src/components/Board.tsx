@@ -148,8 +148,15 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     Array<(isAnimating: boolean) => void>
   >([]);
 
-  // Card preview state (hover mode)
-  const [previewCard, setPreviewCard] = useState<Card | null>(null);
+  // Card preview state (hover mode). Carries cardCode and faceUp so the
+  // preview component can resolve which side to render — see CardPreview.tsx
+  // (face-up shows .face; face-down shows the back via card.back / back_code,
+  // skipped entirely if the back is the generic cardType.back).
+  const [previewCard, setPreviewCard] = useState<{
+    card: Card;
+    cardCode: string;
+    faceUp: boolean;
+  } | null>(null);
   const [previewPosition, setPreviewPosition] = useState<{
     x: number;
     y: number;
@@ -164,9 +171,13 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     }
   }, [isMenuOpen, isPhantomDragActive]);
 
-  // Modal preview state (mobile double-tap)
+  // Modal preview state (mobile double-tap). Same shape as hover preview.
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [modalPreviewCard, setModalPreviewCard] = useState<Card | null>(null);
+  const [modalPreviewCard, setModalPreviewCard] = useState<{
+    card: Card;
+    cardCode: string;
+    faceUp: boolean;
+  } | null>(null);
 
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
@@ -233,7 +244,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Helper: Get card from stack object
   const getCardFromStack = useCallback(
-    (objectId: string): Card | null => {
+    (objectId: string): { card: Card; cardCode: string } | null => {
       const obj = storeRef.current.getObject(objectId);
 
       if (!obj) {
@@ -280,7 +291,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         return null;
       }
 
-      return card;
+      return { card, cardCode: topCardCode };
     },
     [gameAssets],
   );
@@ -305,8 +316,8 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         'cardScreenHeight=',
         cardScreenHeight,
       );
-      // If hover cleared or not face-up, hide preview
-      if (!objectId || !isFaceUp) {
+      // If hover cleared, hide preview
+      if (!objectId) {
         dbg('hover', 'Board.setHoveredObject -> CLEARING previewCard');
         setPreviewCard(null);
         setPreviewPosition(null);
@@ -320,10 +331,11 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       }
 
       // Get the card using helper
-      const card = getCardFromStack(objectId);
-      if (!card || !gameAssets) {
+      const result = getCardFromStack(objectId);
+      if (!result || !gameAssets) {
         return;
       }
+      const { card, cardCode } = result;
 
       // Calculate preview dimensions based on card orientation
       const orientation = getCardOrientation(card, gameAssets);
@@ -379,21 +391,28 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         objectId,
       );
       setPreviewPosition({ x, y });
-      setPreviewCard(card);
+      setPreviewCard({ card, cardCode, faceUp: isFaceUp });
     },
     [gameAssets, getCardFromStack, isPhantomDragActive],
   );
 
-  // Handle modal preview request from renderer (mobile double-tap)
+  // Handle modal preview request from renderer (mobile double-tap).
+  // The renderer's message only carries objectId, so faceUp is read from the
+  // store here. CardPreview/FullScreenCardPreview decide what to render based
+  // on faceUp + back resolution; if face-down with a default cardType.back
+  // they show nothing (consistent with hover behavior).
   const showCardPreviewModal = useCallback(
     (objectId: string) => {
-      // Get the card using helper
-      const card = getCardFromStack(objectId);
-      if (!card) {
+      const result = getCardFromStack(objectId);
+      if (!result) {
         return;
       }
-
-      setModalPreviewCard(card);
+      const obj = storeRef.current.getObject(objectId);
+      if (!obj || obj._kind !== ObjectKind.Stack) {
+        return;
+      }
+      const faceUp = (obj as StackObject)._faceUp ?? true;
+      setModalPreviewCard({ ...result, faceUp });
       setIsModalVisible(true);
     },
     [getCardFromStack],
@@ -729,7 +748,9 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
       {/* Card Preview - Hover Mode */}
       <CardPreview
-        card={previewCard}
+        card={previewCard?.card ?? null}
+        cardCode={previewCard?.cardCode ?? null}
+        faceUp={previewCard?.faceUp ?? true}
         gameAssets={gameAssets ?? null}
         mode="hover"
         position={previewPosition ?? undefined}
@@ -740,9 +761,12 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       />
 
       {/* Full-screen card preview - Mobile Double-Tap */}
-      {isModalVisible && modalPreviewCard && (
+      {isModalVisible && modalPreviewCard && gameAssets && (
         <FullScreenCardPreview
-          card={modalPreviewCard}
+          card={modalPreviewCard.card}
+          cardCode={modalPreviewCard.cardCode}
+          faceUp={modalPreviewCard.faceUp}
+          gameAssets={gameAssets}
           onClose={() => {
             setIsModalVisible(false);
             setModalPreviewCard(null);

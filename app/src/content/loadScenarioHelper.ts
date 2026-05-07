@@ -50,6 +50,19 @@ export function loadScenarioContent(
   store.metadata.set('loadedScenario', metadata);
   console.log(`${logPrefix} Stored scenario metadata in Y.Doc`, metadata);
 
+  // Local-dev scenarios replace the table's plugin identity entirely. Clear any
+  // stale `pluginId` from a prior registry-driven load so the mount effect on
+  // the next reload doesn't eagerly re-fetch that plugin's assets and overwrite
+  // the local-plugin gameAssets we're about to set (regression introduced by
+  // ct-4wk's eager mount-time `loadPluginAssets`; see ct-62j).
+  //
+  // Registry-driven scenarios ('plugin') intentionally do NOT touch `pluginId`
+  // here — the mount effect's eager plugin-asset load is the whole point of
+  // ct-4wk and the table's binding to its plugin is preserved by design.
+  if (metadata.type === 'local-dev') {
+    store.metadata.delete('pluginId');
+  }
+
   // Set game assets in store (notifies subscribers like Board component)
   store.setGameAssets(content.content);
 

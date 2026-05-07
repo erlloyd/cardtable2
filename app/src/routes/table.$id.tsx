@@ -21,7 +21,11 @@ import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { resetTable } from '../store/YjsActions';
 import { buildActionContext } from '../actions/buildActionContext';
-import { registerDefaultActions } from '../actions/registerDefaultActions';
+import {
+  registerDefaultActions,
+  registerLoadablesActions,
+  unregisterLoadablesActions,
+} from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
 import { registerHandActions } from '../actions/handActions';
@@ -29,6 +33,11 @@ import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
 import { ComponentSetModal } from '../components/ComponentSetModal';
+import {
+  LoadPickerModal,
+  type LoadPickerSelectHandler,
+  type DerivedItemsResolver,
+} from '../components/load-picker/LoadPickerModal';
 import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
@@ -40,8 +49,10 @@ import {
   type LoadedScenarioMetadata,
 } from '../content';
 import { loadScenarioContent } from '../content/loadScenarioHelper';
+import { handleLoadSelection } from '../content/loadHandler';
+import { getLoadableEntries } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
 
 /**
  * Discriminated error state for the table-load path.
@@ -84,6 +95,13 @@ function Table() {
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
   const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  const [loadPicker, setLoadPicker] = useState<{
+    open: boolean;
+    presetType?: string;
+  }>({ open: false });
+  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
+    getLoadableEntries(),
+  );
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -183,6 +201,19 @@ function Table() {
     registerDefaultActions();
     registerHandActions(ActionRegistry.getInstance());
   }, []);
+
+  // Keep the dynamic per-type "Load <X>..." actions and the local loadables
+  // state in sync with the active plugin's runtime registry. The registry is
+  // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
+  // here whenever gameAssets change so plugin switches drop stale entries.
+  useEffect(() => {
+    const entries = getLoadableEntries();
+    setLoadables(entries);
+    unregisterLoadablesActions();
+    if (entries.length > 0) {
+      registerLoadablesActions(entries);
+    }
+  }, [gameAssets]);
 
   // Dev-only: apply URL seed (?seed=stack-of-5) on a fresh table.
   // No-op in production and no-op when the table already has objects.
@@ -557,6 +588,54 @@ function Table() {
     setComponentSetModalOpen(true);
   }, []);
 
+  const handleOpenLoadPicker = useCallback((presetType?: string) => {
+    setLoadPicker({ open: true, presetType });
+  }, []);
+
+  const handleCloseLoadPicker = useCallback(() => {
+    setLoadPicker({ open: false });
+  }, []);
+
+  // Resolver for asset-pack-derived loadables. The runtime registry already
+  // materialises derived sources into `kind: 'static'` (see ct-8gf.2), so on
+  // the happy path this is never invoked — but the picker accepts a resolver
+  // for any unmaterialized entries it might receive.
+  const resolveDerivedItems = useCallback<DerivedItemsResolver>((entry) => {
+    if (entry.source.kind === 'static') {
+      return entry.source.items.map((it) => ({
+        id: it.id,
+        label: it.label,
+        data: it.data,
+      }));
+    }
+    return [];
+  }, []);
+
+  const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
+    (entry, item) => {
+      if (!store) return;
+      const board = boardRef.current;
+      void handleLoadSelection(entry, item, {
+        store,
+        getViewportState: () => {
+          if (!board) {
+            // No board mounted — fall back to a centered, un-zoomed viewport
+            // so additive placement still produces a valid origin.
+            return Promise.resolve({
+              cameraX: 0,
+              cameraY: 0,
+              cameraScale: 1,
+              viewportWidth: 0,
+              viewportHeight: 0,
+            });
+          }
+          return board.getViewportState();
+        },
+      });
+    },
+    [store],
+  );
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -571,6 +650,7 @@ function Table() {
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
       handleOpenComponentSets,
+      handleOpenLoadPicker,
     );
 
     if (context) {
@@ -591,6 +671,7 @@ function Table() {
     setGridSnapEnabled,
     handPanel.activeHandId,
     handleOpenComponentSets,
+    handleOpenLoadPicker,
   ]);
 
   // Enable keyboard shortcuts
@@ -747,6 +828,16 @@ function Table() {
           gameAssets={gameAssets}
         />
       )}
+
+      {/* Load Picker Modal (ct-8gf.5) */}
+      <LoadPickerModal
+        open={loadPicker.open}
+        onClose={handleCloseLoadPicker}
+        loadables={loadables}
+        presetType={loadPicker.presetType}
+        onSelectItem={handleLoadPickerSelect}
+        resolveDerivedItems={resolveDerivedItems}
+      />
     </div>
   );
 }

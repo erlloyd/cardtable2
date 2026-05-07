@@ -96,3 +96,31 @@ export function handleRequestScreenCoords(
     screenCoords,
   });
 }
+
+/**
+ * Handle request-viewport-state message (ct-8gf.5).
+ *
+ * Snapshot the current camera + viewport into a `viewport-state` response so
+ * action handlers on the main thread can compute a viewport-center placement
+ * without taking a PixiJS dependency. Mirrors the world-vs-screen relationship
+ * documented in `app/src/utils/viewportPlacement.ts`.
+ *
+ * All values are reported in the same unit space (physical canvas pixels —
+ * `app.renderer.width/height` and `worldContainer.position` already live
+ * there). The placement primitive only requires consistency between camera
+ * coords and viewport dimensions, so DPR scaling cancels out and we don't
+ * normalize here.
+ */
+export function handleRequestViewportState(
+  _message: Extract<MainToRendererMessage, { type: 'request-viewport-state' }>,
+  context: RendererContext,
+): void {
+  context.postResponse({
+    type: 'viewport-state',
+    cameraX: context.worldContainer.position.x,
+    cameraY: context.worldContainer.position.y,
+    cameraScale: context.coordConverter.getCameraScale(),
+    viewportWidth: context.app.renderer.width,
+    viewportHeight: context.app.renderer.height,
+  });
+}

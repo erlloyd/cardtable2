@@ -200,4 +200,57 @@ describe('Table Route', () => {
     expect(loadPluginAssetsMock).not.toHaveBeenCalled();
     expect(setGameAssetsMock).not.toHaveBeenCalled();
   });
+
+  it('does not re-seed pluginId from navigation state when a local-dev scenario is loaded (ct-62j)', async () => {
+    // Regression: the user navigated home -> Test Game (state.pluginId =
+    // "testgame"), then triggered Load Plugin from Directory which cleared
+    // pluginId metadata and set loadedScenario.type === "local-dev". On
+    // reload, history.state still carries pluginId="testgame". The mount
+    // effect must NOT re-seed pluginId from state in this case — otherwise
+    // the eager `loadPluginAssets` would overwrite the local plugin assets
+    // when the user re-loads it (and on this no-pluginId path it should not
+    // call loadPluginAssets at all).
+    mockMetadata.set('loadedScenario', {
+      type: 'local-dev',
+      loadedAt: Date.now(),
+      scenarioName: 'My Local Scenario',
+    });
+
+    const memoryHistory = createMemoryHistory({
+      initialEntries: ['/'],
+    });
+    const router = createRouter({
+      routeTree,
+      history: memoryHistory,
+      defaultPendingMinMs: 0,
+    });
+
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      await router.load();
+    });
+
+    // Navigate WITH state. This mirrors GameSelect's
+    // `navigate({ to: '/table/$id', state: { pluginId } })` call. The state
+    // sticks in history.state across reloads in real browsers — the mount
+    // effect must not act on it when a scenario is already loaded.
+    await act(async () => {
+      await router.navigate({
+        to: '/table/$id',
+        params: { id: 'local-dev-reload' },
+        state: { pluginId: 'testgame' } as Record<string, unknown>,
+      });
+    });
+
+    await screen.findByTestId('board');
+
+    // pluginId stays unset — the local-dev scenario marker locks the table
+    // out of the registry-driven plugin path.
+    expect(mockMetadata.get('pluginId')).toBeUndefined();
+    // No plugin fetch — local-dev scenarios cannot be auto-reloaded.
+    expect(loadPluginAssetsMock).not.toHaveBeenCalled();
+    // No setGameAssets either — the user must re-trigger Load Plugin from
+    // Directory to populate them.
+    expect(setGameAssetsMock).not.toHaveBeenCalled();
+  });
 });

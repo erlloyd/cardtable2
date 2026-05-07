@@ -399,5 +399,45 @@ describe('loadScenarioContent', () => {
 
       expect(mockStore.metadata.get('loadedScenario')).toBe(localDevMetadata);
     });
+
+    it('clears stale pluginId metadata when loading a local-dev scenario (ct-62j)', () => {
+      // Simulate the regression scenario: a registry-driven plugin was loaded
+      // first (via GameSelector navigation), seeding `pluginId`. Then the
+      // user triggers Load Plugin from Directory, replacing the table's
+      // gameAssets with a local plugin. Without this clear, the next mount
+      // effect would re-fetch the registry plugin's assets and overwrite
+      // the local-plugin gameAssets — and any objects placed against the
+      // local plugin's cards would render as missing.
+      mockStore.metadata.set('pluginId', 'testgame');
+      const localDevMetadata: LoadedScenarioMetadata = {
+        type: 'local-dev',
+        loadedAt: Date.now(),
+        scenarioName: 'Local Dev Scenario',
+      };
+
+      loadScenarioContent(mockStore, mockContent, localDevMetadata, '[Test]');
+
+      expect(mockStore.metadata.has('pluginId')).toBe(false);
+      expect(mockStore.metadata.get('loadedScenario')).toBe(localDevMetadata);
+    });
+
+    it('preserves pluginId metadata when loading a registry-driven plugin scenario', () => {
+      // Counterpart to the local-dev clearing test. Plugin scenarios are
+      // bound to the table's plugin identity by design (ct-4wk), so the
+      // mount effect can re-load the plugin's assets on reload. Clearing
+      // pluginId here would defeat that.
+      mockStore.metadata.set('pluginId', 'testgame');
+      const pluginMetadata: LoadedScenarioMetadata = {
+        type: 'plugin',
+        pluginId: 'testgame',
+        scenarioFile: 'scenario1.json',
+        loadedAt: Date.now(),
+        scenarioName: 'Plugin Scenario',
+      };
+
+      loadScenarioContent(mockStore, mockContent, pluginMetadata, '[Test]');
+
+      expect(mockStore.metadata.get('pluginId')).toBe('testgame');
+    });
   });
 });

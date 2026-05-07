@@ -219,9 +219,18 @@ function Table() {
         ? pluginIdFromStateRaw
         : undefined;
     const storedPluginId = store.metadata.get('pluginId') as string | undefined;
+    const storedScenario = store.metadata.get('loadedScenario') as
+      | LoadedScenarioMetadata
+      | undefined;
 
-    // New table: store pluginId from navigation state.
-    if (pluginIdFromState && !storedPluginId) {
+    // Store pluginId from navigation state ONLY on a brand-new table — i.e.
+    // no existing pluginId AND no prior scenario load. The scenario check is
+    // load-bearing for local-dev: that flow clears `pluginId` in
+    // `loadScenarioContent` (see ct-62j) so the table stays unbound after
+    // reload, but `history.state` from the original GameSelect navigation
+    // sticks around and would re-introduce the stale registry pluginId
+    // here without this guard.
+    if (pluginIdFromState && !storedPluginId && !storedScenario) {
       console.log(`[Table] Storing pluginId in metadata: ${pluginIdFromState}`);
       store.metadata.set('pluginId', pluginIdFromState);
     }

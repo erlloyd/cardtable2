@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   findBlobUrl,
+  loadLocalPluginScenario,
   loadScenarioFromPlugin,
   replaceImagePathsWithBlobUrls,
 } from './index';
@@ -521,5 +522,197 @@ describe('loadScenarioFromPlugin', () => {
     expect(result.objects).toBeInstanceOf(Map);
     // gameAssets reference is preserved.
     expect(result.content).toBe(gameAssets);
+  });
+});
+
+// ============================================================================
+// loadLocalPluginScenario Tests
+// ============================================================================
+
+/**
+ * Build a fake `File` from a string. jsdom's `File` constructor works, but we
+ * need `text()` to return the original content reliably across Node versions.
+ */
+function fakeFile(name: string, contents: string): File {
+  const file = new File([contents], name, { type: 'application/json' });
+  // jsdom's File.text() may not roundtrip our exact string in some versions;
+  // override to be safe.
+  Object.defineProperty(file, 'text', {
+    value: () => Promise.resolve(contents),
+  });
+  return file;
+}
+
+/**
+ * Mount the directory-picker mock that `loadLocalPluginDirectory` drives via
+ * `document.createElement('input')`. Returns the captured input so the test
+ * can fire `onchange` after the function call.
+ */
+function mockDirectoryPicker(files: File[]): {
+  input: {
+    type: string;
+    webkitdirectory: boolean;
+    multiple: boolean;
+    click: () => void;
+    files: FileList | null;
+    onchange: (() => void) | null;
+    oncancel: (() => void) | null;
+  };
+  trigger: () => void;
+} {
+  const input: ReturnType<typeof mockDirectoryPicker>['input'] = {
+    type: '',
+    webkitdirectory: false,
+    multiple: false,
+    click: vi.fn(),
+    files: null,
+    onchange: null,
+    oncancel: null,
+  };
+
+  vi.spyOn(document, 'createElement').mockReturnValue(
+    input as unknown as HTMLInputElement,
+  );
+
+  const fileList = Object.assign([...files], {
+    item: (i: number) => files[i] ?? null,
+  }) as unknown as FileList;
+  Object.defineProperty(fileList, 'length', { value: files.length });
+
+  return {
+    input,
+    trigger: () => {
+      input.files = fileList;
+      input.onchange?.();
+    },
+  };
+}
+
+describe('loadLocalPluginScenario', () => {
+  beforeEach(() => {
+    // Stub URL.createObjectURL — jsdom doesn't implement it.
+    let counter = 0;
+    vi.stubGlobal(
+      'URL',
+      Object.assign(URL, {
+        createObjectURL: vi.fn(() => `blob:mock-${++counter}`),
+        revokeObjectURL: vi.fn(),
+      }),
+    );
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('loads a valid local plugin directory and returns instantiated content', async () => {
+    const manifest = {
+      id: 'local-plugin',
+      name: 'Local Test Plugin',
+      version: '1.0.0',
+      assets: ['core.json'],
+      scenarios: ['scenario-1.json'],
+    };
+
+    const assetPack = {
+      schema: 'ct-assets@1',
+      id: 'local-core',
+      name: 'Local Core Pack',
+      version: '1.0.0',
+      baseUrl: '/api/card-image/local/',
+      cardTypes: {
+        player: { back: 'back.png', size: 'standard' },
+      },
+      cards: {
+        '01001': { type: 'player', face: '01001.jpg' },
+      },
+      tokenTypes: {
+        damage: { name: 'Damage', image: 'tokens/damage.png' },
+      },
+    };
+
+    const scenario: Scenario = {
+      schema: 'ct-scenario@2',
+      id: 'scenario-1',
+      name: 'Local Test Scenario',
+      version: '1.0.0',
+      packs: [],
+    };
+
+    const damagePng = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+      'damage.png',
+    );
+
+    const files = [
+      fakeFile('index.json', JSON.stringify(manifest)),
+      fakeFile('core.json', JSON.stringify(assetPack)),
+      fakeFile('scenario-1.json', JSON.stringify(scenario)),
+      damagePng,
+    ];
+
+    const { trigger } = mockDirectoryPicker(files);
+    const promise = loadLocalPluginScenario();
+    trigger();
+
+    const result = await promise;
+
+    // Loaded scenario reflects parsed JSON.
+    expect(result.scenario.name).toBe('Local Test Scenario');
+    expect(result.scenario.id).toBe('scenario-1');
+
+    // pluginManifest field surfaces the manifest so the caller (Load Plugin
+    // action) can pass `componentSets` to `loadScenarioContent`.
+    expect(result.pluginManifest.id).toBe('local-plugin');
+    expect(result.pluginManifest.assets).toEqual(['core.json']);
+
+    // GameAssets carry the asset pack contents — cards and cardTypes resolved.
+    expect(result.content.cards['01001']).toBeDefined();
+    expect(result.content.cardTypes['player']).toBeDefined();
+
+    // tokenTypes.damage.image was rewritten to a blob URL by
+    // replaceImagePathsWithBlobUrls (suffix-match against the registered
+    // 'damage.png' file).
+    expect(result.content.tokenTypes['damage']?.image).toMatch(/^blob:mock-/);
+
+    // blobUrls map is exposed so the caller can pass it into
+    // setComponentSetEntries (script + image resolution for component sets).
+    expect(result.blobUrls).toBeInstanceOf(Map);
+  });
+
+  it('parses a manifest with no asset packs as long as the scenario file exists', async () => {
+    // Edge case: a "scenario-only" local plugin. `loadLocalPluginScenario`
+    // iterates assets to load packs, then loads the scenario from the manifest
+    // and runs `instantiateScenario`. Even with zero packs the scenario should
+    // still parse cleanly.
+    const manifest = {
+      id: 'no-packs-plugin',
+      name: 'Empty Plugin',
+      version: '0.1.0',
+      assets: [],
+      scenarios: ['scenario.json'],
+    };
+    const scenario: Scenario = {
+      schema: 'ct-scenario@2',
+      id: 'empty-scenario',
+      name: 'Empty Scenario',
+      version: '1.0.0',
+      packs: [],
+    };
+    const files = [
+      fakeFile('index.json', JSON.stringify(manifest)),
+      fakeFile('scenario.json', JSON.stringify(scenario)),
+    ];
+
+    const { trigger } = mockDirectoryPicker(files);
+    const promise = loadLocalPluginScenario();
+    trigger();
+
+    const result = await promise;
+    expect(result.scenario.name).toBe('Empty Scenario');
+    expect(result.objects.size).toBe(0);
   });
 });

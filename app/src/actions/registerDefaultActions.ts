@@ -1,6 +1,7 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS, VIEW_ACTIONS, CONTENT_ACTIONS } from './types';
 import { registerAttachmentActions } from './attachmentActions';
+import type { LoadableEntry } from '@cardtable2/shared';
 import {
   flipCards,
   exhaustCards,
@@ -15,17 +16,6 @@ import {
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
 import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
-import {
-  loadPluginAssets,
-  loadScenarioFromPlugin,
-  loadPlugin,
-  type LoadedScenarioMetadata,
-} from '../content';
-import { loadScenarioContent } from '../content/loadScenarioHelper';
-import {
-  ACTION_LOAD_SCENARIO_FAILED,
-  ACTION_LOAD_MARVELCHAMPIONS_FAILED,
-} from '../constants/errorIds';
 /**
  * Register default actions that are available in both table and dev routes.
  * This ensures consistent functionality across all table views.
@@ -405,84 +395,6 @@ export function registerDefaultActions(): void {
     },
   });
 
-  // Global action: Load Scenario
-  registry.register({
-    id: 'load-scenario',
-    label: 'Load Scenario',
-    icon: '📦',
-    category: 'Global Actions',
-    description: 'Load the first scenario for the current game',
-    isAvailable: (ctx) => {
-      // Only available when nothing selected and a plugin is bound to the
-      // table.
-      const pluginId = ctx.store.metadata.get('pluginId') as string | undefined;
-      return ctx.selection.count === 0 && pluginId !== undefined;
-    },
-    execute: async (ctx) => {
-      try {
-        const pluginId = ctx.store.metadata.get('pluginId') as string;
-
-        console.log(`[Load Scenario] Loading scenario for plugin: ${pluginId}`);
-
-        // Load plugin manifest (cached) to get its first scenario.
-        const plugin = await loadPlugin(pluginId);
-        const scenarioFile = plugin.manifest.scenarios[0];
-        if (!scenarioFile) {
-          throw new Error(`Plugin "${pluginId}" has no scenarios`);
-        }
-
-        // Use already-loaded plugin assets from the store (cached on table
-        // mount). Defensive fallback to loadPluginAssets — should be a cache
-        // hit on the happy path because the table-mount effect already
-        // populated the cache.
-        let gameAssets = ctx.store.getGameAssets();
-        if (!gameAssets) {
-          console.log(
-            '[Load Scenario] No gameAssets in store; loading plugin assets',
-          );
-          gameAssets = await loadPluginAssets(pluginId);
-        }
-
-        // Pure scenario load: fetches scenario JSON only, no asset packs.
-        const content = await loadScenarioFromPlugin(
-          pluginId,
-          scenarioFile,
-          gameAssets,
-        );
-
-        console.log(
-          `[Load Scenario] Loaded ${content.objects.size} objects from scenario: ${content.scenario.name}`,
-        );
-
-        const metadata: LoadedScenarioMetadata = {
-          type: 'plugin',
-          pluginId,
-          scenarioFile,
-          loadedAt: Date.now(),
-          scenarioName: content.scenario.name,
-        };
-
-        loadScenarioContent(
-          ctx.store,
-          content,
-          metadata,
-          '[Load Scenario]',
-          plugin.manifest.componentSets,
-          plugin.registry.baseUrl,
-        );
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error('[Load Scenario] Failed to load scenario', {
-          errorId: ACTION_LOAD_SCENARIO_FAILED,
-          pluginId: ctx.store.metadata.get('pluginId'),
-          error: errorMessage,
-        });
-        alert(`Failed to load scenario: ${errorMessage}`);
-      }
-    },
-  });
-
   // Global action: Reset Table
   registry.register({
     id: 'reset-table',
@@ -544,67 +456,69 @@ export function registerDefaultActions(): void {
     },
   });
 
-  // Content action: Load Marvel Champions - Rhino Scenario
+  // Content action: Generic Load... (opens the two-step picker)
+  //
+  // Per-type Load <X>... commands are registered separately by
+  // `registerLoadablesActions()` so they can be re-derived whenever the
+  // active plugin's loadable registry changes.
   registry.register({
-    id: 'load-marvelchampions-rhino',
-    label: 'Load Marvel Champions: Rhino',
-    shortLabel: 'MC: Rhino',
-    icon: '🦏',
+    id: 'load',
+    label: 'Load…',
+    shortLabel: 'Load',
+    icon: '📥',
     category: CONTENT_ACTIONS,
-    description: 'Load the Marvel Champions Rhino scenario from GitHub',
-    isAvailable: (ctx) => ctx.selection.count === 0,
-    execute: async (ctx) => {
-      const pluginId: string = 'marvel-champions';
-      const scenarioFile: string = 'marvelchampions-rhino-scenario.json';
-
-      try {
-        console.log('[Load Marvel Champions] Loading Rhino scenario...');
-
-        // Plugin lookup served from cache after first load.
-        const plugin = await loadPlugin(pluginId);
-
-        // Reuse already-loaded plugin assets if available; otherwise hit the
-        // plugin cache to load + merge them. Either way, NO duplicate
-        // pack-fetches inside the scenario load.
-        let gameAssets = ctx.store.getGameAssets();
-        if (!gameAssets) {
-          gameAssets = await loadPluginAssets(pluginId);
-        }
-
-        const content = await loadScenarioFromPlugin(
-          pluginId,
-          scenarioFile,
-          gameAssets,
-        );
-
-        // Store metadata for plugin scenarios (can auto-reload)
-        const metadata: LoadedScenarioMetadata = {
-          type: 'plugin',
-          pluginId,
-          scenarioFile,
-          loadedAt: Date.now(),
-          scenarioName: content.scenario.name,
-        };
-
-        loadScenarioContent(
-          ctx.store,
-          content,
-          metadata,
-          '[Load Marvel Champions]',
-          plugin.manifest.componentSets,
-          plugin.registry.baseUrl,
-        );
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error('[Load Marvel Champions] Failed to load scenario', {
-          errorId: ACTION_LOAD_MARVELCHAMPIONS_FAILED,
-          pluginId,
-          scenarioFile,
-          error: errorMessage,
-        });
-        alert(`Failed to load Marvel Champions scenario: ${errorMessage}`);
-      }
+    description: 'Pick what to load onto the table (scenarios, cards, sets…)',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 0 && ctx.onOpenLoadPicker !== undefined,
+    execute: (ctx) => {
+      ctx.onOpenLoadPicker?.();
     },
   });
+}
+
+/** Module-level record of the per-type Load actions that are live, so a
+ * subsequent register call can unregister them precisely without touching
+ * unrelated `load-*` ids (e.g. the built-in `load-components`). */
+const liveLoadableActionIds = new Set<string>();
+
+/**
+ * Register the dynamic "Load <type>..." actions derived from the current
+ * plugin's loadable registry.  Idempotent: callers should pair this with
+ * {@link unregisterLoadablesActions} before re-registering with a new set.
+ *
+ * The id format is `load-<entry.type>`; collisions with built-in action ids
+ * are the plugin author's responsibility — the registry warns on overwrite.
+ */
+export function registerLoadablesActions(loadables: LoadableEntry[]): void {
+  const registry = ActionRegistry.getInstance();
+  for (const entry of loadables) {
+    const id = `load-${entry.type}`;
+    registry.register({
+      id,
+      label: `Load ${entry.label}…`,
+      shortLabel: entry.label,
+      icon: '📥',
+      category: CONTENT_ACTIONS,
+      description: `Open the ${entry.label} picker`,
+      isAvailable: (ctx) =>
+        ctx.selection.count === 0 && ctx.onOpenLoadPicker !== undefined,
+      execute: (ctx) => {
+        ctx.onOpenLoadPicker?.(entry.type);
+      },
+    });
+    liveLoadableActionIds.add(id);
+  }
+}
+
+/**
+ * Remove the dynamic "Load <type>..." actions previously registered by
+ * {@link registerLoadablesActions}.  Built-in actions (e.g. `load-components`,
+ * the generic `load`) are left untouched.
+ */
+export function unregisterLoadablesActions(): void {
+  const registry = ActionRegistry.getInstance();
+  for (const id of liveLoadableActionIds) {
+    registry.unregister(id);
+  }
+  liveLoadableActionIds.clear();
 }

@@ -33,6 +33,7 @@ export function buildActionContext(
   onGridSnapEnabledChange?: (enabled: boolean) => void,
   activeHandId?: string,
   onOpenComponentSets?: () => void,
+  onOpenLoadPicker?: (presetType?: string) => void,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -76,5 +77,6 @@ export function buildActionContext(
     onGridSnapEnabledChange,
     activeHandId,
     onOpenComponentSets,
+    onOpenLoadPicker,
   };
 }

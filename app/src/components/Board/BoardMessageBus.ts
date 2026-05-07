@@ -1,5 +1,6 @@
 import { MessageHandlerRegistry } from '../../messaging/MessageHandlerRegistry';
 import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
+import type { ViewportState } from '../../utils/viewportPlacement';
 import { isValidPosition } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
@@ -54,6 +55,9 @@ export interface BoardHandlerContext {
   selectionSettledCallbacks: React.MutableRefObject<Array<() => void>>;
   animationStateCallbacks: React.MutableRefObject<
     Array<(isAnimating: boolean) => void>
+  >;
+  viewportStateCallbacks: React.MutableRefObject<
+    Array<(state: ViewportState) => void>
   >;
   throttledCursorUpdate: React.MutableRefObject<
     ThrottledFunction<(x: number, y: number) => void>
@@ -387,6 +391,19 @@ export class BoardMessageBus {
     this.registry.register('screen-coords', (msg, ctx) => {
       ctx.setDebugCoords(msg.screenCoords.length > 0 ? msg.screenCoords : null);
       ctx.setIsWaitingForCoords(false);
+    });
+
+    this.registry.register('viewport-state', (msg, ctx) => {
+      const callbacks = ctx.viewportStateCallbacks.current;
+      ctx.viewportStateCallbacks.current = [];
+      const state: ViewportState = {
+        cameraX: msg.cameraX,
+        cameraY: msg.cameraY,
+        cameraScale: msg.cameraScale,
+        viewportWidth: msg.viewportWidth,
+        viewportHeight: msg.viewportHeight,
+      };
+      for (const cb of callbacks) cb(state);
     });
 
     // Awareness

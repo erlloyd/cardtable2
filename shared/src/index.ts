@@ -232,6 +232,7 @@ export type MainToRendererMessage =
       }>;
     }
   | { type: 'request-screen-coords'; ids: string[] } // M3.5.1-T6: Request screen coordinates for objects
+  | { type: 'request-viewport-state' } // ct-8gf.5: Query viewport-camera state for additive placement
   | { type: 'phantom-drag-start' } // Hand-to-board phantom drag: begin
   | { type: 'phantom-drag-move'; canvasX: number; canvasY: number } // Hand-to-board phantom drag: update position (DPR-scaled canvas coords)
   | { type: 'phantom-drag-end' }; // Hand-to-board phantom drag: cleanup
@@ -297,6 +298,14 @@ export type RendererToMainMessage =
         width: number; // Object width in DOM pixels
         height: number; // Object height in DOM pixels
       }>;
+    }
+  | {
+      type: 'viewport-state'; // ct-8gf.5: Response to request-viewport-state
+      cameraX: number; // worldContainer.position.x (screen pixels)
+      cameraY: number; // worldContainer.position.y (screen pixels)
+      cameraScale: number; // Camera zoom level (1.0 = 100%)
+      viewportWidth: number; // Viewport width in CSS pixels
+      viewportHeight: number; // Viewport height in CSS pixels
     }
   | { type: 'pan-started' } // M3.5.1-T6: Camera pan started
   | { type: 'pan-ended' } // M3.5.1-T6: Camera pan ended

@@ -22,11 +22,23 @@ import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import { CommandPalette } from '../components/CommandPalette';
 import { ComponentSetModal } from '../components/ComponentSetModal';
+import {
+  LoadPickerModal,
+  type LoadPickerSelectHandler,
+  type DerivedItemsResolver,
+} from '../components/load-picker/LoadPickerModal';
 import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import {
+  registerLoadablesActions,
+  unregisterLoadablesActions,
+} from '../actions/registerDefaultActions';
+import { handleLoadSelection } from '../content/loadHandler';
+import { getLoadableEntries } from '../content/loadablesRegistry';
+import type { LoadableEntry } from '@cardtable2/shared';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -86,6 +98,13 @@ function DevTable() {
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
   const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  const [loadPicker, setLoadPicker] = useState<{
+    open: boolean;
+    presetType?: string;
+  }>({ open: false });
+  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
+    getLoadableEntries(),
+  );
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -95,6 +114,19 @@ function DevTable() {
   // Register default actions (shared with table route)
   useEffect(() => {
     registerDefaultActions();
+  }, []);
+
+  // Re-derive per-type Load... actions whenever the loadable registry might
+  // have changed. Dev tables don't auto-load a plugin, so this most often
+  // runs once with an empty list; a manual `loadPluginAssets` call from the
+  // dev tools will populate it.
+  useEffect(() => {
+    const entries = getLoadableEntries();
+    setLoadables(entries);
+    unregisterLoadablesActions();
+    if (entries.length > 0) {
+      registerLoadablesActions(entries);
+    }
   }, []);
 
   // Handler to spawn a test card (M3-T2 testing)
@@ -170,6 +202,45 @@ function DevTable() {
     setComponentSetModalOpen(true);
   }, []);
 
+  const handleOpenLoadPicker = useCallback((presetType?: string) => {
+    setLoadPicker({ open: true, presetType });
+  }, []);
+
+  const handleCloseLoadPicker = useCallback(() => {
+    setLoadPicker({ open: false });
+  }, []);
+
+  const resolveDerivedItems = useCallback<DerivedItemsResolver>((entry) => {
+    if (entry.source.kind === 'static') {
+      return entry.source.items.map((it) => ({
+        id: it.id,
+        label: it.label,
+        data: it.data,
+      }));
+    }
+    return [];
+  }, []);
+
+  const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
+    (entry, item) => {
+      if (!store) return;
+      // Dev table has no Board reference for camera state — fall back to
+      // origin/un-zoomed; placement primitive returns sensible defaults.
+      void handleLoadSelection(entry, item, {
+        store,
+        getViewportState: () =>
+          Promise.resolve({
+            cameraX: 0,
+            cameraY: 0,
+            cameraScale: 1,
+            viewportWidth: 0,
+            viewportHeight: 0,
+          }),
+      });
+    },
+    [store],
+  );
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -184,6 +255,7 @@ function DevTable() {
       setGridSnapEnabled,
       undefined,
       handleOpenComponentSets,
+      handleOpenLoadPicker,
     );
   }, [
     store,
@@ -193,6 +265,7 @@ function DevTable() {
     gridSnapEnabled,
     setGridSnapEnabled,
     handleOpenComponentSets,
+    handleOpenLoadPicker,
   ]);
 
   // Enable keyboard shortcuts
@@ -339,6 +412,16 @@ function DevTable() {
           gameAssets={null}
         />
       )}
+
+      {/* Load Picker Modal (ct-8gf.5) */}
+      <LoadPickerModal
+        open={loadPicker.open}
+        onClose={handleCloseLoadPicker}
+        loadables={loadables}
+        presetType={loadPicker.presetType}
+        onSelectItem={handleLoadPickerSelect}
+        resolveDerivedItems={resolveDerivedItems}
+      />
     </div>
   );
 }

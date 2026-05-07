@@ -14,6 +14,7 @@ import {
   type Card,
   type StackObject,
 } from '@cardtable2/shared';
+import type { ViewportState } from '../utils/viewportPlacement';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
 import type { GameAssets } from '../content';
@@ -58,6 +59,15 @@ export interface BoardHandle {
     clientY: number,
   ) => { x: number; y: number } | null;
   clearPreview: () => void;
+  /**
+   * Round-trip the renderer for the current camera + viewport snapshot.
+   *
+   * Resolves with values in the renderer's internal pixel space (matches
+   * `worldContainer.position` and `app.renderer.width/height`); the placement
+   * primitive only requires consistency between camera coords and viewport
+   * dimensions. See ct-8gf.5.
+   */
+  getViewportState: () => Promise<ViewportState>;
 }
 
 export interface BoardProps {
@@ -147,6 +157,9 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   const animationStateCallbacksRef = useRef<
     Array<(isAnimating: boolean) => void>
   >([]);
+  const viewportStateCallbacksRef = useRef<
+    Array<(state: ViewportState) => void>
+  >([]);
 
   // Card preview state (hover mode). Carries cardCode and faceUp so the
   // preview component can resolve which side to render — see CardPreview.tsx
@@ -205,6 +218,25 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         setPreviewCard(null);
         setPreviewPosition(null);
       },
+      getViewportState: () =>
+        new Promise<ViewportState>((resolve) => {
+          if (!renderer) {
+            // No renderer yet — placement falls back to a centered, un-zoomed
+            // viewport. Width/height are 0 so the placement primitive returns
+            // the camera-origin-relative center; not ideal but better than
+            // hanging the action.
+            resolve({
+              cameraX: 0,
+              cameraY: 0,
+              cameraScale: 1,
+              viewportWidth: 0,
+              viewportHeight: 0,
+            });
+            return;
+          }
+          viewportStateCallbacksRef.current.push(resolve);
+          renderer.sendMessage({ type: 'request-viewport-state' });
+        }),
     }),
     [renderer],
   );
@@ -453,6 +485,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         flushCallbacks: flushCallbacksRef,
         selectionSettledCallbacks: selectionSettledCallbacksRef,
         animationStateCallbacks: animationStateCallbacksRef,
+        viewportStateCallbacks: viewportStateCallbacksRef,
         throttledCursorUpdate,
         throttledDragStateUpdate,
         onBoardDragStart,

@@ -129,6 +129,22 @@
       "face": "01036.jpg",
       "setCode": "extra",
       "typeCode": "resource"
+    },
+    "01037A": {
+      "name": "Hero Test",
+      "type": "player",
+      "face": "01037A.jpg",
+      "back_code": "01037B",
+      "setCode": "extra",
+      "typeCode": "ally"
+    },
+    "01037B": {
+      "name": "Alter Test",
+      "type": "player",
+      "face": "01037B.jpg",
+      "back_code": "01037A",
+      "setCode": "extra",
+      "typeCode": "ally"
     }
   },
   "cardSets": {

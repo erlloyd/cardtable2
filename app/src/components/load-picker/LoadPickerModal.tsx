@@ -231,6 +231,7 @@ export function LoadPickerModal({
             : `Choose ${activeEntry.label.toLowerCase()}`
         }
         ref={panelRef}
+        data-testid="load-picker-panel"
       >
         <div className="load-picker-header">
           {!showStep1 && (
@@ -288,7 +289,11 @@ function Step1TypeList({ loadables, onPickType }: Step1Props) {
     return <div className="load-picker-empty">No loadables declared</div>;
   }
   return (
-    <div className="load-picker-types" role="list">
+    <div
+      className="load-picker-types"
+      role="list"
+      data-testid="load-picker-types"
+    >
       {loadables.map((entry) => (
         <button
           key={entry.type}
@@ -296,6 +301,7 @@ function Step1TypeList({ loadables, onPickType }: Step1Props) {
           className="load-picker-type"
           onClick={() => onPickType(entry.type)}
           role="listitem"
+          data-testid={`load-picker-type-${entry.type}`}
         >
           <div className="load-picker-type-label">{entry.label}</div>
           <div className="load-picker-type-meta">
@@ -364,7 +370,11 @@ function Step2ItemList({
         aria-label="Search items"
       />
 
-      <div className="load-picker-items" role="list">
+      <div
+        className="load-picker-items"
+        role="list"
+        data-testid="load-picker-items"
+      >
         {items.length === 0 && (
           <div className="load-picker-empty">No items match</div>
         )}
@@ -375,6 +385,7 @@ function Step2ItemList({
             className="load-picker-item"
             onClick={() => onPickItem(it)}
             role="listitem"
+            data-testid={`load-picker-item-${it.id}`}
           >
             {it.label}
           </button>

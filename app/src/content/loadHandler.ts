@@ -518,6 +518,8 @@ export async function loadScenarioByFile(
       '[Load Scenario]',
       plugin.manifest.componentSets,
       plugin.registry.baseUrl,
+      undefined,
+      plugin.manifest.loadables,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

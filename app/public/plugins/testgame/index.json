@@ -17,5 +17,51 @@
         }
       ]
     }
+  ],
+  "loadables": [
+    {
+      "type": "scenario",
+      "label": "Scenario",
+      "mode": "replace",
+      "source": {
+        "kind": "static",
+        "items": [
+          {
+            "id": "testgame-basic",
+            "label": "Test Game - Basic Setup",
+            "data": { "file": "testgame-basic.json" }
+          }
+        ]
+      }
+    },
+    {
+      "type": "encounter-set",
+      "label": "Encounter Set",
+      "mode": "additive",
+      "source": {
+        "kind": "static",
+        "items": [
+          {
+            "id": "encounter-basic",
+            "label": "Basic Encounters",
+            "data": { "cardSet": "encounter-basic" }
+          },
+          {
+            "id": "encounter-nemesis",
+            "label": "Nemesis Encounters",
+            "data": { "cardSet": "encounter-nemesis" }
+          }
+        ]
+      }
+    },
+    {
+      "type": "card",
+      "label": "Card",
+      "mode": "additive",
+      "source": {
+        "kind": "asset-pack-derived",
+        "derivation": "all-cards"
+      }
+    }
   ]
 }

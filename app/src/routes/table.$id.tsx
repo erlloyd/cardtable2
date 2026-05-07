@@ -292,6 +292,7 @@ function Table() {
           pending.pluginManifest.componentSets,
           '', // Local plugins have no remote base URL
           pending.blobUrls,
+          pending.pluginManifest.loadables,
         );
       } else {
         console.warn(

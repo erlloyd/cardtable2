@@ -1,4 +1,4 @@
-import type { ComponentSetEntry } from '@cardtable2/shared';
+import type { ComponentSetEntry, LoadableEntry } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { LoadedContent, LoadedScenarioMetadata } from './index';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
@@ -8,6 +8,7 @@ import {
   setComponentSetEntries,
   clearComponentSetEntries,
 } from './componentSetRegistry';
+import { setLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -30,6 +31,11 @@ import {
  * @param pluginComponentSets - Optional component sets from plugin manifest
  * @param pluginBaseUrl - Plugin base URL (for API imports)
  * @param blobUrls - Optional blob URL map for local plugin files (images + scripts)
+ * @param pluginLoadables - Optional loadables[] from plugin manifest. Populated
+ *   into the runtime loadablesRegistry so the picker UI / per-type Load
+ *   commands surface the active plugin's items. Mirrors `pluginComponentSets`.
+ *   Required for the local-dev path, which bypasses `loadPluginAssets()`
+ *   (where the registered-plugin path populates the registry). See ct-erb.
  */
 export function loadScenarioContent(
   store: YjsStore,
@@ -39,6 +45,7 @@ export function loadScenarioContent(
   pluginComponentSets?: ComponentSetEntry[],
   pluginBaseUrl?: string,
   blobUrls?: Map<string, string>,
+  pluginLoadables?: LoadableEntry[],
 ): void {
   console.log(`${logPrefix} Scenario loaded:`, {
     objectCount: content.objects.size,
@@ -77,6 +84,21 @@ export function loadScenarioContent(
     setComponentSetEntries(pluginComponentSets, pluginBaseUrl ?? '', blobUrls);
     console.log(
       `${logPrefix} Registered ${pluginComponentSets.length} component sets`,
+    );
+  }
+
+  // Populate the loadables registry so the picker UI and per-type "Load …"
+  // commands see the active plugin's items. Clear unconditionally first so a
+  // plugin-switch to a plugin with no loadables doesn't leak the previous
+  // plugin's entries. The registered-plugin path also populates this in
+  // `loadPluginAssets()`; the local-dev path bypasses that, so populating here
+  // makes `loadScenarioContent` the single source of truth for "apply this
+  // plugin's runtime state to the active table." See ct-erb.
+  clearLoadableEntries();
+  if (pluginLoadables && pluginLoadables.length > 0) {
+    setLoadableEntries(pluginLoadables, content.content);
+    console.log(
+      `${logPrefix} Registered ${pluginLoadables.length} loadable entries`,
     );
   }
 

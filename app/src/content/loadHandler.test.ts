@@ -95,6 +95,7 @@ function makeStore(opts: {
     setGameAssets: vi.fn(),
     setObject: vi.fn(),
     forEachObject: vi.fn(),
+    clearAllObjects: vi.fn(),
   } as unknown as YjsStore;
 }
 
@@ -141,6 +142,35 @@ describe('handleLoadSelection — replace + scenario', () => {
     });
     const helper = await import('./loadScenarioHelper');
     expect(helper.loadScenarioContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears existing objects before loading the new scenario (ct-5ee)', async () => {
+    const store = makeStore({
+      pluginId: 'testgame',
+      gameAssets: makeAssets(),
+    });
+    const helper = await import('./loadScenarioHelper');
+    // Reset accumulated call history from sibling tests in this file (the
+    // helper mock is module-level, set up via vi.mock at the top).
+    vi.mocked(helper.loadScenarioContent).mockClear();
+    // Track the call order between clearAllObjects and loadScenarioContent.
+    const callOrder: string[] = [];
+    vi.mocked(store.clearAllObjects).mockImplementation(() => {
+      callOrder.push('clearAllObjects');
+    });
+    vi.mocked(helper.loadScenarioContent).mockImplementation(() => {
+      callOrder.push('loadScenarioContent');
+    });
+
+    await handleLoadSelection(
+      scenarioEntry,
+      { id: 's1', label: 'Test', data: { file: 'testgame-basic.json' } },
+      { store, getViewportState },
+    );
+
+    expect(store.clearAllObjects).toHaveBeenCalledTimes(1);
+    expect(helper.loadScenarioContent).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(['clearAllObjects', 'loadScenarioContent']);
   });
 
   it('warns and no-ops when item is null', async () => {

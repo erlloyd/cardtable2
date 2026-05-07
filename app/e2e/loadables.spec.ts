@@ -202,64 +202,61 @@ test.describe('Loadables — unified loading (ct-8gf.6)', () => {
     );
   });
 
-  // Pinned to ct-5ee: replace-mode currently does NOT clear existing objects
-  // before the second load, so the count doubles instead of staying constant.
-  // Marked .fixme so the suite is green while the bug is open; flips to a
-  // tight regression pin once ct-5ee lands. The test body below is the exact
-  // contract the fix must satisfy.
-  test.fixme(
-    'Replace mode: loading scenario twice rebuilds without duplicating',
-    async ({ page }, testInfo) => {
-      const tableId = `loadables-replace-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
-      await setupTestgameTable(page, tableId);
+  // ct-5ee regression pin: replace-mode loads must clear the table before
+  // adding the new scenario's objects. Reloading the same scenario must keep
+  // the object count stable (rebuild), not double it.
+  test('Replace mode: loading scenario twice rebuilds without duplicating', async ({
+    page,
+  }, testInfo) => {
+    const tableId = `loadables-replace-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await setupTestgameTable(page, tableId);
 
-      // First load.
-      await openCommandPalette(page);
-      await page
-        .locator('.command-palette-label')
-        .filter({ hasText: /^Load Scenario…$/ })
-        .first()
-        .click();
-      await page.getByTestId('load-picker-item-testgame-basic').click();
-      await page.waitForFunction(
-        () => {
-          const store = (globalThis as unknown as LoadablesTestGlobalThis)
-            .__TEST_STORE__;
-          return (store?.getAllObjects().size ?? 0) >= 3;
-        },
-        undefined,
-        { timeout: 30_000 },
-      );
-      const firstCount = await getObjectCount(page);
-      expect(firstCount).toBeGreaterThan(0);
+    // First load.
+    await openCommandPalette(page);
+    await page
+      .locator('.command-palette-label')
+      .filter({ hasText: /^Load Scenario…$/ })
+      .first()
+      .click();
+    await page.getByTestId('load-picker-item-testgame-basic').click();
+    await page.waitForFunction(
+      () => {
+        const store = (globalThis as unknown as LoadablesTestGlobalThis)
+          .__TEST_STORE__;
+        return (store?.getAllObjects().size ?? 0) >= 3;
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+    const firstCount = await getObjectCount(page);
+    expect(firstCount).toBeGreaterThan(0);
 
-      // Second load of the same scenario. Replace mode means the table is
-      // cleared and rebuilt — final count must equal first count, NOT 2x.
-      await openCommandPalette(page);
-      await page
-        .locator('.command-palette-label')
-        .filter({ hasText: /^Load Scenario…$/ })
-        .first()
-        .click();
-      await page.getByTestId('load-picker-item-testgame-basic').click();
+    // Second load of the same scenario. Replace mode means the table is
+    // cleared and rebuilt — final count must equal first count, NOT 2x.
+    await openCommandPalette(page);
+    await page
+      .locator('.command-palette-label')
+      .filter({ hasText: /^Load Scenario…$/ })
+      .first()
+      .click();
+    await page.getByTestId('load-picker-item-testgame-basic').click();
 
-      // Wait for the second load to complete. We pin on "count is firstCount
-      // AND has been stable for one extra poll" via a settle helper rather than
-      // the bare equality so the intermediate replace state (clear -> add)
-      // doesn't fool us. Generous timeout for parallel-worker server contention.
-      await page.waitForFunction(
-        (expected: number) => {
-          const store = (globalThis as unknown as LoadablesTestGlobalThis)
-            .__TEST_STORE__;
-          return (store?.getAllObjects().size ?? -1) === expected;
-        },
-        firstCount,
-        { timeout: 30_000 },
-      );
-      const secondCount = await getObjectCount(page);
-      expect(secondCount).toBe(firstCount);
-    },
-  );
+    // Wait for the second load to complete. We pin on "count is firstCount
+    // AND has been stable for one extra poll" via a settle helper rather than
+    // the bare equality so the intermediate replace state (clear -> add)
+    // doesn't fool us. Generous timeout for parallel-worker server contention.
+    await page.waitForFunction(
+      (expected: number) => {
+        const store = (globalThis as unknown as LoadablesTestGlobalThis)
+          .__TEST_STORE__;
+        return (store?.getAllObjects().size ?? -1) === expected;
+      },
+      firstCount,
+      { timeout: 30_000 },
+    );
+    const secondCount = await getObjectCount(page);
+    expect(secondCount).toBe(firstCount);
+  });
 
   test('Additive Card: pick a single card → +1 stack', async ({
     page,

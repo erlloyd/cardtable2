@@ -505,6 +505,12 @@ export async function loadScenarioByFile(
       loadedAt: Date.now(),
       scenarioName: content.scenario.name,
     };
+    // ct-5ee: replace-mode contract — clear existing table objects before the
+    // new scenario is added, otherwise reloading the same scenario doubles the
+    // object count. Done after the plugin/scenario fetch succeeds so a failed
+    // load doesn't wipe the table. `loadScenarioContent` resets `loadedScenario`
+    // metadata immediately afterward.
+    store.clearAllObjects();
     loadScenarioContent(
       store,
       content,

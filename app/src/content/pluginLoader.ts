@@ -5,7 +5,7 @@
  * to discover and load asset packs and scenarios.
  */
 
-import type { ComponentSetEntry } from '@cardtable2/shared';
+import type { ComponentSetEntry, LoadableEntry } from '@cardtable2/shared';
 import {
   PLUGIN_REGISTRY_FETCH_FAILED,
   PLUGIN_REGISTRY_PARSE_FAILED,
@@ -47,6 +47,13 @@ export interface PluginManifest {
   assets: string[];
   scenarios: string[];
   componentSets?: ComponentSetEntry[];
+  /**
+   * Plugin-declared loadable categories (scenarios, decks, encounter sets,
+   * individual cards, …) surfaced through the generic Load… picker. Optional
+   * so existing manifests (which still rely on the legacy `scenarios` /
+   * `componentSets` shapes) keep validating. See ct-8gf.
+   */
+  loadables?: LoadableEntry[];
 }
 
 export interface LoadedPlugin {

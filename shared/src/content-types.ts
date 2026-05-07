@@ -301,6 +301,91 @@ export function isApiComponentSetEntry(
 }
 
 // ============================================================================
+// Loadables (plugin-declared content the host can load on demand)
+// ============================================================================
+// A "loadable" is any unit of content a plugin makes available beyond the
+// initial scenario boot — scenarios, decks, encounter sets, individual cards.
+// The plugin manifest declares them; the host shows a generic two-step picker
+// (type → item), and a per-type registry knows how to materialize the choice.
+//
+// Item-source variants intentionally map onto how items are *discovered* (not
+// how they render): static JSON, parser-driven providers (e.g. apiImport), and
+// host-derived lists computed from already-loaded asset packs.
+
+/**
+ * How adding a loadable affects the existing table.
+ *
+ * `additive` drops new objects on top of whatever's already there (the common
+ * case for cards / encounter sets). `replace` clears the table first (used for
+ * scenario swaps). The host enforces this on apply; plugins only declare it.
+ */
+export type LoadableMode = 'additive' | 'replace';
+
+/**
+ * A single item exposed by a loadable category in the picker UI.
+ *
+ * `data` is intentionally typed to a generic so each loadable type can pin its
+ * own item-payload shape (e.g. scenarios use `{ file: string }` to point at a
+ * JSON file under the plugin's baseUrl). `unknown` is the safe default at the
+ * shared-schema layer; per-type narrowing happens in the consumer.
+ */
+export interface LoadableStaticItem<TData = unknown> {
+  id: string; // Stable identifier within this loadable type
+  label: string; // Display label for the picker
+  data: TData; // Type-specific payload (e.g. scenario file path, card code)
+}
+
+/** Static list of items declared inline in the plugin manifest. */
+export interface LoadableStaticSource<TData = unknown> {
+  kind: 'static';
+  items: Array<LoadableStaticItem<TData>>;
+}
+
+/**
+ * Provider-backed source: declares an action (e.g. apiImport) whose runtime
+ * module produces items dynamically. Mirrors `ApiComponentSetEntry`'s shape;
+ * see ct-8gf.1 follow-up on whether to consolidate.
+ */
+export interface LoadableProviderSource {
+  kind: 'provider';
+  module: string; // Path (relative to plugin baseUrl) to parser/provider JS
+  config?: Record<string, unknown>; // Provider-specific configuration
+}
+
+/**
+ * How the host should derive items from already-loaded asset packs.
+ *
+ * Kept as a string union (rather than open-ended) so the host can refuse
+ * unknown derivations at parse time. Extend as new derivations are needed.
+ */
+export type LoadableDerivation = 'all-cards' | 'all-card-sets';
+
+/** Host-computed source: items materialized from merged asset packs at load time. */
+export interface LoadableAssetPackDerivedSource {
+  kind: 'asset-pack-derived';
+  derivation: LoadableDerivation;
+}
+
+/** Discriminated union over all supported item-source kinds. */
+export type LoadableItemSource<TData = unknown> =
+  | LoadableStaticSource<TData>
+  | LoadableProviderSource
+  | LoadableAssetPackDerivedSource;
+
+/**
+ * One loadable category declared by a plugin (e.g. "scenario", "deck",
+ * "encounter-set", "card"). `type` is plugin-defined so games can name their
+ * own categories; the host treats it as an opaque key for the picker UI and
+ * runtime registry.
+ */
+export interface LoadableEntry<TData = unknown> {
+  type: string; // Plugin-defined category key (e.g. "scenario", "deck")
+  label: string; // Display label for the picker's first step
+  mode: LoadableMode; // Additive vs replace semantics on apply
+  source: LoadableItemSource<TData>; // How items are discovered
+}
+
+// ============================================================================
 // Worker Communication Types
 // ============================================================================
 

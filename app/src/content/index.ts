@@ -30,6 +30,7 @@ import {
   instantiateScenario,
 } from './instantiate';
 import { setComponentSetEntries } from './componentSetRegistry';
+import { setLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 import {
   loadAllPlugins,
   loadPlugin,
@@ -226,6 +227,16 @@ export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
       plugin.manifest.componentSets,
       plugin.registry.baseUrl,
     );
+  }
+
+  // Populate the loadables registry from the plugin manifest. Static and
+  // provider sources pass through; asset-pack-derived sources are materialized
+  // here against the merged `assets` so consumers receive a uniform list of
+  // resolved items. Clear unconditionally first so a plugin-switch to a plugin
+  // with no loadables doesn't leak the previous plugin's entries. See ct-8gf.2.
+  clearLoadableEntries();
+  if (plugin.manifest.loadables && plugin.manifest.loadables.length > 0) {
+    setLoadableEntries(plugin.manifest.loadables, assets);
   }
 
   return assets;

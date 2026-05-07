@@ -34,10 +34,12 @@ const mockAssetPack1: AssetPack = {
   },
   cards: {
     '01001': {
+      name: '',
       type: 'hero',
       face: '01001.jpg',
     },
     '01002': {
+      name: '',
       type: 'hero',
       face: '01002.jpg',
       back: 'custom_back.jpg',
@@ -69,10 +71,12 @@ const mockAssetPack2: AssetPack = {
   cards: {
     '01001': {
       // Override from pack 1
+      name: '',
       type: 'hero',
       face: '01001_alt.jpg',
     },
     '02001': {
+      name: '',
       type: 'villain',
       face: '02001.jpg',
     },
@@ -328,16 +332,19 @@ describe('mergeAssetPacks', () => {
     });
     // Cards should have resolved URLs with baseUrl applied
     expect(merged.cards['01001']).toEqual({
+      name: '',
       type: 'hero',
       face: 'https://example.com/pack2/01001_alt.jpg',
       back: undefined, // No back specified, so undefined
     }); // Pack 2 wins
     expect(merged.cards['01002']).toEqual({
+      name: '',
       type: 'hero',
       face: 'https://example.com/pack1/01002.jpg',
       back: 'https://example.com/pack1/custom_back.jpg',
     });
     expect(merged.cards['02001']).toEqual({
+      name: '',
       type: 'villain',
       face: 'https://example.com/pack2/02001.jpg',
       back: undefined,
@@ -360,11 +367,13 @@ describe('mergeAssetPacks', () => {
     // Cards should have resolved URLs
     expect(merged.cards).toEqual({
       '01001': {
+        name: '',
         type: 'hero',
         face: 'https://example.com/pack1/01001.jpg',
         back: undefined,
       },
       '01002': {
+        name: '',
         type: 'hero',
         face: 'https://example.com/pack1/01002.jpg',
         back: 'https://example.com/pack1/custom_back.jpg',
@@ -487,6 +496,7 @@ describe('resolveCard', () => {
       ...content,
       cards: {
         invalid: {
+          name: '',
           type: 'nonexistent',
           face: 'test.jpg',
         },
@@ -509,6 +519,7 @@ describe('resolveCard', () => {
       },
       cards: {
         invalid: {
+          name: '',
           type: 'noback',
           face: 'test.jpg',
         },
@@ -525,6 +536,7 @@ describe('resolveCard', () => {
       ...content,
       cards: {
         custom: {
+          name: '',
           type: 'hero',
           face: 'custom.jpg',
           size: 'jumbo',
@@ -541,6 +553,7 @@ describe('resolveCard', () => {
       ...content,
       cards: {
         custom: {
+          name: '',
           type: 'hero',
           face: 'custom.jpg',
           size: [300, 400],
@@ -569,11 +582,13 @@ describe('resolveCard', () => {
         },
         cards: {
           '01097a': {
+            name: '',
             type: 'mainScheme',
             face: '01097a.jpg',
             back_code: '01097',
           },
           '01097': {
+            name: '',
             type: 'mainScheme',
             face: '01097.jpg',
             back_code: '01097a',
@@ -603,6 +618,7 @@ describe('resolveCard', () => {
         },
         cards: {
           orphan: {
+            name: '',
             type: 'encounter',
             face: 'orphan.jpg',
             back_code: 'does_not_exist',
@@ -637,12 +653,14 @@ describe('resolveCard', () => {
         },
         cards: {
           '01097a': {
+            name: '',
             type: 'mainScheme',
             face: '01097a.jpg',
             back: 'explicit_back.jpg',
             back_code: '01097',
           },
           '01097': {
+            name: '',
             type: 'mainScheme',
             face: '01097.jpg',
           },
@@ -665,7 +683,7 @@ describe('resolveCard', () => {
           hero: { back: 'hero_back.jpg', size: 'standard' },
         },
         cards: {
-          plain: { type: 'hero', face: 'plain.jpg' },
+          plain: { name: '', type: 'hero', face: 'plain.jpg' },
         },
       };
       const merged = mergeAssetPacks([pack]);
@@ -686,6 +704,7 @@ describe('resolveCard', () => {
         },
         cards: {
           spider_man: {
+            name: '',
             type: 'hero',
             face: 'spider_man.jpg',
             back_code: 'peter_parker',
@@ -700,6 +719,7 @@ describe('resolveCard', () => {
         baseUrl: 'https://cdn-b.example.com/expansion/',
         cards: {
           peter_parker: {
+            name: '',
             type: 'hero',
             face: 'peter_parker.jpg',
           },
@@ -729,11 +749,13 @@ describe('resolveCard', () => {
         },
         cards: {
           spider_man: {
+            name: '',
             type: 'hero',
             face: 'spider_man.jpg',
             back_code: 'peter_parker',
           },
           peter_parker: {
+            name: '',
             type: 'hero',
             face: 'peter_parker.jpg',
             // No back_code declared — asymmetric.
@@ -765,6 +787,7 @@ describe('resolveCard', () => {
         },
         cards: {
           self_ref: {
+            name: '',
             type: 'treachery',
             face: 'self_ref.jpg',
             back_code: 'self_ref',

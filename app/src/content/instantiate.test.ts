@@ -31,14 +31,17 @@ const mockPack1: AssetPack = {
   },
   cards: {
     '01001': {
+      name: '',
       type: 'hero',
       face: '01001.jpg',
     },
     '01002': {
+      name: '',
       type: 'hero',
       face: '01002.jpg',
     },
     '01003': {
+      name: '',
       type: 'hero',
       face: '01003.jpg',
     },
@@ -81,6 +84,7 @@ const mockPack2: AssetPack = {
   },
   cards: {
     '02001': {
+      name: '',
       type: 'villain',
       face: '02001.jpg',
     },

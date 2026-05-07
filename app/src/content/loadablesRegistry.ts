@@ -69,9 +69,9 @@ function deriveItems(
   gameAssets: GameAssets,
 ): LoadableStaticItem[] {
   if (derivation === 'all-cards') {
-    return Object.entries(gameAssets.cards).map(([code]) => ({
+    return Object.entries(gameAssets.cards).map(([code, card]) => ({
       id: code,
-      label: code,
+      label: card.name || code,
       data: { code },
     }));
   }

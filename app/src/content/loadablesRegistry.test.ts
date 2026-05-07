@@ -23,8 +23,8 @@ function createGameAssets(overrides: Partial<GameAssets> = {}): GameAssets {
   };
 }
 
-function makeCard(face: string, type = 'player'): Card {
-  return { face, type };
+function makeCard(face: string, name = '', type = 'player'): Card {
+  return { name, face, type };
 }
 
 describe('loadablesRegistry', () => {
@@ -113,6 +113,31 @@ describe('loadablesRegistry', () => {
     // Each item carries id + label + data referencing the card code
     expect(source.items[0].label).toBe(source.items[0].id);
     expect(source.items[0].data).toEqual({ code: source.items[0].id });
+  });
+
+  it('uses the card name as the derived item label when name is non-empty', () => {
+    const assets = createGameAssets({
+      cards: {
+        '01001': makeCard('hero.png', 'Hero'),
+      },
+    });
+
+    const entry: LoadableEntry = {
+      type: 'card',
+      label: 'Card',
+      mode: 'additive',
+      source: { kind: 'asset-pack-derived', derivation: 'all-cards' },
+    };
+
+    setLoadableEntries([entry], assets);
+
+    const source = getLoadableEntries()[0].source;
+    expect(source.kind).toBe('static');
+    if (source.kind !== 'static') throw new Error('unreachable');
+
+    expect(source.items).toHaveLength(1);
+    expect(source.items[0].id).toBe('01001');
+    expect(source.items[0].label).toBe('Hero');
   });
 
   it('derives all-card-sets items from the merged asset packs', () => {

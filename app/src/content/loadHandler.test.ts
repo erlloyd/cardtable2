@@ -225,7 +225,7 @@ describe('handleLoadSelection — additive + card', () => {
     const store = makeStore({
       pluginId: 'p',
       gameAssets: makeAssets({
-        cards: { '01001': { face: 'a.png', type: 'player' } },
+        cards: { '01001': { name: '', face: 'a.png', type: 'player' } },
       }),
     });
     await handleLoadSelection(

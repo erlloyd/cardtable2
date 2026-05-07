@@ -52,6 +52,7 @@ export interface CardType {
 }
 
 export interface Card {
+  name: string; // Display name shown in pickers / search; plugins may ship empty string when name is unavailable, callers should fall back to the card code
   type: string; // References a cardType key
   face: string; // Card face image URL
   back?: string; // Optional override of type's back image

@@ -64,10 +64,12 @@ describe('loadScenarioContent', () => {
         cardTypes: {},
         cards: {
           CARD001: {
+            name: '',
             type: 'hero',
             face: '/assets/hero1.jpg',
           },
           CARD002: {
+            name: '',
             type: 'villain',
             face: '/assets/villain1.jpg',
           },

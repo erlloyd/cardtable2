@@ -20,9 +20,9 @@ const mockPack: AssetPack = {
     hero: { back: 'hero_back.jpg', size: 'standard' },
   },
   cards: {
-    '01001': { type: 'hero', face: '01001.jpg' },
-    '01002': { type: 'hero', face: '01002.jpg' },
-    '01003': { type: 'hero', face: '01003.jpg' },
+    '01001': { name: '', type: 'hero', face: '01001.jpg' },
+    '01002': { name: '', type: 'hero', face: '01002.jpg' },
+    '01003': { name: '', type: 'hero', face: '01003.jpg' },
   },
   cardSets: {
     heroes: ['01001', '01002', '01003'],

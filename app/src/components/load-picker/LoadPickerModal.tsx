@@ -156,7 +156,9 @@ export function LoadPickerModal({
       // Cap on first-paint to avoid lag for very large catalogs.
       return items.slice(0, DERIVED_RENDER_CAP);
     }
-    return fuzzySearch(items, q, (it) => it.label);
+    // Search across label and id so users can find a card by either its
+    // display name or its stable code (e.g., MarvelCDB-style "01001A").
+    return fuzzySearch(items, q, (it) => `${it.label} ${it.id}`);
   }, [items, query]);
 
   const handleClose = useCallback(() => {

@@ -12,102 +12,119 @@
   },
   "cards": {
     "01020": {
+      "name": "Mercury",
       "type": "player",
       "face": "01020.jpg",
       "setCode": "starter",
       "typeCode": "ally"
     },
     "01021": {
+      "name": "Phoenix",
       "type": "player",
       "face": "01021.jpg",
       "setCode": "starter",
       "typeCode": "ally"
     },
     "01022": {
+      "name": "Lightning Bolt",
       "type": "player",
       "face": "01022.jpg",
       "setCode": "starter",
       "typeCode": "event"
     },
     "01023": {
+      "name": "Power Surge",
       "type": "player",
       "face": "01023.jpg",
       "setCode": "starter",
       "typeCode": "event"
     },
     "01024": {
+      "name": "Iron Shield",
       "type": "player",
       "face": "01024.jpg",
       "setCode": "starter",
       "typeCode": "upgrade"
     },
     "01025": {
+      "name": "Ambush",
       "type": "player",
       "face": "01025.jpg",
       "setCode": "encounter",
       "typeCode": "encounter"
     },
     "01026": {
+      "name": "Trap",
       "type": "player",
       "face": "01026.jpg",
       "setCode": "encounter",
       "typeCode": "encounter"
     },
     "01027": {
+      "name": "Storm",
       "type": "player",
       "face": "01027.jpg",
       "setCode": "encounter",
       "typeCode": "encounter"
     },
     "01028": {
+      "name": "Rival Hunter",
       "type": "player",
       "face": "01028.jpg",
       "setCode": "nemesis",
       "typeCode": "encounter"
     },
     "01029": {
+      "name": "Hidden Foe",
       "type": "player",
       "face": "01029.jpg",
       "setCode": "nemesis",
       "typeCode": "encounter"
     },
     "01030": {
+      "name": "Inner Conflict",
       "type": "player",
       "face": "01030.jpg",
       "setCode": "nemesis",
       "typeCode": "obligation"
     },
     "01031": {
+      "name": "Healing Aura",
       "type": "player",
       "face": "01031.jpg",
       "setCode": "extra",
       "typeCode": "support"
     },
     "01032": {
+      "name": "Watchful Ally",
       "type": "player",
       "face": "01032.jpg",
       "setCode": "extra",
       "typeCode": "support"
     },
     "01033": {
+      "name": "Energy Crystal",
       "type": "player",
       "face": "01033.jpg",
       "setCode": "extra",
       "typeCode": "resource"
     },
     "01034": {
+      "name": "Mana Stone",
       "type": "player",
       "face": "01034.jpg",
       "setCode": "extra",
       "typeCode": "resource"
     },
     "01035": {
+      "name": "Spirit Shard",
       "type": "player",
       "face": "01035.jpg",
       "setCode": "extra",
       "typeCode": "resource"
     },
     "01036": {
+      "name": "Power Cell",
       "type": "player",
       "face": "01036.jpg",
       "setCode": "extra",

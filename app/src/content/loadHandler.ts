@@ -19,11 +19,14 @@ import {
   ObjectKind,
   type GameAssets,
   type LoadableEntry,
+  type LoadableProviderSource,
   type LoadableStaticItem,
+  type PluginApiImport,
   type Position,
+  type TableObject,
 } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
-import { createObject } from '../store/YjsActions';
+import { createObject, generateTopSortKey } from '../store/YjsActions';
 import {
   loadPlugin,
   loadPluginAssets,
@@ -31,6 +34,7 @@ import {
   type LoadedScenarioMetadata,
 } from './index';
 import { loadScenarioContent } from './loadScenarioHelper';
+import { importFromApi } from './DeckImportEngine';
 import {
   getViewportCenterPlacement,
   type ViewportState,
@@ -79,10 +83,104 @@ function pickCardSetName(data: unknown): string | null {
   return null;
 }
 
+/**
+ * Async input collector for provider-source loadables.
+ *
+ * Defaults to a `window.prompt` modal — replace via `setProviderInputProvider`
+ * for tests, or once a proper modal UI lands (tracked as a follow-up to
+ * ct-c9u). Returning `null` aborts the import.
+ */
+export type ProviderInputProvider = (params: {
+  apiImport: PluginApiImport;
+  entry: LoadableEntry;
+}) => Promise<string | null>;
+
+let providerInputProvider: ProviderInputProvider = ({ apiImport }) => {
+  const message = `${apiImport.labels.siteName}: ${apiImport.labels.inputPlaceholder}`;
+  const result =
+    typeof window !== 'undefined' && typeof window.prompt === 'function'
+      ? window.prompt(message)
+      : null;
+  return Promise.resolve(result);
+};
+
+/**
+ * Override the provider-input collector. Returns the previous provider so
+ * callers (tests) can restore it. The default uses `window.prompt`.
+ */
+export function setProviderInputProvider(
+  next: ProviderInputProvider,
+): ProviderInputProvider {
+  const previous = providerInputProvider;
+  providerInputProvider = next;
+  return previous;
+}
+
 export interface HandleLoadSelectionDeps {
   store: YjsStore;
   /** Async snapshot of the current viewport — see Board.getViewportState. */
   getViewportState: () => Promise<ViewportState>;
+}
+
+/**
+ * Coerce a {@link LoadableProviderSource}'s declared config + module path into
+ * the {@link PluginApiImport} shape consumed by `importFromApi`.
+ *
+ * The Marvel Champions manifest declares both a legacy
+ * `componentSets[].apiImport` block and the new `loadables[].source.config`
+ * block — they currently mirror the same fields (`apiEndpoints`, `labels`).
+ * This helper normalises the loadable side so the existing
+ * `DeckImportEngine` runner can drive both. ct-u6q tracks consolidating
+ * the two manifest shapes; until that lands, both code paths coexist.
+ *
+ * Returns `null` when the provider config does not have the expected shape
+ * (caller should surface a friendly error).
+ */
+export function coerceProviderSourceToApiImport(
+  source: LoadableProviderSource,
+): PluginApiImport | null {
+  const cfg = source.config ?? {};
+  const endpoints = cfg.apiEndpoints;
+  const labels = cfg.labels;
+
+  if (
+    endpoints === null ||
+    typeof endpoints !== 'object' ||
+    labels === null ||
+    typeof labels !== 'object'
+  ) {
+    return null;
+  }
+
+  const endpointObj = endpoints as { public?: unknown; private?: unknown };
+  const labelObj = labels as {
+    siteName?: unknown;
+    inputPlaceholder?: unknown;
+  };
+
+  if (
+    typeof endpointObj.public !== 'string' ||
+    typeof labelObj.siteName !== 'string' ||
+    typeof labelObj.inputPlaceholder !== 'string'
+  ) {
+    return null;
+  }
+
+  const apiImport: PluginApiImport = {
+    apiEndpoints: {
+      public: endpointObj.public,
+      ...(typeof endpointObj.private === 'string'
+        ? { private: endpointObj.private }
+        : {}),
+    },
+    parserModule: source.module,
+    labels: {
+      siteName: labelObj.siteName,
+      inputPlaceholder: labelObj.inputPlaceholder,
+    },
+  };
+
+  return apiImport;
 }
 
 /**
@@ -125,14 +223,7 @@ export async function handleLoadSelection(
 
   // Additive modes
   if (entry.source.kind === 'provider') {
-    console.warn(
-      '[Load] Provider-source loadables are not wired in ct-8gf.5; see ct-u6q investigation',
-      { entryType: entry.type, module: entry.source.module },
-    );
-    alert(
-      `"${entry.label}" uses an import provider; the runner for this is ` +
-        `not implemented yet (tracked in ct-u6q).`,
-    );
+    await runProviderLoadable(entry, entry.source, deps);
     return;
   }
 
@@ -199,6 +290,146 @@ export async function handleLoadSelection(
     itemId: item.id,
     data: item.data,
   });
+}
+
+/**
+ * Provider-source path: drive the existing API import runner from a
+ * `LoadableProviderSource` declaration.
+ *
+ * Flow:
+ *   1. coerce provider config → PluginApiImport (shared with the legacy
+ *      `componentSets[].apiImport` runner)
+ *   2. ask the host for the user's input (deck ID) via the configurable
+ *      provider-input collector
+ *   3. run `importFromApi` (fetch → worker parse → resolve → instantiate)
+ *   4. translate the engine's positions onto the live table at viewport
+ *      center + jitter, generating fresh top sort keys
+ *
+ * Failure cases surface via `alert` with stable errorIds; we never throw.
+ */
+async function runProviderLoadable(
+  entry: LoadableEntry,
+  source: LoadableProviderSource,
+  deps: HandleLoadSelectionDeps,
+): Promise<void> {
+  const apiImport = coerceProviderSourceToApiImport(source);
+  if (!apiImport) {
+    console.error(
+      '[Load] Provider source missing required apiEndpoints/labels config',
+      {
+        errorId: LOAD_ADDITIVE_FAILED,
+        entryType: entry.type,
+        module: source.module,
+      },
+    );
+    alert(
+      `"${entry.label}" provider config is missing apiEndpoints or labels.`,
+    );
+    return;
+  }
+
+  const gameAssets = deps.store.getGameAssets();
+  if (!gameAssets) {
+    console.error(
+      '[Load] No gameAssets in store; cannot run provider loadable',
+      { errorId: LOAD_ADDITIVE_FAILED, entryType: entry.type },
+    );
+    alert('Cannot import a deck before plugin assets are ready.');
+    return;
+  }
+
+  let deckId: string | null;
+  try {
+    deckId = await providerInputProvider({ apiImport, entry });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Load] Provider input collector failed', {
+      errorId: LOAD_ADDITIVE_FAILED,
+      entryType: entry.type,
+      error: message,
+    });
+    alert(`Failed to collect deck input: ${message}`);
+    return;
+  }
+
+  if (deckId === null || deckId.trim() === '') {
+    console.log('[Load] Provider import cancelled — no deck ID provided');
+    return;
+  }
+
+  let viewport: ViewportState;
+  try {
+    viewport = await deps.getViewportState();
+  } catch (error) {
+    console.error('[Load] Failed to read viewport state', {
+      errorId: LOAD_ADDITIVE_FAILED,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+
+  const placement = getViewportCenterPlacement(viewport);
+
+  const result = await importFromApi({
+    deckId: deckId.trim(),
+    isPrivate: false,
+    apiImport,
+    gameAssets,
+  });
+
+  if ('error' in result) {
+    console.error('[Load] Provider import failed', {
+      errorId: LOAD_ADDITIVE_FAILED,
+      entryType: entry.type,
+      deckId,
+      error: result.error,
+    });
+    alert(`Failed to import deck: ${result.error}`);
+    return;
+  }
+
+  // Drop the parsed objects on the table at viewport-center + jitter.
+  // The engine returns positions relative to (0, 0); shift them so the
+  // first stack lands at the picked placement origin and assign sort keys
+  // above all existing objects so the new content stays on top.
+  addObjectsAt(deps.store, result.objects, placement);
+
+  console.log(
+    `[Load] Provider import complete: ${String(result.objectCount)} objects from deck ${deckId}`,
+  );
+}
+
+/**
+ * Place a batch of pre-instantiated objects on the table.
+ *
+ * Translates the engine's local layout origin to the supplied world-space
+ * position and assigns top-of-stack sort keys so newly imported objects sit
+ * above whatever's already on the table. Mirrors the helper in
+ * `ComponentSetModal.tsx`; intentionally duplicated rather than shared so
+ * the legacy and new paths can diverge if needed (see ct-u6q).
+ */
+function addObjectsAt(
+  store: YjsStore,
+  objects: Map<string, TableObject>,
+  origin: { x: number; y: number },
+): void {
+  const baseSortKey = generateTopSortKey(store);
+  const baseNum = parseInt(baseSortKey, 10);
+  let offset = 0;
+
+  for (const [id, obj] of objects) {
+    const next: TableObject = {
+      ...obj,
+      _pos: {
+        x: obj._pos.x + origin.x,
+        y: obj._pos.y + origin.y,
+        r: obj._pos.r,
+      },
+      _sortKey: String(baseNum + offset).padStart(6, '0'),
+    };
+    offset++;
+    store.setObject(id, next);
+  }
 }
 
 /**

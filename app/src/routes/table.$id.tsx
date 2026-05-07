@@ -34,10 +34,12 @@ import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
   loadPluginAssets,
+  consumePendingLocalPlugin,
   PluginNotFoundError,
   type GameAssets,
   type LoadedScenarioMetadata,
 } from '../content';
+import { loadScenarioContent } from '../content/loadScenarioHelper';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind } from '@cardtable2/shared';
 
@@ -204,6 +206,11 @@ function Table() {
   }, [store, isStoreReady, location.search]);
 
   // Store pluginId in Y.Doc metadata from location state (new table only).
+  //
+  // Two arrival paths from the main screen:
+  //   - state.pluginId: registered plugin (loaded via loadPluginAssets on mount)
+  //   - state.localDev: local-dev plugin already loaded into the
+  //     consumePendingLocalPlugin() stash; applied directly to the store here.
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;
@@ -218,8 +225,9 @@ function Table() {
       typeof pluginIdFromStateRaw === 'string'
         ? pluginIdFromStateRaw
         : undefined;
+    const localDevFromState = stateRecord?.localDev === true;
     const storedPluginId = store.metadata.get('pluginId') as string | undefined;
-    const storedScenario = store.metadata.get('loadedScenario') as
+    const storedLoadedScenario = store.metadata.get('loadedScenario') as
       | LoadedScenarioMetadata
       | undefined;
 
@@ -230,9 +238,35 @@ function Table() {
     // reload, but `history.state` from the original GameSelect navigation
     // sticks around and would re-introduce the stale registry pluginId
     // here without this guard.
-    if (pluginIdFromState && !storedPluginId && !storedScenario) {
+    if (pluginIdFromState && !storedPluginId && !storedLoadedScenario) {
       console.log(`[Table] Storing pluginId in metadata: ${pluginIdFromState}`);
       store.metadata.set('pluginId', pluginIdFromState);
+    }
+
+    // New table arriving from main-screen "Load from local directory…":
+    // consume the stash and apply the local-dev plugin's assets + scenario.
+    if (localDevFromState && !storedLoadedScenario) {
+      const pending = consumePendingLocalPlugin();
+      if (pending) {
+        const metadata: LoadedScenarioMetadata = {
+          type: 'local-dev',
+          loadedAt: Date.now(),
+          scenarioName: pending.scenario.name,
+        };
+        loadScenarioContent(
+          store,
+          pending,
+          metadata,
+          '[Load Plugin]',
+          pending.pluginManifest.componentSets,
+          '', // Local plugins have no remote base URL
+          pending.blobUrls,
+        );
+      } else {
+        console.warn(
+          '[Table] localDev navigation state present but no pending local plugin; user likely reloaded the page',
+        );
+      }
     }
   }, [location.state, store, isStoreReady]);
 

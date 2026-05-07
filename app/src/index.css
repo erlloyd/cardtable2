@@ -1472,6 +1472,61 @@ h1 {
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* Load Plugin from Local Directory (dev affordance) */
+.local-plugin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  width: 100%;
+  color: rgba(255, 255, 255, 0.85);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+  animation: fade-up 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 220ms;
+}
+
+.local-plugin-button:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.local-plugin-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.7);
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.local-plugin-button__icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.local-plugin-button__label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.local-plugin-button__hint {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.02em;
+}
+
 /* Loading Skeleton */
 @keyframes skeleton-shimmer {
   0% {

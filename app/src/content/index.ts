@@ -343,6 +343,46 @@ export async function loadLocalPluginScenario(
   };
 }
 
+// ============================================================================
+// Pending Local Plugin Stash
+// ============================================================================
+
+/**
+ * Module-level stash for a local-dev plugin that has been loaded on the main
+ * screen but not yet applied to a table store.
+ *
+ * Flow:
+ *   1. Main screen: user picks a directory, `loadLocalPluginScenario()` returns
+ *      `LoadedLocalPluginContent`. Caller stashes it via
+ *      `setPendingLocalPlugin()` and navigates to a fresh table.
+ *   2. Table mount: reads `state.localDev`, calls `consumePendingLocalPlugin()`
+ *      to retrieve the stashed content, applies it to the store via
+ *      `loadScenarioContent`.
+ *
+ * The stash is single-shot — `consume` clears it. If no consumer arrives (e.g.
+ * navigation cancelled, page reload), the next caller of `setPendingLocalPlugin`
+ * overwrites it; on hard reload the module state is gone, so no leakage.
+ */
+let pendingLocalPlugin: LoadedLocalPluginContent | null = null;
+
+/**
+ * Stash a freshly loaded local-dev plugin's content for application by the
+ * table route on the next navigation.
+ */
+export function setPendingLocalPlugin(content: LoadedLocalPluginContent): void {
+  pendingLocalPlugin = content;
+}
+
+/**
+ * Retrieve and clear the stashed local-dev plugin content. Returns `null` if
+ * no plugin is pending.
+ */
+export function consumePendingLocalPlugin(): LoadedLocalPluginContent | null {
+  const content = pendingLocalPlugin;
+  pendingLocalPlugin = null;
+  return content;
+}
+
 /**
  * Find a blob URL for a given image path.
  *

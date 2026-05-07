@@ -18,14 +18,12 @@ import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
 import {
   loadPluginAssets,
   loadScenarioFromPlugin,
-  loadLocalPluginScenario,
   loadPlugin,
   type LoadedScenarioMetadata,
 } from '../content';
 import { loadScenarioContent } from '../content/loadScenarioHelper';
 import {
   ACTION_LOAD_SCENARIO_FAILED,
-  ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
   ACTION_LOAD_MARVELCHAMPIONS_FAILED,
 } from '../constants/errorIds';
 /**
@@ -542,49 +540,6 @@ export function registerDefaultActions(): void {
     execute: (ctx) => {
       if (ctx.onOpenComponentSets) {
         ctx.onOpenComponentSets();
-      }
-    },
-  });
-
-  // Content action: Load Plugin from Directory (Dev)
-  registry.register({
-    id: 'load-plugin-from-directory',
-    label: 'Load Plugin from Directory',
-    shortLabel: 'Load Plugin',
-    icon: '📁',
-    category: CONTENT_ACTIONS,
-    description:
-      'Load a plugin scenario from a local directory (development workflow)',
-    isAvailable: (ctx) => ctx.selection.count === 0,
-    execute: async (ctx) => {
-      try {
-        console.log('[Load Plugin] Opening directory picker...');
-        const content = await loadLocalPluginScenario();
-
-        // Store metadata for local-dev scenarios (cannot auto-reload)
-        const metadata: LoadedScenarioMetadata = {
-          type: 'local-dev',
-          loadedAt: Date.now(),
-          scenarioName: content.scenario.name,
-        };
-
-        loadScenarioContent(
-          ctx.store,
-          content,
-          metadata,
-          '[Load Plugin]',
-          content.pluginManifest.componentSets,
-          '', // Local plugins don't have a remote base URL
-          content.blobUrls,
-        );
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error('[Load Plugin] Failed to load plugin from directory', {
-          errorId: ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
-          error: errorMessage,
-        });
-        alert(`Failed to load plugin: ${errorMessage}`);
       }
     },
   });

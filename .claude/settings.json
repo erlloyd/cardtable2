@@ -1,4 +1,25 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(bd:*)",
+      "Bash(jq -r *)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:e2e)",
+      "Bash(pnpm format:check)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm run typecheck)",
+      "Bash(pnpm run test)",
+      "Bash(pnpm run test:e2e)",
+      "Bash(pnpm run lint)",
+      "Bash(pnpm run format:check)",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__plugin_playwright_playwright__browser_network_requests",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot"
+    ]
+  },
   "hooks": {
     "PreCompact": [
       {

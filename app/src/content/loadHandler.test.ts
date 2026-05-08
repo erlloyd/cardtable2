@@ -13,14 +13,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   GameAssets,
   LoadableEntry,
+  LoadableProviderSource,
   TableObject,
 } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import {
-  coerceProviderSourceToApiImport,
   handleLoadSelection,
-  setProviderInputProvider,
-  type ProviderInputProvider,
+  readProviderLabels,
+  setDeckInputProvider,
+  type DeckInputProvider,
 } from './loadHandler';
 import type * as ContentIndex from './index';
 import * as YjsActions from '../store/YjsActions';
@@ -42,7 +43,6 @@ vi.mock('./index', async () => {
           version: '1.0.0',
           assets: [],
           scenarios: [],
-          componentSets: [],
         },
       }),
     ),
@@ -335,60 +335,43 @@ describe('handleLoadSelection — additive + card-set', () => {
   });
 });
 
-describe('coerceProviderSourceToApiImport', () => {
-  it('translates the MC-style provider config into PluginApiImport', () => {
-    const result = coerceProviderSourceToApiImport({
+describe('readProviderLabels', () => {
+  it('returns labels when both required fields are present', () => {
+    const source: LoadableProviderSource = {
       kind: 'provider',
       module: 'deckImport.js',
       config: {
-        apiEndpoints: {
-          public: 'https://example.com/public/{deckId}',
-          private: 'https://example.com/private/{deckId}',
-        },
-        labels: {
-          siteName: 'TestDB',
-          inputPlaceholder: 'Enter deck ID',
-        },
+        labels: { siteName: 'TestDB', inputPlaceholder: 'Enter deck ID' },
       },
-    });
-    expect(result).toEqual({
-      apiEndpoints: {
-        public: 'https://example.com/public/{deckId}',
-        private: 'https://example.com/private/{deckId}',
-      },
-      parserModule: 'deckImport.js',
-      labels: {
-        siteName: 'TestDB',
-        inputPlaceholder: 'Enter deck ID',
-      },
+    };
+    expect(readProviderLabels(source)).toEqual({
+      siteName: 'TestDB',
+      inputPlaceholder: 'Enter deck ID',
     });
   });
 
-  it('omits the private endpoint when not declared', () => {
-    const result = coerceProviderSourceToApiImport({
-      kind: 'provider',
-      module: 'p.js',
-      config: {
-        apiEndpoints: { public: 'https://x/{deckId}' },
-        labels: { siteName: 'X', inputPlaceholder: 'p' },
-      },
-    });
-    expect(result).not.toBeNull();
-    expect(result?.apiEndpoints.private).toBeUndefined();
-  });
-
-  it('returns null when the config is missing required fields', () => {
+  it('returns null when labels are missing', () => {
     expect(
-      coerceProviderSourceToApiImport({
+      readProviderLabels({
         kind: 'provider',
         module: 'p.js',
-        config: { apiEndpoints: { public: 'https://x' } },
       }),
     ).toBeNull();
     expect(
-      coerceProviderSourceToApiImport({
+      readProviderLabels({
         kind: 'provider',
         module: 'p.js',
+        config: {},
+      }),
+    ).toBeNull();
+  });
+
+  it('returns null when one of the required label fields is empty', () => {
+    expect(
+      readProviderLabels({
+        kind: 'provider',
+        module: 'p.js',
+        config: { labels: { siteName: '', inputPlaceholder: 'x' } },
       }),
     ).toBeNull();
   });
@@ -409,18 +392,20 @@ describe('handleLoadSelection — additive + provider', () => {
     },
   };
 
-  let restoreProvider: ProviderInputProvider | null = null;
+  let restoreProvider: DeckInputProvider | null = null;
 
   afterEach(() => {
     if (restoreProvider) {
-      setProviderInputProvider(restoreProvider);
+      setDeckInputProvider(restoreProvider);
       restoreProvider = null;
     }
   });
 
-  it('coerces config, prompts the user, runs importFromApi, and offsets objects to viewport center', async () => {
+  it('reads labels, prompts the user, runs importFromApi, and offsets objects to viewport center', async () => {
     const store = makeStore({ pluginId: 'p', gameAssets: makeAssets() });
-    restoreProvider = setProviderInputProvider(() => Promise.resolve('12345'));
+    restoreProvider = setDeckInputProvider(() =>
+      Promise.resolve({ deckId: '12345', isPrivate: false }),
+    );
     const importSpy = vi
       .spyOn(DeckImportEngine, 'importFromApi')
       .mockResolvedValue({
@@ -451,8 +436,8 @@ describe('handleLoadSelection — additive + provider', () => {
     expect(importSpy).toHaveBeenCalledTimes(1);
     const call = importSpy.mock.calls[0][0];
     expect(call.deckId).toBe('12345');
-    expect(call.apiImport.parserModule).toBe('deckImport.js');
-    expect(call.apiImport.apiEndpoints.public).toBe('https://x/{deckId}');
+    expect(call.source.module).toBe('deckImport.js');
+    expect(call.source.config?.apiEndpoints?.public).toBe('https://x/{deckId}');
 
     // setObject should be called once with the translated position. Center
     // (500, 400), jitter ≤ 50 → final lands at (~510, ~420) ± jitter range.
@@ -467,7 +452,7 @@ describe('handleLoadSelection — additive + provider', () => {
 
   it('aborts when the user cancels the prompt', async () => {
     const store = makeStore({ pluginId: 'p', gameAssets: makeAssets() });
-    restoreProvider = setProviderInputProvider(() => Promise.resolve(null));
+    restoreProvider = setDeckInputProvider(() => Promise.resolve(null));
     const importSpy = vi.spyOn(DeckImportEngine, 'importFromApi');
 
     await handleLoadSelection(providerEntry, null, {
@@ -499,7 +484,9 @@ describe('handleLoadSelection — additive + provider', () => {
 
   it('alerts when importFromApi returns an error', async () => {
     const store = makeStore({ pluginId: 'p', gameAssets: makeAssets() });
-    restoreProvider = setProviderInputProvider(() => Promise.resolve('999'));
+    restoreProvider = setDeckInputProvider(() =>
+      Promise.resolve({ deckId: '999', isPrivate: false }),
+    );
     vi.spyOn(DeckImportEngine, 'importFromApi').mockResolvedValue({
       error: 'API returned 404',
     });

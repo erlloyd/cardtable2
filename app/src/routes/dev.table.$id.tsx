@@ -21,7 +21,10 @@ import type { TableObjectYMap } from '../store/types';
 import { registerDefaultActions } from '../actions/registerDefaultActions';
 import type { ActionContext } from '../actions/types';
 import { CommandPalette } from '../components/CommandPalette';
-import { ComponentSetModal } from '../components/ComponentSetModal';
+import {
+  DeckImportModal,
+  type DeckImportModalLabels,
+} from '../components/DeckImportModal';
 import {
   LoadPickerModal,
   type LoadPickerSelectHandler,
@@ -36,7 +39,11 @@ import {
   registerLoadablesActions,
   unregisterLoadablesActions,
 } from '../actions/registerDefaultActions';
-import { handleLoadSelection } from '../content/loadHandler';
+import {
+  handleLoadSelection,
+  setDeckInputProvider,
+  type DeckInputResult,
+} from '../content/loadHandler';
 import { getLoadableEntries } from '../content/loadablesRegistry';
 import type { LoadableEntry } from '@cardtable2/shared';
 
@@ -97,7 +104,23 @@ function DevTable() {
 
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
-  const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  /** See `routes/table.$id.tsx` — host-driven deck-import modal state. */
+  const [deckImport, setDeckImport] = useState<{
+    open: boolean;
+    labels: DeckImportModalLabels;
+    supportsPrivate: boolean;
+    loading: boolean;
+    error: string | null;
+  }>({
+    open: false,
+    labels: { siteName: '', inputPlaceholder: '' },
+    supportsPrivate: false,
+    loading: false,
+    error: null,
+  });
+  const deckImportResolveRef = useRef<
+    ((value: DeckInputResult | null) => void) | null
+  >(null);
   const [loadPicker, setLoadPicker] = useState<{
     open: boolean;
     presetType?: string;
@@ -198,13 +221,48 @@ function DevTable() {
     return unsubscribe;
   }, [store]);
 
-  const handleOpenComponentSets = useCallback(() => {
-    setComponentSetModalOpen(true);
-  }, []);
-
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker({ open: true, presetType });
   }, []);
+
+  // Register deck-input provider — see routes/table.$id.tsx for the full doc.
+  useEffect(() => {
+    const previous = setDeckInputProvider(
+      ({ labels, supportsPrivate }) =>
+        new Promise<DeckInputResult | null>((resolve) => {
+          deckImportResolveRef.current = resolve;
+          setDeckImport({
+            open: true,
+            labels,
+            supportsPrivate,
+            loading: false,
+            error: null,
+          });
+        }),
+    );
+    return () => {
+      setDeckInputProvider(previous);
+    };
+  }, []);
+
+  const handleDeckImportClose = useCallback(() => {
+    if (deckImportResolveRef.current) {
+      deckImportResolveRef.current(null);
+      deckImportResolveRef.current = null;
+    }
+    setDeckImport((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  const handleDeckImportSubmit = useCallback(
+    (deckId: string, isPrivate: boolean) => {
+      if (deckImportResolveRef.current) {
+        deckImportResolveRef.current({ deckId, isPrivate });
+        deckImportResolveRef.current = null;
+      }
+      setDeckImport((prev) => ({ ...prev, open: false }));
+    },
+    [],
+  );
 
   const handleCloseLoadPicker = useCallback(() => {
     setLoadPicker({ open: false });
@@ -254,7 +312,6 @@ function DevTable() {
       gridSnapEnabled,
       setGridSnapEnabled,
       undefined,
-      handleOpenComponentSets,
       handleOpenLoadPicker,
     );
   }, [
@@ -264,7 +321,6 @@ function DevTable() {
     id,
     gridSnapEnabled,
     setGridSnapEnabled,
-    handleOpenComponentSets,
     handleOpenLoadPicker,
   ]);
 
@@ -403,15 +459,17 @@ function DevTable() {
         context={actionContext}
       />
 
-      {/* Component Set Modal */}
-      {store && (
-        <ComponentSetModal
-          isOpen={componentSetModalOpen}
-          onClose={() => setComponentSetModalOpen(false)}
-          store={store}
-          gameAssets={null}
-        />
-      )}
+      {/* Deck Import Modal — opened by the loadHandler's provider branch via
+          the registered deckInputProvider. */}
+      <DeckImportModal
+        isOpen={deckImport.open}
+        onClose={handleDeckImportClose}
+        onSubmit={handleDeckImportSubmit}
+        labels={deckImport.labels}
+        supportsPrivate={deckImport.supportsPrivate}
+        loading={deckImport.loading}
+        error={deckImport.error}
+      />
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal

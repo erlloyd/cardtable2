@@ -29,7 +29,6 @@ import {
   namespaceCardCode,
   instantiateScenario,
 } from './instantiate';
-import { setComponentSetEntries } from './componentSetRegistry';
 import { setLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 import {
   loadAllPlugins,
@@ -210,33 +209,23 @@ export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
   const packs = await loadAssetPacks(packUrls);
   const assets = mergeAssetPacks(packs, baseUrl);
 
-  // Populate the component-set registry from the plugin manifest. The Load
-  // Components modal reads from this registry at click time. Before this
-  // line existed the registry was only populated by `loadScenarioContent`
-  // (called when a user explicitly loaded a scenario), so a user navigating
-  // to a fresh table — which now eagerly loads plugin assets without auto-
-  // loading a scenario (ct-4wk) — saw an empty modal. Calling this here
-  // makes any plugin-load path populate the registry idempotently;
-  // subsequent scenario loads pass the same data through the same setter,
-  // so no duplication concerns.
-  if (
-    plugin.manifest.componentSets &&
-    plugin.manifest.componentSets.length > 0
-  ) {
-    setComponentSetEntries(
-      plugin.manifest.componentSets,
-      plugin.registry.baseUrl,
-    );
-  }
-
   // Populate the loadables registry from the plugin manifest. Static and
   // provider sources pass through; asset-pack-derived sources are materialized
   // here against the merged `assets` so consumers receive a uniform list of
   // resolved items. Clear unconditionally first so a plugin-switch to a plugin
   // with no loadables doesn't leak the previous plugin's entries. See ct-8gf.2.
+  //
+  // The plugin's `baseUrl` is also recorded on the registry so deck-import
+  // provider sources can resolve their parser-module path against the right
+  // origin (registered plugins use HTTP; local-dev plugins replace this via
+  // `loadScenarioContent` with a blob-URL map at navigation time).
   clearLoadableEntries();
   if (plugin.manifest.loadables && plugin.manifest.loadables.length > 0) {
-    setLoadableEntries(plugin.manifest.loadables, assets);
+    setLoadableEntries(
+      plugin.manifest.loadables,
+      assets,
+      plugin.registry.baseUrl,
+    );
   }
 
   return assets;

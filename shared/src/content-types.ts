@@ -262,46 +262,6 @@ export interface ComponentSet {
 }
 
 // ============================================================================
-// Plugin API Import Types
-// ============================================================================
-
-/** Configuration for API-backed deck import in a plugin */
-export interface PluginApiImport {
-  apiEndpoints: {
-    public: string; // URL template with {deckId} placeholder
-    private?: string; // Optional private deck endpoint
-  };
-  parserModule: string; // Filename of the parser JS (e.g., "deckImport.js")
-  labels: {
-    siteName: string; // Display name (e.g., "MarvelCDB")
-    inputPlaceholder: string; // Input field placeholder text
-  };
-}
-
-/** A static component set entry — pure JSON, no code required */
-export interface StaticComponentSetEntry extends ComponentSet {
-  id: string; // Unique identifier for this component set
-  name: string; // Display name shown in UI
-}
-
-/** An API-backed component set entry — requires parser JS */
-export interface ApiComponentSetEntry {
-  id: string; // Unique identifier
-  name: string; // Display name shown in UI
-  apiImport: PluginApiImport; // API import configuration
-}
-
-/** Discriminated union of static and API component set entries */
-export type ComponentSetEntry = StaticComponentSetEntry | ApiComponentSetEntry;
-
-/** Type guard: is this entry API-backed? */
-export function isApiComponentSetEntry(
-  entry: ComponentSetEntry,
-): entry is ApiComponentSetEntry {
-  return 'apiImport' in entry;
-}
-
-// ============================================================================
 // Loadables (plugin-declared content the host can load on demand)
 // ============================================================================
 // A "loadable" is any unit of content a plugin makes available beyond the
@@ -343,14 +303,48 @@ export interface LoadableStaticSource<TData = unknown> {
 }
 
 /**
- * Provider-backed source: declares an action (e.g. apiImport) whose runtime
- * module produces items dynamically. Mirrors `ApiComponentSetEntry`'s shape;
- * see ct-8gf.1 follow-up on whether to consolidate.
+ * Endpoint URLs for a provider source's HTTP fetch step. The `public` template
+ * is mandatory (the provider always needs a way to fetch a deck); `private` is
+ * optional and only used when the user opts in to a private-deck flow.
+ *
+ * `{deckId}` is substituted at runtime with the user-supplied identifier.
+ */
+export interface LoadableProviderApiEndpoints {
+  public: string; // URL template with {deckId} placeholder
+  private?: string; // Optional private-deck endpoint
+}
+
+/**
+ * Display labels driving the provider's input modal — site name shown in the
+ * modal header, placeholder text shown in the input field. Plugins ship these
+ * inline so the host stays game-agnostic.
+ */
+export interface LoadableProviderLabels {
+  siteName: string; // e.g. "MarvelCDB"
+  inputPlaceholder: string; // e.g. "Enter deck ID (e.g., 12345)"
+}
+
+/**
+ * Provider-source config: everything the host needs to drive the provider's
+ * input modal + HTTP fetch + worker parse. Each field is optional at the
+ * shared-schema layer so older manifests still validate; the runtime warns
+ * (and aborts the import) when a provider is invoked with incomplete config.
+ */
+export interface LoadableProviderConfig {
+  apiEndpoints?: LoadableProviderApiEndpoints;
+  labels?: LoadableProviderLabels;
+}
+
+/**
+ * Provider-backed source: declares a parser/provider JS module whose runtime
+ * function fetches and materializes items dynamically. The host opens a
+ * deck-import modal driven by `config.labels`, fetches via
+ * `config.apiEndpoints`, and runs the parser in a Web Worker sandbox.
  */
 export interface LoadableProviderSource {
   kind: 'provider';
   module: string; // Path (relative to plugin baseUrl) to parser/provider JS
-  config?: Record<string, unknown>; // Provider-specific configuration
+  config?: LoadableProviderConfig;
 }
 
 /**

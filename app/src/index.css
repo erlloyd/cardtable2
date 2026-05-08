@@ -1882,117 +1882,95 @@ h1 {
   background-color: #4b5563;
 }
 
-/* Component Set Modal Styles */
-.cs-modal-dialog {
-  position: relative;
-  z-index: 50;
-}
-
-.cs-modal-backdrop {
+/* Deck Import Modal (ct-qbn) — modal for entering a deck-import provider's
+ * input (deck id + optional private flag). Replaces the legacy ComponentSet
+ * modal's selectedApiEntry detail view; same visual language as Load Picker
+ * (glass-morphism panel, blurred backdrop), portaled to document.body to
+ * escape ancestor backdrop-filter containing-blocks (CLAUDE.md memory). */
+.deck-import-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.cs-modal-container {
-  position: fixed;
-  inset: 0;
-  overflow-y: auto;
-}
-
-.cs-modal-wrapper {
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
   display: flex;
-  min-height: 100%;
   align-items: flex-start;
   justify-content: center;
   padding: 1rem;
-  padding-top: 20vh;
+  padding-top: 18vh;
 }
 
-.cs-modal-panel {
+.deck-import-panel {
   width: 100%;
   max-width: 28rem;
   border-radius: 0.75rem;
-  background-color: #111827;
-  padding: 1.5rem;
+  background-color: rgba(17, 24, 39, 0.95);
+  padding: 1.25rem 1.5rem;
   box-shadow:
-    0 20px 25px -5px rgb(0 0 0 / 0.3),
+    0 20px 25px -5px rgb(0 0 0 / 0.4),
     0 8px 10px -6px rgb(0 0 0 / 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.cs-modal-title {
+.deck-import-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.deck-import-title {
   font-size: 1.125rem;
   font-weight: 500;
   color: white;
-  margin-bottom: 1rem;
 }
 
-.cs-modal-error {
-  margin-bottom: 1rem;
+.deck-import-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: color 0.15s;
+}
+
+.deck-import-close:hover:not(:disabled) {
+  color: white;
+}
+
+.deck-import-close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.deck-import-error {
   border-radius: 0.5rem;
   background-color: rgba(127, 29, 29, 0.5);
   border: 1px solid rgba(185, 28, 28, 0.7);
-  padding: 0.75rem;
+  padding: 0.625rem 0.75rem;
   font-size: 0.875rem;
   color: #fecaca;
 }
 
-.cs-modal-entry {
-  width: 100%;
-  text-align: left;
-  border-radius: 0.5rem;
-  background-color: #1f2937;
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  border: none;
-  transition: background-color 0.15s;
-}
-
-.cs-modal-entry:hover {
-  background-color: #374151;
-}
-
-.cs-modal-entry:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cs-modal-entry-name {
-  color: white;
-  font-weight: 500;
-}
-
-.cs-modal-entry-desc {
-  font-size: 0.875rem;
-  color: #9ca3af;
-}
-
-.cs-modal-back {
-  font-size: 0.875rem;
-  color: #9ca3af;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  margin-bottom: 0.75rem;
+.deck-import-body {
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.cs-modal-back:hover {
-  color: white;
-}
-
-.cs-modal-label {
+.deck-import-label {
   display: block;
   font-size: 0.875rem;
   color: #d1d5db;
-  margin-bottom: 0.25rem;
 }
 
-.cs-modal-input {
+.deck-import-input {
   width: 100%;
   border-radius: 0.5rem;
   background-color: #1f2937;
@@ -2001,57 +1979,56 @@ h1 {
   color: white;
   outline: none;
   box-sizing: border-box;
+  font-size: 0.95rem;
 }
 
-.cs-modal-input:focus {
+.deck-import-input:focus {
   border-color: #3b82f6;
 }
 
-.cs-modal-input::placeholder {
+.deck-import-input::placeholder {
   color: #6b7280;
 }
 
-.cs-modal-checkbox-label {
+.deck-import-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deck-import-checkbox-label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
   color: #d1d5db;
+  margin-top: 0.25rem;
 }
 
-.cs-modal-submit {
-  width: 100%;
+.deck-import-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.deck-import-submit {
   border-radius: 0.5rem;
   background-color: #2563eb;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.25rem;
   color: white;
   font-weight: 500;
   border: none;
   cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color 0.15s;
 }
 
-.cs-modal-submit:hover {
+.deck-import-submit:hover:not(:disabled) {
   background-color: #3b82f6;
 }
 
-.cs-modal-submit:disabled {
+.deck-import-submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.cs-modal-empty {
-  color: #9ca3af;
-  font-size: 0.875rem;
-  text-align: center;
-  padding: 1rem 0;
-}
-
-.cs-modal-space-y > * + * {
-  margin-top: 0.5rem;
-}
-
-.cs-modal-space-y-3 > * + * {
-  margin-top: 0.75rem;
 }
 
 /* Load Picker Modal (ct-8gf.4) — generic two-step "Load…" picker.

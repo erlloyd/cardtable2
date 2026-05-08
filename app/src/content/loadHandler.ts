@@ -7,21 +7,25 @@
  *   - additive + card         -> instantiate stack-of-1 at viewport center + jitter
  *   - additive + card-set     -> instantiate stack-of-N (one card per set entry)
  *                                at viewport center + jitter
- *   - additive + provider     -> not implemented in this iteration
+ *   - additive + provider     -> open the host's deck-import modal; on submit
+ *                                run `importFromApi` and drop the parsed objects
+ *                                at viewport center + jitter.
  *
  * All inputs come from `LoadPickerModal` (`onSelectItem`) and the table route
- * (`store`, `getViewportState`).  Pure async functions: no React state, no
+ * (`store`, `getViewportState`). Pure async functions: no React state, no
  * direct PixiJS access — viewport state is supplied by the caller via the
- * Promise the BoardHandle exposes.
+ * Promise the BoardHandle exposes; deck-input is collected via the
+ * `deckInputProvider` the route registers (the route mounts the
+ * `DeckImportModal` and resolves the promise on submit / cancel).
  */
 
 import {
   ObjectKind,
   type GameAssets,
   type LoadableEntry,
+  type LoadableProviderLabels,
   type LoadableProviderSource,
   type LoadableStaticItem,
-  type PluginApiImport,
   type Position,
   type TableObject,
 } from '@cardtable2/shared';
@@ -86,33 +90,39 @@ function pickCardSetName(data: unknown): string | null {
 /**
  * Async input collector for provider-source loadables.
  *
- * Defaults to a `window.prompt` modal — replace via `setProviderInputProvider`
- * for tests, or once a proper modal UI lands (tracked as a follow-up to
- * ct-c9u). Returning `null` aborts the import.
+ * The default implementation returns null (no UI), so callers MUST register
+ * their own provider via `setDeckInputProvider` before driving the provider
+ * branch — the table routes do this at mount time, supplying a callback that
+ * opens the `DeckImportModal` and resolves the promise on submit/cancel.
+ *
+ * Resolving with `null` aborts the import; a non-null value supplies the deck
+ * id (and the optional `isPrivate` flag).
  */
-export type ProviderInputProvider = (params: {
-  apiImport: PluginApiImport;
-  entry: LoadableEntry;
-}) => Promise<string | null>;
+export interface DeckInputResult {
+  deckId: string;
+  isPrivate: boolean;
+}
 
-let providerInputProvider: ProviderInputProvider = ({ apiImport }) => {
-  const message = `${apiImport.labels.siteName}: ${apiImport.labels.inputPlaceholder}`;
-  const result =
-    typeof window !== 'undefined' && typeof window.prompt === 'function'
-      ? window.prompt(message)
-      : null;
-  return Promise.resolve(result);
-};
+export type DeckInputProvider = (params: {
+  source: LoadableProviderSource;
+  labels: LoadableProviderLabels;
+  supportsPrivate: boolean;
+  entry: LoadableEntry;
+}) => Promise<DeckInputResult | null>;
+
+let deckInputProvider: DeckInputProvider = () => Promise.resolve(null);
 
 /**
- * Override the provider-input collector. Returns the previous provider so
- * callers (tests) can restore it. The default uses `window.prompt`.
+ * Override the deck-input collector. Returns the previous provider so callers
+ * (tests + route teardown) can restore it. The default returns `null`, which
+ * aborts the provider branch — the table route registers its modal-driven
+ * implementation at mount time.
  */
-export function setProviderInputProvider(
-  next: ProviderInputProvider,
-): ProviderInputProvider {
-  const previous = providerInputProvider;
-  providerInputProvider = next;
+export function setDeckInputProvider(
+  next: DeckInputProvider,
+): DeckInputProvider {
+  const previous = deckInputProvider;
+  deckInputProvider = next;
   return previous;
 }
 
@@ -123,64 +133,17 @@ export interface HandleLoadSelectionDeps {
 }
 
 /**
- * Coerce a {@link LoadableProviderSource}'s declared config + module path into
- * the {@link PluginApiImport} shape consumed by `importFromApi`.
- *
- * The Marvel Champions manifest declares both a legacy
- * `componentSets[].apiImport` block and the new `loadables[].source.config`
- * block — they currently mirror the same fields (`apiEndpoints`, `labels`).
- * This helper normalises the loadable side so the existing
- * `DeckImportEngine` runner can drive both. ct-u6q tracks consolidating
- * the two manifest shapes; until that lands, both code paths coexist.
- *
- * Returns `null` when the provider config does not have the expected shape
- * (caller should surface a friendly error).
+ * Read a {@link LoadableProviderSource}'s declared labels, returning `null`
+ * when required fields are missing (caller should surface a friendly error).
  */
-export function coerceProviderSourceToApiImport(
+export function readProviderLabels(
   source: LoadableProviderSource,
-): PluginApiImport | null {
-  const cfg = source.config ?? {};
-  const endpoints = cfg.apiEndpoints;
-  const labels = cfg.labels;
-
-  if (
-    endpoints === null ||
-    typeof endpoints !== 'object' ||
-    labels === null ||
-    typeof labels !== 'object'
-  ) {
+): LoadableProviderLabels | null {
+  const labels = source.config?.labels;
+  if (!labels || !labels.siteName || !labels.inputPlaceholder) {
     return null;
   }
-
-  const endpointObj = endpoints as { public?: unknown; private?: unknown };
-  const labelObj = labels as {
-    siteName?: unknown;
-    inputPlaceholder?: unknown;
-  };
-
-  if (
-    typeof endpointObj.public !== 'string' ||
-    typeof labelObj.siteName !== 'string' ||
-    typeof labelObj.inputPlaceholder !== 'string'
-  ) {
-    return null;
-  }
-
-  const apiImport: PluginApiImport = {
-    apiEndpoints: {
-      public: endpointObj.public,
-      ...(typeof endpointObj.private === 'string'
-        ? { private: endpointObj.private }
-        : {}),
-    },
-    parserModule: source.module,
-    labels: {
-      siteName: labelObj.siteName,
-      inputPlaceholder: labelObj.inputPlaceholder,
-    },
-  };
-
-  return apiImport;
+  return labels;
 }
 
 /**
@@ -297,10 +260,10 @@ export async function handleLoadSelection(
  * `LoadableProviderSource` declaration.
  *
  * Flow:
- *   1. coerce provider config → PluginApiImport (shared with the legacy
- *      `componentSets[].apiImport` runner)
- *   2. ask the host for the user's input (deck ID) via the configurable
- *      provider-input collector
+ *   1. validate provider config (apiEndpoints + labels)
+ *   2. ask the host for the user's input (deck ID + optional private flag)
+ *      via the configurable provider-input collector — the route registers a
+ *      modal-driven implementation at mount.
  *   3. run `importFromApi` (fetch → worker parse → resolve → instantiate)
  *   4. translate the engine's positions onto the live table at viewport
  *      center + jitter, generating fresh top sort keys
@@ -312,8 +275,9 @@ async function runProviderLoadable(
   source: LoadableProviderSource,
   deps: HandleLoadSelectionDeps,
 ): Promise<void> {
-  const apiImport = coerceProviderSourceToApiImport(source);
-  if (!apiImport) {
+  const labels = readProviderLabels(source);
+  const endpoints = source.config?.apiEndpoints;
+  if (!labels || !endpoints || !endpoints.public) {
     console.error(
       '[Load] Provider source missing required apiEndpoints/labels config',
       {
@@ -338,12 +302,17 @@ async function runProviderLoadable(
     return;
   }
 
-  let deckId: string | null;
+  let input: DeckInputResult | null;
   try {
-    deckId = await providerInputProvider({ apiImport, entry });
+    input = await deckInputProvider({
+      source,
+      labels,
+      supportsPrivate: typeof endpoints.private === 'string',
+      entry,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('[Load] Provider input collector failed', {
+    console.error('[Load] Deck input collector failed', {
       errorId: LOAD_ADDITIVE_FAILED,
       entryType: entry.type,
       error: message,
@@ -352,7 +321,7 @@ async function runProviderLoadable(
     return;
   }
 
-  if (deckId === null || deckId.trim() === '') {
+  if (input === null || input.deckId.trim() === '') {
     console.log('[Load] Provider import cancelled — no deck ID provided');
     return;
   }
@@ -371,9 +340,9 @@ async function runProviderLoadable(
   const placement = getViewportCenterPlacement(viewport);
 
   const result = await importFromApi({
-    deckId: deckId.trim(),
-    isPrivate: false,
-    apiImport,
+    deckId: input.deckId.trim(),
+    isPrivate: input.isPrivate,
+    source,
     gameAssets,
   });
 
@@ -381,7 +350,7 @@ async function runProviderLoadable(
     console.error('[Load] Provider import failed', {
       errorId: LOAD_ADDITIVE_FAILED,
       entryType: entry.type,
-      deckId,
+      deckId: input.deckId,
       error: result.error,
     });
     alert(`Failed to import deck: ${result.error}`);
@@ -395,7 +364,7 @@ async function runProviderLoadable(
   addObjectsAt(deps.store, result.objects, placement);
 
   console.log(
-    `[Load] Provider import complete: ${String(result.objectCount)} objects from deck ${deckId}`,
+    `[Load] Provider import complete: ${String(result.objectCount)} objects from deck ${input.deckId}`,
   );
 }
 
@@ -404,9 +373,7 @@ async function runProviderLoadable(
  *
  * Translates the engine's local layout origin to the supplied world-space
  * position and assigns top-of-stack sort keys so newly imported objects sit
- * above whatever's already on the table. Mirrors the helper in
- * `ComponentSetModal.tsx`; intentionally duplicated rather than shared so
- * the legacy and new paths can diverge if needed (see ct-u6q).
+ * above whatever's already on the table.
  */
 function addObjectsAt(
   store: YjsStore,
@@ -516,7 +483,6 @@ export async function loadScenarioByFile(
       content,
       metadata,
       '[Load Scenario]',
-      plugin.manifest.componentSets,
       plugin.registry.baseUrl,
       undefined,
       plugin.manifest.loadables,

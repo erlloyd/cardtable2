@@ -142,10 +142,11 @@ describe('registerLoadablesActions / per-type Load <X>… actions', () => {
     expect(ActionRegistry.getInstance().getAction('load-card')).toBeUndefined();
     // The generic Load… action stays.
     expect(ActionRegistry.getInstance().getAction('load')).toBeDefined();
-    // Builtin Load Components stays — id starts with `load-` but it was
-    // registered by registerDefaultActions, not by registerLoadablesActions.
+  });
+
+  it('does not register the legacy load-components action (ct-qbn)', () => {
     expect(
       ActionRegistry.getInstance().getAction('load-components'),
-    ).toBeDefined();
+    ).toBeUndefined();
   });
 });

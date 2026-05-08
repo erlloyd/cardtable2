@@ -51,7 +51,10 @@ import {
   type GameAssets,
   type LoadedScenarioMetadata,
 } from '../content';
-import { loadScenarioContent } from '../content/loadScenarioHelper';
+import {
+  setLoadableEntries,
+  clearLoadableEntries,
+} from '../content/loadablesRegistry';
 import {
   handleLoadSelection,
   setDeckInputProvider,
@@ -271,7 +274,9 @@ function Table() {
   // Two arrival paths from the main screen:
   //   - state.pluginId: registered plugin (loaded via loadPluginAssets on mount)
   //   - state.localDev: local-dev plugin already loaded into the
-  //     consumePendingLocalPlugin() stash; applied directly to the store here.
+  //     consumePendingLocalPlugin() stash; assets applied directly to the store
+  //     here (no scenario auto-load — the user picks one via the unified
+  //     "Load Scenario…" picker, matching registered-plugin UX; see ct-7kx).
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;
@@ -305,24 +310,41 @@ function Table() {
     }
 
     // New table arriving from main-screen "Load from local directory…":
-    // consume the stash and apply the local-dev plugin's assets + scenario.
+    // consume the stash and apply the local-dev plugin's assets + populate the
+    // loadables[] runtime registry. This deliberately does NOT instantiate a
+    // scenario — the table lands empty so the user can pick a scenario (or
+    // any other loadable) via the unified picker, matching the registered-
+    // plugin path. We also do NOT write `loadedScenario` metadata here since
+    // no scenario is loaded; that metadata is written by `loadScenarioContent`
+    // when the user later picks a scenario via the picker. See ct-7kx.
     if (localDevFromState && !storedLoadedScenario) {
       const pending = consumePendingLocalPlugin();
       if (pending) {
-        const metadata: LoadedScenarioMetadata = {
-          type: 'local-dev',
-          loadedAt: Date.now(),
-          scenarioName: pending.scenario.name,
-        };
-        loadScenarioContent(
-          store,
-          pending,
-          metadata,
-          '[Load Plugin]',
-          '', // Local plugins have no remote base URL
-          pending.blobUrls,
-          pending.pluginManifest.loadables,
+        console.log('[Load Plugin] Applying local-dev plugin assets:', {
+          pluginName: pending.pluginManifest.name,
+          cardCount: Object.keys(pending.content.cards).length,
+        });
+        store.setGameAssets(pending.content);
+        registerAttachmentActions(
+          ActionRegistry.getInstance(),
+          pending.content,
         );
+        // Populate the loadables registry so the picker UI / per-type Load
+        // commands surface the active local-dev plugin's items. Registered
+        // plugins do this inside `loadPluginAssets`; the local-dev path
+        // bypasses that, so we replicate it here. See ct-erb.
+        clearLoadableEntries();
+        if (
+          pending.pluginManifest.loadables &&
+          pending.pluginManifest.loadables.length > 0
+        ) {
+          setLoadableEntries(
+            pending.pluginManifest.loadables,
+            pending.content,
+            '', // Local plugins have no remote base URL
+            pending.blobUrls,
+          );
+        }
       } else {
         console.warn(
           '[Table] localDev navigation state present but no pending local plugin; user likely reloaded the page',

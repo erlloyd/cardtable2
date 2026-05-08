@@ -6,6 +6,8 @@ import {
   clearLoadableEntries,
   getLoadablesPluginBaseUrl,
   resolveParserModuleUrl,
+  getLoadablesOfType,
+  getStaticItems,
 } from './loadablesRegistry';
 
 function createGameAssets(overrides: Partial<GameAssets> = {}): GameAssets {
@@ -507,6 +509,134 @@ describe('loadablesRegistry', () => {
       clearLoadableEntries();
       expect(getLoadablesPluginBaseUrl()).toBe('');
       expect(resolveParserModuleUrl('x.js')).toBe('x.js');
+    });
+  });
+
+  describe('selectors', () => {
+    const scenarioEntry: LoadableEntry<{ file: string }> = {
+      type: 'scenario',
+      label: 'Scenario',
+      mode: 'replace',
+      source: {
+        kind: 'static',
+        items: [
+          { id: 's1', label: 'Scenario One', data: { file: 'one.json' } },
+          { id: 's2', label: 'Scenario Two', data: { file: 'two.json' } },
+        ],
+      },
+    };
+
+    const deckEntry: LoadableEntry = {
+      type: 'deck',
+      label: 'Deck',
+      mode: 'additive',
+      source: {
+        kind: 'provider',
+        module: 'deckImport.js',
+      },
+    };
+
+    const cardEntry: LoadableEntry = {
+      type: 'card',
+      label: 'Card',
+      mode: 'additive',
+      source: { kind: 'asset-pack-derived', derivation: 'all-cards' },
+    };
+
+    describe('getLoadablesOfType', () => {
+      it('returns entries whose type matches', () => {
+        const matched = getLoadablesOfType(
+          [scenarioEntry, deckEntry, cardEntry],
+          'scenario',
+        );
+        expect(matched).toHaveLength(1);
+        expect(matched[0]).toBe(scenarioEntry);
+      });
+
+      it('returns an empty array when no entry matches', () => {
+        const matched = getLoadablesOfType(
+          [scenarioEntry, deckEntry],
+          'encounter-set',
+        );
+        expect(matched).toEqual([]);
+      });
+
+      it('returns multiple entries when several share a type', () => {
+        // Plugins are free to declare two categories with the same `type`
+        // (e.g. two grouped scenario lists). The selector returns all of them
+        // so callers can decide whether to flatten or merge.
+        const second: LoadableEntry<{ file: string }> = {
+          ...scenarioEntry,
+          label: 'Scenario (Pack 2)',
+          source: {
+            kind: 'static',
+            items: [
+              { id: 's3', label: 'Scenario 3', data: { file: 'three.json' } },
+            ],
+          },
+        };
+        const matched = getLoadablesOfType(
+          [scenarioEntry, second, deckEntry],
+          'scenario',
+        );
+        expect(matched).toHaveLength(2);
+        expect(matched).toEqual([scenarioEntry, second]);
+      });
+
+      it('includes provider-source entries (no items, type still matches)', () => {
+        // Provider-source entries materialize items at action time, not at
+        // registry population. They should still surface in a type filter so
+        // call sites can detect "is there a deck loadable?" without inspecting
+        // each entry's source kind.
+        const matched = getLoadablesOfType([deckEntry, cardEntry], 'deck');
+        expect(matched).toEqual([deckEntry]);
+      });
+    });
+
+    describe('getStaticItems', () => {
+      it('flattens static items for the given type', () => {
+        const items = getStaticItems<{ file: string }>(
+          [scenarioEntry, deckEntry],
+          'scenario',
+        );
+        expect(items).toHaveLength(2);
+        expect(items.map((i) => i.data.file)).toEqual(['one.json', 'two.json']);
+      });
+
+      it('returns an empty array when the type is absent', () => {
+        const items = getStaticItems(
+          [scenarioEntry, deckEntry],
+          'encounter-set',
+        );
+        expect(items).toEqual([]);
+      });
+
+      it('includes asset-pack-derived items after registry materialization', () => {
+        // setLoadableEntries converts asset-pack-derived sources to static
+        // items; once materialized, getStaticItems returns them uniformly.
+        const assets = createGameAssets({
+          cards: {
+            '01001': makeCard('one.png', 'Hero'),
+          },
+        });
+        setLoadableEntries([cardEntry], assets);
+        const resolved = getLoadableEntries();
+        const items = getStaticItems<{ code: string }>(resolved, 'card');
+        expect(items).toHaveLength(1);
+        expect(items[0]).toEqual({
+          id: '01001',
+          label: 'Hero',
+          data: { code: '01001' },
+        });
+      });
+
+      it('skips provider-source entries (they have no items yet)', () => {
+        // Provider sources materialize at action time, not registry population.
+        // getStaticItems intentionally omits them rather than returning
+        // placeholder items.
+        const items = getStaticItems([deckEntry], 'deck');
+        expect(items).toEqual([]);
+      });
     });
   });
 });

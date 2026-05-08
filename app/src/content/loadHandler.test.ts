@@ -42,7 +42,6 @@ vi.mock('./index', async () => {
           name: 'Test',
           version: '1.0.0',
           assets: [],
-          scenarios: [],
         },
       }),
     ),

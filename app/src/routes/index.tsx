@@ -12,7 +12,7 @@ import {
   loadPluginRegistry,
   type PluginRegistryEntry,
 } from '../content/pluginLoader';
-import { loadLocalPluginScenario, setPendingLocalPlugin } from '../content';
+import { loadLocalPluginAssets, setPendingLocalPlugin } from '../content';
 import { ACTION_LOAD_PLUGIN_DIRECTORY_FAILED } from '../constants/errorIds';
 
 export const Route = createFileRoute('/')({
@@ -67,7 +67,7 @@ function GameSelect() {
 
   const handleLoadLocalDirectory = async () => {
     try {
-      const content = await loadLocalPluginScenario();
+      const content = await loadLocalPluginAssets();
       setPendingLocalPlugin(content);
 
       const tableId = uniqueNamesGenerator(nameConfig);

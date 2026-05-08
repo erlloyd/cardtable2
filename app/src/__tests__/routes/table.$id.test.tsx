@@ -8,8 +8,13 @@ import {
 } from '@tanstack/react-router';
 import { routeTree } from '../../routeTree.gen';
 import * as Y from 'yjs';
-import type { GameAssets } from '@cardtable2/shared';
+import type { GameAssets, LoadableEntry } from '@cardtable2/shared';
 import type * as ContentModule from '../../content';
+import { setPendingLocalPlugin } from '../../content';
+import {
+  getLoadableEntries,
+  clearLoadableEntries,
+} from '../../content/loadablesRegistry';
 
 // ---------------------------------------------------------------------------
 // Shared mock state (so tests can pre-set metadata before mount)
@@ -252,5 +257,90 @@ describe('Table Route', () => {
     // No setGameAssets either — the user must re-trigger Load Plugin from
     // Directory to populate them.
     expect(setGameAssetsMock).not.toHaveBeenCalled();
+  });
+
+  it('local-dev arrival applies assets + populates loadables registry, but does NOT load a scenario (ct-7kx)', async () => {
+    // Mirror the main-screen flow: user picks a local plugin directory,
+    // `loadLocalPluginAssets` returns a `LoadedLocalPluginContent`, the
+    // caller stashes it via `setPendingLocalPlugin`, then navigates with
+    // `state.localDev = true`. The table mount effect must:
+    //   - consume the stash
+    //   - call store.setGameAssets with the plugin's content
+    //   - populate the loadables[] runtime registry from the manifest
+    //   - NOT write `loadedScenario` metadata (no scenario was loaded)
+    //   - NOT call loadPluginAssets (no registered pluginId on this path)
+    clearLoadableEntries();
+
+    const loadables: LoadableEntry[] = [
+      {
+        type: 'scenario',
+        label: 'Scenario',
+        mode: 'replace',
+        source: {
+          kind: 'static',
+          items: [
+            {
+              id: 'local-scenario-a',
+              label: 'Local Scenario A',
+              data: { file: 'a.json' },
+            },
+          ],
+        },
+      },
+    ];
+
+    setPendingLocalPlugin({
+      content: emptyAssets,
+      pluginManifest: {
+        id: 'local-plugin',
+        name: 'Local Plugin',
+        version: '1.0.0',
+        assets: [],
+        scenarios: [],
+        loadables,
+      },
+      blobUrls: new Map(),
+    });
+
+    const memoryHistory = createMemoryHistory({ initialEntries: ['/'] });
+    const router = createRouter({
+      routeTree,
+      history: memoryHistory,
+      defaultPendingMinMs: 0,
+    });
+
+    await act(async () => {
+      render(<RouterProvider router={router} />);
+      await router.load();
+    });
+
+    await act(async () => {
+      await router.navigate({
+        to: '/table/$id',
+        params: { id: 'local-dev-fresh' },
+        state: { localDev: true } as Record<string, unknown>,
+      });
+    });
+
+    await screen.findByTestId('board');
+
+    // Assets applied to the store from the pending stash.
+    expect(setGameAssetsMock).toHaveBeenCalledTimes(1);
+    expect(setGameAssetsMock).toHaveBeenCalledWith(emptyAssets);
+
+    // No scenario was loaded — `loadedScenario` metadata stays empty.
+    expect(mockMetadata.get('loadedScenario')).toBeUndefined();
+    // Local-dev tables don't bind to a registered plugin, so pluginId is
+    // never set — the mount effect skips eager plugin asset loading.
+    expect(mockMetadata.get('pluginId')).toBeUndefined();
+    expect(loadPluginAssetsMock).not.toHaveBeenCalled();
+
+    // Loadables registry populated from the manifest so the unified picker /
+    // per-type Load commands surface this plugin's items (ct-erb).
+    const entries = getLoadableEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].type).toBe('scenario');
+
+    clearLoadableEntries();
   });
 });

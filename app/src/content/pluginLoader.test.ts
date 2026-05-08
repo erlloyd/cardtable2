@@ -6,8 +6,10 @@ import {
   loadPlugin,
   loadLocalPluginDirectory,
   getLocalPluginFile,
+  getPluginScenarioUrls,
   PluginNotFoundError,
   __resetPluginCacheForTests,
+  type LoadedPlugin,
   type PluginRegistry,
   type PluginManifest,
   type PluginRegistryEntry,
@@ -46,7 +48,23 @@ const mockManifest: PluginManifest = {
   version: '1.0.0',
   description: 'A test plugin manifest',
   assets: ['test-pack.json'],
-  scenarios: ['test-scenario.json'],
+  loadables: [
+    {
+      type: 'scenario',
+      label: 'Scenario',
+      mode: 'replace',
+      source: {
+        kind: 'static',
+        items: [
+          {
+            id: 'test-scenario',
+            label: 'Test Scenario',
+            data: { file: 'test-scenario.json' },
+          },
+        ],
+      },
+    },
+  ],
 };
 
 // ============================================================================
@@ -258,7 +276,6 @@ describe('loadPluginManifest', () => {
           name: 'Test',
           version: '1.0.0',
           assets: [],
-          scenarios: [],
         }),
     });
 
@@ -275,7 +292,6 @@ describe('loadPluginManifest', () => {
           id: 'test',
           version: '1.0.0',
           assets: [],
-          scenarios: [],
         }),
     });
 
@@ -292,7 +308,6 @@ describe('loadPluginManifest', () => {
           id: 'test',
           name: 'Test',
           assets: [],
-          scenarios: [],
         }),
     });
 
@@ -310,7 +325,6 @@ describe('loadPluginManifest', () => {
           name: 'Test',
           version: '1.0.0',
           assets: 'not an array',
-          scenarios: [],
         }),
     });
 
@@ -319,22 +333,41 @@ describe('loadPluginManifest', () => {
     ).rejects.toThrow('Invalid plugin manifest: assets must be an array');
   });
 
-  it('should throw when scenarios is not an array', async () => {
+  it('accepts a manifest without legacy scenarios[] (post-ct-kpa)', async () => {
+    // The legacy top-level `scenarios: string[]` field is gone — scenarios
+    // are sourced from `loadables[]` entries with `type: 'scenario'`.
+    // Confirms the validator no longer requires the dropped field.
+    const manifest = {
+      id: 'no-scenarios-field',
+      name: 'Loadables-Only Plugin',
+      version: '1.0.0',
+      assets: ['pack.json'],
+      loadables: [
+        {
+          type: 'scenario',
+          label: 'Scenario',
+          mode: 'replace',
+          source: {
+            kind: 'static',
+            items: [
+              {
+                id: 's1',
+                label: 'Scenario 1',
+                data: { file: 's1.json' },
+              },
+            ],
+          },
+        },
+      ],
+    };
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () =>
-        Promise.resolve({
-          id: 'test',
-          name: 'Test',
-          version: '1.0.0',
-          assets: [],
-          scenarios: 'not an array',
-        }),
+      json: () => Promise.resolve(manifest),
     });
 
-    await expect(
-      loadPluginManifest('https://example.com/plugin/'),
-    ).rejects.toThrow('Invalid plugin manifest: scenarios must be an array');
+    const result = await loadPluginManifest('https://example.com/plugin/');
+    expect(result.id).toBe('no-scenarios-field');
+    expect(result.loadables?.[0].type).toBe('scenario');
   });
 
   it('should accept optional description field', async () => {
@@ -842,7 +875,23 @@ describe('loadLocalPluginDirectory', () => {
       name: 'Local Test Plugin',
       version: '1.0.0',
       assets: ['asset1.json'],
-      scenarios: ['scenario1.json'],
+      loadables: [
+        {
+          type: 'scenario',
+          label: 'Scenario',
+          mode: 'replace',
+          source: {
+            kind: 'static',
+            items: [
+              {
+                id: 'scenario1',
+                label: 'Scenario 1',
+                data: { file: 'scenario1.json' },
+              },
+            ],
+          },
+        },
+      ],
     };
 
     const mockFiles = [
@@ -898,7 +947,23 @@ describe('loadLocalPluginDirectory', () => {
       name: 'Local Test Plugin',
       version: '1.0.0',
       assets: ['missing-asset.json', 'another-missing.json'],
-      scenarios: ['missing-scenario.json'],
+      loadables: [
+        {
+          type: 'scenario',
+          label: 'Scenario',
+          mode: 'replace',
+          source: {
+            kind: 'static',
+            items: [
+              {
+                id: 'missing-scenario',
+                label: 'Missing Scenario',
+                data: { file: 'missing-scenario.json' },
+              },
+            ],
+          },
+        },
+      ],
     };
 
     const mockFiles = [
@@ -988,5 +1053,72 @@ describe('getLocalPluginFile', () => {
     await expect(getLocalPluginFile(plugin, 'error.json')).rejects.toThrow(
       'File read failed',
     );
+  });
+});
+
+// ============================================================================
+// getPluginScenarioUrls (post-ct-kpa: sources scenarios from loadables[])
+// ============================================================================
+
+describe('getPluginScenarioUrls', () => {
+  function makePlugin(loadables: PluginManifest['loadables']): LoadedPlugin {
+    return {
+      registry: mockRegistryEntry,
+      manifest: {
+        id: 'test-plugin',
+        name: 'Test Plugin',
+        version: '1.0.0',
+        assets: [],
+        loadables,
+      },
+    };
+  }
+
+  it('builds URLs from the scenario loadable items (no legacy scenarios[] field)', () => {
+    const plugin = makePlugin([
+      {
+        type: 'scenario',
+        label: 'Scenario',
+        mode: 'replace',
+        source: {
+          kind: 'static',
+          items: [
+            {
+              id: 's1',
+              label: 'Scenario 1',
+              data: { file: 'scenarios/one.json' },
+            },
+            {
+              id: 's2',
+              label: 'Scenario 2',
+              data: { file: 'scenarios/two.json' },
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(getPluginScenarioUrls(plugin)).toEqual([
+      'https://example.com/plugins/test-plugin/scenarios/one.json',
+      'https://example.com/plugins/test-plugin/scenarios/two.json',
+    ]);
+  });
+
+  it('returns an empty array when no scenario loadable is declared', () => {
+    const plugin = makePlugin([
+      {
+        type: 'deck',
+        label: 'Deck',
+        mode: 'additive',
+        source: { kind: 'provider', module: 'deckImport.js' },
+      },
+    ]);
+
+    expect(getPluginScenarioUrls(plugin)).toEqual([]);
+  });
+
+  it('returns an empty array when loadables is undefined', () => {
+    const plugin = makePlugin(undefined);
+    expect(getPluginScenarioUrls(plugin)).toEqual([]);
   });
 });

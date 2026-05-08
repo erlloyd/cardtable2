@@ -296,7 +296,6 @@ describe('Table Route', () => {
         name: 'Local Plugin',
         version: '1.0.0',
         assets: [],
-        scenarios: [],
         loadables,
       },
       blobUrls: new Map(),

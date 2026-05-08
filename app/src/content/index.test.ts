@@ -385,7 +385,6 @@ describe('loadScenarioFromPlugin', () => {
     name: 'Test Plugin',
     version: '1.0.0',
     assets: ['pack-a.json', 'pack-b.json'],
-    scenarios: ['scenario-1.json'],
   };
 
   const scenarioJson: Scenario = {
@@ -616,8 +615,25 @@ describe('loadLocalPluginAssets', () => {
       assets: ['core.json'],
       // Manifest declares a scenario file (and one is shipped in the
       // directory below) — this loader must ignore it post-ct-7kx. The user
-      // picks a scenario later via the unified picker.
-      scenarios: ['scenario-1.json'],
+      // picks a scenario later via the unified picker. Post-ct-kpa, scenarios
+      // are declared as loadables[] entries rather than a top-level array.
+      loadables: [
+        {
+          type: 'scenario',
+          label: 'Scenario',
+          mode: 'replace',
+          source: {
+            kind: 'static',
+            items: [
+              {
+                id: 'scenario-1',
+                label: 'Scenario 1',
+                data: { file: 'scenario-1.json' },
+              },
+            ],
+          },
+        },
+      ],
     };
 
     const assetPack = {
@@ -699,7 +715,6 @@ describe('loadLocalPluginAssets', () => {
       name: 'Empty Plugin',
       version: '0.1.0',
       assets: [],
-      scenarios: [],
     };
     const files = [fakeFile('index.json', JSON.stringify(manifest))];
 

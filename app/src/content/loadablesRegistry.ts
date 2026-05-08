@@ -99,6 +99,61 @@ export function clearLoadableEntries(): void {
   currentBlobUrls = new Map();
 }
 
+// ============================================================================
+// Selectors
+// ============================================================================
+// Filtering loadables[] by `type` (e.g. "scenario", "deck") is a recurring
+// pattern: pluginLoader builds scenario URLs from the entries with
+// `type === 'scenario'`; future call sites (picker pre-selection, action
+// wiring) will want the same shape. Centralizing the filter keeps the
+// shared/content-types invariants in one place rather than reimplementing
+// `entries.filter(e => e.type === ...)` throughout.
+
+/**
+ * Return the subset of loadable entries whose `type` matches.
+ *
+ * Includes provider-source and asset-pack-derived entries — those have no
+ * static `items` themselves but are still relevant to the type-level filter
+ * (e.g. counting how many "scenario" categories a plugin exposes).
+ *
+ * For materialized item access, see {@link getStaticItems}.
+ */
+export function getLoadablesOfType(
+  entries: LoadableEntry[],
+  type: string,
+): LoadableEntry[] {
+  return entries.filter((entry) => entry.type === type);
+}
+
+/**
+ * Flatten the static items across every entry of the given `type`.
+ *
+ * `setLoadableEntries` materializes asset-pack-derived sources into static
+ * items at population time, so this selector returns items uniformly for
+ * both `static` and `asset-pack-derived` declarations once the registry has
+ * been populated. Provider-source entries contribute no items here — call
+ * {@link getLoadablesOfType} if you need to discover provider categories.
+ *
+ * The generic `TData` lets callers narrow the per-item payload shape (e.g.
+ * scenarios pin `{ file: string }`).
+ */
+export function getStaticItems<TData = unknown>(
+  entries: LoadableEntry[],
+  type: string,
+): LoadableStaticItem<TData>[] {
+  const items: LoadableStaticItem<TData>[] = [];
+  for (const entry of entries) {
+    if (entry.type !== type) continue;
+    if (entry.source.kind !== 'static') continue;
+    // After resolveEntry, asset-pack-derived sources are converted to static.
+    // The shared schema types `items` as `LoadableStaticItem<unknown>` because
+    // the discriminator carries no per-type narrowing; the generic narrows it
+    // for callers who know the per-type shape.
+    items.push(...(entry.source.items as LoadableStaticItem<TData>[]));
+  }
+  return items;
+}
+
 function resolveEntry(
   entry: LoadableEntry,
   gameAssets: GameAssets,

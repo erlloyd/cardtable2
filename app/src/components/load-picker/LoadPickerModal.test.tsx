@@ -83,17 +83,45 @@ describe('LoadPickerModal', () => {
     expect(screen.getByText('No items match')).toBeInTheDocument();
   });
 
-  it('shows action UI for provider-source types', async () => {
-    const { user } = renderPicker();
+  it('auto-fires for provider-source types and closes the modal (ct-yj2)', async () => {
+    const { onSelectItem, onClose, user } = renderPicker();
     await user.click(screen.getByText('Deck (from MarvelCDB)'));
 
+    // No intermediate "Run import…" UI is rendered.
     expect(
-      screen.getByRole('button', { name: 'Run import…' }),
-    ).toBeInTheDocument();
-    // No search field on provider step
-    expect(screen.queryByLabelText('Search items')).not.toBeInTheDocument();
-    // Module path surfaced
-    expect(screen.getByText('parsers/marvelcdb-deck.js')).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Run import…' }),
+    ).not.toBeInTheDocument();
+
+    // Selection fired with a null item; modal asked to close.
+    expect(onSelectItem).toHaveBeenCalledTimes(1);
+    const [entry, item] = onSelectItem.mock.calls[0];
+    expect(entry.type).toBe('deck');
+    expect(item).toBeNull();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('auto-fires for provider-source presetType without rendering action UI (ct-yj2)', () => {
+    const onSelectItem = vi.fn<LoadPickerSelectHandler>();
+    const onClose = vi.fn<() => void>();
+    render(
+      <LoadPickerModal
+        open={true}
+        onClose={onClose}
+        loadables={FIXTURE_LOADABLES}
+        presetType="deck"
+        onSelectItem={onSelectItem}
+        resolveDerivedItems={fixtureResolveDerivedItems}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Run import…' }),
+    ).not.toBeInTheDocument();
+    expect(onSelectItem).toHaveBeenCalledTimes(1);
+    const [entry, item] = onSelectItem.mock.calls[0];
+    expect(entry.type).toBe('deck');
+    expect(item).toBeNull();
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('presetType skips step 1 and renders step 2 directly', () => {
@@ -122,17 +150,6 @@ describe('LoadPickerModal', () => {
       label: 'Klaw',
       data: { file: 'scenarios/klaw.json' },
     });
-  });
-
-  it('clicking "Run import…" invokes onSelectItem with entry + null item', async () => {
-    const { onSelectItem, user } = renderPicker();
-    await user.click(screen.getByText('Deck (from MarvelCDB)'));
-    await user.click(screen.getByRole('button', { name: 'Run import…' }));
-
-    expect(onSelectItem).toHaveBeenCalledTimes(1);
-    const [entry, item] = onSelectItem.mock.calls[0];
-    expect(entry.type).toBe('deck');
-    expect(item).toBeNull();
   });
 
   it('Esc closes the modal', async () => {

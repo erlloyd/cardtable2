@@ -4,6 +4,8 @@ import {
   setLoadableEntries,
   getLoadableEntries,
   clearLoadableEntries,
+  getLoadablesPluginBaseUrl,
+  resolveParserModuleUrl,
 } from './loadablesRegistry';
 
 function createGameAssets(overrides: Partial<GameAssets> = {}): GameAssets {
@@ -65,7 +67,9 @@ describe('loadablesRegistry', () => {
       source: {
         kind: 'provider',
         module: 'deckImport.js',
-        config: { siteName: 'MarvelCDB' },
+        config: {
+          labels: { siteName: 'MarvelCDB', inputPlaceholder: 'Deck ID' },
+        },
       },
     };
 
@@ -76,7 +80,9 @@ describe('loadablesRegistry', () => {
     expect(resolved[0].source).toEqual({
       kind: 'provider',
       module: 'deckImport.js',
-      config: { siteName: 'MarvelCDB' },
+      config: {
+        labels: { siteName: 'MarvelCDB', inputPlaceholder: 'Deck ID' },
+      },
     });
   });
 
@@ -450,5 +456,57 @@ describe('loadablesRegistry', () => {
 
     clearLoadableEntries();
     expect(getLoadableEntries()).toEqual([]);
+  });
+
+  describe('parser module URL resolution (ct-qbn)', () => {
+    it('records and returns the plugin base URL', () => {
+      setLoadableEntries([], createGameAssets(), 'https://example.com/plugin/');
+      expect(getLoadablesPluginBaseUrl()).toBe('https://example.com/plugin/');
+    });
+
+    it('returns empty plugin base URL when none supplied', () => {
+      setLoadableEntries([], createGameAssets());
+      expect(getLoadablesPluginBaseUrl()).toBe('');
+    });
+
+    it('resolves a parser-module path against the plugin base URL', () => {
+      setLoadableEntries([], createGameAssets(), 'https://example.com/plugin/');
+      expect(resolveParserModuleUrl('deckImport.js')).toBe(
+        'https://example.com/plugin/deckImport.js',
+      );
+    });
+
+    it('prefers a blob URL when the filename is in the local-plugin map', () => {
+      const blobUrls = new Map<string, string>([
+        ['deckImport.js', 'blob:mock-deck-import'],
+      ]);
+      setLoadableEntries(
+        [],
+        createGameAssets(),
+        'https://example.com/plugin/',
+        blobUrls,
+      );
+      // Local-plugin blob takes precedence even when a baseUrl is set.
+      expect(resolveParserModuleUrl('deckImport.js')).toBe(
+        'blob:mock-deck-import',
+      );
+    });
+
+    it('returns the bare filename when no baseUrl or blob is registered', () => {
+      setLoadableEntries([], createGameAssets());
+      expect(resolveParserModuleUrl('deckImport.js')).toBe('deckImport.js');
+    });
+
+    it('clearLoadableEntries resets the baseUrl + blob map', () => {
+      setLoadableEntries(
+        [],
+        createGameAssets(),
+        'https://example.com/plugin/',
+        new Map([['x.js', 'blob:x']]),
+      );
+      clearLoadableEntries();
+      expect(getLoadablesPluginBaseUrl()).toBe('');
+      expect(resolveParserModuleUrl('x.js')).toBe('x.js');
+    });
   });
 });

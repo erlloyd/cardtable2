@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { importFromApi } from './DeckImportEngine';
-import type { GameAssets, PluginApiImport } from '@cardtable2/shared';
+import type { GameAssets, LoadableProviderSource } from '@cardtable2/shared';
 
 const mockGameAssets: GameAssets = {
   packs: [],
@@ -19,15 +19,18 @@ const mockGameAssets: GameAssets = {
   iconTypes: {},
 };
 
-const mockApiImport: PluginApiImport = {
-  apiEndpoints: {
-    public: 'https://example.com/api/decklist/{deckId}',
-    private: 'https://example.com/api/deck/{deckId}',
-  },
-  parserModule: 'deckImport.js',
-  labels: {
-    siteName: 'TestDB',
-    inputPlaceholder: 'Enter deck ID',
+const mockProviderSource: LoadableProviderSource = {
+  kind: 'provider',
+  module: 'deckImport.js',
+  config: {
+    apiEndpoints: {
+      public: 'https://example.com/api/decklist/{deckId}',
+      private: 'https://example.com/api/deck/{deckId}',
+    },
+    labels: {
+      siteName: 'TestDB',
+      inputPlaceholder: 'Enter deck ID',
+    },
   },
 };
 
@@ -44,8 +47,7 @@ describe('importFromApi', () => {
     await importFromApi({
       deckId: '12345',
       isPrivate: false,
-      apiImport: mockApiImport,
-
+      source: mockProviderSource,
       gameAssets: mockGameAssets,
     });
 
@@ -62,8 +64,7 @@ describe('importFromApi', () => {
     await importFromApi({
       deckId: '12345',
       isPrivate: true,
-      apiImport: mockApiImport,
-
+      source: mockProviderSource,
       gameAssets: mockGameAssets,
     });
 
@@ -71,10 +72,13 @@ describe('importFromApi', () => {
   });
 
   it('should fall back to public URL when private not available', async () => {
-    const apiImportNoPrivate: PluginApiImport = {
-      ...mockApiImport,
-      apiEndpoints: {
-        public: 'https://example.com/api/decklist/{deckId}',
+    const sourceNoPrivate: LoadableProviderSource = {
+      ...mockProviderSource,
+      config: {
+        ...mockProviderSource.config,
+        apiEndpoints: {
+          public: 'https://example.com/api/decklist/{deckId}',
+        },
       },
     };
 
@@ -85,14 +89,32 @@ describe('importFromApi', () => {
     await importFromApi({
       deckId: '12345',
       isPrivate: true,
-      apiImport: apiImportNoPrivate,
-
+      source: sourceNoPrivate,
       gameAssets: mockGameAssets,
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
       'https://example.com/api/decklist/12345',
     );
+  });
+
+  it('should return error when apiEndpoints config is missing', async () => {
+    const noConfig: LoadableProviderSource = {
+      kind: 'provider',
+      module: 'deckImport.js',
+    };
+
+    const result = await importFromApi({
+      deckId: '12345',
+      isPrivate: false,
+      source: noConfig,
+      gameAssets: mockGameAssets,
+    });
+
+    expect('error' in result).toBe(true);
+    if ('error' in result) {
+      expect(result.error).toContain('apiEndpoints.public');
+    }
   });
 
   it('should return error on network failure', async () => {
@@ -103,8 +125,7 @@ describe('importFromApi', () => {
     const result = await importFromApi({
       deckId: '12345',
       isPrivate: false,
-      apiImport: mockApiImport,
-
+      source: mockProviderSource,
       gameAssets: mockGameAssets,
     });
 
@@ -122,8 +143,7 @@ describe('importFromApi', () => {
     const result = await importFromApi({
       deckId: '99999',
       isPrivate: false,
-      apiImport: mockApiImport,
-
+      source: mockProviderSource,
       gameAssets: mockGameAssets,
     });
 
@@ -144,8 +164,7 @@ describe('importFromApi', () => {
     const result = await importFromApi({
       deckId: '12345',
       isPrivate: false,
-      apiImport: mockApiImport,
-
+      source: mockProviderSource,
       gameAssets: mockGameAssets,
     });
 

@@ -68,8 +68,10 @@ export const FIXTURE_LOADABLES: LoadableEntry[] = [
       kind: 'provider',
       module: 'parsers/marvelcdb-deck.js',
       config: {
-        siteName: 'MarvelCDB',
-        inputPlaceholder: 'Deck ID (e.g. 12345)',
+        labels: {
+          siteName: 'MarvelCDB',
+          inputPlaceholder: 'Deck ID (e.g. 12345)',
+        },
       },
     },
   },

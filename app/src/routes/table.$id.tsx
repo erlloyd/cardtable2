@@ -32,7 +32,10 @@ import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
-import { ComponentSetModal } from '../components/ComponentSetModal';
+import {
+  DeckImportModal,
+  type DeckImportModalLabels,
+} from '../components/DeckImportModal';
 import {
   LoadPickerModal,
   type LoadPickerSelectHandler,
@@ -49,7 +52,11 @@ import {
   type LoadedScenarioMetadata,
 } from '../content';
 import { loadScenarioContent } from '../content/loadScenarioHelper';
-import { handleLoadSelection } from '../content/loadHandler';
+import {
+  handleLoadSelection,
+  setDeckInputProvider,
+  type DeckInputResult,
+} from '../content/loadHandler';
 import { getLoadableEntries } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
@@ -94,7 +101,30 @@ function Table() {
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
-  const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  /**
+   * Deck-import modal state. The modal is host-driven: `loadHandler` calls
+   * `deckInputProvider`, which we register on mount to resolve the modal's
+   * promise on submit/cancel. We retain `labels` + `supportsPrivate` so the
+   * modal renders the right copy for whichever provider triggered it; the
+   * `resolve` ref is held mutably so submit / dismiss can complete the
+   * outstanding promise without re-rendering.
+   */
+  const [deckImport, setDeckImport] = useState<{
+    open: boolean;
+    labels: DeckImportModalLabels;
+    supportsPrivate: boolean;
+    loading: boolean;
+    error: string | null;
+  }>({
+    open: false,
+    labels: { siteName: '', inputPlaceholder: '' },
+    supportsPrivate: false,
+    loading: false,
+    error: null,
+  });
+  const deckImportResolveRef = useRef<
+    ((value: DeckInputResult | null) => void) | null
+  >(null);
   const [loadPicker, setLoadPicker] = useState<{
     open: boolean;
     presetType?: string;
@@ -289,7 +319,6 @@ function Table() {
           pending,
           metadata,
           '[Load Plugin]',
-          pending.pluginManifest.componentSets,
           '', // Local plugins have no remote base URL
           pending.blobUrls,
           pending.pluginManifest.loadables,
@@ -585,13 +614,54 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
-  const handleOpenComponentSets = useCallback(() => {
-    setComponentSetModalOpen(true);
-  }, []);
-
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker({ open: true, presetType });
   }, []);
+
+  // Register the deck-input provider that opens DeckImportModal. The provider
+  // returns a promise that resolves when the user submits (with deckId +
+  // optional isPrivate flag) or dismisses (resolve(null) → loadHandler aborts).
+  // Re-registering on each mount is idempotent — `setDeckInputProvider` returns
+  // the previous implementation so we restore it on unmount.
+  useEffect(() => {
+    const previous = setDeckInputProvider(
+      ({ labels, supportsPrivate }) =>
+        new Promise<DeckInputResult | null>((resolve) => {
+          deckImportResolveRef.current = resolve;
+          setDeckImport({
+            open: true,
+            labels,
+            supportsPrivate,
+            loading: false,
+            error: null,
+          });
+        }),
+    );
+    return () => {
+      setDeckInputProvider(previous);
+    };
+  }, []);
+
+  const handleDeckImportClose = useCallback(() => {
+    if (deckImportResolveRef.current) {
+      deckImportResolveRef.current(null);
+      deckImportResolveRef.current = null;
+    }
+    setDeckImport((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  const handleDeckImportSubmit = useCallback(
+    (deckId: string, isPrivate: boolean) => {
+      if (deckImportResolveRef.current) {
+        deckImportResolveRef.current({ deckId, isPrivate });
+        deckImportResolveRef.current = null;
+      }
+      // Close immediately on submit — the import runs asynchronously after the
+      // promise resolves, but the modal's job (collecting input) is done.
+      setDeckImport((prev) => ({ ...prev, open: false }));
+    },
+    [],
+  );
 
   const handleCloseLoadPicker = useCallback(() => {
     setLoadPicker({ open: false });
@@ -650,7 +720,6 @@ function Table() {
       gridSnapEnabled,
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
-      handleOpenComponentSets,
       handleOpenLoadPicker,
     );
 
@@ -671,7 +740,6 @@ function Table() {
     gridSnapEnabled,
     setGridSnapEnabled,
     handPanel.activeHandId,
-    handleOpenComponentSets,
     handleOpenLoadPicker,
   ]);
 
@@ -820,15 +888,17 @@ function Table() {
         context={actionContext}
       />
 
-      {/* Component Set Modal */}
-      {store && (
-        <ComponentSetModal
-          isOpen={componentSetModalOpen}
-          onClose={() => setComponentSetModalOpen(false)}
-          store={store}
-          gameAssets={gameAssets}
-        />
-      )}
+      {/* Deck Import Modal — opened by the loadHandler's provider branch via
+          the registered deckInputProvider. */}
+      <DeckImportModal
+        isOpen={deckImport.open}
+        onClose={handleDeckImportClose}
+        onSubmit={handleDeckImportSubmit}
+        labels={deckImport.labels}
+        supportsPrivate={deckImport.supportsPrivate}
+        loading={deckImport.loading}
+        error={deckImport.error}
+      />
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal

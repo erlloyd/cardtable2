@@ -410,12 +410,10 @@ interface ProviderActionPanelProps {
 }
 
 function ProviderActionPanel({ source, onRun }: ProviderActionPanelProps) {
-  // Provider config is typed as `Record<string, unknown>`; the picker
-  // doesn't know the provider's schema (deck-id flow lives in the
-  // runtime).  Render only string-valued config entries — anything
-  // structured is the provider's concern.
-  const cfg = source.config ?? {};
-  const siteName = typeof cfg.siteName === 'string' ? cfg.siteName : null;
+  // The picker shows the provider's site name as a meta hint when the
+  // manifest declares one — the actual deck-id flow lives in the runtime,
+  // so the picker doesn't render the input here.
+  const siteName = source.config?.labels?.siteName ?? null;
 
   return (
     <div className="load-picker-provider">

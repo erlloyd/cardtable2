@@ -665,7 +665,7 @@ describe('loadLocalPluginScenario', () => {
     expect(result.scenario.id).toBe('scenario-1');
 
     // pluginManifest field surfaces the manifest so the caller (Load Plugin
-    // action) can pass `componentSets` to `loadScenarioContent`.
+    // action) can pass `loadables` to `loadScenarioContent`.
     expect(result.pluginManifest.id).toBe('local-plugin');
     expect(result.pluginManifest.assets).toEqual(['core.json']);
 
@@ -679,7 +679,8 @@ describe('loadLocalPluginScenario', () => {
     expect(result.content.tokenTypes['damage']?.image).toMatch(/^blob:mock-/);
 
     // blobUrls map is exposed so the caller can pass it into
-    // setComponentSetEntries (script + image resolution for component sets).
+    // loadScenarioContent → loadablesRegistry (image + parser-module
+    // resolution for the active plugin's loadables[]).
     expect(result.blobUrls).toBeInstanceOf(Map);
   });
 

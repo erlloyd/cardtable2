@@ -494,7 +494,6 @@ describe('loadScenarioContent', () => {
         '[Test]',
         undefined,
         undefined,
-        undefined,
         loadables,
       );
 
@@ -531,7 +530,6 @@ describe('loadScenarioContent', () => {
         mockContent,
         mockMetadata,
         '[Test]',
-        undefined,
         undefined,
         undefined,
         previousLoadables,

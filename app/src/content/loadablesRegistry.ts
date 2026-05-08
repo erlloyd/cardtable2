@@ -1,14 +1,18 @@
 /**
  * Runtime registry for the active plugin's `loadables[]`.
  *
- * Mirrors `componentSetRegistry`: module-level state populated when a plugin
- * is loaded, cleared on table reset / plugin switch. Picker UI and command
- * palette read from this registry rather than re-parsing the manifest.
+ * Module-level state populated when a plugin is loaded, cleared on table
+ * reset / plugin switch. Picker UI and command palette read from this
+ * registry rather than re-parsing the manifest.
  *
  * Asset-pack-derived sources are materialized into static items at population
  * time using the merged `GameAssets`. Static sources pass through unchanged.
  * Provider sources retain their `module` / `config` so the action layer can
  * invoke them when the picker selection fires.
+ *
+ * The registry also tracks the active plugin's base URL and a map of
+ * blob URLs (for local-dev plugins) so `resolveParserModuleUrl` can produce
+ * a usable URL for the worker sandbox to fetch the plugin's parser JS.
  */
 
 import type {
@@ -18,6 +22,8 @@ import type {
 } from '@cardtable2/shared';
 
 let currentEntries: LoadableEntry[] = [];
+let currentPluginBaseUrl = '';
+let currentBlobUrls: Map<string, string> = new Map();
 
 /**
  * Replace the registry's contents with the supplied loadables, computing
@@ -25,12 +31,24 @@ let currentEntries: LoadableEntry[] = [];
  *
  * Idempotent: callers may invoke this multiple times during a session
  * (e.g. plugin eager-load followed by scenario load); the latest call wins.
+ *
+ * @param entries - Loadable categories from the plugin manifest
+ * @param gameAssets - Merged game assets (used to materialize derived sources)
+ * @param pluginBaseUrl - Plugin base URL for resolving parser module paths
+ *   (registered plugins) — empty string for local-dev plugins which use
+ *   blob URLs instead.
+ * @param blobUrls - Optional map of relative-path → blob-URL for local-dev
+ *   plugins. Used by `resolveParserModuleUrl` to find the in-memory script.
  */
 export function setLoadableEntries(
   entries: LoadableEntry[],
   gameAssets: GameAssets,
+  pluginBaseUrl?: string,
+  blobUrls?: Map<string, string>,
 ): void {
   currentEntries = entries.map((entry) => resolveEntry(entry, gameAssets));
+  currentPluginBaseUrl = pluginBaseUrl ?? '';
+  currentBlobUrls = blobUrls ?? new Map<string, string>();
 }
 
 /**
@@ -41,11 +59,44 @@ export function getLoadableEntries(): LoadableEntry[] {
 }
 
 /**
+ * Read the active plugin's base URL (registered plugins) or empty string
+ * (local-dev plugins). Used by deck-import to construct module URLs.
+ */
+export function getLoadablesPluginBaseUrl(): string {
+  return currentPluginBaseUrl;
+}
+
+/**
+ * Resolve a parser-module filename to a usable URL for the worker sandbox.
+ *
+ * Local-dev plugins ship blob URLs (the directory picker creates one per
+ * script file at upload time); registered plugins concatenate the relative
+ * filename onto the plugin's remote `baseUrl`.
+ *
+ * @param filename - Module path relative to the plugin's baseUrl
+ * @returns A URL the worker can fetch (blob: or absolute http(s):)
+ */
+export function resolveParserModuleUrl(filename: string): string {
+  // Check blob URLs first (local plugins)
+  const blobUrl = currentBlobUrls.get(filename);
+  if (blobUrl) return blobUrl;
+
+  // Fall back to remote URL
+  if (currentPluginBaseUrl) {
+    return `${currentPluginBaseUrl}${filename}`;
+  }
+
+  return filename;
+}
+
+/**
  * Reset the registry. Called when the active plugin changes (room load,
  * plugin switch) so a stale plugin's loadables don't leak into the new one.
  */
 export function clearLoadableEntries(): void {
   currentEntries = [];
+  currentPluginBaseUrl = '';
+  currentBlobUrls = new Map();
 }
 
 function resolveEntry(

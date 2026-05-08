@@ -438,24 +438,6 @@ export function registerDefaultActions(): void {
     },
   });
 
-  // Content action: Load Components (always available)
-  registry.register({
-    id: 'load-components',
-    label: 'Load Components',
-    shortLabel: 'Components',
-    icon: '📦',
-    category: CONTENT_ACTIONS,
-    description:
-      'Load component sets (decks, encounter sets, tokens) onto the table',
-    isAvailable: (ctx) =>
-      ctx.selection.count === 0 && ctx.onOpenComponentSets !== undefined,
-    execute: (ctx) => {
-      if (ctx.onOpenComponentSets) {
-        ctx.onOpenComponentSets();
-      }
-    },
-  });
-
   // Content action: Generic Load... (opens the two-step picker)
   //
   // Per-type Load <X>... commands are registered separately by
@@ -478,7 +460,7 @@ export function registerDefaultActions(): void {
 
 /** Module-level record of the per-type Load actions that are live, so a
  * subsequent register call can unregister them precisely without touching
- * unrelated `load-*` ids (e.g. the built-in `load-components`). */
+ * unrelated `load-*` ids (e.g. the built-in generic `load`). */
 const liveLoadableActionIds = new Set<string>();
 
 /**
@@ -512,8 +494,8 @@ export function registerLoadablesActions(loadables: LoadableEntry[]): void {
 
 /**
  * Remove the dynamic "Load <type>..." actions previously registered by
- * {@link registerLoadablesActions}.  Built-in actions (e.g. `load-components`,
- * the generic `load`) are left untouched.
+ * {@link registerLoadablesActions}.  Built-in actions (e.g. the generic
+ * `load`) are left untouched.
  */
 export function unregisterLoadablesActions(): void {
   const registry = ActionRegistry.getInstance();

@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type {
-  LoadableEntry,
-  LoadableProviderSource,
-  LoadableStaticItem,
-} from '@cardtable2/shared';
+import type { LoadableEntry, LoadableStaticItem } from '@cardtable2/shared';
 import { fuzzySearch } from '../../utils/fuzzySearch';
 
 /**
@@ -77,9 +73,10 @@ interface LoadPickerModalProps {
  *   step 1: pick a loadable type (skipped if `presetType` matches one)
  *   step 2: pick an item with optional text search
  *
- * For provider-source entries step 2 short-circuits to a single
- * "Run import…" button — the actual flow (deck-id prompt, etc.) is
- * driven by the host's loadable runtime, not this picker.
+ * For provider-source entries step 2 is auto-fired — the picker
+ * immediately invokes `onSelectItem(entry, null)` and closes, letting
+ * the host's loadable runtime drive the actual flow (deck-id prompt,
+ * etc.) without an intermediate confirmation click (ct-yj2).
  *
  * Portaled to `document.body` per the CLAUDE.md backdrop-filter memory:
  * any ancestor with `backdrop-filter: blur(...)` becomes a containing
@@ -133,6 +130,26 @@ export function LoadPickerModal({
     return loadables.find((l) => l.type === selectedType) ?? null;
   }, [loadables, selectedType]);
 
+  // Auto-fire for provider-source entries (ct-yj2): there's no decision
+  // to be made on step 2 — the host runtime drives the provider flow
+  // (deck-id prompt, etc.) — so skip the dead "Run import…" click.
+  // A ref guards against re-firing when React re-runs the effect with
+  // the same entry (e.g. parent re-render); the next open cycle resets
+  // it because `open` flipping to false runs the cleanup.
+  const autoFiredEntryRef = useRef<LoadableEntry | null>(null);
+  useEffect(() => {
+    if (!open) {
+      autoFiredEntryRef.current = null;
+      return;
+    }
+    if (!activeEntry) return;
+    if (activeEntry.source.kind !== 'provider') return;
+    if (autoFiredEntryRef.current === activeEntry) return;
+    autoFiredEntryRef.current = activeEntry;
+    onSelectItem(activeEntry, null);
+    onClose();
+  }, [open, activeEntry, onSelectItem, onClose]);
+
   const items = useMemo<LoadPickerItem[]>(() => {
     if (!activeEntry) return [];
     const source = activeEntry.source;
@@ -184,12 +201,6 @@ export function LoadPickerModal({
   const handlePickItem = (item: LoadPickerItem) => {
     if (!activeEntry) return;
     onSelectItem(activeEntry, item);
-    handleClose();
-  };
-
-  const handleProviderRun = () => {
-    if (!activeEntry) return;
-    onSelectItem(activeEntry, null);
     handleClose();
   };
 
@@ -261,17 +272,20 @@ export function LoadPickerModal({
           )}
         </div>
 
+        {/*
+          Provider entries render nothing in the body — the auto-fire
+          effect above (ct-yj2) invokes onSelectItem + onClose
+          immediately, so the dead "Run import…" UI is never shown.
+         */}
         {showStep1 ? (
           <Step1TypeList loadables={loadables} onPickType={handleSelectType} />
-        ) : (
+        ) : activeEntry.source.kind === 'provider' ? null : (
           <Step2ItemList
-            entry={activeEntry}
             items={filteredItems}
             totalItems={items.length}
             query={query}
             onQueryChange={setQuery}
             onPickItem={handlePickItem}
-            onProviderRun={handleProviderRun}
           />
         )}
       </div>
@@ -331,28 +345,22 @@ function describeSource(entry: LoadableEntry): string {
 }
 
 interface Step2Props {
-  entry: LoadableEntry;
   items: LoadPickerItem[];
   totalItems: number;
   query: string;
   onQueryChange: (q: string) => void;
   onPickItem: (item: LoadPickerItem) => void;
-  onProviderRun: () => void;
 }
 
+// Provider-source entries auto-fire from the modal-level effect (ct-yj2);
+// Step2ItemList is only mounted for static / asset-pack-derived entries.
 function Step2ItemList({
-  entry,
   items,
   totalItems,
   query,
   onQueryChange,
   onPickItem,
-  onProviderRun,
 }: Step2Props) {
-  if (entry.source.kind === 'provider') {
-    return <ProviderActionPanel source={entry.source} onRun={onProviderRun} />;
-  }
-
   const showingCappedHint = !query.trim() && totalItems > items.length;
 
   if (totalItems === 0) {
@@ -400,39 +408,6 @@ function Step2ItemList({
           to narrow.
         </div>
       )}
-    </div>
-  );
-}
-
-interface ProviderActionPanelProps {
-  source: LoadableProviderSource;
-  onRun: () => void;
-}
-
-function ProviderActionPanel({ source, onRun }: ProviderActionPanelProps) {
-  // The picker shows the provider's site name as a meta hint when the
-  // manifest declares one — the actual deck-id flow lives in the runtime,
-  // so the picker doesn't render the input here.
-  const siteName = source.config?.labels?.siteName ?? null;
-
-  return (
-    <div className="load-picker-provider">
-      <div className="load-picker-provider-meta">
-        Provider: <code>{source.module}</code>
-        {siteName && (
-          <>
-            {' '}
-            &middot; <span>{siteName}</span>
-          </>
-        )}
-      </div>
-      <button
-        type="button"
-        className="load-picker-provider-run"
-        onClick={onRun}
-      >
-        Run import…
-      </button>
     </div>
   );
 }

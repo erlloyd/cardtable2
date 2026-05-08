@@ -17,7 +17,9 @@
       "mcp__plugin_playwright_playwright__browser_console_messages",
       "mcp__plugin_playwright_playwright__browser_network_requests",
       "mcp__plugin_playwright_playwright__browser_wait_for",
-      "mcp__plugin_playwright_playwright__browser_take_screenshot"
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "Read(//Users/erlloyd/Code/cardtable2/**)",
+      "Read(//Users/erlloyd/Code/cardtable2/.claude/worktrees/**)"
     ]
   },
   "hooks": {

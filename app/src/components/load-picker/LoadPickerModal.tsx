@@ -272,13 +272,14 @@ export function LoadPickerModal({
           )}
         </div>
 
+        {/*
+          Provider entries render nothing in the body — the auto-fire
+          effect above (ct-yj2) invokes onSelectItem + onClose
+          immediately, so the dead "Run import…" UI is never shown.
+         */}
         {showStep1 ? (
           <Step1TypeList loadables={loadables} onPickType={handleSelectType} />
-        ) : activeEntry.source.kind ===
-          'provider' ? // onSelectItem + onClose synchronously after the first paint; // Auto-fire path (ct-yj2): the effect above invokes
-        // we render nothing rather than the dead "Run import…" UI so
-        // there's no visible intermediate step.
-        null : (
+        ) : activeEntry.source.kind === 'provider' ? null : (
           <Step2ItemList
             items={filteredItems}
             totalItems={items.length}

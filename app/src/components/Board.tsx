@@ -231,6 +231,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
               cameraScale: 1,
               viewportWidth: 0,
               viewportHeight: 0,
+              devicePixelRatio: window.devicePixelRatio || 1,
             });
             return;
           }

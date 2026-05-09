@@ -47,6 +47,7 @@ import {
   ACTION_LOAD_SCENARIO_FAILED,
   LOAD_ADDITIVE_FAILED,
 } from '../constants/errorIds';
+import { dbg } from '../dev/dbg';
 
 /**
  * Item payload narrowing helpers.
@@ -85,6 +86,25 @@ function pickCardSetName(data: unknown): string | null {
   if (typeof obj.setName === 'string') return obj.setName;
   if (typeof obj.cardSet === 'string') return obj.cardSet;
   return null;
+}
+
+/**
+ * Translate a CSS-pixel world coordinate (as produced by
+ * {@link getViewportCenterPlacement}) into the renderer's native canvas-pixel
+ * world space. Required because the viewport-state response now carries CSS
+ * pixels (matching its type doc — see ct-rde) while every object position
+ * stored in the YJS doc is interpreted by the renderer in canvas-pixel world
+ * space (set up by `CameraManager.initialize` from `app.renderer.width/height`,
+ * both DPR-multiplied).
+ */
+function toCanvasPxPlacement(
+  placement: { x: number; y: number },
+  devicePixelRatio: number,
+): { x: number; y: number } {
+  return {
+    x: placement.x * devicePixelRatio,
+    y: placement.y * devicePixelRatio,
+  };
 }
 
 /**
@@ -218,7 +238,10 @@ export async function handleLoadSelection(
     return;
   }
 
-  const placement = getViewportCenterPlacement(viewport);
+  const placement = toCanvasPxPlacement(
+    getViewportCenterPlacement(viewport),
+    viewport.devicePixelRatio,
+  );
 
   // Card: stack-of-1
   if (isCardItemData(item.data)) {
@@ -322,7 +345,7 @@ async function runProviderLoadable(
   }
 
   if (input === null || input.deckId.trim() === '') {
-    console.log('[Load] Provider import cancelled — no deck ID provided');
+    dbg('plugin-loading', 'Provider import cancelled — no deck ID provided');
     return;
   }
 
@@ -337,7 +360,10 @@ async function runProviderLoadable(
     return;
   }
 
-  const placement = getViewportCenterPlacement(viewport);
+  const placement = toCanvasPxPlacement(
+    getViewportCenterPlacement(viewport),
+    viewport.devicePixelRatio,
+  );
 
   const result = await importFromApi({
     deckId: input.deckId.trim(),
@@ -363,8 +389,9 @@ async function runProviderLoadable(
   // above all existing objects so the new content stays on top.
   addObjectsAt(deps.store, result.objects, placement);
 
-  console.log(
-    `[Load] Provider import complete: ${String(result.objectCount)} objects from deck ${input.deckId}`,
+  dbg(
+    'plugin-loading',
+    `Provider import complete: ${String(result.objectCount)} objects from deck ${input.deckId}`,
   );
 }
 
@@ -422,8 +449,9 @@ function instantiateCardStack(
     cards,
     faceUp: true,
   });
-  console.log(
-    `[Load] Added ${String(cards.length)}-card stack "${logLabel}" id=${id} at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`,
+  dbg(
+    'plugin-loading',
+    `Added ${String(cards.length)}-card stack "${logLabel}" id=${id} at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`,
   );
 }
 
@@ -446,15 +474,14 @@ export async function loadScenarioByFile(
     return;
   }
   try {
-    console.log(
-      `[Load Scenario] Loading "${scenarioFile}" for plugin: ${pluginId}`,
+    dbg(
+      'plugin-loading',
+      `Loading scenario "${scenarioFile}" for plugin: ${pluginId}`,
     );
     const plugin = await loadPlugin(pluginId);
     let gameAssets: GameAssets | null = store.getGameAssets();
     if (!gameAssets) {
-      console.log(
-        '[Load Scenario] No gameAssets in store; loading plugin assets',
-      );
+      dbg('plugin-loading', 'No gameAssets in store; loading plugin assets');
       gameAssets = await loadPluginAssets(pluginId);
     }
     const content = await loadScenarioFromPlugin(
@@ -462,8 +489,9 @@ export async function loadScenarioByFile(
       scenarioFile,
       gameAssets,
     );
-    console.log(
-      `[Load Scenario] Loaded ${String(content.objects.size)} objects from scenario: ${content.scenario.name}`,
+    dbg(
+      'plugin-loading',
+      `Loaded ${String(content.objects.size)} objects from scenario: ${content.scenario.name}`,
     );
     const metadata: LoadedScenarioMetadata = {
       type: 'plugin',

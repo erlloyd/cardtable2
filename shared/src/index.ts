@@ -301,11 +301,12 @@ export type RendererToMainMessage =
     }
   | {
       type: 'viewport-state'; // ct-8gf.5: Response to request-viewport-state
-      cameraX: number; // worldContainer.position.x (screen pixels)
-      cameraY: number; // worldContainer.position.y (screen pixels)
+      cameraX: number; // Camera screen-space x offset (CSS pixels)
+      cameraY: number; // Camera screen-space y offset (CSS pixels)
       cameraScale: number; // Camera zoom level (1.0 = 100%)
       viewportWidth: number; // Viewport width in CSS pixels
       viewportHeight: number; // Viewport height in CSS pixels
+      devicePixelRatio: number; // CSS-to-canvas scale factor (ct-rde)
     }
   | { type: 'pan-started' } // M3.5.1-T6: Camera pan started
   | { type: 'pan-ended' } // M3.5.1-T6: Camera pan ended

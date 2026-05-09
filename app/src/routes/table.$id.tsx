@@ -63,6 +63,7 @@ import {
 import { getLoadableEntries } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
+import { dbg } from '../dev/dbg';
 
 /**
  * Discriminated error state for the table-load path.
@@ -320,7 +321,7 @@ function Table() {
     if (localDevFromState && !storedLoadedScenario) {
       const pending = consumePendingLocalPlugin();
       if (pending) {
-        console.log('[Load Plugin] Applying local-dev plugin assets:', {
+        dbg('plugin-loading', 'Applying local-dev plugin assets:', {
           pluginName: pending.pluginManifest.name,
           cardCount: Object.keys(pending.content.cards).length,
         });
@@ -720,6 +721,7 @@ function Table() {
               cameraScale: 1,
               viewportWidth: 0,
               viewportHeight: 0,
+              devicePixelRatio: window.devicePixelRatio || 1,
             });
           }
           return board.getViewportState();

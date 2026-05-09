@@ -402,6 +402,7 @@ export class BoardMessageBus {
         cameraScale: msg.cameraScale,
         viewportWidth: msg.viewportWidth,
         viewportHeight: msg.viewportHeight,
+        devicePixelRatio: msg.devicePixelRatio,
       };
       for (const cb of callbacks) cb(state);
     });

@@ -23,11 +23,16 @@
  * Plain shape describing the camera + viewport. Caller is responsible for
  * sourcing these from the renderer's CameraManager / CoordinateConverter
  * (or any equivalent test double).
+ *
+ * All screen-space values are in CSS pixels — see
+ * `MainToRendererMessage.viewport-state` for the canonical wire shape and
+ * `app/src/renderer/handlers/coordinates.ts::handleRequestViewportState` for
+ * the conversion from the renderer's native canvas-pixel space.
  */
 export interface ViewportState {
-  /** Camera screen-space x offset (worldContainer.position.x). */
+  /** Camera screen-space x offset (CSS pixels). */
   cameraX: number;
-  /** Camera screen-space y offset (worldContainer.position.y). */
+  /** Camera screen-space y offset (CSS pixels). */
   cameraY: number;
   /** Camera zoom level (1.0 = 100%). */
   cameraScale: number;
@@ -35,6 +40,12 @@ export interface ViewportState {
   viewportWidth: number;
   /** Viewport height in CSS pixels. */
   viewportHeight: number;
+  /**
+   * Device pixel ratio used to scale CSS-pixel world coords back into the
+   * renderer's native canvas-pixel space when storing object positions.
+   * Pure callers (e.g. unit tests) can default this to 1.
+   */
+  devicePixelRatio: number;
 }
 
 /**

@@ -105,22 +105,35 @@ export function handleRequestScreenCoords(
  * without taking a PixiJS dependency. Mirrors the world-vs-screen relationship
  * documented in `app/src/utils/viewportPlacement.ts`.
  *
- * All values are reported in the same unit space (physical canvas pixels —
- * `app.renderer.width/height` and `worldContainer.position` already live
- * there). The placement primitive only requires consistency between camera
- * coords and viewport dimensions, so DPR scaling cancels out and we don't
- * normalize here.
+ * All values are reported in CSS pixels — matching the type docs in
+ * `MainToRendererMessage.viewport-state` and the `ViewportState` shape the
+ * placement primitive consumes.
+ *
+ * The renderer internally tracks `worldContainer.position` and
+ * `app.renderer.width/height` in physical canvas pixels (CSS × DPR — see
+ * `CameraManager.initialize`). On non-1.0 DPR displays sourcing the response
+ * straight from those buffers leaks DPR-scaled values across the boundary,
+ * which made the documented "CSS pixels" promise a lie. We divide camera
+ * position by DPR and source viewport dimensions from `app.screen` (PixiJS's
+ * CSS-pixel mirror of the canvas) so the placement primitive gets a
+ * consistent CSS-pixel snapshot. The consumer (`runStaticLoadable` /
+ * `runProviderLoadable` in `app/src/content/loadHandler.ts`) scales the
+ * resulting world coord back up by `devicePixelRatio` before storing the
+ * object's `_pos`, since the renderer otherwise expects positions in its
+ * native canvas-pixel world space.
  */
 export function handleRequestViewportState(
   _message: Extract<MainToRendererMessage, { type: 'request-viewport-state' }>,
   context: RendererContext,
 ): void {
+  const dpr = context.coordConverter.getDevicePixelRatio();
   context.postResponse({
     type: 'viewport-state',
-    cameraX: context.worldContainer.position.x,
-    cameraY: context.worldContainer.position.y,
+    cameraX: context.worldContainer.position.x / dpr,
+    cameraY: context.worldContainer.position.y / dpr,
     cameraScale: context.coordConverter.getCameraScale(),
-    viewportWidth: context.app.renderer.width,
-    viewportHeight: context.app.renderer.height,
+    viewportWidth: context.app.screen.width,
+    viewportHeight: context.app.screen.height,
+    devicePixelRatio: dpr,
   });
 }

@@ -2111,6 +2111,22 @@ h1 {
   gap: 0.5rem;
   padding: 0.75rem;
   overflow-y: auto;
+  /* Reset native <ul> defaults so the semantic list markup (ct-rde) keeps
+     the prior visual layout. */
+  list-style: none;
+  margin: 0;
+}
+
+.load-picker-types-item {
+  /* Pass-through layout: <li> takes its width from the flex column and the
+     <button> child fills it. We avoid `display: contents` because some
+     screen readers historically dropped list semantics on contents-display
+     children. */
+  display: flex;
+}
+
+.load-picker-types-item > .load-picker-type {
+  flex: 1;
 }
 
 .load-picker-type {
@@ -2200,6 +2216,18 @@ h1 {
   padding: 0.5rem;
   overflow-y: auto;
   min-height: 0;
+  flex: 1;
+  /* Reset native <ul> defaults so the semantic list markup (ct-rde) keeps
+     the prior visual layout. */
+  list-style: none;
+  margin: 0;
+}
+
+.load-picker-items-item {
+  display: flex;
+}
+
+.load-picker-items-item > .load-picker-item {
   flex: 1;
 }
 

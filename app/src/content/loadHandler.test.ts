@@ -104,6 +104,7 @@ const NEUTRAL_VIEWPORT: ViewportState = {
   cameraScale: 1,
   viewportWidth: 1000,
   viewportHeight: 800,
+  devicePixelRatio: 1,
 };
 
 const getViewportState = () => Promise.resolve(NEUTRAL_VIEWPORT);
@@ -257,6 +258,64 @@ describe('handleLoadSelection — additive + card', () => {
     );
     expect(YjsActions.createObject).not.toHaveBeenCalled();
     expect(err).toHaveBeenCalled();
+  });
+
+  it('scales placement by devicePixelRatio so canvas-pixel world coords match across DPRs (ct-rde)', async () => {
+    // The handler now sources viewport state in CSS pixels and multiplies
+    // the placement back by DPR before storing. Two displays with the
+    // same CSS layout but different DPR should land objects at the same
+    // canvas-pixel world coordinate (modulo jitter).
+    const store = makeStore({
+      pluginId: 'p',
+      gameAssets: makeAssets({
+        cards: { '01001': { name: '', face: 'a.png', type: 'player' } },
+      }),
+    });
+    const cssViewport = {
+      cameraX: 500, // CSS pixels
+      cameraY: 400,
+      cameraScale: 1,
+      viewportWidth: 1000,
+      viewportHeight: 800,
+    };
+    // viewport center in world space is (0, 0) with this layout.
+    // After DPR multiply: dpr=1 → (0±50, 0±50); dpr=2 → also (0±50, 0±50)
+    // because the CSS center is (0,0) and 0×anything = 0.
+    // So pick a non-centered camera so the multiplication actually matters.
+    const offCenter = {
+      ...cssViewport,
+      cameraX: 100, // CSS, so world center = (500-100)/1 = 400
+    };
+    const dpr1: () => Promise<
+      typeof offCenter & { devicePixelRatio: number }
+    > = () => Promise.resolve({ ...offCenter, devicePixelRatio: 1 });
+    const dpr2: () => Promise<
+      typeof offCenter & { devicePixelRatio: number }
+    > = () => Promise.resolve({ ...offCenter, devicePixelRatio: 2 });
+
+    await handleLoadSelection(
+      cardEntry,
+      { id: '01001', label: '01001', data: { code: '01001' } },
+      { store, getViewportState: dpr1 },
+    );
+    await handleLoadSelection(
+      cardEntry,
+      { id: '01001', label: '01001', data: { code: '01001' } },
+      { store, getViewportState: dpr2 },
+    );
+
+    const calls = vi.mocked(YjsActions.createObject).mock.calls;
+    const dpr1Pos = calls[0][1].pos;
+    const dpr2Pos = calls[1][1].pos;
+
+    // CSS world center is 400. dpr=1 → ~400±50; dpr=2 → ~800±100 (both
+    // jitter and offset double). The renderer interprets both in
+    // canvas-pixel world space, so the visual lands in the same on-screen
+    // location (the canvas at dpr=2 has 2× the pixels along each axis).
+    expect(dpr1Pos.x).toBeGreaterThanOrEqual(350);
+    expect(dpr1Pos.x).toBeLessThanOrEqual(450);
+    expect(dpr2Pos.x).toBeGreaterThanOrEqual(700);
+    expect(dpr2Pos.x).toBeLessThanOrEqual(900);
   });
 });
 

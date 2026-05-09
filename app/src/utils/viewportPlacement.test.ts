@@ -15,6 +15,7 @@ const NEUTRAL_VIEWPORT: ViewportState = {
   cameraScale: 1,
   viewportWidth: 1200,
   viewportHeight: 800,
+  devicePixelRatio: 1,
 };
 
 describe('getViewportCenter', () => {
@@ -44,10 +45,32 @@ describe('getViewportCenter', () => {
       cameraScale: 2,
       viewportWidth: 1200,
       viewportHeight: 800,
+      devicePixelRatio: 1,
     };
     const center = getViewportCenter(zoomed);
     expect(center.x).toBe(300); // (600 - 0) / 2
     expect(center.y).toBe(200); // (400 - 0) / 2
+  });
+
+  it('returns the same world center regardless of device pixel ratio (ct-rde)', () => {
+    // The handler now sources cameraX/Y and viewportWidth/Height in CSS
+    // pixels and reports `devicePixelRatio` separately. Two displays with
+    // identical CSS layouts but different DPR should resolve the viewport
+    // center to the same world coordinate — the placement primitive must
+    // not consume DPR.
+    const css1: ViewportState = {
+      cameraX: 600,
+      cameraY: 400,
+      cameraScale: 1,
+      viewportWidth: 1200,
+      viewportHeight: 800,
+      devicePixelRatio: 1,
+    };
+    const css2: ViewportState = {
+      ...css1,
+      devicePixelRatio: 2,
+    };
+    expect(getViewportCenter(css1)).toEqual(getViewportCenter(css2));
   });
 });
 
@@ -135,6 +158,7 @@ describe('getViewportCenterPlacement', () => {
       cameraScale: 2,
       viewportWidth: 1200,
       viewportHeight: 800,
+      devicePixelRatio: 1,
     };
     const center = getViewportCenter(zoomed);
     const rng = createSeededRng(5);

@@ -14,7 +14,7 @@ import {
   clearAllSelections,
   resetToTestScene,
 } from '../store/YjsActions';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, type GameAssets } from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
 import type { TableObjectYMap } from '../store/types';
@@ -128,6 +128,7 @@ function DevTable() {
   const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
     getLoadableEntries(),
   );
+  const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -139,10 +140,25 @@ function DevTable() {
     registerDefaultActions();
   }, []);
 
+  // Subscribe to store gameAssets changes so the loadables-derivation effect
+  // below can re-run when a dev tool / scenario load populates the registry.
+  // Mirrors the main route's pattern (see `routes/table.$id.tsx` ~line 437).
+  useEffect(() => {
+    if (!store) return;
+
+    const unsubscribe = store.onGameAssetsChange((assets) => {
+      setGameAssets(assets);
+    });
+
+    return unsubscribe;
+  }, [store]);
+
   // Re-derive per-type Load... actions whenever the loadable registry might
-  // have changed. Dev tables don't auto-load a plugin, so this most often
-  // runs once with an empty list; a manual `loadPluginAssets` call from the
-  // dev tools will populate it.
+  // have changed. Dev tables don't auto-load a plugin, so this typically
+  // starts empty and populates only after a manual `loadPluginAssets` /
+  // local-dev scenario load. Depending on `gameAssets` (matches
+  // `table.$id.tsx`'s pattern, ct-rde) drives re-derivation when those
+  // sources fire.
   useEffect(() => {
     const entries = getLoadableEntries();
     setLoadables(entries);
@@ -150,7 +166,7 @@ function DevTable() {
     if (entries.length > 0) {
       registerLoadablesActions(entries);
     }
-  }, []);
+  }, [gameAssets]);
 
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
@@ -293,6 +309,7 @@ function DevTable() {
             cameraScale: 1,
             viewportWidth: 0,
             viewportHeight: 0,
+            devicePixelRatio: window.devicePixelRatio || 1,
           }),
       });
     },

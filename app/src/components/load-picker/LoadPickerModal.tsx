@@ -304,31 +304,34 @@ function Step1TypeList({ loadables, onPickType }: Step1Props) {
   if (loadables.length === 0) {
     return <div className="load-picker-empty">No loadables declared</div>;
   }
+  // Semantic <ul><li><button> markup so screen readers announce each row as
+  // a list item AND a button (ct-rde). Putting role='listitem' directly on
+  // the <button> would override the implicit button role.
   return (
-    <div
+    <ul
       className="load-picker-types"
-      role="list"
+      aria-label="Loadable types"
       data-testid="load-picker-types"
     >
       {loadables.map((entry) => (
-        <button
-          key={entry.type}
-          type="button"
-          className="load-picker-type"
-          onClick={() => onPickType(entry.type)}
-          role="listitem"
-          data-testid={`load-picker-type-${entry.type}`}
-        >
-          <div className="load-picker-type-label">{entry.label}</div>
-          <div className="load-picker-type-meta">
-            {describeSource(entry)}
-            <span className="load-picker-type-mode">
-              {entry.mode === 'replace' ? 'replace' : 'additive'}
-            </span>
-          </div>
-        </button>
+        <li key={entry.type} className="load-picker-types-item">
+          <button
+            type="button"
+            className="load-picker-type"
+            onClick={() => onPickType(entry.type)}
+            data-testid={`load-picker-type-${entry.type}`}
+          >
+            <div className="load-picker-type-label">{entry.label}</div>
+            <div className="load-picker-type-meta">
+              {describeSource(entry)}
+              <span className="load-picker-type-mode">
+                {entry.mode === 'replace' ? 'replace' : 'additive'}
+              </span>
+            </div>
+          </button>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -380,27 +383,32 @@ function Step2ItemList({
         aria-label="Search items"
       />
 
-      <div
-        className="load-picker-items"
-        role="list"
-        data-testid="load-picker-items"
-      >
-        {items.length === 0 && (
-          <div className="load-picker-empty">No items match</div>
-        )}
-        {items.map((it) => (
-          <button
-            key={it.id}
-            type="button"
-            className="load-picker-item"
-            onClick={() => onPickItem(it)}
-            role="listitem"
-            data-testid={`load-picker-item-${it.id}`}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
+      {items.length === 0 ? (
+        <div className="load-picker-empty">No items match</div>
+      ) : (
+        // Semantic <ul><li><button> markup so screen readers announce each
+        // row as a list item AND a button (ct-rde). Empty-match state
+        // renders a plain message instead of an empty list to avoid an
+        // <ul> with zero <li> children.
+        <ul
+          className="load-picker-items"
+          aria-label="Items"
+          data-testid="load-picker-items"
+        >
+          {items.map((it) => (
+            <li key={it.id} className="load-picker-items-item">
+              <button
+                type="button"
+                className="load-picker-item"
+                onClick={() => onPickItem(it)}
+                data-testid={`load-picker-item-${it.id}`}
+              >
+                {it.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {showingCappedHint && (
         <div className="load-picker-hint">

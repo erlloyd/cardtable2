@@ -4,19 +4,6 @@
   "version": "1.0.0",
   "description": "A minimal test game for validating the content system",
   "assets": ["testgame-core.json"],
-  "componentSets": [
-    {
-      "id": "testgame-starter",
-      "name": "Test Starter Pack",
-      "stacks": [
-        {
-          "label": "Test Deck",
-          "faceUp": false,
-          "cards": ["01020", "01021"]
-        }
-      ]
-    }
-  ],
   "loadables": [
     {
       "type": "scenario",

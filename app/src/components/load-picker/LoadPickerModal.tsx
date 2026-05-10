@@ -325,12 +325,7 @@ function Step1TypeList({ loadables, onPickType }: Step1Props) {
             data-testid={`load-picker-type-${entry.type}`}
           >
             <div className="load-picker-type-label">{entry.label}</div>
-            <div className="load-picker-type-meta">
-              {describeSource(entry)}
-              <span className="load-picker-type-mode">
-                {entry.mode === 'replace' ? 'replace' : 'additive'}
-              </span>
-            </div>
+            <div className="load-picker-type-meta">{describeSource(entry)}</div>
           </button>
         </li>
       ))}

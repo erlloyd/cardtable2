@@ -27,8 +27,11 @@ export interface LoadPickerItem {
  *
  * For provider-source entries (e.g. apiImport) the picker fires this
  * with `item: null` — there is no concrete item to select; the host
- * runtime takes over from there to drive the provider's flow (e.g.
- * prompt for a deck ID).  See ct-8gf.5 for the real wiring.
+ * runtime takes over from there to drive the provider's flow (it
+ * opens the `DeckImportModal` to collect a deck id). When the only
+ * loadable for a `presetType` is a provider source, the picker
+ * auto-fires this with `item: null` on open without showing step 2
+ * (see ct-yj2). The full wiring lives in `loadHandler.ts`.
  */
 export type LoadPickerSelectHandler = (
   entry: LoadableEntry,

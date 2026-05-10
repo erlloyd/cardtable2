@@ -47,6 +47,14 @@ describe('LoadPickerModal', () => {
     expect(screen.getByText('Single Card')).toBeInTheDocument();
   });
 
+  it('does not render the additive/replace mode badge in step 1 (ct-i4d)', () => {
+    renderPicker();
+    // Mode badge previously rendered the literal text 'additive' or
+    // 'replace' as plumbing detail — now removed.
+    expect(screen.queryByText(/^additive$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^replace$/i)).not.toBeInTheDocument();
+  });
+
   it('clicking a static type shows its items at step 2', async () => {
     const { user } = renderPicker();
     await user.click(screen.getByText('Scenario'));

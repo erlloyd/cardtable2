@@ -378,7 +378,7 @@ function describeSource(entry: LoadableEntry): string {
   if (source.kind === 'asset-pack-derived') {
     return source.derivation === 'all-cards' ? 'All cards' : 'All card sets';
   }
-  return 'Provider';
+  return source.config?.labels?.siteName ?? 'External import';
 }
 
 interface Step2Props {

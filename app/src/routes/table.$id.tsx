@@ -932,6 +932,7 @@ function Table() {
         presetType={loadPicker.presetType}
         onSelectItem={handleLoadPickerSelect}
         resolveDerivedItems={resolveDerivedItems}
+        gameAssets={gameAssets}
       />
     </div>
   );

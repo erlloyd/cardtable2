@@ -496,6 +496,7 @@ function DevTable() {
         presetType={loadPicker.presetType}
         onSelectItem={handleLoadPickerSelect}
         resolveDerivedItems={resolveDerivedItems}
+        gameAssets={gameAssets}
       />
     </div>
   );

@@ -2230,10 +2230,50 @@ h1 {
 
 .load-picker-items-item {
   display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
 }
 
 .load-picker-items-item > .load-picker-item {
   flex: 1;
+}
+
+/*
+ * Eye-icon affordance for card rows (ct-87o). Sibling button to the row
+ * select; its onClick stops propagation so tapping the eye doesn't load
+ * the card. Matches the row's vertical rhythm; the icon's color picks
+ * up the row text color via currentColor.
+ */
+.load-picker-card-preview-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+  flex-shrink: 0;
+}
+
+.load-picker-card-preview-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.load-picker-card-preview-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.7);
+  border-color: rgba(99, 102, 241, 0.6);
+  color: white;
 }
 
 .load-picker-item {

@@ -7,24 +7,33 @@ import type {
   OrientationRule,
 } from '@cardtable2/shared';
 
+// Test helper: cards may omit `name` (defaults to '') to keep fixtures terse.
+type TestCardInput = Omit<Card, 'name'> & { name?: string };
+
 const createGameAssets = (
   cardTypes: Record<string, CardType> = {},
-  cards: Record<string, Card> = {},
+  cards: Record<string, TestCardInput> = {},
   orientationRules: OrientationRule[] = [],
-): GameAssets => ({
-  packs: [],
-  cardTypes,
-  cards,
-  cardSets: {},
-  tokens: {},
-  counters: {},
-  mats: {},
-  tokenTypes: {},
-  statusTypes: {},
-  modifierStats: {},
-  iconTypes: {},
-  orientationRules,
-});
+): GameAssets => {
+  const normalizedCards: Record<string, Card> = {};
+  for (const [code, card] of Object.entries(cards)) {
+    normalizedCards[code] = { name: '', ...card };
+  }
+  return {
+    packs: [],
+    cardTypes,
+    cards: normalizedCards,
+    cardSets: {},
+    tokens: {},
+    counters: {},
+    mats: {},
+    tokenTypes: {},
+    statusTypes: {},
+    modifierStats: {},
+    iconTypes: {},
+    orientationRules,
+  };
+};
 
 describe('getCardOrientation', () => {
   describe('Card-level override (layer 1)', () => {

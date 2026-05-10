@@ -1,13 +1,10 @@
-import type { ComponentSetEntry } from '@cardtable2/shared';
+import type { LoadableEntry } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import type { LoadedContent, LoadedScenarioMetadata } from './index';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
-import {
-  setComponentSetEntries,
-  clearComponentSetEntries,
-} from './componentSetRegistry';
+import { setLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -27,18 +24,24 @@ import {
  * @param content - Loaded scenario content (scenario, gameAssets, objects)
  * @param metadata - Scenario metadata to store (for reload on mount)
  * @param logPrefix - Prefix for console logs (e.g., '[Load Plugin]')
- * @param pluginComponentSets - Optional component sets from plugin manifest
- * @param pluginBaseUrl - Plugin base URL (for API imports)
- * @param blobUrls - Optional blob URL map for local plugin files (images + scripts)
+ * @param pluginBaseUrl - Plugin base URL (for parser-module resolution in
+ *   deck-import providers). Empty string for local-dev plugins.
+ * @param blobUrls - Optional blob URL map for local plugin files (images +
+ *   scripts). Used by `resolveParserModuleUrl` for in-memory script lookup.
+ * @param pluginLoadables - Optional loadables[] from plugin manifest. Populated
+ *   into the runtime loadablesRegistry so the picker UI / per-type Load
+ *   commands surface the active plugin's items. Required for the local-dev
+ *   path, which bypasses `loadPluginAssets()` (where the registered-plugin
+ *   path populates the registry). See ct-erb.
  */
 export function loadScenarioContent(
   store: YjsStore,
   content: LoadedContent,
   metadata: LoadedScenarioMetadata,
   logPrefix: string,
-  pluginComponentSets?: ComponentSetEntry[],
   pluginBaseUrl?: string,
   blobUrls?: Map<string, string>,
+  pluginLoadables?: LoadableEntry[],
 ): void {
   console.log(`${logPrefix} Scenario loaded:`, {
     objectCount: content.objects.size,
@@ -50,6 +53,19 @@ export function loadScenarioContent(
   store.metadata.set('loadedScenario', metadata);
   console.log(`${logPrefix} Stored scenario metadata in Y.Doc`, metadata);
 
+  // Local-dev scenarios replace the table's plugin identity entirely. Clear any
+  // stale `pluginId` from a prior registry-driven load so the mount effect on
+  // the next reload doesn't eagerly re-fetch that plugin's assets and overwrite
+  // the local-plugin gameAssets we're about to set (regression introduced by
+  // ct-4wk's eager mount-time `loadPluginAssets`; see ct-62j).
+  //
+  // Registry-driven scenarios ('plugin') intentionally do NOT touch `pluginId`
+  // here — the mount effect's eager plugin-asset load is the whole point of
+  // ct-4wk and the table's binding to its plugin is preserved by design.
+  if (metadata.type === 'local-dev') {
+    store.metadata.delete('pluginId');
+  }
+
   // Set game assets in store (notifies subscribers like Board component)
   store.setGameAssets(content.content);
 
@@ -58,12 +74,28 @@ export function loadScenarioContent(
   registerAttachmentActions(registry, content.content);
   console.log(`${logPrefix} Registered attachment actions for loaded content`);
 
-  // Store component set entries for the modal
-  clearComponentSetEntries();
-  if (pluginComponentSets && pluginComponentSets.length > 0) {
-    setComponentSetEntries(pluginComponentSets, pluginBaseUrl ?? '', blobUrls);
+  // Populate the loadables registry so the picker UI and per-type "Load …"
+  // commands see the active plugin's items. Clear unconditionally first so a
+  // plugin-switch to a plugin with no loadables doesn't leak the previous
+  // plugin's entries. The registered-plugin path also populates this in
+  // `loadPluginAssets()`; the local-dev path bypasses that, so populating here
+  // makes `loadScenarioContent` the single source of truth for "apply this
+  // plugin's runtime state to the active table." See ct-erb.
+  //
+  // We also pass `pluginBaseUrl` and `blobUrls` so the registry can resolve
+  // parser-module paths for deck-import providers. Local-dev plugins ship
+  // a blobUrls map (with one blob: URL per script file); registered plugins
+  // pass their remote baseUrl and an empty/absent map.
+  clearLoadableEntries();
+  if (pluginLoadables && pluginLoadables.length > 0) {
+    setLoadableEntries(
+      pluginLoadables,
+      content.content,
+      pluginBaseUrl ?? '',
+      blobUrls,
+    );
     console.log(
-      `${logPrefix} Registered ${pluginComponentSets.length} component sets`,
+      `${logPrefix} Registered ${pluginLoadables.length} loadable entries`,
     );
   }
 

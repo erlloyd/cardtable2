@@ -21,25 +21,49 @@ import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { resetTable } from '../store/YjsActions';
 import { buildActionContext } from '../actions/buildActionContext';
-import { registerDefaultActions } from '../actions/registerDefaultActions';
+import {
+  registerDefaultActions,
+  registerLoadablesActions,
+  unregisterLoadablesActions,
+} from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
 import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
-import { ComponentSetModal } from '../components/ComponentSetModal';
+import {
+  DeckImportModal,
+  type DeckImportModalLabels,
+} from '../components/DeckImportModal';
+import {
+  LoadPickerModal,
+  type LoadPickerSelectHandler,
+  type DerivedItemsResolver,
+} from '../components/load-picker/LoadPickerModal';
 import type { BoardHandle } from '../components/Board';
 import { useHandPanel } from '../hooks/useHandPanel';
 import { moveAllCardsToHand } from '../store/YjsHandActions';
 import {
   loadPluginAssets,
+  consumePendingLocalPlugin,
   PluginNotFoundError,
   type GameAssets,
   type LoadedScenarioMetadata,
 } from '../content';
+import {
+  setLoadableEntries,
+  clearLoadableEntries,
+} from '../content/loadablesRegistry';
+import {
+  handleLoadSelection,
+  setDeckInputProvider,
+  type DeckInputResult,
+} from '../content/loadHandler';
+import { getLoadableEntries } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
+import { dbg } from '../dev/dbg';
 
 /**
  * Discriminated error state for the table-load path.
@@ -81,7 +105,37 @@ function Table() {
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
-  const [componentSetModalOpen, setComponentSetModalOpen] = useState(false);
+  /**
+   * Deck-import modal state. The modal is host-driven: `loadHandler` calls
+   * `deckInputProvider`, which we register on mount to resolve the modal's
+   * promise on submit/cancel. We retain `labels` + `supportsPrivate` so the
+   * modal renders the right copy for whichever provider triggered it; the
+   * `resolve` ref is held mutably so submit / dismiss can complete the
+   * outstanding promise without re-rendering.
+   */
+  const [deckImport, setDeckImport] = useState<{
+    open: boolean;
+    labels: DeckImportModalLabels;
+    supportsPrivate: boolean;
+    loading: boolean;
+    error: string | null;
+  }>({
+    open: false,
+    labels: { siteName: '', inputPlaceholder: '' },
+    supportsPrivate: false,
+    loading: false,
+    error: null,
+  });
+  const deckImportResolveRef = useRef<
+    ((value: DeckInputResult | null) => void) | null
+  >(null);
+  const [loadPicker, setLoadPicker] = useState<{
+    open: boolean;
+    presetType?: string;
+  }>({ open: false });
+  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
+    getLoadableEntries(),
+  );
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -182,6 +236,19 @@ function Table() {
     registerHandActions(ActionRegistry.getInstance());
   }, []);
 
+  // Keep the dynamic per-type "Load <X>..." actions and the local loadables
+  // state in sync with the active plugin's runtime registry. The registry is
+  // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
+  // here whenever gameAssets change so plugin switches drop stale entries.
+  useEffect(() => {
+    const entries = getLoadableEntries();
+    setLoadables(entries);
+    unregisterLoadablesActions();
+    if (entries.length > 0) {
+      registerLoadablesActions(entries);
+    }
+  }, [gameAssets]);
+
   // Dev-only: apply URL seed (?seed=stack-of-5) on a fresh table.
   // No-op in production and no-op when the table already has objects.
   useEffect(() => {
@@ -204,6 +271,13 @@ function Table() {
   }, [store, isStoreReady, location.search]);
 
   // Store pluginId in Y.Doc metadata from location state (new table only).
+  //
+  // Two arrival paths from the main screen:
+  //   - state.pluginId: registered plugin (loaded via loadPluginAssets on mount)
+  //   - state.localDev: local-dev plugin already loaded into the
+  //     consumePendingLocalPlugin() stash; assets applied directly to the store
+  //     here (no scenario auto-load — the user picks one via the unified
+  //     "Load Scenario…" picker, matching registered-plugin UX; see ct-7kx).
   useEffect(() => {
     if (!store || !isStoreReady) {
       return;
@@ -218,12 +292,65 @@ function Table() {
       typeof pluginIdFromStateRaw === 'string'
         ? pluginIdFromStateRaw
         : undefined;
+    const localDevFromState = stateRecord?.localDev === true;
     const storedPluginId = store.metadata.get('pluginId') as string | undefined;
+    const storedLoadedScenario = store.metadata.get('loadedScenario') as
+      | LoadedScenarioMetadata
+      | undefined;
 
-    // New table: store pluginId from navigation state.
-    if (pluginIdFromState && !storedPluginId) {
+    // Store pluginId from navigation state ONLY on a brand-new table — i.e.
+    // no existing pluginId AND no prior scenario load. The scenario check is
+    // load-bearing for local-dev: that flow clears `pluginId` in
+    // `loadScenarioContent` (see ct-62j) so the table stays unbound after
+    // reload, but `history.state` from the original GameSelect navigation
+    // sticks around and would re-introduce the stale registry pluginId
+    // here without this guard.
+    if (pluginIdFromState && !storedPluginId && !storedLoadedScenario) {
       console.log(`[Table] Storing pluginId in metadata: ${pluginIdFromState}`);
       store.metadata.set('pluginId', pluginIdFromState);
+    }
+
+    // New table arriving from main-screen "Load from local directory…":
+    // consume the stash and apply the local-dev plugin's assets + populate the
+    // loadables[] runtime registry. This deliberately does NOT instantiate a
+    // scenario — the table lands empty so the user can pick a scenario (or
+    // any other loadable) via the unified picker, matching the registered-
+    // plugin path. We also do NOT write `loadedScenario` metadata here since
+    // no scenario is loaded; that metadata is written by `loadScenarioContent`
+    // when the user later picks a scenario via the picker. See ct-7kx.
+    if (localDevFromState && !storedLoadedScenario) {
+      const pending = consumePendingLocalPlugin();
+      if (pending) {
+        dbg('plugin-loading', 'Applying local-dev plugin assets:', {
+          pluginName: pending.pluginManifest.name,
+          cardCount: Object.keys(pending.content.cards).length,
+        });
+        store.setGameAssets(pending.content);
+        registerAttachmentActions(
+          ActionRegistry.getInstance(),
+          pending.content,
+        );
+        // Populate the loadables registry so the picker UI / per-type Load
+        // commands surface the active local-dev plugin's items. Registered
+        // plugins do this inside `loadPluginAssets`; the local-dev path
+        // bypasses that, so we replicate it here. See ct-erb.
+        clearLoadableEntries();
+        if (
+          pending.pluginManifest.loadables &&
+          pending.pluginManifest.loadables.length > 0
+        ) {
+          setLoadableEntries(
+            pending.pluginManifest.loadables,
+            pending.content,
+            '', // Local plugins have no remote base URL
+            pending.blobUrls,
+          );
+        }
+      } else {
+        console.warn(
+          '[Table] localDev navigation state present but no pending local plugin; user likely reloaded the page',
+        );
+      }
     }
   }, [location.state, store, isStoreReady]);
 
@@ -510,9 +637,99 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
-  const handleOpenComponentSets = useCallback(() => {
-    setComponentSetModalOpen(true);
+  const handleOpenLoadPicker = useCallback((presetType?: string) => {
+    setLoadPicker({ open: true, presetType });
   }, []);
+
+  // Register the deck-input provider that opens DeckImportModal. The provider
+  // returns a promise that resolves when the user submits (with deckId +
+  // optional isPrivate flag) or dismisses (resolve(null) → loadHandler aborts).
+  // Re-registering on each mount is idempotent — `setDeckInputProvider` returns
+  // the previous implementation so we restore it on unmount.
+  useEffect(() => {
+    const previous = setDeckInputProvider(
+      ({ labels, supportsPrivate }) =>
+        new Promise<DeckInputResult | null>((resolve) => {
+          deckImportResolveRef.current = resolve;
+          setDeckImport({
+            open: true,
+            labels,
+            supportsPrivate,
+            loading: false,
+            error: null,
+          });
+        }),
+    );
+    return () => {
+      setDeckInputProvider(previous);
+    };
+  }, []);
+
+  const handleDeckImportClose = useCallback(() => {
+    if (deckImportResolveRef.current) {
+      deckImportResolveRef.current(null);
+      deckImportResolveRef.current = null;
+    }
+    setDeckImport((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  const handleDeckImportSubmit = useCallback(
+    (deckId: string, isPrivate: boolean) => {
+      if (deckImportResolveRef.current) {
+        deckImportResolveRef.current({ deckId, isPrivate });
+        deckImportResolveRef.current = null;
+      }
+      // Close immediately on submit — the import runs asynchronously after the
+      // promise resolves, but the modal's job (collecting input) is done.
+      setDeckImport((prev) => ({ ...prev, open: false }));
+    },
+    [],
+  );
+
+  const handleCloseLoadPicker = useCallback(() => {
+    setLoadPicker({ open: false });
+  }, []);
+
+  // Resolver for asset-pack-derived loadables. The runtime registry already
+  // materialises derived sources into `kind: 'static'` (see ct-8gf.2), so on
+  // the happy path this is never invoked — but the picker accepts a resolver
+  // for any unmaterialized entries it might receive.
+  const resolveDerivedItems = useCallback<DerivedItemsResolver>((entry) => {
+    if (entry.source.kind === 'static') {
+      return entry.source.items.map((it) => ({
+        id: it.id,
+        label: it.label,
+        data: it.data,
+      }));
+    }
+    return [];
+  }, []);
+
+  const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
+    (entry, item) => {
+      if (!store) return;
+      const board = boardRef.current;
+      void handleLoadSelection(entry, item, {
+        store,
+        getViewportState: () => {
+          if (!board) {
+            // No board mounted — fall back to a centered, un-zoomed viewport
+            // so additive placement still produces a valid origin.
+            return Promise.resolve({
+              cameraX: 0,
+              cameraY: 0,
+              cameraScale: 1,
+              viewportWidth: 0,
+              viewportHeight: 0,
+              devicePixelRatio: window.devicePixelRatio || 1,
+            });
+          }
+          return board.getViewportState();
+        },
+      });
+    },
+    [store],
+  );
 
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
@@ -527,7 +744,7 @@ function Table() {
       gridSnapEnabled,
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
-      handleOpenComponentSets,
+      handleOpenLoadPicker,
     );
 
     if (context) {
@@ -547,7 +764,7 @@ function Table() {
     gridSnapEnabled,
     setGridSnapEnabled,
     handPanel.activeHandId,
-    handleOpenComponentSets,
+    handleOpenLoadPicker,
   ]);
 
   // Enable keyboard shortcuts
@@ -695,15 +912,27 @@ function Table() {
         context={actionContext}
       />
 
-      {/* Component Set Modal */}
-      {store && (
-        <ComponentSetModal
-          isOpen={componentSetModalOpen}
-          onClose={() => setComponentSetModalOpen(false)}
-          store={store}
-          gameAssets={gameAssets}
-        />
-      )}
+      {/* Deck Import Modal — opened by the loadHandler's provider branch via
+          the registered deckInputProvider. */}
+      <DeckImportModal
+        isOpen={deckImport.open}
+        onClose={handleDeckImportClose}
+        onSubmit={handleDeckImportSubmit}
+        labels={deckImport.labels}
+        supportsPrivate={deckImport.supportsPrivate}
+        loading={deckImport.loading}
+        error={deckImport.error}
+      />
+
+      {/* Load Picker Modal (ct-8gf.5) */}
+      <LoadPickerModal
+        open={loadPicker.open}
+        onClose={handleCloseLoadPicker}
+        loadables={loadables}
+        presetType={loadPicker.presetType}
+        onSelectItem={handleLoadPickerSelect}
+        resolveDerivedItems={resolveDerivedItems}
+      />
     </div>
   );
 }

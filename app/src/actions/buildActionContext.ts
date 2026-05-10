@@ -21,7 +21,7 @@ import type { TableObjectYMap } from '../store/types';
  * @param gridSnapEnabled - Optional grid snap enabled state
  * @param onGridSnapEnabledChange - Optional grid snap toggle callback
  * @param activeHandId - Optional currently active player hand ID
- * @param onOpenComponentSets - Optional callback to open component set modal
+ * @param onOpenLoadPicker - Optional callback to open the generic Load picker
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -32,7 +32,7 @@ export function buildActionContext(
   gridSnapEnabled?: boolean,
   onGridSnapEnabledChange?: (enabled: boolean) => void,
   activeHandId?: string,
-  onOpenComponentSets?: () => void,
+  onOpenLoadPicker?: (presetType?: string) => void,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -75,6 +75,6 @@ export function buildActionContext(
     gridSnapEnabled,
     onGridSnapEnabledChange,
     activeHandId,
-    onOpenComponentSets,
+    onOpenLoadPicker,
   };
 }

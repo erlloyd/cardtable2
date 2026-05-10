@@ -11,12 +11,13 @@
 import type {
   ComponentSet,
   GameAssets,
-  PluginApiImport,
+  LoadableProviderApiEndpoints,
+  LoadableProviderSource,
 } from '@cardtable2/shared';
 import type { TableObject } from '@cardtable2/shared';
 import { DeckImportSandbox } from './DeckImportSandbox';
 import { resolveComponentSet, instantiateComponentSet } from './componentSet';
-import { resolveParserModuleUrl } from './componentSetRegistry';
+import { resolveParserModuleUrl } from './loadablesRegistry';
 
 // ============================================================================
 // Types
@@ -25,7 +26,13 @@ import { resolveParserModuleUrl } from './componentSetRegistry';
 export interface ImportFromApiOptions {
   deckId: string;
   isPrivate: boolean;
-  apiImport: PluginApiImport;
+  /**
+   * The provider-source declaration carrying everything the engine needs:
+   * the parser-module path, the apiEndpoints templates, and the labels
+   * (the labels are surfaced through the modal UI; the engine itself only
+   * uses module + endpoints).
+   */
+  source: LoadableProviderSource;
   gameAssets: GameAssets;
 }
 
@@ -38,14 +45,12 @@ export type ImportResult =
 // ============================================================================
 
 function buildApiUrl(
-  apiImport: PluginApiImport,
+  endpoints: LoadableProviderApiEndpoints,
   deckId: string,
   isPrivate: boolean,
 ): string {
   const template =
-    isPrivate && apiImport.apiEndpoints.private
-      ? apiImport.apiEndpoints.private
-      : apiImport.apiEndpoints.public;
+    isPrivate && endpoints.private ? endpoints.private : endpoints.public;
 
   return template.replace('{deckId}', deckId);
 }
@@ -63,10 +68,18 @@ function buildApiUrl(
 export async function importFromApi(
   options: ImportFromApiOptions,
 ): Promise<ImportResult> {
-  const { deckId, isPrivate, apiImport, gameAssets } = options;
+  const { deckId, isPrivate, source, gameAssets } = options;
+
+  // 0. Validate provider config: apiEndpoints.public is required to fetch.
+  const endpoints = source.config?.apiEndpoints;
+  if (!endpoints || !endpoints.public) {
+    return {
+      error: `Provider "${source.module}" is missing required apiEndpoints.public for deck ${deckId}`,
+    };
+  }
 
   // 1. Build API URL
-  const apiUrl = buildApiUrl(apiImport, deckId, isPrivate);
+  const apiUrl = buildApiUrl(endpoints, deckId, isPrivate);
 
   // 2. Fetch from API
   let apiResponse: unknown;
@@ -87,7 +100,7 @@ export async function importFromApi(
   let componentSet: ComponentSet;
   const sandbox = new DeckImportSandbox();
   try {
-    const parserModuleUrl = resolveParserModuleUrl(apiImport.parserModule);
+    const parserModuleUrl = resolveParserModuleUrl(source.module);
     componentSet = await sandbox.parse({
       parserModuleUrl,
       apiResponse,

@@ -100,6 +100,10 @@ export class RendererMessageBus {
       'request-screen-coords',
       coordinates.handleRequestScreenCoords,
     );
+    this.registry.register(
+      'request-viewport-state',
+      coordinates.handleRequestViewportState,
+    );
 
     // Phantom drag (hand-to-board)
     this.registry.register(

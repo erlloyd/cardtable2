@@ -1472,6 +1472,61 @@ h1 {
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* Load Plugin from Local Directory (dev affordance) */
+.local-plugin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 1rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  width: 100%;
+  color: rgba(255, 255, 255, 0.85);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+  animation: fade-up 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 220ms;
+}
+
+.local-plugin-button:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.local-plugin-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.7);
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.local-plugin-button__icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.local-plugin-button__label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.local-plugin-button__hint {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.02em;
+}
+
 /* Loading Skeleton */
 @keyframes skeleton-shimmer {
   0% {
@@ -1827,117 +1882,95 @@ h1 {
   background-color: #4b5563;
 }
 
-/* Component Set Modal Styles */
-.cs-modal-dialog {
-  position: relative;
-  z-index: 50;
-}
-
-.cs-modal-backdrop {
+/* Deck Import Modal (ct-qbn) — modal for entering a deck-import provider's
+ * input (deck id + optional private flag). Replaces the legacy ComponentSet
+ * modal's selectedApiEntry detail view; same visual language as Load Picker
+ * (glass-morphism panel, blurred backdrop), portaled to document.body to
+ * escape ancestor backdrop-filter containing-blocks (CLAUDE.md memory). */
+.deck-import-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.cs-modal-container {
-  position: fixed;
-  inset: 0;
-  overflow-y: auto;
-}
-
-.cs-modal-wrapper {
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
   display: flex;
-  min-height: 100%;
   align-items: flex-start;
   justify-content: center;
   padding: 1rem;
-  padding-top: 20vh;
+  padding-top: 18vh;
 }
 
-.cs-modal-panel {
+.deck-import-panel {
   width: 100%;
   max-width: 28rem;
   border-radius: 0.75rem;
-  background-color: #111827;
-  padding: 1.5rem;
+  background-color: rgba(17, 24, 39, 0.95);
+  padding: 1.25rem 1.5rem;
   box-shadow:
-    0 20px 25px -5px rgb(0 0 0 / 0.3),
+    0 20px 25px -5px rgb(0 0 0 / 0.4),
     0 8px 10px -6px rgb(0 0 0 / 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.cs-modal-title {
+.deck-import-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.deck-import-title {
   font-size: 1.125rem;
   font-weight: 500;
   color: white;
-  margin-bottom: 1rem;
 }
 
-.cs-modal-error {
-  margin-bottom: 1rem;
+.deck-import-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: color 0.15s;
+}
+
+.deck-import-close:hover:not(:disabled) {
+  color: white;
+}
+
+.deck-import-close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.deck-import-error {
   border-radius: 0.5rem;
   background-color: rgba(127, 29, 29, 0.5);
   border: 1px solid rgba(185, 28, 28, 0.7);
-  padding: 0.75rem;
+  padding: 0.625rem 0.75rem;
   font-size: 0.875rem;
   color: #fecaca;
 }
 
-.cs-modal-entry {
-  width: 100%;
-  text-align: left;
-  border-radius: 0.5rem;
-  background-color: #1f2937;
-  padding: 0.75rem 1rem;
-  cursor: pointer;
-  border: none;
-  transition: background-color 0.15s;
-}
-
-.cs-modal-entry:hover {
-  background-color: #374151;
-}
-
-.cs-modal-entry:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cs-modal-entry-name {
-  color: white;
-  font-weight: 500;
-}
-
-.cs-modal-entry-desc {
-  font-size: 0.875rem;
-  color: #9ca3af;
-}
-
-.cs-modal-back {
-  font-size: 0.875rem;
-  color: #9ca3af;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  margin-bottom: 0.75rem;
+.deck-import-body {
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.cs-modal-back:hover {
-  color: white;
-}
-
-.cs-modal-label {
+.deck-import-label {
   display: block;
   font-size: 0.875rem;
   color: #d1d5db;
-  margin-bottom: 0.25rem;
 }
 
-.cs-modal-input {
+.deck-import-input {
   width: 100%;
   border-radius: 0.5rem;
   background-color: #1f2937;
@@ -1946,55 +1979,296 @@ h1 {
   color: white;
   outline: none;
   box-sizing: border-box;
+  font-size: 0.95rem;
 }
 
-.cs-modal-input:focus {
+.deck-import-input:focus {
   border-color: #3b82f6;
 }
 
-.cs-modal-input::placeholder {
+.deck-import-input::placeholder {
   color: #6b7280;
 }
 
-.cs-modal-checkbox-label {
+.deck-import-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deck-import-checkbox-label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
   color: #d1d5db;
+  margin-top: 0.25rem;
 }
 
-.cs-modal-submit {
-  width: 100%;
+.deck-import-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.deck-import-submit {
   border-radius: 0.5rem;
   background-color: #2563eb;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.25rem;
   color: white;
   font-weight: 500;
   border: none;
   cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color 0.15s;
 }
 
-.cs-modal-submit:hover {
+.deck-import-submit:hover:not(:disabled) {
   background-color: #3b82f6;
 }
 
-.cs-modal-submit:disabled {
+.deck-import-submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.cs-modal-empty {
-  color: #9ca3af;
+/* Load Picker Modal (ct-8gf.4) — generic two-step "Load…" picker.
+ * Portaled to document.body to escape ancestor backdrop-filter
+ * containing-blocks; see CLAUDE.md memory. */
+.load-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  padding-top: 12vh;
+}
+
+.load-picker-panel {
+  width: 100%;
+  max-width: 32rem;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.4),
+    0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+}
+
+.load-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.load-picker-title {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.load-picker-back,
+.load-picker-close {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  border-radius: 0.375rem;
+}
+
+.load-picker-back:hover,
+.load-picker-close:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.load-picker-back:focus-visible,
+.load-picker-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.7);
+}
+
+.load-picker-types {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  overflow-y: auto;
+  /* Reset native <ul> defaults so the semantic list markup (ct-rde) keeps
+     the prior visual layout. */
+  list-style: none;
+  margin: 0;
+}
+
+.load-picker-types-item {
+  /* Pass-through layout: <li> takes its width from the flex column and the
+     <button> child fills it. We avoid `display: contents` because some
+     screen readers historically dropped list semantics on contents-display
+     children. */
+  display: flex;
+}
+
+.load-picker-types-item > .load-picker-type {
+  flex: 1;
+}
+
+.load-picker-type {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.load-picker-type:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.load-picker-type:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.7);
+  border-color: rgba(99, 102, 241, 0.6);
+}
+
+.load-picker-type-label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 0.125rem;
+}
+
+.load-picker-type-meta {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.load-picker-type-mode {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+}
+
+.load-picker-step2 {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.load-picker-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  color: white;
+  outline: none;
+}
+
+.load-picker-search::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.load-picker-search:focus {
+  border-bottom-color: rgba(99, 102, 241, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.load-picker-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  /* Reset native <ul> defaults so the semantic list markup (ct-rde) keeps
+     the prior visual layout. */
+  list-style: none;
+  margin: 0;
+}
+
+.load-picker-items-item {
+  display: flex;
+}
+
+.load-picker-items-item > .load-picker-item {
+  flex: 1;
+}
+
+.load-picker-item {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.88);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.load-picker-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.load-picker-item:focus-visible {
+  outline: none;
+  background: rgba(79, 70, 229, 0.25);
+  border-color: rgba(99, 102, 241, 0.7);
+}
+
+.load-picker-empty {
+  padding: 1.5rem 1rem;
   font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.5);
   text-align: center;
-  padding: 1rem 0;
 }
 
-.cs-modal-space-y > * + * {
-  margin-top: 0.5rem;
-}
-
-.cs-modal-space-y-3 > * + * {
-  margin-top: 0.75rem;
+.load-picker-hint {
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }

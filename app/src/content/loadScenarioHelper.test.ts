@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { loadScenarioContent } from './loadScenarioHelper';
 import type { YjsStore } from '../store/YjsStore';
 import type { LoadedContent, LoadedScenarioMetadata } from './index';
-import type { TableObject, StackObject } from '@cardtable2/shared';
+import type {
+  TableObject,
+  StackObject,
+  LoadableEntry,
+} from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
+import { getLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 
 describe('loadScenarioContent', () => {
   let mockStore: YjsStore;
@@ -59,10 +64,12 @@ describe('loadScenarioContent', () => {
         cardTypes: {},
         cards: {
           CARD001: {
+            name: '',
             type: 'hero',
             face: '/assets/hero1.jpg',
           },
           CARD002: {
+            name: '',
             type: 'villain',
             face: '/assets/villain1.jpg',
           },
@@ -398,6 +405,140 @@ describe('loadScenarioContent', () => {
       loadScenarioContent(mockStore, mockContent, localDevMetadata, '[Test]');
 
       expect(mockStore.metadata.get('loadedScenario')).toBe(localDevMetadata);
+    });
+
+    it('clears stale pluginId metadata when loading a local-dev scenario (ct-62j)', () => {
+      // Simulate the regression scenario: a registry-driven plugin was loaded
+      // first (via GameSelector navigation), seeding `pluginId`. Then the
+      // user triggers Load Plugin from Directory, replacing the table's
+      // gameAssets with a local plugin. Without this clear, the next mount
+      // effect would re-fetch the registry plugin's assets and overwrite
+      // the local-plugin gameAssets — and any objects placed against the
+      // local plugin's cards would render as missing.
+      mockStore.metadata.set('pluginId', 'testgame');
+      const localDevMetadata: LoadedScenarioMetadata = {
+        type: 'local-dev',
+        loadedAt: Date.now(),
+        scenarioName: 'Local Dev Scenario',
+      };
+
+      loadScenarioContent(mockStore, mockContent, localDevMetadata, '[Test]');
+
+      expect(mockStore.metadata.has('pluginId')).toBe(false);
+      expect(mockStore.metadata.get('loadedScenario')).toBe(localDevMetadata);
+    });
+
+    it('preserves pluginId metadata when loading a registry-driven plugin scenario', () => {
+      // Counterpart to the local-dev clearing test. Plugin scenarios are
+      // bound to the table's plugin identity by design (ct-4wk), so the
+      // mount effect can re-load the plugin's assets on reload. Clearing
+      // pluginId here would defeat that.
+      mockStore.metadata.set('pluginId', 'testgame');
+      const pluginMetadata: LoadedScenarioMetadata = {
+        type: 'plugin',
+        pluginId: 'testgame',
+        scenarioFile: 'scenario1.json',
+        loadedAt: Date.now(),
+        scenarioName: 'Plugin Scenario',
+      };
+
+      loadScenarioContent(mockStore, mockContent, pluginMetadata, '[Test]');
+
+      expect(mockStore.metadata.get('pluginId')).toBe('testgame');
+    });
+  });
+
+  describe('loadables registry propagation (ct-erb)', () => {
+    beforeEach(() => {
+      clearLoadableEntries();
+    });
+
+    afterEach(() => {
+      clearLoadableEntries();
+    });
+
+    it('populates the loadables registry when loadables are supplied (local-dev path)', () => {
+      const localDevMetadata: LoadedScenarioMetadata = {
+        type: 'local-dev',
+        loadedAt: Date.now(),
+        scenarioName: 'Local Dev Scenario',
+      };
+      const loadables: LoadableEntry[] = [
+        {
+          type: 'scenario',
+          label: 'Scenario',
+          mode: 'replace',
+          source: {
+            kind: 'static',
+            items: [
+              {
+                id: 'testgame-basic',
+                label: 'Test Game - Basic Setup',
+                data: { file: 'testgame-basic.json' },
+              },
+            ],
+          },
+        },
+        {
+          type: 'card',
+          label: 'Card',
+          mode: 'additive',
+          source: { kind: 'asset-pack-derived', derivation: 'all-cards' },
+        },
+      ];
+
+      loadScenarioContent(
+        mockStore,
+        mockContent,
+        localDevMetadata,
+        '[Test]',
+        undefined,
+        undefined,
+        loadables,
+      );
+
+      const resolved = getLoadableEntries();
+      expect(resolved).toHaveLength(2);
+      expect(resolved[0].type).toBe('scenario');
+      expect(resolved[1].type).toBe('card');
+      // asset-pack-derived 'all-cards' should be materialized into a static
+      // list keyed off mockContent.content.cards (CARD001, CARD002).
+      expect(resolved[1].source.kind).toBe('static');
+      if (resolved[1].source.kind === 'static') {
+        expect(resolved[1].source.items.map((i) => i.id).sort()).toEqual([
+          'CARD001',
+          'CARD002',
+        ]);
+      }
+    });
+
+    it('clears the loadables registry when no loadables are supplied (plugin-switch leak guard)', () => {
+      // Seed the registry as if a previous plugin had populated it.
+      const previousLoadables: LoadableEntry[] = [
+        {
+          type: 'scenario',
+          label: 'Scenario',
+          mode: 'replace',
+          source: {
+            kind: 'static',
+            items: [{ id: 'old', label: 'Old', data: {} }],
+          },
+        },
+      ];
+      loadScenarioContent(
+        mockStore,
+        mockContent,
+        mockMetadata,
+        '[Test]',
+        undefined,
+        undefined,
+        previousLoadables,
+      );
+      expect(getLoadableEntries()).toHaveLength(1);
+
+      // Subsequent load with no loadables should empty the registry.
+      loadScenarioContent(mockStore, mockContent, mockMetadata, '[Test]');
+      expect(getLoadableEntries()).toEqual([]);
     });
   });
 });

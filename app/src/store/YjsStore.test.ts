@@ -436,10 +436,12 @@ describe('YjsStore', () => {
       },
       cards: {
         HERO001: {
+          name: '',
           type: 'hero',
           face: '/assets/hero001.jpg',
         },
         VILLAIN001: {
+          name: '',
           type: 'villain',
           face: '/assets/villain001.jpg',
         },
@@ -473,6 +475,7 @@ describe('YjsStore', () => {
         cards: {
           ...mockGameAssets.cards,
           HERO002: {
+            name: '',
             type: 'hero',
             face: '/assets/hero002.jpg',
           },
@@ -647,6 +650,7 @@ describe('YjsStore', () => {
         ...mockGameAssets,
         cards: {
           HERO003: {
+            name: '',
             type: 'hero',
             face: '/assets/hero003.jpg',
           },

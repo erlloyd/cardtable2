@@ -12,6 +12,8 @@ import {
   loadPluginRegistry,
   type PluginRegistryEntry,
 } from '../content/pluginLoader';
+import { loadLocalPluginAssets, setPendingLocalPlugin } from '../content';
+import { ACTION_LOAD_PLUGIN_DIRECTORY_FAILED } from '../constants/errorIds';
 
 export const Route = createFileRoute('/')({
   component: GameSelect,
@@ -61,6 +63,27 @@ function GameSelect() {
       params: { id: tableId },
       state: { pluginId: game.id } as Record<string, unknown>,
     });
+  };
+
+  const handleLoadLocalDirectory = async () => {
+    try {
+      const content = await loadLocalPluginAssets();
+      setPendingLocalPlugin(content);
+
+      const tableId = uniqueNamesGenerator(nameConfig);
+      void navigate({
+        to: '/table/$id',
+        params: { id: tableId },
+        state: { localDev: true } as Record<string, unknown>,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('[GameSelect] Failed to load plugin from directory', {
+        errorId: ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
+        error: errorMessage,
+      });
+      alert(`Failed to load plugin: ${errorMessage}`);
+    }
   };
 
   if (loading) {
@@ -148,6 +171,23 @@ function GameSelect() {
 
         <main className="game-select__main">
           <GameSelector games={games} onGameLaunch={handleGameLaunch} />
+          <button
+            type="button"
+            className="local-plugin-button"
+            onClick={() => {
+              void handleLoadLocalDirectory();
+            }}
+          >
+            <span className="local-plugin-button__icon" aria-hidden="true">
+              📁
+            </span>
+            <span className="local-plugin-button__label">
+              Load from local directory…
+            </span>
+            <span className="local-plugin-button__hint">
+              Dev: pick a plugin folder on disk
+            </span>
+          </button>
         </main>
       </div>
     </div>

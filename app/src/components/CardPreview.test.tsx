@@ -76,6 +76,7 @@ describe('CardPreview', () => {
 
     it('renders nothing when gameAssets is null', () => {
       const card: Card = {
+        name: '',
         type: 'hero',
         face: 'spiderman.jpg',
       };
@@ -97,6 +98,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -124,6 +126,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -153,6 +156,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -178,6 +182,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -206,6 +211,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -232,6 +238,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -260,6 +267,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -287,6 +295,7 @@ describe('CardPreview', () => {
         { hero: {} }, // No orientation
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -313,6 +322,7 @@ describe('CardPreview', () => {
         {},
         {
           rhino: {
+            name: '',
             type: 'villain',
             face: 'rhino.jpg',
           },
@@ -341,6 +351,7 @@ describe('CardPreview', () => {
         {},
         {
           rhino: {
+            name: '',
             type: 'villain',
             face: 'rhino.jpg',
           },
@@ -372,6 +383,7 @@ describe('CardPreview', () => {
         {},
         {
           rhino: {
+            name: '',
             type: 'villain',
             face: 'rhino.jpg',
           },
@@ -403,6 +415,7 @@ describe('CardPreview', () => {
         {},
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -434,6 +447,7 @@ describe('CardPreview', () => {
         {},
         {
           rhino: {
+            name: '',
             type: 'villain',
             face: 'rhino.jpg',
           },
@@ -466,6 +480,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -492,6 +507,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -518,6 +534,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -544,6 +561,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -573,6 +591,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -600,6 +619,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -627,6 +647,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -655,6 +676,7 @@ describe('CardPreview', () => {
         { hero: {} },
         {
           spiderman: {
+            name: '',
             type: 'hero',
             face: 'spiderman.jpg',
           },
@@ -687,6 +709,7 @@ describe('CardPreview', () => {
       mockUseImage.mockReturnValue([null, 'failed']);
 
       const card: Card = {
+        name: '',
         type: 'hero',
         face: 'front.jpg',
       };
@@ -712,6 +735,7 @@ describe('CardPreview', () => {
       mockUseImage.mockReturnValue([null, 'failed']);
 
       const card: Card = {
+        name: '',
         type: 'hero',
         face: 'front.jpg',
       };
@@ -744,6 +768,7 @@ describe('CardPreview', () => {
       mockUseImage.mockReturnValue([null, 'loading']);
 
       const card: Card = {
+        name: '',
         type: 'hero',
         face: 'front.jpg',
       };
@@ -775,11 +800,13 @@ describe('CardPreview', () => {
 
     it('shows partner face URL when face-down card has back_code pointing at an existing card', () => {
       const card: Card = {
+        name: '',
         type: 'main_scheme',
         face: 'https://example.com/01097a.jpg',
         back_code: '01097b',
       };
       const partner: Card = {
+        name: '',
         type: 'main_scheme',
         face: 'https://example.com/01097b.jpg',
       };
@@ -811,6 +838,7 @@ describe('CardPreview', () => {
 
     it('shows explicit card.back URL when face-down with no back_code', () => {
       const card: Card = {
+        name: '',
         type: 'player',
         face: 'https://example.com/face.jpg',
         back: 'https://example.com/explicit-back.jpg',
@@ -838,6 +866,7 @@ describe('CardPreview', () => {
 
     it('renders nothing when face-down card resolves to the generic cardType.back', () => {
       const card: Card = {
+        name: '',
         type: 'player',
         face: 'https://example.com/face.jpg',
       };
@@ -863,6 +892,7 @@ describe('CardPreview', () => {
 
     it('renders nothing when face-down card has back_code pointing at a missing card', () => {
       const card: Card = {
+        name: '',
         type: 'player',
         face: 'https://example.com/face.jpg',
         back_code: 'NONEXISTENT',
@@ -895,11 +925,13 @@ describe('CardPreview', () => {
 
     it('shows the face when faceUp is true, regardless of back_code', () => {
       const card: Card = {
+        name: '',
         type: 'main_scheme',
         face: 'https://example.com/01097a.jpg',
         back_code: '01097b',
       };
       const partner: Card = {
+        name: '',
         type: 'main_scheme',
         face: 'https://example.com/01097b.jpg',
       };
@@ -933,11 +965,13 @@ describe('CardPreview', () => {
       // Legacy callers that haven't migrated to the new shape should keep
       // working: face is shown unconditionally.
       const card: Card = {
+        name: '',
         type: 'main_scheme',
         face: 'https://example.com/01097a.jpg',
         back_code: '01097b',
       };
       const partner: Card = {
+        name: '',
         type: 'main_scheme',
         face: 'https://example.com/01097b.jpg',
       };

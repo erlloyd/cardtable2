@@ -5,7 +5,8 @@
  * to discover and load asset packs and scenarios.
  */
 
-import type { ComponentSetEntry } from '@cardtable2/shared';
+import type { LoadableEntry } from '@cardtable2/shared';
+import { getStaticItems } from './loadablesRegistry';
 import {
   PLUGIN_REGISTRY_FETCH_FAILED,
   PLUGIN_REGISTRY_PARSE_FAILED,
@@ -45,8 +46,15 @@ export interface PluginManifest {
   version: string;
   description?: string;
   assets: string[];
-  scenarios: string[];
-  componentSets?: ComponentSetEntry[];
+  /**
+   * Plugin-declared loadable categories (scenarios, decks, encounter sets,
+   * individual cards, …) surfaced through the generic Load… picker. Optional
+   * so manifests that ship only asset packs still validate. Scenarios that
+   * used to live on a top-level array are now declared here as a
+   * `type: 'scenario'` entry whose static items pin a `{ file }` payload
+   * (see {@link getPluginScenarioUrls}). See ct-8gf, ct-kpa.
+   */
+  loadables?: LoadableEntry[];
 }
 
 export interface LoadedPlugin {
@@ -236,18 +244,6 @@ export async function loadPluginManifest(
     throw new Error('Invalid plugin manifest: assets must be an array');
   }
 
-  if (!Array.isArray(obj.scenarios)) {
-    console.error(
-      '[PluginLoader] Invalid plugin manifest: scenarios not array',
-      {
-        errorId: PLUGIN_MANIFEST_INVALID,
-        url: manifestUrl,
-        scenariosType: typeof obj.scenarios,
-      },
-    );
-    throw new Error('Invalid plugin manifest: scenarios must be an array');
-  }
-
   return data as PluginManifest;
 }
 
@@ -402,12 +398,19 @@ export function getPluginAssetUrls(plugin: LoadedPlugin): string[] {
 }
 
 /**
- * Get all scenario URLs for a plugin
+ * Get all scenario URLs for a plugin.
+ *
+ * Sources scenario filenames from the manifest's `loadables[]` entries with
+ * `type: 'scenario'` (post-ct-kpa). Each scenario item pins a
+ * `{ file: string }` payload pointing at a JSON file under the plugin's
+ * baseUrl. Returns an empty array when no `scenario` loadable is declared.
  */
 export function getPluginScenarioUrls(plugin: LoadedPlugin): string[] {
-  return plugin.manifest.scenarios.map((filename) =>
-    getPluginScenarioUrl(plugin, filename),
+  const items = getStaticItems<{ file: string }>(
+    plugin.manifest.loadables ?? [],
+    'scenario',
   );
+  return items.map((item) => getPluginScenarioUrl(plugin, item.data.file));
 }
 
 // ============================================================================
@@ -525,14 +528,6 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
     throw new Error('Invalid plugin manifest: assets must be an array');
   }
 
-  if (!Array.isArray(obj.scenarios)) {
-    console.error('[PluginLoader] Invalid local plugin: scenarios not array', {
-      errorId: PLUGIN_MANIFEST_INVALID,
-      scenariosType: typeof obj.scenarios,
-    });
-    throw new Error('Invalid plugin manifest: scenarios must be an array');
-  }
-
   // Build file map
   const fileMap = new Map<string, File>();
   for (let i = 0; i < files.length; i++) {
@@ -540,7 +535,9 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
     fileMap.set(file.name, file);
   }
 
-  // Validate that all manifest files exist in the directory
+  // Validate that all manifest files exist in the directory.
+  // Asset files are declared on `assets[]`; scenario files are declared as
+  // static items on `loadables[]` entries with `type: 'scenario'` (ct-kpa).
   const missingFiles: string[] = [];
 
   for (const assetFile of obj.assets as string[]) {
@@ -549,7 +546,12 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
     }
   }
 
-  for (const scenarioFile of obj.scenarios as string[]) {
+  const loadables = Array.isArray(obj.loadables)
+    ? (obj.loadables as LoadableEntry[])
+    : [];
+  const scenarioItems = getStaticItems<{ file: string }>(loadables, 'scenario');
+  const scenarioFiles = scenarioItems.map((item) => item.data.file);
+  for (const scenarioFile of scenarioFiles) {
     if (!fileMap.has(scenarioFile)) {
       missingFiles.push(scenarioFile);
     }
@@ -561,7 +563,7 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
       pluginId: obj.id,
       missingFiles,
       manifestAssets: obj.assets,
-      manifestScenarios: obj.scenarios,
+      manifestScenarios: scenarioFiles,
       availableFiles: Array.from(fileMap.keys()),
     });
     throw new Error(
@@ -590,7 +592,7 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
     fileCount: fileMap.size,
     imageCount: imageUrls.size,
     assets: obj.assets,
-    scenarios: obj.scenarios,
+    scenarios: scenarioFiles,
   });
 
   return {

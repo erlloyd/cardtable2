@@ -96,3 +96,44 @@ export function handleRequestScreenCoords(
     screenCoords,
   });
 }
+
+/**
+ * Handle request-viewport-state message (ct-8gf.5).
+ *
+ * Snapshot the current camera + viewport into a `viewport-state` response so
+ * action handlers on the main thread can compute a viewport-center placement
+ * without taking a PixiJS dependency. Mirrors the world-vs-screen relationship
+ * documented in `app/src/utils/viewportPlacement.ts`.
+ *
+ * All values are reported in CSS pixels — matching the type docs in
+ * `MainToRendererMessage.viewport-state` and the `ViewportState` shape the
+ * placement primitive consumes.
+ *
+ * The renderer internally tracks `worldContainer.position` and
+ * `app.renderer.width/height` in physical canvas pixels (CSS × DPR — see
+ * `CameraManager.initialize`). On non-1.0 DPR displays sourcing the response
+ * straight from those buffers leaks DPR-scaled values across the boundary,
+ * which made the documented "CSS pixels" promise a lie. We divide camera
+ * position by DPR and source viewport dimensions from `app.screen` (PixiJS's
+ * CSS-pixel mirror of the canvas) so the placement primitive gets a
+ * consistent CSS-pixel snapshot. The consumer (`runStaticLoadable` /
+ * `runProviderLoadable` in `app/src/content/loadHandler.ts`) scales the
+ * resulting world coord back up by `devicePixelRatio` before storing the
+ * object's `_pos`, since the renderer otherwise expects positions in its
+ * native canvas-pixel world space.
+ */
+export function handleRequestViewportState(
+  _message: Extract<MainToRendererMessage, { type: 'request-viewport-state' }>,
+  context: RendererContext,
+): void {
+  const dpr = context.coordConverter.getDevicePixelRatio();
+  context.postResponse({
+    type: 'viewport-state',
+    cameraX: context.worldContainer.position.x / dpr,
+    cameraY: context.worldContainer.position.y / dpr,
+    cameraScale: context.coordConverter.getCameraScale(),
+    viewportWidth: context.app.screen.width,
+    viewportHeight: context.app.screen.height,
+    devicePixelRatio: dpr,
+  });
+}

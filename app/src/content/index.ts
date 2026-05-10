@@ -29,7 +29,7 @@ import {
   namespaceCardCode,
   instantiateScenario,
 } from './instantiate';
-import { setComponentSetEntries } from './componentSetRegistry';
+import { setLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 import {
   loadAllPlugins,
   loadPlugin,
@@ -209,21 +209,21 @@ export async function loadPluginAssets(pluginId: string): Promise<GameAssets> {
   const packs = await loadAssetPacks(packUrls);
   const assets = mergeAssetPacks(packs, baseUrl);
 
-  // Populate the component-set registry from the plugin manifest. The Load
-  // Components modal reads from this registry at click time. Before this
-  // line existed the registry was only populated by `loadScenarioContent`
-  // (called when a user explicitly loaded a scenario), so a user navigating
-  // to a fresh table — which now eagerly loads plugin assets without auto-
-  // loading a scenario (ct-4wk) — saw an empty modal. Calling this here
-  // makes any plugin-load path populate the registry idempotently;
-  // subsequent scenario loads pass the same data through the same setter,
-  // so no duplication concerns.
-  if (
-    plugin.manifest.componentSets &&
-    plugin.manifest.componentSets.length > 0
-  ) {
-    setComponentSetEntries(
-      plugin.manifest.componentSets,
+  // Populate the loadables registry from the plugin manifest. Static and
+  // provider sources pass through; asset-pack-derived sources are materialized
+  // here against the merged `assets` so consumers receive a uniform list of
+  // resolved items. Clear unconditionally first so a plugin-switch to a plugin
+  // with no loadables doesn't leak the previous plugin's entries. See ct-8gf.2.
+  //
+  // The plugin's `baseUrl` is also recorded on the registry so deck-import
+  // provider sources can resolve their parser-module path against the right
+  // origin (registered plugins use HTTP; local-dev plugins replace this via
+  // `loadScenarioContent` with a blob-URL map at navigation time).
+  clearLoadableEntries();
+  if (plugin.manifest.loadables && plugin.manifest.loadables.length > 0) {
+    setLoadableEntries(
+      plugin.manifest.loadables,
+      assets,
       plugin.registry.baseUrl,
     );
   }
@@ -279,41 +279,36 @@ export async function loadScenarioFromPlugin(
 }
 
 /**
- * Load a scenario from a local plugin directory
+ * Load a local-disk plugin's assets (no scenario instantiation).
  *
- * Prompts the user to select a plugin directory, reads all files locally,
- * and loads the scenario. This is useful for plugin development.
+ * Prompts the user to select a plugin directory, reads all asset packs
+ * locally, merges them, and rewrites relative image paths to blob URLs from
+ * the picked directory. The returned shape is designed to mirror what a
+ * registered plugin produces from `loadPluginAssets` — assets + the manifest
+ * the caller needs to populate the loadables[] runtime registry.
  *
- * @param scenarioFilename - The scenario filename from the plugin manifest
- * @returns Complete loaded content ready to be added to Y.Doc
+ * The local-dev path intentionally does NOT auto-load a scenario. The user
+ * picks one (or any other loadable) via the unified picker on the table,
+ * matching the registered-plugin UX.
  *
  * @example
  * ```typescript
- * const content = await loadLocalPluginScenario('marvelchampions-rhino-scenario.json');
- * // Add objects to Y.Doc
- * for (const [id, obj] of content.objects) {
- *   store.setObject(id, obj);
- * }
+ * const pending = await loadLocalPluginAssets();
+ * setPendingLocalPlugin(pending);
+ * navigate({ to: '/table/$id', params: { id: tableId }, state: { localDev: true } });
  * ```
  */
-export interface LoadedLocalPluginContent extends LoadedContent {
+export interface LoadedLocalPluginContent {
+  content: GameAssets;
   pluginManifest: PluginManifest;
   blobUrls: Map<string, string>; // filename → blob URL (for images and scripts)
 }
 
-export async function loadLocalPluginScenario(
-  scenarioFilename?: string,
-): Promise<LoadedLocalPluginContent> {
+export async function loadLocalPluginAssets(): Promise<LoadedLocalPluginContent> {
   // Prompt user to select directory
   const plugin = await loadLocalPluginDirectory();
 
-  // If no scenario specified, use first one from manifest
-  const targetScenario = scenarioFilename ?? plugin.manifest.scenarios[0];
-  if (!targetScenario) {
-    throw new Error('No scenario found in plugin manifest');
-  }
-
-  // Load ALL asset packs from the plugin manifest (not just scenario.packs)
+  // Load ALL asset packs from the plugin manifest
   const packs: AssetPack[] = [];
   for (const assetFilename of plugin.manifest.assets) {
     const packJson = await getLocalPluginFile(plugin, assetFilename);
@@ -324,23 +319,56 @@ export async function loadLocalPluginScenario(
   // Merge packs
   const content = mergeAssetPacks(packs);
 
-  // Load scenario JSON
-  const scenarioJson = await getLocalPluginFile(plugin, targetScenario);
-  const scenario = loadScenarioFromString(scenarioJson, targetScenario);
-
   // Replace relative image paths with blob URLs from local filesystem
   replaceImagePathsWithBlobUrls(content, plugin.imageUrls);
 
-  // Instantiate scenario objects
-  const objects = instantiateScenario(scenario, content);
-
   return {
-    scenario,
     content,
-    objects,
     pluginManifest: plugin.manifest,
     blobUrls: plugin.imageUrls,
   };
+}
+
+// ============================================================================
+// Pending Local Plugin Stash
+// ============================================================================
+
+/**
+ * Module-level stash for a local-dev plugin that has been loaded on the main
+ * screen but not yet applied to a table store.
+ *
+ * Flow:
+ *   1. Main screen: user picks a directory, `loadLocalPluginAssets()` returns
+ *      `LoadedLocalPluginContent` (assets-only — no scenario auto-loaded; see
+ *      ct-7kx). Caller stashes it via `setPendingLocalPlugin()` and navigates
+ *      to a fresh table with `state.localDev: true`.
+ *   2. Table mount: reads `state.localDev`, calls `consumePendingLocalPlugin()`
+ *      to retrieve the stashed content, applies the assets + populates the
+ *      loadables[] registry. The user then picks a scenario / card / etc. via
+ *      the unified Load picker, matching the registered-plugin UX.
+ *
+ * The stash is single-shot — `consume` clears it. If no consumer arrives (e.g.
+ * navigation cancelled, page reload), the next caller of `setPendingLocalPlugin`
+ * overwrites it; on hard reload the module state is gone, so no leakage.
+ */
+let pendingLocalPlugin: LoadedLocalPluginContent | null = null;
+
+/**
+ * Stash a freshly loaded local-dev plugin's content for application by the
+ * table route on the next navigation.
+ */
+export function setPendingLocalPlugin(content: LoadedLocalPluginContent): void {
+  pendingLocalPlugin = content;
+}
+
+/**
+ * Retrieve and clear the stashed local-dev plugin content. Returns `null` if
+ * no plugin is pending.
+ */
+export function consumePendingLocalPlugin(): LoadedLocalPluginContent | null {
+  const content = pendingLocalPlugin;
+  pendingLocalPlugin = null;
+  return content;
 }
 
 /**

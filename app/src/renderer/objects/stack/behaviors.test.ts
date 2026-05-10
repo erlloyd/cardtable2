@@ -121,6 +121,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         packs: [],
         cards: {
           card1: {
+            name: '',
             type: 'player',
             face: '/api/card-image/pack1/card1-face.jpg',
           },
@@ -214,6 +215,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         packs: [],
         cards: {
           card1: {
+            name: '',
             type: 'player',
             face: '/api/card-image/pack1/card1-face.jpg',
           },
@@ -333,6 +335,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         packs: [],
         cards: {
           card1: {
+            name: '',
             type: 'player',
             face: '/api/card-image/pack1/card1-face.jpg',
           },
@@ -394,6 +397,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         packs: [],
         cards: {
           card1: {
+            name: '',
             type: 'player',
             face: '/api/card-image/pack1/card1-face.jpg',
           },
@@ -511,6 +515,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
           packs: [],
           cards: {
             'card-1': {
+              name: '',
               face: '/api/card-image/pack1/card-1-face.jpg',
               back: '/api/card-image/pack1/card-1-back.jpg',
               type: 'player',
@@ -576,6 +581,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
           ...mockContext.gameAssets!,
           cards: {
             'card-1': {
+              name: '',
               face: '/api/card-image/pack1/card-1-face.jpg',
               type: 'player',
             },
@@ -747,6 +753,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
           ...mockContext.gameAssets!,
           cards: {
             'card-1': {
+              name: '',
               face: '/api/card-image/pack1/card-1-face.jpg',
               type: 'player',
             },
@@ -822,6 +829,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
           packs: [],
           cards: {
             card1: {
+              name: '',
               type: 'player',
               face: '/card1-face.jpg',
             },
@@ -1373,6 +1381,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         packs: [],
         cards: {
           card1: {
+            name: '',
             type: 'player',
             face: '/api/card-image/pack1/card1-face.jpg',
           },
@@ -1473,6 +1482,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
           packs: [],
           cards: {
             card1: {
+              name: '',
               type: 'player',
               face: '/api/card-image/pack1/card1-face.jpg',
             },

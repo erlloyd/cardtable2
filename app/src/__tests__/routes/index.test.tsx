@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import {
   createMemoryHistory,
@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-router';
 import { routeTree } from '../../routeTree.gen';
 import type { PluginRegistry } from '../../content/pluginLoader';
+import { DEV_MODE_STORAGE_KEY } from '../../hooks/useDevMode';
 
 const mockPluginRegistry: PluginRegistry = {
   plugins: [
@@ -160,6 +161,84 @@ describe('Index Route (GameSelect)', () => {
 
     await waitFor(() => {
       expect(router.state.location.pathname).toMatch(/^\/table\//);
+    });
+  });
+
+  describe('local-directory button visibility (ct-824)', () => {
+    beforeEach(() => {
+      window.localStorage.clear();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockPluginRegistry),
+          } as Response),
+        ),
+      );
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      window.localStorage.clear();
+    });
+
+    const renderRoute = async () => {
+      const router = createTestRouter();
+      await act(async () => {
+        render(<RouterProvider router={router} />);
+        await router.load();
+      });
+      // Wait until the games list has rendered — the local-dir button
+      // lives in the same `<main>` and only appears once the registry
+      // resolves.
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', { name: 'Select Fake Game' }),
+        ).toBeInTheDocument();
+      });
+    };
+
+    it('shows the local-directory button in Vite DEV mode by default', async () => {
+      vi.stubEnv('DEV', true);
+      await renderRoute();
+      expect(
+        screen.getByRole('button', { name: /Load from local directory/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('hides the local-directory button outside DEV when no dev-mode is persisted', async () => {
+      vi.stubEnv('DEV', false);
+      await renderRoute();
+      expect(
+        screen.queryByRole('button', { name: /Load from local directory/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows the local-directory button outside DEV when dev-mode is persisted', async () => {
+      vi.stubEnv('DEV', false);
+      window.localStorage.setItem(DEV_MODE_STORAGE_KEY, 'true');
+      await renderRoute();
+      expect(
+        screen.getByRole('button', { name: /Load from local directory/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows the "dev" indicator only when revealed via persisted dev-mode (not in DEV)', async () => {
+      vi.stubEnv('DEV', false);
+      window.localStorage.setItem(DEV_MODE_STORAGE_KEY, 'true');
+      await renderRoute();
+      expect(screen.getByLabelText('dev mode')).toBeInTheDocument();
+    });
+
+    it('does not show the "dev" indicator when in Vite DEV mode', async () => {
+      vi.stubEnv('DEV', true);
+      await renderRoute();
+      // Button is visible, indicator is not — the button itself signals "dev".
+      expect(
+        screen.getByRole('button', { name: /Load from local directory/i }),
+      ).toBeInTheDocument();
+      expect(screen.queryByLabelText('dev mode')).not.toBeInTheDocument();
     });
   });
 });

@@ -29,6 +29,7 @@
     "rbush": "^4.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-konami-code": "^2.3.0",
     "unique-names-generator": "^4.7.1",
     "use-image": "^1.1.4",
     "uuid": "^13.0.0",

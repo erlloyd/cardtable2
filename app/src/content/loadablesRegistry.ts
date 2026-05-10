@@ -166,7 +166,11 @@ function resolveEntry(
   const items = deriveItems(source.derivation, gameAssets);
   return {
     ...entry,
-    source: { kind: 'static', items },
+    // Preserve `derivedFrom` so the picker UI can re-detect that this was
+    // originally `all-cards` (and render the per-row card-image preview
+    // affordance) without depending on plugin-defined `type` strings
+    // (ct-87o).
+    source: { kind: 'static', items, derivedFrom: source.derivation },
   };
 }
 

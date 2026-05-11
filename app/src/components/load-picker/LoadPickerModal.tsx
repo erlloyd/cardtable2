@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { LoadableEntry, LoadableStaticItem } from '@cardtable2/shared';
+import type {
+  Card,
+  GameAssets,
+  LoadableEntry,
+  LoadableStaticItem,
+} from '@cardtable2/shared';
 import { fuzzySearch } from '../../utils/fuzzySearch';
+import { FullScreenCardPreview } from '../FullScreenCardPreview';
+import { CardPreviewPopover } from './CardPreviewPopover';
+import { useHoverCapable } from './useHoverCapable';
 
 /**
  * Cap on the number of items rendered for asset-pack-derived sources to
@@ -68,6 +76,15 @@ interface LoadPickerModalProps {
    * those entries.
    */
   resolveDerivedItems?: DerivedItemsResolver;
+  /**
+   * Active game assets — required to render the per-row card-image
+   * preview affordance (eye icon) on `asset-pack-derived` /
+   * `derivation: 'all-cards'` entries (ct-87o). Optional because the
+   * picker is also used for scenarios / encounter sets / decks where no
+   * preview is shown, and tests without a plugin loaded omit it. When
+   * absent, the picker simply doesn't render the eye icon.
+   */
+  gameAssets?: GameAssets | null;
 }
 
 /**
@@ -93,6 +110,7 @@ export function LoadPickerModal({
   presetType,
   onSelectItem,
   resolveDerivedItems,
+  gameAssets,
 }: LoadPickerModalProps) {
   const presetEntry = useMemo(
     () =>
@@ -207,6 +225,22 @@ export function LoadPickerModal({
     handleClose();
   };
 
+  // Card-image preview affordance is only meaningful for the "Card"
+  // loadable: scenarios / decks / encounter sets are loaded as a unit and
+  // don't have a single previewable image. We key off the source
+  // provenance — either a still-derived `asset-pack-derived` /
+  // `all-cards`, or a materialized `static` whose `derivedFrom` is
+  // `all-cards` (the registry materializes derived sources at populate
+  // time; see `loadablesRegistry.resolveEntry`). Both paths converge to
+  // items shaped `{ code: string }`, which is what the eye icon needs.
+  // Crucially we don't key off plugin-defined `type` strings (ct-87o).
+  const isCardEntry =
+    activeEntry !== null &&
+    ((activeEntry.source.kind === 'asset-pack-derived' &&
+      activeEntry.source.derivation === 'all-cards') ||
+      (activeEntry.source.kind === 'static' &&
+        activeEntry.source.derivedFrom === 'all-cards'));
+
   // Backdrop click — only close if the click landed on the backdrop
   // itself, not on the panel.  Prevents accidental closes when the
   // user releases a drag started inside the panel.
@@ -289,6 +323,8 @@ export function LoadPickerModal({
             query={query}
             onQueryChange={setQuery}
             onPickItem={handlePickItem}
+            isCardEntry={isCardEntry}
+            gameAssets={gameAssets ?? null}
           />
         )}
       </div>
@@ -325,12 +361,7 @@ function Step1TypeList({ loadables, onPickType }: Step1Props) {
             data-testid={`load-picker-type-${entry.type}`}
           >
             <div className="load-picker-type-label">{entry.label}</div>
-            <div className="load-picker-type-meta">
-              {describeSource(entry)}
-              <span className="load-picker-type-mode">
-                {entry.mode === 'replace' ? 'replace' : 'additive'}
-              </span>
-            </div>
+            <div className="load-picker-type-meta">{describeSource(entry)}</div>
           </button>
         </li>
       ))}
@@ -347,7 +378,7 @@ function describeSource(entry: LoadableEntry): string {
   if (source.kind === 'asset-pack-derived') {
     return source.derivation === 'all-cards' ? 'All cards' : 'All card sets';
   }
-  return 'Provider';
+  return source.config?.labels?.siteName ?? 'External import';
 }
 
 interface Step2Props {
@@ -356,6 +387,44 @@ interface Step2Props {
   query: string;
   onQueryChange: (q: string) => void;
   onPickItem: (item: LoadPickerItem) => void;
+  /**
+   * True when the active loadable is the card-image entry (asset-pack
+   * derived, 'all-cards'). Drives the per-row eye-icon affordance.
+   */
+  isCardEntry: boolean;
+  /**
+   * Game assets for resolving card images. Only consulted when
+   * `isCardEntry` is true. Null is tolerated — the eye icon is hidden.
+   */
+  gameAssets: GameAssets | null;
+}
+
+/**
+ * Per-row card-image preview state. We track the picker item that was
+ * activated plus the icon element that anchored the popover; both are
+ * needed because:
+ *
+ *   - the item gives us `data.code` to resolve the `Card`;
+ *   - the anchor gives the popover a stable position to flip / clamp
+ *     against, even when the list scrolls.
+ */
+interface PreviewState {
+  item: LoadPickerItem;
+  anchor: HTMLElement;
+}
+
+/**
+ * Read a `{ code: string }` payload off a picker item, returning `null`
+ * if the shape doesn't match. The `LoadPickerItem.data` field is `unknown`
+ * by design (the picker stays generic over scenarios / decks / cards).
+ * Asset-pack-derived 'all-cards' items always carry `{ code }` per
+ * `loadablesRegistry.deriveItems`, but a defensive narrowing keeps the
+ * types honest for tests and unforeseen callers.
+ */
+function readCardCode(data: unknown): string | null {
+  if (data === null || typeof data !== 'object') return null;
+  const code = (data as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
 }
 
 // Provider-source entries auto-fire from the modal-level effect (ct-yj2);
@@ -366,8 +435,37 @@ function Step2ItemList({
   query,
   onQueryChange,
   onPickItem,
+  isCardEntry,
+  gameAssets,
 }: Step2Props) {
   const showingCappedHint = !query.trim() && totalItems > items.length;
+  const hoverCapable = useHoverCapable();
+
+  // The *currently shown* preview, regardless of mode. On hover-capable
+  // devices it's set/cleared by mouseenter/leave on the eye icon; on
+  // touch devices it's set by clicking the icon and cleared by closing
+  // the modal. Storing the anchor element lets the popover follow the
+  // icon on scroll without an extra ref-by-id lookup.
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+
+  // Resolving "what to render" is shared between hover and touch paths.
+  // We tolerate a missing card (asset pack hasn't loaded the entry yet)
+  // by skipping render — the eye icon stays visible but does nothing.
+  const previewCard: { card: Card; cardCode: string } | null = useMemo(() => {
+    if (!preview || !gameAssets) return null;
+    const code = readCardCode(preview.item.data);
+    if (code === null) return null;
+    const card = gameAssets.cards[code];
+    if (!card) return null;
+    return { card, cardCode: code };
+  }, [preview, gameAssets]);
+
+  // Card-image preview shows the eye icon only when:
+  //   - the active loadable is the card entry, AND
+  //   - the host supplied gameAssets (otherwise we can't resolve images).
+  // Both conditions are checked at the row level for correctness when a
+  // host re-renders the picker mid-flow.
+  const showEyeIcon = isCardEntry && gameAssets !== null;
 
   if (totalItems === 0) {
     return <div className="load-picker-empty">No items available</div>;
@@ -393,6 +491,11 @@ function Step2ItemList({
         // row as a list item AND a button (ct-rde). Empty-match state
         // renders a plain message instead of an empty list to avoid an
         // <ul> with zero <li> children.
+        //
+        // For card entries the row also gets a sibling eye-icon button.
+        // Sibling (not nested) so we don't produce invalid HTML
+        // (button-in-button) and so each control has its own
+        // accessibility tree node.
         <ul
           className="load-picker-items"
           aria-label="Items"
@@ -408,6 +511,15 @@ function Step2ItemList({
               >
                 {it.label}
               </button>
+              {showEyeIcon && (
+                <CardPreviewIconButton
+                  item={it}
+                  hoverCapable={hoverCapable}
+                  onHoverIn={(anchor) => setPreview({ item: it, anchor })}
+                  onHoverOut={() => setPreview(null)}
+                  onTap={(anchor) => setPreview({ item: it, anchor })}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -419,6 +531,117 @@ function Step2ItemList({
           to narrow.
         </div>
       )}
+
+      {/*
+        Two preview surfaces — both are conditional on:
+          1. `preview` being set (a row was activated),
+          2. `previewCard` resolving (gameAssets present, card found).
+        Hover-capable devices get the popover; touch devices get the
+        full-screen modal. The hook flips reactively if the device's
+        capabilities change mid-session (rare but possible — e.g. user
+        unplugs a mouse).
+       */}
+      {preview && previewCard && hoverCapable && gameAssets && (
+        <CardPreviewPopover
+          card={previewCard.card}
+          cardCode={previewCard.cardCode}
+          gameAssets={gameAssets}
+          anchorEl={preview.anchor}
+          onClose={() => setPreview(null)}
+        />
+      )}
+      {preview && previewCard && !hoverCapable && gameAssets && (
+        <FullScreenCardPreview
+          card={previewCard.card}
+          cardCode={previewCard.cardCode}
+          faceUp={true}
+          gameAssets={gameAssets}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
+  );
+}
+
+interface CardPreviewIconButtonProps {
+  item: LoadPickerItem;
+  hoverCapable: boolean;
+  onHoverIn: (anchor: HTMLElement) => void;
+  onHoverOut: () => void;
+  onTap: (anchor: HTMLElement) => void;
+}
+
+/**
+ * Eye-icon button rendered alongside each card row. Stops click
+ * propagation so the row's "select item" handler doesn't fire — the
+ * affordance is preview-only (per the bd description, no click-to-pin
+ * v1). On hover-capable devices the icon doesn't *do* anything on click;
+ * the preview is purely hover-driven. On touch devices, click opens the
+ * full-screen modal.
+ */
+function CardPreviewIconButton({
+  item,
+  hoverCapable,
+  onHoverIn,
+  onHoverOut,
+  onTap,
+}: CardPreviewIconButtonProps) {
+  return (
+    <button
+      type="button"
+      className="load-picker-card-preview-btn"
+      aria-label={`Preview ${item.label}`}
+      data-testid={`load-picker-card-preview-${item.id}`}
+      onClick={(e) => {
+        // Always block the row select; the icon is its own affordance.
+        e.stopPropagation();
+        if (!hoverCapable) {
+          onTap(e.currentTarget);
+        }
+      }}
+      onMouseEnter={(e) => {
+        if (hoverCapable) onHoverIn(e.currentTarget);
+      }}
+      onMouseLeave={() => {
+        if (hoverCapable) onHoverOut();
+      }}
+      onFocus={(e) => {
+        // Keyboard-tab parity with hover: focusing the icon shows the
+        // popover on hover-capable devices. On touch devices we don't
+        // auto-open from focus (would clash with tap-to-open).
+        if (hoverCapable) onHoverIn(e.currentTarget);
+      }}
+      onBlur={() => {
+        if (hoverCapable) onHoverOut();
+      }}
+    >
+      <EyeIcon />
+    </button>
+  );
+}
+
+/**
+ * Inline eye SVG — kept out of an icon library because we use exactly
+ * one icon and the project doesn't currently depend on lucide / heroicons
+ * via a per-component import path. `aria-hidden` because the parent
+ * button carries the accessible label.
+ */
+function EyeIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   );
 }

@@ -1527,6 +1527,21 @@ h1 {
   letter-spacing: 0.02em;
 }
 
+.local-plugin-button__dev-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.25rem;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: rgba(199, 210, 254, 0.95);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 /* Loading Skeleton */
 @keyframes skeleton-shimmer {
   0% {
@@ -2171,16 +2186,6 @@ h1 {
   gap: 0.5rem;
 }
 
-.load-picker-type-mode {
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.25rem;
-  padding: 0.0625rem 0.375rem;
-}
-
 .load-picker-step2 {
   display: flex;
   flex-direction: column;
@@ -2225,10 +2230,50 @@ h1 {
 
 .load-picker-items-item {
   display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
 }
 
 .load-picker-items-item > .load-picker-item {
   flex: 1;
+}
+
+/*
+ * Eye-icon affordance for card rows (ct-87o). Sibling button to the row
+ * select; its onClick stops propagation so tapping the eye doesn't load
+ * the card. Matches the row's vertical rhythm; the icon's color picks
+ * up the row text color via currentColor.
+ */
+.load-picker-card-preview-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+  flex-shrink: 0;
+}
+
+.load-picker-card-preview-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.load-picker-card-preview-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.7);
+  border-color: rgba(99, 102, 241, 0.6);
+  color: white;
 }
 
 .load-picker-item {

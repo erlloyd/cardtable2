@@ -109,18 +109,26 @@ export function handleRequestScreenCoords(
  * `MainToRendererMessage.viewport-state` and the `ViewportState` shape the
  * placement primitive consumes.
  *
- * The renderer internally tracks `worldContainer.position` and
- * `app.renderer.width/height` in physical canvas pixels (CSS × DPR — see
- * `CameraManager.initialize`). On non-1.0 DPR displays sourcing the response
- * straight from those buffers leaks DPR-scaled values across the boundary,
- * which made the documented "CSS pixels" promise a lie. We divide camera
- * position by DPR and source viewport dimensions from `app.screen` (PixiJS's
- * CSS-pixel mirror of the canvas) so the placement primitive gets a
- * consistent CSS-pixel snapshot. The consumer (`runStaticLoadable` /
- * `runProviderLoadable` in `app/src/content/loadHandler.ts`) scales the
- * resulting world coord back up by `devicePixelRatio` before storing the
- * object's `_pos`, since the renderer otherwise expects positions in its
- * native canvas-pixel world space.
+ * Unit care (ct-t9z): the renderer is initialised with PixiJS as
+ *   `app.init({ width: clientWidth * dpr, height: clientHeight * dpr,
+ *               resolution: dpr, autoDensity: true, … })`
+ * (see `useCanvasLifecycle.ts` and `RendererOrchestrator.initialize`). With
+ * that config PixiJS's "stage units" (which is what `app.screen.width/height`
+ * and `worldContainer.position` carry) equal physical canvas pixels — NOT CSS
+ * pixels. `CameraManager.initialize` sets `worldContainer.position` from
+ * `app.renderer.width/height` (also physical px), so both inputs to this
+ * handler live in the same physical-px coordinate system. To honour the
+ * documented "CSS pixels" contract we must divide ALL of them by DPR — both
+ * the camera position AND the viewport dimensions. The earlier ct-rde version
+ * only divided the camera position, leaving viewport dims in physical px, so
+ * the placement primitive computed a world point that was DPR× too far from
+ * centre and additive loads landed near the canvas bottom-right corner on
+ * retina displays.
+ *
+ * The consumer (`handleLoadSelection` in `app/src/content/loadHandler.ts`)
+ * scales the resulting world coord back up by `devicePixelRatio` before
+ * storing the object's `_pos`, since the renderer otherwise expects positions
+ * in its native stage-unit world space.
  */
 export function handleRequestViewportState(
   _message: Extract<MainToRendererMessage, { type: 'request-viewport-state' }>,
@@ -132,8 +140,8 @@ export function handleRequestViewportState(
     cameraX: context.worldContainer.position.x / dpr,
     cameraY: context.worldContainer.position.y / dpr,
     cameraScale: context.coordConverter.getCameraScale(),
-    viewportWidth: context.app.screen.width,
-    viewportHeight: context.app.screen.height,
+    viewportWidth: context.app.screen.width / dpr,
+    viewportHeight: context.app.screen.height / dpr,
     devicePixelRatio: dpr,
   });
 }

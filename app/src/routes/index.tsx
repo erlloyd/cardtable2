@@ -7,6 +7,7 @@ import {
   Config,
 } from 'unique-names-generator';
 import { useState, useEffect } from 'react';
+import { useKonami } from 'react-konami-code';
 import GameSelector from '../components/GameSelector';
 import {
   loadPluginRegistry,
@@ -14,6 +15,7 @@ import {
 } from '../content/pluginLoader';
 import { loadLocalPluginAssets, setPendingLocalPlugin } from '../content';
 import { ACTION_LOAD_PLUGIN_DIRECTORY_FAILED } from '../constants/errorIds';
+import { useDevMode } from '../hooks/useDevMode';
 
 export const Route = createFileRoute('/')({
   component: GameSelect,
@@ -32,6 +34,20 @@ function GameSelect() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attemptCount, setAttemptCount] = useState(0);
+
+  // Dev tools (the "Load from local directory…" button) are always
+  // visible in local Vite dev (`pnpm dev`). In production builds the
+  // button is hidden until the user enters the Konami code, at which
+  // point dev-mode is persisted in localStorage so it survives reloads.
+  // See ct-824.
+  const isLocalDev = import.meta.env.DEV;
+  const { enabled: konamiDevMode, enable: enableDevMode } = useDevMode();
+  useKonami(enableDevMode);
+  const showLocalDir = isLocalDev || konamiDevMode;
+  // Show the subtle "dev" indicator only when revealed via Konami in a
+  // production build — in `pnpm dev` the button itself already labels
+  // the feature as a dev tool, so a second tag adds noise.
+  const showKonamiIndicator = !isLocalDev && konamiDevMode;
 
   useEffect(() => {
     const loadGames = async () => {
@@ -171,23 +187,33 @@ function GameSelect() {
 
         <main className="game-select__main">
           <GameSelector games={games} onGameLaunch={handleGameLaunch} />
-          <button
-            type="button"
-            className="local-plugin-button"
-            onClick={() => {
-              void handleLoadLocalDirectory();
-            }}
-          >
-            <span className="local-plugin-button__icon" aria-hidden="true">
-              📁
-            </span>
-            <span className="local-plugin-button__label">
-              Load from local directory…
-            </span>
-            <span className="local-plugin-button__hint">
-              Dev: pick a plugin folder on disk
-            </span>
-          </button>
+          {showLocalDir && (
+            <button
+              type="button"
+              className="local-plugin-button"
+              onClick={() => {
+                void handleLoadLocalDirectory();
+              }}
+            >
+              <span className="local-plugin-button__icon" aria-hidden="true">
+                📁
+              </span>
+              <span className="local-plugin-button__label">
+                Load from local directory…
+                {showKonamiIndicator && (
+                  <span
+                    className="local-plugin-button__dev-tag"
+                    aria-label="dev mode"
+                  >
+                    dev
+                  </span>
+                )}
+              </span>
+              <span className="local-plugin-button__hint">
+                Dev: pick a plugin folder on disk
+              </span>
+            </button>
+          )}
         </main>
       </div>
     </div>

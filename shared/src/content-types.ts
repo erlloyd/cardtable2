@@ -300,6 +300,15 @@ export interface LoadableStaticItem<TData = unknown> {
 export interface LoadableStaticSource<TData = unknown> {
   kind: 'static';
   items: Array<LoadableStaticItem<TData>>;
+  /**
+   * Provenance marker preserved when an `asset-pack-derived` source is
+   * materialized into a static source by the host's loadables registry
+   * (ct-87o). Lets downstream UI tell "all-cards" items apart from
+   * arbitrary plugin-declared static items without leaking plugin-defined
+   * `type` strings into the picker logic. Absent for genuinely-static
+   * (manifest-declared) sources.
+   */
+  derivedFrom?: LoadableDerivation;
 }
 
 /**

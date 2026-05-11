@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(bd:*)",
-      "Bash(jq -r *)",
+      "Bash(jq:*)",
+      "Bash(rg:*)",
       "Bash(pnpm typecheck)",
       "Bash(pnpm test)",
       "Bash(pnpm test:e2e)",

@@ -389,6 +389,75 @@ export interface LoadableEntry<TData = unknown> {
   source: LoadableItemSource<TData>; // How items are discovered
 }
 
+/**
+ * Counter-type-definition payload carried by `loadables[]` entries with
+ * `type: 'counter'`.
+ *
+ * Each plugin-declared counter type is the *template* a Counter instance is
+ * materialized from (auto-spawn or picker). Template-only by design — the
+ * instance-time fields (`typeId`, `currentValue`) are not part of the
+ * declaration; they are assigned when a Counter object is created from the
+ * template (see ct-c7c, ct-jxl).
+ *
+ * The loadable's `LoadableStaticItem.id` doubles as the counter type id —
+ * resolvers look up a type def by item id. The static item's `label` drives
+ * the picker UI; `text` (when set) is the small display label baked into the
+ * pill render.
+ *
+ * Conventional manifest entry:
+ *
+ * ```json
+ * {
+ *   "type": "counter",
+ *   "label": "Counter",
+ *   "mode": "additive",
+ *   "source": {
+ *     "kind": "static",
+ *     "items": [
+ *       {
+ *         "id": "damage",
+ *         "label": "Damage",
+ *         "data": {
+ *           "color": 16280146,
+ *           "text": "DMG",
+ *           "min": 0,
+ *           "max": 99,
+ *           "startingValue": 0
+ *         }
+ *       }
+ *     ]
+ *   }
+ * }
+ * ```
+ *
+ * Note the distinction from the `Counter` asset-pack interface above:
+ * `Counter` (`{label, min, max, start}`) is the *legacy* counter catalog
+ * entry used by `ComponentSetCounter.ref`. `CounterTypeDef` is the
+ * loadables-system payload for the typed-counter spawn flow.
+ */
+export interface CounterTypeDef {
+  /** RGB number for the pill body (e.g. `0xf39c12`). */
+  color: number;
+  /** Optional short display label baked into the pill (e.g. `"DMG"`). */
+  text?: string;
+  /** Optional icon image URL for icon-backed counters. */
+  img?: string;
+  /** Lower clamp on `currentValue`. */
+  min: number;
+  /** Upper clamp on `currentValue`. */
+  max: number;
+  /** Initial `currentValue` when an instance is materialized. */
+  startingValue: number;
+}
+
+/**
+ * Plugin-declared counter-loadable type string. Hard-coded here (rather than
+ * left as an arbitrary plugin-defined string) because the host's typed-counter
+ * spawn / picker / resolver consumers all key off this same constant; using a
+ * shared literal prevents drift across consumers.
+ */
+export const COUNTER_LOADABLE_TYPE = 'counter';
+
 // ============================================================================
 // Worker Communication Types
 // ============================================================================

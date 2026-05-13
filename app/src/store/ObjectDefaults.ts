@@ -1,4 +1,5 @@
 import { ObjectKind } from '@cardtable2/shared';
+import { createCounterMeta } from '../renderer/objects/counter/utils';
 
 /**
  * Object Defaults System
@@ -42,8 +43,36 @@ export function getDefaultProperties(
 
     case ObjectKind.Zone:
     case ObjectKind.Mat:
-    case ObjectKind.Counter:
       // No additional required properties beyond base TableObject
+      return {};
+
+    case ObjectKind.Counter:
+      // No additional required top-level properties beyond base TableObject.
+      // Counter template + instance fields live inside `_meta`; see
+      // `getDefaultMeta` and `createCounterMeta` for per-kind meta defaults.
+      return {};
+  }
+}
+
+/**
+ * Get default `_meta` values for a given object kind.
+ *
+ * Unlike `getDefaultProperties`, these are not top-level required object
+ * properties — they live inside the freeform `_meta` record. They are
+ * applied at create-time only (no automatic backfill), since `_meta` is
+ * kind-agnostic at the data-model layer.
+ *
+ * @param kind The object kind
+ * @returns Default `_meta` content for the kind (empty object by default)
+ */
+export function getDefaultMeta(kind: ObjectKind): Record<string, unknown> {
+  switch (kind) {
+    case ObjectKind.Counter:
+      return createCounterMeta();
+    case ObjectKind.Stack:
+    case ObjectKind.Token:
+    case ObjectKind.Zone:
+    case ObjectKind.Mat:
       return {};
   }
 }

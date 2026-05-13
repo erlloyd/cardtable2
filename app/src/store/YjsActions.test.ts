@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as Y from 'yjs';
 import { YjsStore, type ObjectChanges, toTableObject } from './YjsStore';
 import {
   createObject,
@@ -314,6 +315,160 @@ describe('YjsActions - createObject', () => {
       expect(stack?._kind).toBe(ObjectKind.Stack);
       expect(token?._kind).toBe(ObjectKind.Token);
       expect(zone?._kind).toBe(ObjectKind.Zone);
+    });
+  });
+
+  describe('Counter Meta (ct-c7c)', () => {
+    it('populates the full CounterMeta template + instance fields with defaults', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 10, y: 20, r: 0 },
+      });
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      expect(obj._kind).toBe(ObjectKind.Counter);
+      expect(obj._meta).toEqual({
+        type: 'generic',
+        typeId: 'generic',
+        color: 0xf39c12,
+        min: 0,
+        max: 99,
+        startingValue: 0,
+        currentValue: 0,
+      });
+    });
+
+    it('lets caller override individual CounterMeta fields and derives currentValue from startingValue', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: { startingValue: 3, color: 0x123456 },
+      });
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      expect(obj._meta.startingValue).toBe(3);
+      expect(obj._meta.currentValue).toBe(3); // follows startingValue
+      expect(obj._meta.color).toBe(0x123456);
+      // Other fields keep defaults
+      expect(obj._meta.type).toBe('generic');
+      expect(obj._meta.typeId).toBe('generic');
+      expect(obj._meta.min).toBe(0);
+      expect(obj._meta.max).toBe(99);
+    });
+
+    it('allows currentValue override independently of startingValue', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: { startingValue: 5, currentValue: 12 },
+      });
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      expect(obj._meta.startingValue).toBe(5);
+      expect(obj._meta.currentValue).toBe(12);
+    });
+
+    it('captures plugin-defined type with typeId provenance', () => {
+      const id = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: {
+          type: 'threat',
+          typeId: 'threat',
+          text: 'THR',
+          min: 0,
+          max: 50,
+          startingValue: 0,
+        },
+      });
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      expect(obj._meta.type).toBe('threat');
+      expect(obj._meta.typeId).toBe('threat');
+      expect(obj._meta.text).toBe('THR');
+      expect(obj._meta.max).toBe(50);
+    });
+
+    it('retains typeId when other fields diverge from the template', () => {
+      // Simulates a plugin-typed counter whose currentValue and color have
+      // since drifted from the type def; typeId still records its origin.
+      const id = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: {
+          type: 'threat',
+          typeId: 'threat',
+          color: 0xaa0000, // diverges from type-def default
+          currentValue: 42, // diverges from startingValue
+        },
+      });
+
+      const obj = toTableObject(store.getObjectYMap(id)!);
+      expect(obj._meta.typeId).toBe('threat');
+      expect(obj._meta.color).toBe(0xaa0000);
+      expect(obj._meta.currentValue).toBe(42);
+    });
+
+    it('only includes optional text and img when explicitly provided', () => {
+      const idWithoutOptionals = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+      });
+      const objWithoutOptionals = toTableObject(
+        store.getObjectYMap(idWithoutOptionals)!,
+      );
+      expect(objWithoutOptionals._meta).not.toHaveProperty('text');
+      expect(objWithoutOptionals._meta).not.toHaveProperty('img');
+
+      const idWithOptionals = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: { text: 'HP', img: 'https://example.com/heart.png' },
+      });
+      const objWithOptionals = toTableObject(
+        store.getObjectYMap(idWithOptionals)!,
+      );
+      expect(objWithOptionals._meta.text).toBe('HP');
+      expect(objWithOptionals._meta.img).toBe('https://example.com/heart.png');
+    });
+
+    it('round-trips all CounterMeta fields through the Y.Map (cross-client sync surface)', () => {
+      // Two Y.Docs sharing state via Yjs updates is the closest unit-level
+      // analogue to multi-client sync; if the meta blob round-trips through
+      // an update payload, the same fields reach remote peers.
+      const sourceId = createObject(store, {
+        kind: ObjectKind.Counter,
+        pos: { x: 0, y: 0, r: 0 },
+        meta: {
+          type: 'threat',
+          typeId: 'threat',
+          color: 0xff8800,
+          text: 'THR',
+          img: 'https://example.com/threat.png',
+          min: 0,
+          max: 25,
+          startingValue: 5,
+          currentValue: 17,
+        },
+      });
+
+      // Capture state via the same conversion path used by the renderer.
+      const sourceObj = toTableObject(store.getObjectYMap(sourceId)!);
+
+      // Apply the underlying Y.Doc's encoded state to a fresh store; this
+      // mirrors what the WebsocketProvider does on a remote peer.
+      const encoded = Y.encodeStateAsUpdate(store.getDoc());
+
+      const peerStore = new YjsStore('peer-table');
+      Y.applyUpdate(peerStore.getDoc(), encoded);
+
+      const peerObj = toTableObject(peerStore.getObjectYMap(sourceId)!);
+
+      expect(peerObj._meta).toEqual(sourceObj._meta);
+      expect(peerObj._meta.typeId).toBe('threat');
+      expect(peerObj._meta.currentValue).toBe(17);
+
+      peerStore.destroy();
     });
   });
 

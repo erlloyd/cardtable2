@@ -1,9 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { ObjectKind } from '@cardtable2/shared';
 import {
+  getDefaultMeta,
   getDefaultProperties,
   hasAllRequiredProperties,
 } from './ObjectDefaults';
+import {
+  COUNTER_DEFAULT_COLOR,
+  COUNTER_DEFAULT_MAX,
+  COUNTER_DEFAULT_MIN,
+  COUNTER_DEFAULT_STARTING_VALUE,
+  COUNTER_TYPE_GENERIC,
+} from '../renderer/objects/counter/constants';
 
 describe('ObjectDefaults', () => {
   describe('getDefaultProperties', () => {
@@ -159,6 +167,35 @@ describe('ObjectDefaults', () => {
       };
 
       expect(hasAllRequiredProperties(obj)).toBe(true);
+    });
+  });
+
+  describe('getDefaultMeta', () => {
+    it('should return an empty object for Stack, Token, Zone, Mat', () => {
+      expect(getDefaultMeta(ObjectKind.Stack)).toEqual({});
+      expect(getDefaultMeta(ObjectKind.Token)).toEqual({});
+      expect(getDefaultMeta(ObjectKind.Zone)).toEqual({});
+      expect(getDefaultMeta(ObjectKind.Mat)).toEqual({});
+    });
+
+    it('should return the full generic CounterMeta for Counter', () => {
+      const meta = getDefaultMeta(ObjectKind.Counter);
+
+      expect(meta).toEqual({
+        type: COUNTER_TYPE_GENERIC,
+        typeId: COUNTER_TYPE_GENERIC,
+        color: COUNTER_DEFAULT_COLOR,
+        min: COUNTER_DEFAULT_MIN,
+        max: COUNTER_DEFAULT_MAX,
+        startingValue: COUNTER_DEFAULT_STARTING_VALUE,
+        currentValue: COUNTER_DEFAULT_STARTING_VALUE,
+      });
+    });
+
+    it('Counter default meta should not include optional text or img', () => {
+      const meta = getDefaultMeta(ObjectKind.Counter);
+      expect(meta).not.toHaveProperty('text');
+      expect(meta).not.toHaveProperty('img');
     });
   });
 });

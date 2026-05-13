@@ -22,8 +22,6 @@ import type { TableObjectYMap } from '../store/types';
  * @param onGridSnapEnabledChange - Optional grid snap toggle callback
  * @param activeHandId - Optional currently active player hand ID
  * @param onOpenLoadPicker - Optional callback to open the generic Load picker
- * @param onSpawnGenericCounter - Optional callback to spawn a generic counter
- *   at viewport center (ct-73z)
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -35,7 +33,6 @@ export function buildActionContext(
   onGridSnapEnabledChange?: (enabled: boolean) => void,
   activeHandId?: string,
   onOpenLoadPicker?: (presetType?: string) => void,
-  onSpawnGenericCounter?: () => void,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -80,6 +77,5 @@ export function buildActionContext(
     onGridSnapEnabledChange,
     activeHandId,
     onOpenLoadPicker,
-    onSpawnGenericCounter,
   };
 }

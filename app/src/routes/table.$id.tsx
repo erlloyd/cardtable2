@@ -60,8 +60,7 @@ import {
   setDeckInputProvider,
   type DeckInputResult,
 } from '../content/loadHandler';
-import { spawnGenericCounter } from '../content/counterSpawn';
-import { getLoadableEntries } from '../content/loadablesRegistry';
+import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
 import { dbg } from '../dev/dbg';
@@ -135,7 +134,7 @@ function Table() {
     presetType?: string;
   }>({ open: false });
   const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntries(),
+    getLoadableEntriesForUi(),
   );
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
@@ -242,7 +241,7 @@ function Table() {
   // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
   // here whenever gameAssets change so plugin switches drop stale entries.
   useEffect(() => {
-    const entries = getLoadableEntries();
+    const entries = getLoadableEntriesForUi();
     setLoadables(entries);
     unregisterLoadablesActions();
     if (entries.length > 0) {
@@ -732,30 +731,6 @@ function Table() {
     [store],
   );
 
-  // Always-available "Load Counter..." action (ct-73z) — drops a generic
-  // counter at viewport center via the shared spawnGenericCounter helper.
-  // Mirrors the boardRef + viewport-state plumbing used by handleLoadSelection.
-  const handleSpawnGenericCounter = useCallback(() => {
-    if (!store) return;
-    const board = boardRef.current;
-    void spawnGenericCounter({
-      store,
-      getViewportState: () => {
-        if (!board) {
-          return Promise.resolve({
-            cameraX: 0,
-            cameraY: 0,
-            cameraScale: 1,
-            viewportWidth: 0,
-            viewportHeight: 0,
-            devicePixelRatio: window.devicePixelRatio || 1,
-          });
-        }
-        return board.getViewportState();
-      },
-    });
-  }, [store]);
-
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -770,7 +745,6 @@ function Table() {
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
       handleOpenLoadPicker,
-      handleSpawnGenericCounter,
     );
 
     if (context) {
@@ -792,7 +766,6 @@ function Table() {
     setGridSnapEnabled,
     handPanel.activeHandId,
     handleOpenLoadPicker,
-    handleSpawnGenericCounter,
   ]);
 
   // Enable keyboard shortcuts

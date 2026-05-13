@@ -11,6 +11,7 @@ import {
   getCounterTypeDef,
   getAllCounterTypeDefs,
 } from './counterRegistry';
+import { COUNTER_TYPE_GENERIC } from '../renderer/objects/counter/constants';
 
 function createGameAssets(overrides: Partial<GameAssets> = {}): GameAssets {
   return {
@@ -183,9 +184,18 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
     clearLoadableEntries();
   });
 
-  it('returns undefined when no plugin is loaded', () => {
+  it('returns undefined for unknown ids when no plugin is loaded, but the synthetic Generic (ct-8vh) is always resolvable', () => {
     expect(getCounterTypeDef('damage')).toBeUndefined();
-    expect(getAllCounterTypeDefs()).toEqual([]);
+    // ct-8vh: the loadables registry's UI view injects a synthetic Generic
+    // counter so `Load Counter…` can always spawn one. The registry consumers
+    // see it too — `getAllCounterTypeDefs()` lists it; the point lookup for
+    // 'generic' resolves.
+    const all = getAllCounterTypeDefs();
+    expect(all).toHaveLength(1);
+    expect(all[0].typeId).toBe(COUNTER_TYPE_GENERIC);
+    const generic = getCounterTypeDef(COUNTER_TYPE_GENERIC);
+    expect(generic?.typeId).toBe(COUNTER_TYPE_GENERIC);
+    expect(generic?.label).toBe('Generic');
   });
 
   it('resolves a single counter type from a plugin manifest', () => {
@@ -211,7 +221,7 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
     expect(getCounterTypeDef('unknown')).toBeUndefined();
   });
 
-  it('lists every declared counter type', () => {
+  it('lists every declared counter type alongside the synthetic Generic (ct-8vh)', () => {
     const entry = counterEntry([
       { typeId: 'damage', label: 'Damage', data: validDef },
       {
@@ -223,8 +233,10 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
     setLoadableEntries([entry], createGameAssets());
 
     const list = getAllCounterTypeDefs();
-    expect(list).toHaveLength(2);
+    // 2 plugin-declared + 1 synthetic Generic (prepended by the UI view).
+    expect(list).toHaveLength(3);
     const byId = Object.fromEntries(list.map((r) => [r.typeId, r]));
+    expect(byId[COUNTER_TYPE_GENERIC]?.label).toBe('Generic');
     expect(byId['damage']?.label).toBe('Damage');
     expect(byId['damage']?.def).toEqual(validDef);
     expect(byId['threat']?.label).toBe('Threat');
@@ -257,7 +269,8 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
     it('flattens counter types across multiple `type: counter` entries', () => {
       // Plugins may declare more than one `counter` loadable (e.g. grouped
       // by theme); the resolver flattens them. Matches the `scenario`
-      // precedent in getLoadablesOfType tests.
+      // precedent in getLoadablesOfType tests. The synthetic Generic
+      // counter (ct-8vh) appears alongside the plugin-declared types.
       const entryA = counterEntry([
         { typeId: 'damage', label: 'Damage', data: validDef },
       ]);
@@ -273,7 +286,8 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       const ids = getAllCounterTypeDefs()
         .map((r) => r.typeId)
         .sort();
-      expect(ids).toEqual(['damage', 'threat']);
+      // Alphabetical sort: damage < generic < threat.
+      expect(ids).toEqual(['damage', COUNTER_TYPE_GENERIC, 'threat']);
     });
   });
 
@@ -288,8 +302,11 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       setLoadableEntries([entry], createGameAssets());
 
       const list = getAllCounterTypeDefs();
-      expect(list).toHaveLength(1);
-      expect(list[0].typeId).toBe('valid');
+      // Synthetic Generic (ct-8vh) + the one valid plugin-declared type;
+      // the malformed `bad` entry is dropped with a warning.
+      expect(list).toHaveLength(2);
+      const ids = list.map((r) => r.typeId).sort();
+      expect(ids).toEqual([COUNTER_TYPE_GENERIC, 'valid']);
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("dropping malformed counter type 'bad'"),
       );
@@ -311,9 +328,12 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       setLoadableEntries([entry], createGameAssets());
 
       const list = getAllCounterTypeDefs();
-      expect(list).toHaveLength(1);
-      expect(list[0].label).toBe('Damage A');
-      expect(list[0].def.color).toBe(validDef.color);
+      // Synthetic Generic + the first declaration of `damage`. The duplicate
+      // is dropped with a warning.
+      expect(list).toHaveLength(2);
+      const damage = list.find((r) => r.typeId === 'damage');
+      expect(damage?.label).toBe('Damage A');
+      expect(damage?.def.color).toBe(validDef.color);
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("duplicate counter type id 'damage'"),
       );

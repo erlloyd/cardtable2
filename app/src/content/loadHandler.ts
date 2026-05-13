@@ -20,6 +20,7 @@
  */
 
 import {
+  COUNTER_LOADABLE_TYPE,
   ObjectKind,
   type GameAssets,
   type LoadableEntry,
@@ -39,6 +40,8 @@ import {
 } from './index';
 import { loadScenarioContent } from './loadScenarioHelper';
 import { importFromApi } from './DeckImportEngine';
+import { getCounterTypeDef } from './counterRegistry';
+import { createCounterMeta } from '../renderer/objects/counter/utils';
 import {
   getViewportCenterPlacement,
   type ViewportState,
@@ -214,6 +217,16 @@ export async function handleLoadSelection(
     console.warn('[Load] Additive picker fired with null item', {
       entryType: entry.type,
     });
+    return;
+  }
+
+  // Counter branch (ct-8vh): the counter loadable type spawns a typed (or
+  // synthetic Generic) counter directly via createObject / createCounterMeta.
+  // Handled BEFORE the gameAssets gate because counter spawning needs no
+  // asset-pack data — the type def is the entire payload (resolved via
+  // counterRegistry, which knows about the synthetic Generic injection).
+  if (entry.type === COUNTER_LOADABLE_TYPE) {
+    await instantiateCounter(item, deps);
     return;
   }
 
@@ -424,6 +437,89 @@ function addObjectsAt(
     offset++;
     store.setObject(id, next);
   }
+}
+
+/**
+ * Materialise a Counter object at viewport center for the picker's counter
+ * branch (ct-8vh).
+ *
+ * Resolves `item.typeId` against the counter registry — both the synthetic
+ * Generic (`typeId === 'generic'`, injected by the loadables registry's UI
+ * view) and plugin-declared typed counters (e.g. damage / threat) flow
+ * through the same lookup. Failure modes:
+ *
+ *  - viewport-state read rejects: log + abort (no counter spawned).
+ *  - registry lookup returns `undefined`: log + abort. This shouldn't happen
+ *    because the picker only surfaces items the registry advertises, but a
+ *    defensive guard keeps the failure mode legible.
+ *  - registry lookup throws (malformed plugin declaration matching this
+ *    typeId): log + abort. `getCounterTypeDef` deliberately throws on
+ *    malformed matched ids — see counterRegistry.ts doc.
+ */
+async function instantiateCounter(
+  item: { typeId: string; label: string; data: unknown },
+  deps: HandleLoadSelectionDeps,
+): Promise<void> {
+  let viewport: ViewportState;
+  try {
+    viewport = await deps.getViewportState();
+  } catch (error) {
+    console.error('[Load] Failed to read viewport state for counter', {
+      errorId: LOAD_ADDITIVE_FAILED,
+      itemId: item.typeId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+
+  // No jitter — single object, predictable placement. Matches the spec for
+  // counter spawning (single anchor at viewport center).
+  const placement = toCanvasPxPlacement(
+    getViewportCenterPlacement(viewport, { jitterRadius: 0 }),
+    viewport.devicePixelRatio,
+  );
+
+  let resolved;
+  try {
+    resolved = getCounterTypeDef(item.typeId);
+  } catch (error) {
+    console.error('[Load] Counter type def is malformed', {
+      errorId: LOAD_ADDITIVE_FAILED,
+      itemId: item.typeId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+
+  if (!resolved) {
+    console.warn('[Load] Counter typeId not found in registry', {
+      itemId: item.typeId,
+    });
+    return;
+  }
+
+  const meta = createCounterMeta({
+    type: resolved.typeId,
+    typeId: resolved.typeId,
+    color: resolved.def.color,
+    min: resolved.def.min,
+    max: resolved.def.max,
+    startingValue: resolved.def.startingValue,
+    text: resolved.def.text,
+    img: resolved.def.img,
+  });
+
+  const position: Position = { x: placement.x, y: placement.y, r: 0 };
+  const id = createObject(deps.store, {
+    kind: ObjectKind.Counter,
+    pos: position,
+    meta,
+  });
+
+  dbg(
+    'plugin-loading',
+    `Spawned counter '${resolved.typeId}' id=${id} at (${position.x.toFixed(1)}, ${position.y.toFixed(1)})`,
+  );
 }
 
 /**

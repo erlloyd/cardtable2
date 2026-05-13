@@ -1,12 +1,17 @@
 /**
- * Action-registration smoke tests for ct-8gf.5.
+ * Action-registration smoke tests for ct-8gf.5 (+ ct-8vh course-correction).
  *
- * Two things this file pins down:
+ * What this file pins down:
  *  1. The hardcoded `load-scenario` and `load-marvelchampions-rhino` actions
  *     are gone — `getAction()` returns `undefined` for both ids.
- *  2. The new generic `load` action and the dynamic `load-<type>` actions
- *     produced by {@link registerLoadablesActions} are present and route
- *     selection through the new `onOpenLoadPicker` callback.
+ *  2. The generic `load` action routes selection through `onOpenLoadPicker`.
+ *  3. The dynamic `load-<type>` actions produced by
+ *     {@link registerLoadablesActions} cover every loadable type the host
+ *     surfaces, including `counter`. Per ct-8vh the counter type is no
+ *     longer special-cased: the loadables registry's UI view always
+ *     includes a counter entry (synthetic Generic + any plugin-declared
+ *     typed counters), so `load-counter` is registered through the regular
+ *     per-type path and routes through the picker.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -84,6 +89,17 @@ describe('registerDefaultActions / load actions', () => {
     expect(onOpenLoadPicker).toHaveBeenCalledTimes(1);
     expect(onOpenLoadPicker.mock.calls[0]).toEqual([]);
   });
+
+  // ct-8vh: load-counter is no longer registered by registerDefaultActions
+  // (the always-available built-in is gone). It comes from
+  // registerLoadablesActions like every other per-type Load action — and the
+  // counter loadable entry is guaranteed by the loadablesRegistry UI view's
+  // synthetic Generic injection, so in real route flow it's always present.
+  it('does NOT register load-counter from registerDefaultActions alone (ct-8vh)', () => {
+    expect(
+      ActionRegistry.getInstance().getAction('load-counter'),
+    ).toBeUndefined();
+  });
 });
 
 describe('registerLoadablesActions / per-type Load <X>… actions', () => {
@@ -150,56 +166,18 @@ describe('registerLoadablesActions / per-type Load <X>… actions', () => {
       ActionRegistry.getInstance().getAction('load-components'),
     ).toBeUndefined();
   });
-});
 
-describe('always-available load-counter action (ct-73z)', () => {
-  beforeEach(() => {
-    ActionRegistry.getInstance().clear();
-    registerDefaultActions();
-  });
-
-  afterEach(() => {
-    ActionRegistry.getInstance().clear();
-  });
-
-  it('registers load-counter unconditionally (no plugin loadables)', () => {
-    const action = ActionRegistry.getInstance().getAction('load-counter');
-    expect(action).toBeDefined();
-    expect(action?.label).toBe('Load Counter…');
-  });
-
-  it('keeps load-counter present when plugin DOES declare counter loadables', () => {
-    // Simulating a plugin that declares its own counter loadables —
-    // registerLoadablesActions must NOT overwrite or register a duplicate
-    // load-counter (it skips the counter type by design).
-    const pluginLoadables: LoadableEntry[] = [
-      {
-        type: 'counter',
-        label: 'Counter',
-        mode: 'additive',
-        source: { kind: 'static', items: [] },
-      },
-      {
-        type: 'card',
-        label: 'Card',
-        mode: 'additive',
-        source: { kind: 'static', items: [] },
-      },
-    ];
-    registerLoadablesActions(pluginLoadables);
-
-    // Built-in load-counter still authoritative with the unchanged label —
-    // proves registerLoadablesActions did NOT overwrite it with a
-    // plugin-defined label.
-    const action = ActionRegistry.getInstance().getAction('load-counter');
-    expect(action).toBeDefined();
-    expect(action?.label).toBe('Load Counter…');
-    // Non-counter loadables still registered.
-    expect(ActionRegistry.getInstance().getAction('load-card')).toBeDefined();
-  });
-
-  it('load-counter survives unregisterLoadablesActions (built-in, not dynamic)', () => {
-    const pluginLoadables: LoadableEntry[] = [
+  // Course-correction on ct-73z (ct-8vh): the `Load Counter…` action is no
+  // longer registered unconditionally by registerDefaultActions; it lives in
+  // registerLoadablesActions like every other per-type Load action. The
+  // counter entry is always present in the loadables view (via the
+  // loadablesRegistry's synthetic Generic injection), so `load-counter` is
+  // still always registered in practice — but through the regular per-type
+  // path, routing through the picker (Generic + plugin-declared typed
+  // counters), not a direct generic-spawn.
+  it('registers load-counter when a counter LoadableEntry is supplied', () => {
+    const withCounter: LoadableEntry[] = [
+      ...loadables,
       {
         type: 'counter',
         label: 'Counter',
@@ -207,49 +185,45 @@ describe('always-available load-counter action (ct-73z)', () => {
         source: { kind: 'static', items: [] },
       },
     ];
-    registerLoadablesActions(pluginLoadables);
+    registerLoadablesActions(withCounter);
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    expect(action).toBeDefined();
+    expect(action?.label).toBe('Load Counter…');
+  });
+
+  it('load-counter routes through onOpenLoadPicker("counter"), not a direct spawn', () => {
+    const withCounter: LoadableEntry[] = [
+      ...loadables,
+      {
+        type: 'counter',
+        label: 'Counter',
+        mode: 'additive',
+        source: { kind: 'static', items: [] },
+      },
+    ];
+    registerLoadablesActions(withCounter);
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    const onOpenLoadPicker = vi.fn();
+    const ctx = makeContext({ onOpenLoadPicker });
+    expect(action?.isAvailable(ctx)).toBe(true);
+    void action?.execute(ctx);
+    expect(onOpenLoadPicker).toHaveBeenCalledWith('counter');
+  });
+
+  it('load-counter is removed by unregisterLoadablesActions (dynamic, not built-in)', () => {
+    const withCounter: LoadableEntry[] = [
+      ...loadables,
+      {
+        type: 'counter',
+        label: 'Counter',
+        mode: 'additive',
+        source: { kind: 'static', items: [] },
+      },
+    ];
+    registerLoadablesActions(withCounter);
     unregisterLoadablesActions();
     expect(
       ActionRegistry.getInstance().getAction('load-counter'),
-    ).toBeDefined();
-  });
-
-  it('load-counter is unavailable without onSpawnGenericCounter', () => {
-    const action = ActionRegistry.getInstance().getAction('load-counter');
-    expect(action?.isAvailable(makeContext())).toBe(false);
-  });
-
-  it('load-counter is unavailable when something is selected', () => {
-    const action = ActionRegistry.getInstance().getAction('load-counter');
-    const onSpawnGenericCounter = vi.fn();
-    expect(
-      action?.isAvailable(
-        makeContext({
-          onSpawnGenericCounter,
-          selection: {
-            ids: ['some-id'],
-            yMaps: [],
-            count: 1,
-            hasStacks: true,
-            hasTokens: false,
-            hasCounters: false,
-            hasMixed: false,
-            allLocked: false,
-            allUnlocked: true,
-            canAct: true,
-          },
-        }),
-      ),
-    ).toBe(false);
-  });
-
-  it('execute dispatches onSpawnGenericCounter', () => {
-    const action = ActionRegistry.getInstance().getAction('load-counter');
-    const onSpawnGenericCounter = vi.fn();
-    const ctx = makeContext({ onSpawnGenericCounter });
-    expect(action?.isAvailable(ctx)).toBe(true);
-    void action?.execute(ctx);
-    expect(onSpawnGenericCounter).toHaveBeenCalledTimes(1);
-    expect(onSpawnGenericCounter.mock.calls[0]).toEqual([]);
+    ).toBeUndefined();
   });
 });

@@ -1,7 +1,7 @@
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS, VIEW_ACTIONS, CONTENT_ACTIONS } from './types';
 import { registerAttachmentActions } from './attachmentActions';
-import { COUNTER_LOADABLE_TYPE, type LoadableEntry } from '@cardtable2/shared';
+import type { LoadableEntry } from '@cardtable2/shared';
 import {
   flipCards,
   exhaustCards,
@@ -442,7 +442,11 @@ export function registerDefaultActions(): void {
   //
   // Per-type Load <X>... commands are registered separately by
   // `registerLoadablesActions()` so they can be re-derived whenever the
-  // active plugin's loadable registry changes.
+  // active plugin's loadable registry changes. The `counter` loadable type is
+  // not special-cased here: the loadables registry's UI view always exposes a
+  // synthetic counter entry (with at least a Generic item, plus any plugin-
+  // declared typed counters), so `registerLoadablesActions` naturally
+  // produces a `load-counter` action that routes through the picker (ct-8vh).
   registry.register({
     id: 'load',
     label: 'Load…',
@@ -454,34 +458,6 @@ export function registerDefaultActions(): void {
       ctx.selection.count === 0 && ctx.onOpenLoadPicker !== undefined,
     execute: (ctx) => {
       ctx.onOpenLoadPicker?.();
-    },
-  });
-
-  // Content action: Load Counter... — always available (ct-73z).
-  //
-  // Unlike the other per-type Load <X>... actions (which are registered by
-  // `registerLoadablesActions` only when the active plugin declares that
-  // loadable type), the counter action is registered unconditionally because
-  // a user always has the option to spawn a generic counter even when the
-  // plugin declares no counter types. `registerLoadablesActions` deliberately
-  // skips the `counter` loadable type so this built-in registration stays
-  // authoritative.
-  //
-  // Today this directly spawns a generic counter via `onSpawnGenericCounter`;
-  // when the counter picker bead lands the action will switch to routing
-  // through `onOpenLoadPicker('counter')` to present a picker that includes
-  // Generic alongside any plugin-declared types.
-  registry.register({
-    id: `load-${COUNTER_LOADABLE_TYPE}`,
-    label: 'Load Counter…',
-    shortLabel: 'Counter',
-    icon: '🔢',
-    category: CONTENT_ACTIONS,
-    description: 'Spawn a counter on the table',
-    isAvailable: (ctx) =>
-      ctx.selection.count === 0 && ctx.onSpawnGenericCounter !== undefined,
-    execute: (ctx) => {
-      ctx.onSpawnGenericCounter?.();
     },
   });
 }
@@ -499,20 +475,15 @@ const liveLoadableActionIds = new Set<string>();
  * The id format is `load-<entry.type>`; collisions with built-in action ids
  * are the plugin author's responsibility — the registry warns on overwrite.
  *
- * The `counter` loadable type is deliberately skipped here: a `load-counter`
- * action is registered unconditionally by `registerDefaultActions` (ct-73z)
- * because users always need the ability to spawn a generic counter even
- * when the plugin declares no counter loadables. Skipping it here keeps the
- * built-in registration authoritative and prevents an overwrite warning.
+ * The `counter` loadable type is treated exactly like every other type: the
+ * loadables registry's UI view always exposes a counter entry (synthetic
+ * Generic + any plugin-declared typed counters), so the corresponding
+ * `load-counter` action is always registered and always routes through the
+ * picker — typed counters reachable, Generic always available (ct-8vh).
  */
 export function registerLoadablesActions(loadables: LoadableEntry[]): void {
   const registry = ActionRegistry.getInstance();
   for (const entry of loadables) {
-    if (entry.type === COUNTER_LOADABLE_TYPE) {
-      // See doc comment: counter type is handled by the always-available
-      // built-in `load-counter` action.
-      continue;
-    }
     const id = `load-${entry.type}`;
     registry.register({
       id,

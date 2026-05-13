@@ -16,7 +16,7 @@ import type {
   LoadableProviderSource,
   TableObject,
 } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import { COUNTER_LOADABLE_TYPE, ObjectKind } from '@cardtable2/shared';
 import {
   handleLoadSelection,
   readProviderLabels,
@@ -26,6 +26,8 @@ import {
 import type * as ContentIndex from './index';
 import * as YjsActions from '../store/YjsActions';
 import * as DeckImportEngine from './DeckImportEngine';
+import { clearLoadableEntries, setLoadableEntries } from './loadablesRegistry';
+import { COUNTER_TYPE_GENERIC } from '../renderer/objects/counter/constants';
 import type { YjsStore } from '../store/YjsStore';
 import type { ViewportState } from '../utils/viewportPlacement';
 
@@ -390,6 +392,154 @@ describe('handleLoadSelection — additive + card-set', () => {
     );
     expect(YjsActions.createObject).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
+  });
+});
+
+describe('handleLoadSelection — additive + counter (ct-8vh)', () => {
+  const counterEntry: LoadableEntry = {
+    type: COUNTER_LOADABLE_TYPE,
+    label: 'Counter',
+    mode: 'additive',
+    source: { kind: 'static', items: [] },
+  };
+
+  afterEach(() => {
+    clearLoadableEntries();
+  });
+
+  it('spawns a Generic counter when typeId === "generic" (synthetic injection)', async () => {
+    // Empty registry — synthetic Generic is the only counter available.
+    clearLoadableEntries();
+    const store = makeStore({ pluginId: 'p', gameAssets: null });
+    await handleLoadSelection(
+      counterEntry,
+      {
+        typeId: COUNTER_TYPE_GENERIC,
+        label: 'Generic',
+        data: {
+          color: 0xf39c12,
+          min: 0,
+          max: 99,
+          startingValue: 0,
+        },
+      },
+      { store, getViewportState },
+    );
+    expect(YjsActions.createObject).toHaveBeenCalledTimes(1);
+    const opts = vi.mocked(YjsActions.createObject).mock.calls[0][1];
+    expect(opts.kind).toBe(ObjectKind.Counter);
+    expect(opts.meta).toMatchObject({
+      type: COUNTER_TYPE_GENERIC,
+      typeId: COUNTER_TYPE_GENERIC,
+    });
+  });
+
+  it('spawns a typed counter when the picker selects a plugin-declared type', async () => {
+    // Populate the registry with a plugin-declared counter type.
+    const pluginEntries: LoadableEntry[] = [
+      {
+        type: COUNTER_LOADABLE_TYPE,
+        label: 'Counter',
+        mode: 'additive',
+        source: {
+          kind: 'static',
+          items: [
+            {
+              typeId: 'damage',
+              label: 'Damage',
+              data: {
+                color: 0xff0000,
+                text: 'DMG',
+                min: 0,
+                max: 99,
+                startingValue: 0,
+              },
+            },
+          ],
+        },
+      },
+    ];
+    setLoadableEntries(pluginEntries, makeAssets());
+
+    const store = makeStore({ pluginId: 'p', gameAssets: null });
+    await handleLoadSelection(
+      counterEntry,
+      {
+        typeId: 'damage',
+        label: 'Damage',
+        data: {
+          color: 0xff0000,
+          text: 'DMG',
+          min: 0,
+          max: 99,
+          startingValue: 0,
+        },
+      },
+      { store, getViewportState },
+    );
+    const opts = vi.mocked(YjsActions.createObject).mock.calls[0][1];
+    expect(opts.kind).toBe(ObjectKind.Counter);
+    expect(opts.meta).toMatchObject({
+      type: 'damage',
+      typeId: 'damage',
+      color: 0xff0000,
+      text: 'DMG',
+      min: 0,
+      max: 99,
+      startingValue: 0,
+    });
+  });
+
+  it('places the counter at viewport center (no jitter)', async () => {
+    clearLoadableEntries();
+    const store = makeStore({ pluginId: 'p', gameAssets: null });
+    await handleLoadSelection(
+      counterEntry,
+      {
+        typeId: COUNTER_TYPE_GENERIC,
+        label: 'Generic',
+        data: {},
+      },
+      { store, getViewportState },
+    );
+    const opts = vi.mocked(YjsActions.createObject).mock.calls[0][1];
+    // viewport center for NEUTRAL_VIEWPORT (1000x800, dpr=1) is (500, 400).
+    expect(opts.pos).toEqual({ x: 500, y: 400, r: 0 });
+  });
+
+  it('does NOT require gameAssets to spawn a counter (skips the gameAssets gate)', async () => {
+    clearLoadableEntries();
+    // gameAssets explicitly null — card branch would error here; counter
+    // branch must succeed.
+    const store = makeStore({ pluginId: 'p', gameAssets: null });
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await handleLoadSelection(
+      counterEntry,
+      {
+        typeId: COUNTER_TYPE_GENERIC,
+        label: 'Generic',
+        data: {},
+      },
+      { store, getViewportState },
+    );
+    expect(YjsActions.createObject).toHaveBeenCalledTimes(1);
+    expect(err).not.toHaveBeenCalled();
+  });
+
+  it('warns and skips when the picker fires a typeId the registry does not know', async () => {
+    clearLoadableEntries();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const store = makeStore({ pluginId: 'p', gameAssets: null });
+    await handleLoadSelection(
+      counterEntry,
+      { typeId: 'phantom', label: 'Phantom', data: {} },
+      { store, getViewportState },
+    );
+    expect(YjsActions.createObject).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('typeId not found'),
+      expect.anything(),
+    );
   });
 });
 

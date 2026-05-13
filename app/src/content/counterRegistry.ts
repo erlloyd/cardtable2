@@ -5,8 +5,8 @@
  * Plugins declare counter type definitions through the generic loadables[]
  * system using `type: 'counter'` entries with static sources. Each
  * LoadableStaticItem carries:
- *   - `id`        — the counter type id (used by the resolver / typeId
- *                   provenance on materialized instances)
+ *   - `typeId`    — the counter type id (used by the resolver and copied as
+ *                   `typeId` provenance on materialized instances)
  *   - `label`     — picker display label
  *   - `data`      — a `CounterTypeDef` payload: `{color, text?, img?, min,
  *                   max, startingValue}` (template-only — instance fields
@@ -18,9 +18,9 @@
  *                                 plugin-manifest boundary; throws a
  *                                 descriptive Error on malformed input.
  *   - `getAllCounterTypeDefs`   — list every plugin-declared counter type as
- *                                 resolved `(id, label, data)` tuples.
- *   - `getCounterTypeDef`       — point lookup by id; `undefined` when the
- *                                 type isn't declared.
+ *                                 resolved `(typeId, label, data)` tuples.
+ *   - `getCounterTypeDef`       — point lookup by typeId; `undefined` when
+ *                                 the type isn't declared.
  *
  * Validation lives at the boundary (plugin manifest → host) because the
  * loadable `data` payload is typed as `unknown` at the shared-schema layer
@@ -43,8 +43,8 @@ import { getLoadableEntries, getStaticItems } from './loadablesRegistry';
  * alongside the template fields in a single object.
  */
 export interface ResolvedCounterTypeDef {
-  /** Counter type id (matches `LoadableStaticItem.id`). */
-  id: string;
+  /** Counter type id (matches `LoadableStaticItem.typeId`). */
+  typeId: string;
   /** Display label (matches `LoadableStaticItem.label`). */
   label: string;
   /** Template fields (color, optional text/img, min, max, startingValue). */
@@ -169,19 +169,19 @@ export function getAllCounterTypeDefs(
  * "type not declared").
  */
 export function getCounterTypeDef(
-  id: string,
+  typeId: string,
   entries?: LoadableEntry[],
 ): ResolvedCounterTypeDef | undefined {
   const source = entries ?? getLoadableEntries();
   const items = getStaticItems<unknown>(source, COUNTER_LOADABLE_TYPE);
 
   for (const item of items) {
-    if (item.id !== id) continue;
+    if (item.typeId !== typeId) continue;
     const def = parseCounterTypeDef(
       item.data,
-      `[counterRegistry] counter type '${item.id}'`,
+      `[counterRegistry] counter type '${item.typeId}'`,
     );
-    return { id: item.id, label: item.label, def };
+    return { typeId: item.typeId, label: item.label, def };
   }
   return undefined;
 }
@@ -206,23 +206,23 @@ function resolveItems(
   const seen = new Set<string>();
 
   for (const item of items) {
-    if (seen.has(item.id)) {
+    if (seen.has(item.typeId)) {
       console.warn(
-        `[counterRegistry] duplicate counter type id '${item.id}' — keeping first declaration`,
+        `[counterRegistry] duplicate counter type id '${item.typeId}' — keeping first declaration`,
       );
       continue;
     }
     try {
       const def = parseCounterTypeDef(
         item.data,
-        `[counterRegistry] counter type '${item.id}'`,
+        `[counterRegistry] counter type '${item.typeId}'`,
       );
-      resolved.push({ id: item.id, label: item.label, def });
-      seen.add(item.id);
+      resolved.push({ typeId: item.typeId, label: item.label, def });
+      seen.add(item.typeId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[counterRegistry] dropping malformed counter type '${item.id}': ${message}`,
+        `[counterRegistry] dropping malformed counter type '${item.typeId}': ${message}`,
       );
     }
   }

@@ -30,7 +30,7 @@ function createGameAssets(overrides: Partial<GameAssets> = {}): GameAssets {
 }
 
 function counterEntry(
-  items: Array<{ id: string; label: string; data: unknown }>,
+  items: Array<{ typeId: string; label: string; data: unknown }>,
 ): LoadableEntry<unknown> {
   return {
     type: COUNTER_LOADABLE_TYPE,
@@ -190,13 +190,13 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
 
   it('resolves a single counter type from a plugin manifest', () => {
     const entry = counterEntry([
-      { id: 'damage', label: 'Damage', data: validDef },
+      { typeId: 'damage', label: 'Damage', data: validDef },
     ]);
     setLoadableEntries([entry], createGameAssets());
 
     const resolved = getCounterTypeDef('damage');
     expect(resolved).toEqual({
-      id: 'damage',
+      typeId: 'damage',
       label: 'Damage',
       def: validDef,
     });
@@ -204,7 +204,7 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
 
   it('returns undefined for an unknown id even when others are registered', () => {
     const entry = counterEntry([
-      { id: 'damage', label: 'Damage', data: validDef },
+      { typeId: 'damage', label: 'Damage', data: validDef },
     ]);
     setLoadableEntries([entry], createGameAssets());
 
@@ -213,9 +213,9 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
 
   it('lists every declared counter type', () => {
     const entry = counterEntry([
-      { id: 'damage', label: 'Damage', data: validDef },
+      { typeId: 'damage', label: 'Damage', data: validDef },
       {
-        id: 'threat',
+        typeId: 'threat',
         label: 'Threat',
         data: { color: 0x3498db, min: 0, max: 20, startingValue: 0 },
       },
@@ -224,7 +224,7 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
 
     const list = getAllCounterTypeDefs();
     expect(list).toHaveLength(2);
-    const byId = Object.fromEntries(list.map((r) => [r.id, r]));
+    const byId = Object.fromEntries(list.map((r) => [r.typeId, r]));
     expect(byId['damage']?.label).toBe('Damage');
     expect(byId['damage']?.def).toEqual(validDef);
     expect(byId['threat']?.label).toBe('Threat');
@@ -234,7 +234,7 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
   it('passes through optional text and img', () => {
     const entry = counterEntry([
       {
-        id: 'shield',
+        typeId: 'shield',
         label: 'Shield',
         data: {
           color: 0,
@@ -259,11 +259,11 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       // by theme); the resolver flattens them. Matches the `scenario`
       // precedent in getLoadablesOfType tests.
       const entryA = counterEntry([
-        { id: 'damage', label: 'Damage', data: validDef },
+        { typeId: 'damage', label: 'Damage', data: validDef },
       ]);
       const entryB = counterEntry([
         {
-          id: 'threat',
+          typeId: 'threat',
           label: 'Threat',
           data: { color: 0x3498db, min: 0, max: 20, startingValue: 0 },
         },
@@ -271,7 +271,7 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       setLoadableEntries([entryA, entryB], createGameAssets());
 
       const ids = getAllCounterTypeDefs()
-        .map((r) => r.id)
+        .map((r) => r.typeId)
         .sort();
       expect(ids).toEqual(['damage', 'threat']);
     });
@@ -282,14 +282,14 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const entry = counterEntry([
-        { id: 'valid', label: 'Valid', data: validDef },
-        { id: 'bad', label: 'Bad', data: { color: 'red' } },
+        { typeId: 'valid', label: 'Valid', data: validDef },
+        { typeId: 'bad', label: 'Bad', data: { color: 'red' } },
       ]);
       setLoadableEntries([entry], createGameAssets());
 
       const list = getAllCounterTypeDefs();
       expect(list).toHaveLength(1);
-      expect(list[0].id).toBe('valid');
+      expect(list[0].typeId).toBe('valid');
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("dropping malformed counter type 'bad'"),
       );
@@ -301,9 +301,9 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const entry = counterEntry([
-        { id: 'damage', label: 'Damage A', data: validDef },
+        { typeId: 'damage', label: 'Damage A', data: validDef },
         {
-          id: 'damage',
+          typeId: 'damage',
           label: 'Damage B',
           data: { ...validDef, color: 0x000000 },
         },
@@ -326,7 +326,7 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       // point lookup with a known id but malformed data is a hard error at
       // spawn time — callers should not silently fall back.
       const entry = counterEntry([
-        { id: 'bad', label: 'Bad', data: { color: 'red' } },
+        { typeId: 'bad', label: 'Bad', data: { color: 'red' } },
       ]);
       setLoadableEntries([entry], createGameAssets());
 
@@ -342,14 +342,16 @@ describe('getCounterTypeDef / getAllCounterTypeDefs', () => {
       // entries directly without first installing them in the global
       // registry. Verify the resolver supports that path.
       const entries: LoadableEntry[] = [
-        counterEntry([{ id: 'explicit', label: 'Explicit', data: validDef }]),
+        counterEntry([
+          { typeId: 'explicit', label: 'Explicit', data: validDef },
+        ]),
       ];
 
       // Global registry is empty
       expect(getCounterTypeDef('explicit')).toBeUndefined();
 
       // Direct entries lookup finds it.
-      expect(getCounterTypeDef('explicit', entries)?.id).toBe('explicit');
+      expect(getCounterTypeDef('explicit', entries)?.typeId).toBe('explicit');
       expect(getAllCounterTypeDefs(entries)).toHaveLength(1);
     });
   });

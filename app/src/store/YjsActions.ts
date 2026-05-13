@@ -12,7 +12,9 @@ import {
   sortKeyWithSub,
   PARENT_ON_TOP_SUB_KEY,
 } from '@cardtable2/shared';
-import { getDefaultProperties } from './ObjectDefaults';
+import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
+import { createCounterMeta } from '../renderer/objects/counter/utils';
+import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
 
 /**
@@ -87,6 +89,25 @@ export function createObject(
   // Get default properties for this kind from centralized defaults
   const defaults = getDefaultProperties(options.kind);
 
+  // Resolve `_meta` with kind-specific defaults.
+  //
+  // For Counter, route through `createCounterMeta` so that caller-supplied
+  // partial overrides (e.g. only `startingValue`) propagate to derived
+  // fields (`currentValue` follows `startingValue`, `typeId` follows
+  // `type`). Other kinds fall back to a plain shallow merge over
+  // `getDefaultMeta` (currently a no-op for everything but Counter).
+  let meta: Record<string, unknown>;
+  if (options.kind === ObjectKind.Counter) {
+    const overrides = (options.meta ?? {}) as Partial<CounterMeta>;
+    meta = createCounterMeta(overrides);
+  } else {
+    const metaDefaults = getDefaultMeta(options.kind);
+    meta = {
+      ...metaDefaults,
+      ...(options.meta ?? {}),
+    };
+  }
+
   // Build base object with defaults
   const baseObject: TableObject = {
     _kind: options.kind,
@@ -95,7 +116,7 @@ export function createObject(
     _sortKey: sortKey,
     _locked: options.locked ?? false,
     _selectedBy: null, // New objects are not selected
-    _meta: options.meta ?? {},
+    _meta: meta,
     ...defaults, // Apply kind-specific defaults
   };
 
@@ -1227,7 +1248,6 @@ export function resetToTestScene(store: YjsStore): void {
       kind: ObjectKind.Counter,
       pos: { x: 150 + i * 120, y: 200, r: 0 },
       meta: {
-        size: 45,
         color: colors[(i + 4) % colors.length],
       },
     });

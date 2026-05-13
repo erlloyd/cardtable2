@@ -30,7 +30,7 @@ GitHub Actions workflows and production hosting reference. Loaded on-demand — 
 
 - Creates Railway preview services per PR
 - Builds Docker images for both app and server
-- Provides unique URLs for testing (e.g., `cardtable2-pr-123.up.railway.app`)
+- Provides unique URLs for testing (app: `cardtable2-app-pr-{N}-prs.up.railway.app`, server: `cardtable2-server-pr-{N}-prs.up.railway.app`)
 - Only builds on first PR build or when package changes
 
 ### `cleanup-pr.yml` — Resource cleanup

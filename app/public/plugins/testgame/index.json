@@ -48,6 +48,37 @@
         "kind": "asset-pack-derived",
         "derivation": "all-cards"
       }
+    },
+    {
+      "type": "counter",
+      "label": "Counter",
+      "mode": "additive",
+      "source": {
+        "kind": "static",
+        "items": [
+          {
+            "id": "damage",
+            "label": "Damage",
+            "data": {
+              "color": 15871769,
+              "text": "DMG",
+              "min": 0,
+              "max": 99,
+              "startingValue": 0
+            }
+          },
+          {
+            "id": "threat",
+            "label": "Threat",
+            "data": {
+              "color": 3447003,
+              "min": 0,
+              "max": 20,
+              "startingValue": 0
+            }
+          }
+        ]
+      }
     }
   ]
 }

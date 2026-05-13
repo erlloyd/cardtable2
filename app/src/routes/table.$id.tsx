@@ -752,6 +752,7 @@ function Table() {
         selectionCount: context.selection.count,
         hasStacks: context.selection.hasStacks,
         hasTokens: context.selection.hasTokens,
+        hasCounters: context.selection.hasCounters,
       });
     }
 

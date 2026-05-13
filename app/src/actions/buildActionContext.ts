@@ -64,6 +64,7 @@ export function buildActionContext(
       count: selectedObjects.length,
       hasStacks: kinds.has(ObjectKind.Stack),
       hasTokens: kinds.has(ObjectKind.Token),
+      hasCounters: kinds.has(ObjectKind.Counter),
       hasMixed: kinds.size > 1,
       allLocked,
       allUnlocked,

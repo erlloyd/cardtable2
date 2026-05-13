@@ -22,6 +22,7 @@ export interface SelectionInfo {
   count: number;
   hasStacks: boolean;
   hasTokens: boolean;
+  hasCounters: boolean;
   hasMixed: boolean;
   allLocked: boolean;
   allUnlocked: boolean;

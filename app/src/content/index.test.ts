@@ -626,7 +626,7 @@ describe('loadLocalPluginAssets', () => {
             kind: 'static',
             items: [
               {
-                id: 'scenario-1',
+                typeId: 'scenario-1',
                 label: 'Scenario 1',
                 data: { file: 'scenario-1.json' },
               },

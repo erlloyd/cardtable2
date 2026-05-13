@@ -13,7 +13,7 @@
         "kind": "static",
         "items": [
           {
-            "id": "testgame-basic",
+            "typeId": "testgame-basic",
             "label": "Test Game - Basic Setup",
             "data": { "file": "testgame-basic.json" }
           }
@@ -28,12 +28,12 @@
         "kind": "static",
         "items": [
           {
-            "id": "encounter-basic",
+            "typeId": "encounter-basic",
             "label": "Basic Encounters",
             "data": { "cardSet": "encounter-basic" }
           },
           {
-            "id": "encounter-nemesis",
+            "typeId": "encounter-nemesis",
             "label": "Nemesis Encounters",
             "data": { "cardSet": "encounter-nemesis" }
           }

@@ -48,8 +48,8 @@ describe('loadablesRegistry', () => {
       source: {
         kind: 'static',
         items: [
-          { id: 's1', label: 'Scenario One', data: { file: 'one.json' } },
-          { id: 's2', label: 'Scenario Two', data: { file: 'two.json' } },
+          { typeId: 's1', label: 'Scenario One', data: { file: 'one.json' } },
+          { typeId: 's2', label: 'Scenario Two', data: { file: 'two.json' } },
         ],
       },
     };
@@ -113,14 +113,14 @@ describe('loadablesRegistry', () => {
     if (source.kind !== 'static') throw new Error('unreachable');
 
     expect(source.items).toHaveLength(3);
-    expect(source.items.map((i) => i.id).sort()).toEqual([
+    expect(source.items.map((i) => i.typeId).sort()).toEqual([
       '01001',
       '01002',
       '02001',
     ]);
-    // Each item carries id + label + data referencing the card code
-    expect(source.items[0].label).toBe(source.items[0].id);
-    expect(source.items[0].data).toEqual({ code: source.items[0].id });
+    // Each item carries typeId + label + data referencing the card code
+    expect(source.items[0].label).toBe(source.items[0].typeId);
+    expect(source.items[0].data).toEqual({ code: source.items[0].typeId });
   });
 
   it('uses the card name as the derived item label when name is non-empty', () => {
@@ -144,7 +144,7 @@ describe('loadablesRegistry', () => {
     if (source.kind !== 'static') throw new Error('unreachable');
 
     expect(source.items).toHaveLength(1);
-    expect(source.items[0].id).toBe('01001');
+    expect(source.items[0].typeId).toBe('01001');
     expect(source.items[0].label).toBe('Hero');
   });
 
@@ -179,7 +179,7 @@ describe('loadablesRegistry', () => {
 
       expect(source.items).toHaveLength(1);
       // Lower code wins (alphabetical) so hero/front side loads by default.
-      expect(source.items[0].id).toBe('01001A');
+      expect(source.items[0].typeId).toBe('01001A');
       expect(source.items[0].label).toBe('Spider-Man / Peter Parker');
       expect(source.items[0].data).toEqual({ code: '01001A' });
     });
@@ -198,7 +198,7 @@ describe('loadablesRegistry', () => {
       if (source.kind !== 'static') throw new Error('unreachable');
 
       expect(source.items).toHaveLength(1);
-      expect(source.items[0].id).toBe('01001A');
+      expect(source.items[0].typeId).toBe('01001A');
       expect(source.items[0].label).toBe('01001A / 01001B');
     });
 
@@ -220,7 +220,7 @@ describe('loadablesRegistry', () => {
       if (source.kind !== 'static') throw new Error('unreachable');
 
       expect(source.items).toHaveLength(1);
-      expect(source.items[0].id).toBe('02001A');
+      expect(source.items[0].typeId).toBe('02001A');
       expect(source.items[0].label).toBe('Encounter Front');
       expect(source.items[0].data).toEqual({ code: '02001A' });
     });
@@ -243,9 +243,9 @@ describe('loadablesRegistry', () => {
       // A emitted (asymmetric: A→B, B doesn't point back). B suppressed
       // (treated as image-only metadata for A). C reached as a singleton
       // (B never executes its asymmetric branch because A suppressed it).
-      const ids = source.items.map((i) => i.id).sort();
+      const ids = source.items.map((i) => i.typeId).sort();
       expect(ids).toEqual(['A', 'C']);
-      const aItem = source.items.find((i) => i.id === 'A');
+      const aItem = source.items.find((i) => i.typeId === 'A');
       expect(aItem?.label).toBe('A name');
     });
 
@@ -262,7 +262,7 @@ describe('loadablesRegistry', () => {
       if (source.kind !== 'static') throw new Error('unreachable');
 
       expect(source.items).toHaveLength(1);
-      expect(source.items[0].id).toBe('A');
+      expect(source.items[0].typeId).toBe('A');
       expect(source.items[0].label).toBe('A name');
       expect(source.items[0].data).toEqual({ code: 'A' });
     });
@@ -289,7 +289,7 @@ describe('loadablesRegistry', () => {
       if (source.kind !== 'static') throw new Error('unreachable');
 
       expect(source.items).toHaveLength(4);
-      const byId = Object.fromEntries(source.items.map((i) => [i.id, i]));
+      const byId = Object.fromEntries(source.items.map((i) => [i.typeId, i]));
       expect(byId['01001A']?.label).toBe('Hero / Alter');
       expect(byId['02001A']?.label).toBe('Front');
       expect(byId['03001']?.label).toBe('Solo');
@@ -321,7 +321,7 @@ describe('loadablesRegistry', () => {
       if (source.kind !== 'static') throw new Error('unreachable');
 
       expect(source.items).toHaveLength(1);
-      expect(source.items[0].id).toBe('01001A');
+      expect(source.items[0].typeId).toBe('01001A');
       expect(source.items[0].label).toBe('Spider-Man / Peter Parker');
     });
   });
@@ -348,11 +348,13 @@ describe('loadablesRegistry', () => {
     expect(source.kind).toBe('static');
     if (source.kind !== 'static') throw new Error('unreachable');
 
-    expect(source.items.map((i) => i.id).sort()).toEqual([
+    expect(source.items.map((i) => i.typeId).sort()).toEqual([
       'captain_america_nemesis',
       'spider_man_nemesis',
     ]);
-    const spiderItem = source.items.find((i) => i.id === 'spider_man_nemesis');
+    const spiderItem = source.items.find(
+      (i) => i.typeId === 'spider_man_nemesis',
+    );
     expect(spiderItem?.label).toBe('spider_man_nemesis');
     expect(spiderItem?.data).toEqual({ setName: 'spider_man_nemesis' });
   });
@@ -386,7 +388,7 @@ describe('loadablesRegistry', () => {
         mode: 'replace',
         source: {
           kind: 'static',
-          items: [{ id: 's1', label: 'Scen 1', data: { file: 's1.json' } }],
+          items: [{ typeId: 's1', label: 'Scen 1', data: { file: 's1.json' } }],
         },
       },
       {
@@ -449,7 +451,7 @@ describe('loadablesRegistry', () => {
       mode: 'replace',
       source: {
         kind: 'static',
-        items: [{ id: 's1', label: 'S', data: {} }],
+        items: [{ typeId: 's1', label: 'S', data: {} }],
       },
     };
 
@@ -520,8 +522,8 @@ describe('loadablesRegistry', () => {
       source: {
         kind: 'static',
         items: [
-          { id: 's1', label: 'Scenario One', data: { file: 'one.json' } },
-          { id: 's2', label: 'Scenario Two', data: { file: 'two.json' } },
+          { typeId: 's1', label: 'Scenario One', data: { file: 'one.json' } },
+          { typeId: 's2', label: 'Scenario Two', data: { file: 'two.json' } },
         ],
       },
     };
@@ -571,7 +573,11 @@ describe('loadablesRegistry', () => {
           source: {
             kind: 'static',
             items: [
-              { id: 's3', label: 'Scenario 3', data: { file: 'three.json' } },
+              {
+                typeId: 's3',
+                label: 'Scenario 3',
+                data: { file: 'three.json' },
+              },
             ],
           },
         };
@@ -624,7 +630,7 @@ describe('loadablesRegistry', () => {
         const items = getStaticItems<{ code: string }>(resolved, 'card');
         expect(items).toHaveLength(1);
         expect(items[0]).toEqual({
-          id: '01001',
+          typeId: '01001',
           label: 'Hero',
           data: { code: '01001' },
         });

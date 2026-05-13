@@ -176,7 +176,7 @@ export function readProviderLabels(
  */
 export async function handleLoadSelection(
   entry: LoadableEntry,
-  item: { id: string; label: string; data: unknown } | null,
+  item: { typeId: string; label: string; data: unknown } | null,
   deps: HandleLoadSelectionDeps,
 ): Promise<void> {
   if (entry.mode === 'replace') {
@@ -273,7 +273,7 @@ export async function handleLoadSelection(
 
   console.warn('[Load] Unrecognised additive item shape', {
     entryType: entry.type,
-    itemId: item.id,
+    itemId: item.typeId,
     data: item.data,
   });
 }

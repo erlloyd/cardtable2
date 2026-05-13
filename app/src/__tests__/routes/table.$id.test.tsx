@@ -280,7 +280,7 @@ describe('Table Route', () => {
           kind: 'static',
           items: [
             {
-              id: 'local-scenario-a',
+              typeId: 'local-scenario-a',
               label: 'Local Scenario A',
               data: { file: 'a.json' },
             },

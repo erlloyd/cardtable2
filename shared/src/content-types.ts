@@ -291,7 +291,7 @@ export type LoadableMode = 'additive' | 'replace';
  * shared-schema layer; per-type narrowing happens in the consumer.
  */
 export interface LoadableStaticItem<TData = unknown> {
-  id: string; // Stable identifier within this loadable type
+  typeId: string; // Stable identifier within this loadable type
   label: string; // Display label for the picker
   data: TData; // Type-specific payload (e.g. scenario file path, card code)
 }

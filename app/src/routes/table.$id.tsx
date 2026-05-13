@@ -697,7 +697,7 @@ function Table() {
   const resolveDerivedItems = useCallback<DerivedItemsResolver>((entry) => {
     if (entry.source.kind === 'static') {
       return entry.source.items.map((it) => ({
-        id: it.id,
+        typeId: it.typeId,
         label: it.label,
         data: it.data,
       }));

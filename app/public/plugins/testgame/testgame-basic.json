@@ -33,5 +33,16 @@
         "label": "First Player"
       }
     ]
-  }
+  },
+  "counters": [
+    {
+      "typeId": "damage",
+      "position": { "x": -200, "y": 200 },
+      "initialValue": 5
+    },
+    {
+      "typeId": "threat",
+      "position": { "x": 200, "y": 200 }
+    }
+  ]
 }

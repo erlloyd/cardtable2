@@ -151,3 +151,105 @@ describe('registerLoadablesActions / per-type Load <X>… actions', () => {
     ).toBeUndefined();
   });
 });
+
+describe('always-available load-counter action (ct-73z)', () => {
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+    registerDefaultActions();
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+  });
+
+  it('registers load-counter unconditionally (no plugin loadables)', () => {
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    expect(action).toBeDefined();
+    expect(action?.label).toBe('Load Counter…');
+  });
+
+  it('keeps load-counter present when plugin DOES declare counter loadables', () => {
+    // Simulating a plugin that declares its own counter loadables —
+    // registerLoadablesActions must NOT overwrite or register a duplicate
+    // load-counter (it skips the counter type by design).
+    const pluginLoadables: LoadableEntry[] = [
+      {
+        type: 'counter',
+        label: 'Counter',
+        mode: 'additive',
+        source: { kind: 'static', items: [] },
+      },
+      {
+        type: 'card',
+        label: 'Card',
+        mode: 'additive',
+        source: { kind: 'static', items: [] },
+      },
+    ];
+    registerLoadablesActions(pluginLoadables);
+
+    // Built-in load-counter still authoritative with the unchanged label —
+    // proves registerLoadablesActions did NOT overwrite it with a
+    // plugin-defined label.
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    expect(action).toBeDefined();
+    expect(action?.label).toBe('Load Counter…');
+    // Non-counter loadables still registered.
+    expect(ActionRegistry.getInstance().getAction('load-card')).toBeDefined();
+  });
+
+  it('load-counter survives unregisterLoadablesActions (built-in, not dynamic)', () => {
+    const pluginLoadables: LoadableEntry[] = [
+      {
+        type: 'counter',
+        label: 'Counter',
+        mode: 'additive',
+        source: { kind: 'static', items: [] },
+      },
+    ];
+    registerLoadablesActions(pluginLoadables);
+    unregisterLoadablesActions();
+    expect(
+      ActionRegistry.getInstance().getAction('load-counter'),
+    ).toBeDefined();
+  });
+
+  it('load-counter is unavailable without onSpawnGenericCounter', () => {
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    expect(action?.isAvailable(makeContext())).toBe(false);
+  });
+
+  it('load-counter is unavailable when something is selected', () => {
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    const onSpawnGenericCounter = vi.fn();
+    expect(
+      action?.isAvailable(
+        makeContext({
+          onSpawnGenericCounter,
+          selection: {
+            ids: ['some-id'],
+            yMaps: [],
+            count: 1,
+            hasStacks: true,
+            hasTokens: false,
+            hasCounters: false,
+            hasMixed: false,
+            allLocked: false,
+            allUnlocked: true,
+            canAct: true,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('execute dispatches onSpawnGenericCounter', () => {
+    const action = ActionRegistry.getInstance().getAction('load-counter');
+    const onSpawnGenericCounter = vi.fn();
+    const ctx = makeContext({ onSpawnGenericCounter });
+    expect(action?.isAvailable(ctx)).toBe(true);
+    void action?.execute(ctx);
+    expect(onSpawnGenericCounter).toHaveBeenCalledTimes(1);
+    expect(onSpawnGenericCounter.mock.calls[0]).toEqual([]);
+  });
+});

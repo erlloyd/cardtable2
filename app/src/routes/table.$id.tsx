@@ -60,6 +60,7 @@ import {
   setDeckInputProvider,
   type DeckInputResult,
 } from '../content/loadHandler';
+import { spawnGenericCounter } from '../content/counterSpawn';
 import { getLoadableEntries } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
@@ -731,6 +732,30 @@ function Table() {
     [store],
   );
 
+  // Always-available "Load Counter..." action (ct-73z) — drops a generic
+  // counter at viewport center via the shared spawnGenericCounter helper.
+  // Mirrors the boardRef + viewport-state plumbing used by handleLoadSelection.
+  const handleSpawnGenericCounter = useCallback(() => {
+    if (!store) return;
+    const board = boardRef.current;
+    void spawnGenericCounter({
+      store,
+      getViewportState: () => {
+        if (!board) {
+          return Promise.resolve({
+            cameraX: 0,
+            cameraY: 0,
+            cameraScale: 1,
+            viewportWidth: 0,
+            viewportHeight: 0,
+            devicePixelRatio: window.devicePixelRatio || 1,
+          });
+        }
+        return board.getViewportState();
+      },
+    });
+  }, [store]);
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -745,6 +770,7 @@ function Table() {
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
       handleOpenLoadPicker,
+      handleSpawnGenericCounter,
     );
 
     if (context) {
@@ -766,6 +792,7 @@ function Table() {
     setGridSnapEnabled,
     handPanel.activeHandId,
     handleOpenLoadPicker,
+    handleSpawnGenericCounter,
   ]);
 
   // Enable keyboard shortcuts

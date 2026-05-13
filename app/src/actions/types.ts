@@ -46,6 +46,15 @@ export interface ActionContext {
    * `presetType`, when supplied, skips the type-list step and renders the
    * item list for that loadable type directly. */
   onOpenLoadPicker?: (presetType?: string) => void;
+  /**
+   * Spawn a generic counter (`typeId === 'generic'`) at viewport center
+   * (ct-73z). Wired by the table routes using the live BoardHandle so the
+   * spawn coordinates land in the user's currently-visible area. When the
+   * counter picker bead lands later this callback will be retired in favor
+   * of `onOpenLoadPicker('counter')` routing through the picker; for now the
+   * picker doesn't exist so the action spawns directly.
+   */
+  onSpawnGenericCounter?: () => void;
 }
 
 /**

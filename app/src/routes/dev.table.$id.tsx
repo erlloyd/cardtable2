@@ -44,6 +44,7 @@ import {
   setDeckInputProvider,
   type DeckInputResult,
 } from '../content/loadHandler';
+import { spawnGenericCounter } from '../content/counterSpawn';
 import { getLoadableEntries } from '../content/loadablesRegistry';
 import type { LoadableEntry } from '@cardtable2/shared';
 
@@ -316,6 +317,25 @@ function DevTable() {
     [store],
   );
 
+  // Always-available "Load Counter..." action (ct-73z). Dev table has no
+  // BoardHandle ref for viewport-center placement, so we fall back to the
+  // origin/un-zoomed viewport stub — matches the loadHandler fallback above.
+  const handleSpawnGenericCounter = useCallback(() => {
+    if (!store) return;
+    void spawnGenericCounter({
+      store,
+      getViewportState: () =>
+        Promise.resolve({
+          cameraX: 0,
+          cameraY: 0,
+          cameraScale: 1,
+          viewportWidth: 0,
+          viewportHeight: 0,
+          devicePixelRatio: window.devicePixelRatio || 1,
+        }),
+    });
+  }, [store]);
+
   // Create action context with live selection info (M3.6-T4)
   // Now passes {id, yMap} pairs directly - zero allocations
   const actionContext: ActionContext | null = useMemo(() => {
@@ -330,6 +350,7 @@ function DevTable() {
       setGridSnapEnabled,
       undefined,
       handleOpenLoadPicker,
+      handleSpawnGenericCounter,
     );
   }, [
     store,
@@ -339,6 +360,7 @@ function DevTable() {
     gridSnapEnabled,
     setGridSnapEnabled,
     handleOpenLoadPicker,
+    handleSpawnGenericCounter,
   ]);
 
   // Enable keyboard shortcuts

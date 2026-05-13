@@ -24,14 +24,26 @@ import type { LoadableEntry } from '@cardtable2/shared';
  * set so the search behavior is exercisable without a plugin loaded.
  */
 const FIXTURE_DERIVED_CARDS = [
-  { id: 'spider-man', label: 'Spider-Man', data: { code: 'spider-man' } },
-  { id: 'iron-man', label: 'Iron Man', data: { code: 'iron-man' } },
-  { id: 'captain-america', label: 'Captain America', data: { code: 'cap' } },
-  { id: 'black-widow', label: 'Black Widow', data: { code: 'black-widow' } },
-  { id: 'thor', label: 'Thor', data: { code: 'thor' } },
-  { id: 'hulk', label: 'Hulk', data: { code: 'hulk' } },
-  { id: 'doctor-strange', label: 'Doctor Strange', data: { code: 'strange' } },
-  { id: 'wasp', label: 'Wasp', data: { code: 'wasp' } },
+  { typeId: 'spider-man', label: 'Spider-Man', data: { code: 'spider-man' } },
+  { typeId: 'iron-man', label: 'Iron Man', data: { code: 'iron-man' } },
+  {
+    typeId: 'captain-america',
+    label: 'Captain America',
+    data: { code: 'cap' },
+  },
+  {
+    typeId: 'black-widow',
+    label: 'Black Widow',
+    data: { code: 'black-widow' },
+  },
+  { typeId: 'thor', label: 'Thor', data: { code: 'thor' } },
+  { typeId: 'hulk', label: 'Hulk', data: { code: 'hulk' } },
+  {
+    typeId: 'doctor-strange',
+    label: 'Doctor Strange',
+    data: { code: 'strange' },
+  },
+  { typeId: 'wasp', label: 'Wasp', data: { code: 'wasp' } },
 ];
 
 export const FIXTURE_LOADABLES: LoadableEntry[] = [
@@ -43,17 +55,17 @@ export const FIXTURE_LOADABLES: LoadableEntry[] = [
       kind: 'static',
       items: [
         {
-          id: 'rhino',
+          typeId: 'rhino',
           label: 'Rhino',
           data: { file: 'scenarios/rhino.json' },
         },
         {
-          id: 'klaw',
+          typeId: 'klaw',
           label: 'Klaw',
           data: { file: 'scenarios/klaw.json' },
         },
         {
-          id: 'ultron',
+          typeId: 'ultron',
           label: 'Ultron',
           data: { file: 'scenarios/ultron.json' },
         },
@@ -94,7 +106,7 @@ export const FIXTURE_LOADABLES: LoadableEntry[] = [
  * implementation for tests and the dev harness.
  */
 export function fixtureResolveDerivedItems(): Array<{
-  id: string;
+  typeId: string;
   label: string;
   data: { code: string };
 }> {

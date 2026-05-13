@@ -25,7 +25,7 @@ const DERIVED_RENDER_CAP = 200;
  * host's loadable runtime (ct-8gf.2 / ct-8gf.5), not in the picker.
  */
 export interface LoadPickerItem {
-  id: string;
+  typeId: string;
   label: string;
   data: unknown;
 }
@@ -176,7 +176,7 @@ export function LoadPickerModal({
     const source = activeEntry.source;
     if (source.kind === 'static') {
       return source.items.map((it: LoadableStaticItem) => ({
-        id: it.id,
+        typeId: it.typeId,
         label: it.label,
         data: it.data,
       }));
@@ -194,9 +194,9 @@ export function LoadPickerModal({
       // Cap on first-paint to avoid lag for very large catalogs.
       return items.slice(0, DERIVED_RENDER_CAP);
     }
-    // Search across label and id so users can find a card by either its
+    // Search across label and typeId so users can find a card by either its
     // display name or its stable code (e.g., MarvelCDB-style "01001A").
-    return fuzzySearch(items, q, (it) => `${it.label} ${it.id}`);
+    return fuzzySearch(items, q, (it) => `${it.label} ${it.typeId}`);
   }, [items, query]);
 
   const handleClose = useCallback(() => {
@@ -502,12 +502,12 @@ function Step2ItemList({
           data-testid="load-picker-items"
         >
           {items.map((it) => (
-            <li key={it.id} className="load-picker-items-item">
+            <li key={it.typeId} className="load-picker-items-item">
               <button
                 type="button"
                 className="load-picker-item"
                 onClick={() => onPickItem(it)}
-                data-testid={`load-picker-item-${it.id}`}
+                data-testid={`load-picker-item-${it.typeId}`}
               >
                 {it.label}
               </button>
@@ -591,7 +591,7 @@ function CardPreviewIconButton({
       type="button"
       className="load-picker-card-preview-btn"
       aria-label={`Preview ${item.label}`}
-      data-testid={`load-picker-card-preview-${item.id}`}
+      data-testid={`load-picker-card-preview-${item.typeId}`}
       onClick={(e) => {
         // Always block the row select; the icon is its own affordance.
         e.stopPropagation();

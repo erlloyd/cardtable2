@@ -472,7 +472,7 @@ describe('loadScenarioContent', () => {
             kind: 'static',
             items: [
               {
-                id: 'testgame-basic',
+                typeId: 'testgame-basic',
                 label: 'Test Game - Basic Setup',
                 data: { file: 'testgame-basic.json' },
               },
@@ -505,7 +505,7 @@ describe('loadScenarioContent', () => {
       // list keyed off mockContent.content.cards (CARD001, CARD002).
       expect(resolved[1].source.kind).toBe('static');
       if (resolved[1].source.kind === 'static') {
-        expect(resolved[1].source.items.map((i) => i.id).sort()).toEqual([
+        expect(resolved[1].source.items.map((i) => i.typeId).sort()).toEqual([
           'CARD001',
           'CARD002',
         ]);
@@ -521,7 +521,7 @@ describe('loadScenarioContent', () => {
           mode: 'replace',
           source: {
             kind: 'static',
-            items: [{ id: 'old', label: 'Old', data: {} }],
+            items: [{ typeId: 'old', label: 'Old', data: {} }],
           },
         },
       ];

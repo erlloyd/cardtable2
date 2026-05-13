@@ -132,7 +132,7 @@ describe('handleLoadSelection — replace + scenario', () => {
       gameAssets: makeAssets(),
     });
     const item = {
-      id: 's1',
+      typeId: 's1',
       label: 'Test',
       data: { file: 'testgame-basic.json' },
     };
@@ -164,7 +164,7 @@ describe('handleLoadSelection — replace + scenario', () => {
 
     await handleLoadSelection(
       scenarioEntry,
-      { id: 's1', label: 'Test', data: { file: 'testgame-basic.json' } },
+      { typeId: 's1', label: 'Test', data: { file: 'testgame-basic.json' } },
       { store, getViewportState },
     );
 
@@ -185,7 +185,7 @@ describe('handleLoadSelection — replace + scenario', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await handleLoadSelection(
       scenarioEntry,
-      { id: 'x', label: 'x', data: {} },
+      { typeId: 'x', label: 'x', data: {} },
       { store, getViewportState },
     );
     expect(warn).toHaveBeenCalled();
@@ -204,7 +204,7 @@ describe('handleLoadSelection — replace + non-scenario', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await handleLoadSelection(
       entry,
-      { id: 'x', label: 'x', data: {} },
+      { typeId: 'x', label: 'x', data: {} },
       { store, getViewportState },
     );
     expect(warn).toHaveBeenCalledWith(
@@ -230,7 +230,7 @@ describe('handleLoadSelection — additive + card', () => {
     });
     await handleLoadSelection(
       cardEntry,
-      { id: '01001', label: '01001', data: { code: '01001' } },
+      { typeId: '01001', label: '01001', data: { code: '01001' } },
       { store, getViewportState },
     );
     expect(YjsActions.createObject).toHaveBeenCalledTimes(1);
@@ -253,7 +253,7 @@ describe('handleLoadSelection — additive + card', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     await handleLoadSelection(
       cardEntry,
-      { id: '01001', label: 'x', data: { code: '01001' } },
+      { typeId: '01001', label: 'x', data: { code: '01001' } },
       { store, getViewportState },
     );
     expect(YjsActions.createObject).not.toHaveBeenCalled();
@@ -295,12 +295,12 @@ describe('handleLoadSelection — additive + card', () => {
 
     await handleLoadSelection(
       cardEntry,
-      { id: '01001', label: '01001', data: { code: '01001' } },
+      { typeId: '01001', label: '01001', data: { code: '01001' } },
       { store, getViewportState: dpr1 },
     );
     await handleLoadSelection(
       cardEntry,
-      { id: '01001', label: '01001', data: { code: '01001' } },
+      { typeId: '01001', label: '01001', data: { code: '01001' } },
       { store, getViewportState: dpr2 },
     );
 
@@ -338,7 +338,7 @@ describe('handleLoadSelection — additive + card-set', () => {
     await handleLoadSelection(
       entry,
       {
-        id: 'encounter-basic',
+        typeId: 'encounter-basic',
         label: 'encounter-basic',
         data: { setName: 'encounter-basic' },
       },
@@ -364,7 +364,7 @@ describe('handleLoadSelection — additive + card-set', () => {
     await handleLoadSelection(
       entry,
       {
-        id: 'encounter-basic',
+        typeId: 'encounter-basic',
         label: 'Encounter Basic',
         data: { cardSet: 'encounter-basic' },
       },
@@ -385,7 +385,7 @@ describe('handleLoadSelection — additive + card-set', () => {
     };
     await handleLoadSelection(
       entry,
-      { id: 'x', label: 'x', data: { cardSet: 'unknown' } },
+      { typeId: 'x', label: 'x', data: { cardSet: 'unknown' } },
       { store, getViewportState },
     );
     expect(YjsActions.createObject).not.toHaveBeenCalled();

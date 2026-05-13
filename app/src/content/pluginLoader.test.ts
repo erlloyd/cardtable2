@@ -57,7 +57,7 @@ const mockManifest: PluginManifest = {
         kind: 'static',
         items: [
           {
-            id: 'test-scenario',
+            typeId: 'test-scenario',
             label: 'Test Scenario',
             data: { file: 'test-scenario.json' },
           },
@@ -351,7 +351,7 @@ describe('loadPluginManifest', () => {
             kind: 'static',
             items: [
               {
-                id: 's1',
+                typeId: 's1',
                 label: 'Scenario 1',
                 data: { file: 's1.json' },
               },
@@ -884,7 +884,7 @@ describe('loadLocalPluginDirectory', () => {
             kind: 'static',
             items: [
               {
-                id: 'scenario1',
+                typeId: 'scenario1',
                 label: 'Scenario 1',
                 data: { file: 'scenario1.json' },
               },
@@ -956,7 +956,7 @@ describe('loadLocalPluginDirectory', () => {
             kind: 'static',
             items: [
               {
-                id: 'missing-scenario',
+                typeId: 'missing-scenario',
                 label: 'Missing Scenario',
                 data: { file: 'missing-scenario.json' },
               },
@@ -1084,12 +1084,12 @@ describe('getPluginScenarioUrls', () => {
           kind: 'static',
           items: [
             {
-              id: 's1',
+              typeId: 's1',
               label: 'Scenario 1',
               data: { file: 'scenarios/one.json' },
             },
             {
-              id: 's2',
+              typeId: 's2',
               label: 'Scenario 2',
               data: { file: 'scenarios/two.json' },
             },

@@ -227,7 +227,7 @@ describe('LoadPickerModal', () => {
     const [entry, item] = onSelectItem.mock.calls[0];
     expect(entry.type).toBe('scenario');
     expect(item).toMatchObject({
-      id: 'klaw',
+      typeId: 'klaw',
       label: 'Klaw',
       data: { file: 'scenarios/klaw.json' },
     });
@@ -268,7 +268,7 @@ describe('LoadPickerModal', () => {
     // Build a 250-item derived resolver — picker should render only 200
     // until the user types.
     const big = Array.from({ length: 250 }, (_, i) => ({
-      id: `c${String(i)}`,
+      typeId: `c${String(i)}`,
       label: `Card ${String(i)}`,
       data: { code: `c${String(i)}` },
     }));
@@ -326,11 +326,11 @@ describe('LoadPickerModal', () => {
             derivedFrom: 'all-cards' as const,
             items: [
               {
-                id: 'spider-man',
+                typeId: 'spider-man',
                 label: 'Spider-Man',
                 data: { code: 'spider-man' },
               },
-              { id: 'hulk', label: 'Hulk', data: { code: 'hulk' } },
+              { typeId: 'hulk', label: 'Hulk', data: { code: 'hulk' } },
             ],
           },
         },

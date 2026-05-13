@@ -185,7 +185,7 @@ function deriveItems(
     //
     // Cases:
     //  1. Bidirectional pair (A.back_code=B AND B.back_code=A):
-    //     emit one item; id/data.code = lexicographically lower code
+    //     emit one item; typeId/data.code = lexicographically lower code
     //     (matches MC's A/B convention so the hero/scheme-front loads first).
     //     Label: `${lower.name||lowerCode} / ${higher.name||higherCode}`.
     //  2. Asymmetric (A.back_code=B but B.back_code !== A, or B has no
@@ -214,7 +214,7 @@ function deriveItems(
           const lowerLabel = lowerCard.name || lowerCode;
           const higherLabel = higherCard.name || higherCode;
           items.push({
-            id: lowerCode,
+            typeId: lowerCode,
             label: `${lowerLabel} / ${higherLabel}`,
             data: { code: lowerCode },
           });
@@ -227,7 +227,7 @@ function deriveItems(
           // Asymmetric: A points at B but B doesn't point back. Emit A;
           // mark B emitted so it never appears as a separate entry.
           items.push({
-            id: code,
+            typeId: code,
             label: card.name || code,
             data: { code },
           });
@@ -242,7 +242,7 @@ function deriveItems(
 
       // Singleton (no back_code, self-reference, or dangling pointer).
       items.push({
-        id: code,
+        typeId: code,
         label: card.name || code,
         data: { code },
       });
@@ -254,7 +254,7 @@ function deriveItems(
 
   // 'all-card-sets'
   return Object.keys(gameAssets.cardSets).map((setName) => ({
-    id: setName,
+    typeId: setName,
     label: setName,
     data: { setName },
   }));

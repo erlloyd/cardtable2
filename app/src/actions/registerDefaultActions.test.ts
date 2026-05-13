@@ -29,6 +29,7 @@ function makeContext(overrides: Partial<ActionContext> = {}): ActionContext {
       count: 0,
       hasStacks: false,
       hasTokens: false,
+      hasCounters: false,
       hasMixed: false,
       allLocked: false,
       allUnlocked: true,

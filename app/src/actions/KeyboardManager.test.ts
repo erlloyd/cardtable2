@@ -35,6 +35,7 @@ describe('KeyboardManager', () => {
         count: 1,
         hasStacks: true,
         hasTokens: false,
+        hasCounters: false,
         hasMixed: false,
         allLocked: false,
         allUnlocked: true,

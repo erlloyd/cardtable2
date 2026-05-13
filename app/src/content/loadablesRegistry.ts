@@ -15,11 +15,20 @@
  * a usable URL for the worker sandbox to fetch the plugin's parser JS.
  */
 
-import type {
-  GameAssets,
-  LoadableEntry,
-  LoadableStaticItem,
+import {
+  COUNTER_LOADABLE_TYPE,
+  type CounterTypeDef,
+  type GameAssets,
+  type LoadableEntry,
+  type LoadableStaticItem,
 } from '@cardtable2/shared';
+import {
+  COUNTER_DEFAULT_COLOR,
+  COUNTER_DEFAULT_MAX,
+  COUNTER_DEFAULT_MIN,
+  COUNTER_DEFAULT_STARTING_VALUE,
+  COUNTER_TYPE_GENERIC,
+} from '../renderer/objects/counter/constants';
 
 let currentEntries: LoadableEntry[] = [];
 let currentPluginBaseUrl = '';
@@ -52,10 +61,45 @@ export function setLoadableEntries(
 }
 
 /**
- * Read the current resolved loadable entries.
+ * Read the current resolved loadable entries — raw, exactly as the active
+ * plugin declared them (after asset-pack-derivation). Use this when you need
+ * the plugin's declared shape verbatim (storage tests, scenario load
+ * pipeline). For UI / action consumers, prefer {@link getLoadableEntriesForUi},
+ * which decorates this list with the host-guaranteed synthetic Generic
+ * counter so `Load Counter…` is always reachable.
  */
 export function getLoadableEntries(): LoadableEntry[] {
   return currentEntries;
+}
+
+/**
+ * Read the current loadable entries with host-supplied decorations applied.
+ *
+ * Today the only decoration is the **synthetic Generic counter** (ct-8vh):
+ *
+ * - If the active plugin declares no `counter` loadable entry, this function
+ *   prepends a synthetic one (`type: 'counter'`, `mode: 'additive'`, static
+ *   source with a single Generic item).
+ * - If the plugin DOES declare a `counter` entry (e.g. testgame with damage
+ *   /threat, marvelchampions with its typed counters), the synthetic Generic
+ *   item is prepended to that entry's `source.items` array so the picker
+ *   always surfaces Generic alongside the typed counters.
+ *
+ * Why decorate here (not at each consumer): both the picker UI (driven by the
+ * route's `loadables` state) AND the dynamic per-type `Load <X>…` actions
+ * registered by `registerLoadablesActions` flow from this single registry
+ * read. Injecting once at the registry's UI-view boundary means the
+ * synthetic counter naturally appears in: the picker's type list, the
+ * picker's item list when `presetType === 'counter'`, the
+ * `load-counter` command, and the counter resolver in `counterRegistry`
+ * (whose `typeId === 'generic'` lookup now succeeds).
+ *
+ * Asset-pack-derived sources are already materialized at populate time by
+ * {@link setLoadableEntries}, so the decoration runs over `kind: 'static'`
+ * entries only — no game-asset dependency is introduced here.
+ */
+export function getLoadableEntriesForUi(): LoadableEntry[] {
+  return decorateWithSyntheticGenericCounter(currentEntries);
 }
 
 /**
@@ -258,4 +302,117 @@ function deriveItems(
     label: setName,
     data: { setName },
   }));
+}
+
+// ============================================================================
+// Synthetic Generic counter injection (ct-8vh)
+// ============================================================================
+// The host guarantees a Generic counter spawn path is always reachable from
+// the Load… picker — even when the active plugin declares no counter
+// loadables. We model that as a synthetic `LoadableStaticItem<CounterTypeDef>`
+// prepended to the counter entry's items list. Whether the counter entry
+// itself exists is handled here too: when the plugin omits it, we synthesize
+// a whole `LoadableEntry` so the per-type `load-counter` action is
+// registered alongside other plugin-declared types.
+
+/** Stable typeId for the synthetic Generic counter item. */
+const SYNTHETIC_GENERIC_COUNTER_TYPE_ID = COUNTER_TYPE_GENERIC;
+
+/** Human-facing label for the synthetic Generic counter item. */
+const SYNTHETIC_GENERIC_COUNTER_LABEL = 'Generic';
+
+/**
+ * Build the synthetic Generic counter item from the runtime defaults defined
+ * in `renderer/objects/counter/constants`. Kept as a builder (not a const)
+ * so the returned object is fresh per call — the picker / action layers
+ * pass it through structured-clone-equivalent paths and shouldn't share
+ * references across renders.
+ */
+function buildSyntheticGenericCounterItem(): LoadableStaticItem<CounterTypeDef> {
+  return {
+    typeId: SYNTHETIC_GENERIC_COUNTER_TYPE_ID,
+    label: SYNTHETIC_GENERIC_COUNTER_LABEL,
+    data: {
+      color: COUNTER_DEFAULT_COLOR,
+      min: COUNTER_DEFAULT_MIN,
+      max: COUNTER_DEFAULT_MAX,
+      startingValue: COUNTER_DEFAULT_STARTING_VALUE,
+    },
+  };
+}
+
+/**
+ * Build the synthetic counter `LoadableEntry` used when the active plugin
+ * declares no counter entry of its own. Mirrors the testgame /
+ * marvelchampions shape: `type: 'counter'`, additive mode, static source.
+ */
+function buildSyntheticCounterEntry(): LoadableEntry {
+  return {
+    type: COUNTER_LOADABLE_TYPE,
+    label: 'Counter',
+    mode: 'additive',
+    source: {
+      kind: 'static',
+      items: [buildSyntheticGenericCounterItem()],
+    },
+  };
+}
+
+/**
+ * Decorate the registry's raw entries with the synthetic Generic counter.
+ * See {@link getLoadableEntriesForUi} for the contract; this function is
+ * the underlying transform.
+ *
+ * Invariants:
+ * - Returns a new array; never mutates `entries`.
+ * - When `entries` contains a counter entry with a non-static source,
+ *   the entry is left untouched (the synthetic Generic is only sensible
+ *   for static sources, which is the only counter shape the schema
+ *   supports — see CounterTypeDef docs in shared/content-types).
+ * - When `entries` contains a counter entry whose items already include
+ *   a `generic`-id item, no second Generic is added — the plugin's
+ *   declaration wins, matching the broader "first declaration wins"
+ *   precedent used by `counterRegistry.resolveItems`.
+ */
+function decorateWithSyntheticGenericCounter(
+  entries: LoadableEntry[],
+): LoadableEntry[] {
+  const counterEntryIndex = entries.findIndex(
+    (entry) => entry.type === COUNTER_LOADABLE_TYPE,
+  );
+
+  if (counterEntryIndex === -1) {
+    // No counter entry — synthesize the whole thing so the picker / action
+    // layer naturally surfaces `Load Counter…` with a single Generic item.
+    return [...entries, buildSyntheticCounterEntry()];
+  }
+
+  const counterEntry = entries[counterEntryIndex];
+  if (counterEntry.source.kind !== 'static') {
+    // Provider / asset-pack-derived counter sources aren't a thing the
+    // current schema produces, but if a plugin ever declared one we
+    // can't sensibly prepend a static synthetic item — leave it alone.
+    return entries;
+  }
+
+  const items = counterEntry.source.items;
+  const hasGeneric = items.some(
+    (item) => item.typeId === SYNTHETIC_GENERIC_COUNTER_TYPE_ID,
+  );
+  if (hasGeneric) {
+    // Plugin already declares a `generic` counter type — first declaration
+    // wins. Pass entries through unchanged.
+    return entries;
+  }
+
+  const decoratedEntry: LoadableEntry = {
+    ...counterEntry,
+    source: {
+      ...counterEntry.source,
+      items: [buildSyntheticGenericCounterItem(), ...items],
+    },
+  };
+  const next = entries.slice();
+  next[counterEntryIndex] = decoratedEntry;
+  return next;
 }

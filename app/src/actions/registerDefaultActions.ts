@@ -442,7 +442,11 @@ export function registerDefaultActions(): void {
   //
   // Per-type Load <X>... commands are registered separately by
   // `registerLoadablesActions()` so they can be re-derived whenever the
-  // active plugin's loadable registry changes.
+  // active plugin's loadable registry changes. The `counter` loadable type is
+  // not special-cased here: the loadables registry's UI view always exposes a
+  // synthetic counter entry (with at least a Generic item, plus any plugin-
+  // declared typed counters), so `registerLoadablesActions` naturally
+  // produces a `load-counter` action that routes through the picker (ct-8vh).
   registry.register({
     id: 'load',
     label: 'Load…',
@@ -470,6 +474,12 @@ const liveLoadableActionIds = new Set<string>();
  *
  * The id format is `load-<entry.type>`; collisions with built-in action ids
  * are the plugin author's responsibility — the registry warns on overwrite.
+ *
+ * The `counter` loadable type is treated exactly like every other type: the
+ * loadables registry's UI view always exposes a counter entry (synthetic
+ * Generic + any plugin-declared typed counters), so the corresponding
+ * `load-counter` action is always registered and always routes through the
+ * picker — typed counters reachable, Generic always available (ct-8vh).
  */
 export function registerLoadablesActions(loadables: LoadableEntry[]): void {
   const registry = ActionRegistry.getInstance();

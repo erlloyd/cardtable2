@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Card, GameAssets, LoadableEntry } from '@cardtable2/shared';
+import { COUNTER_LOADABLE_TYPE } from '@cardtable2/shared';
 import {
   setLoadableEntries,
   getLoadableEntries,
+  getLoadableEntriesForUi,
   clearLoadableEntries,
   getLoadablesPluginBaseUrl,
   resolveParserModuleUrl,
   getLoadablesOfType,
   getStaticItems,
 } from './loadablesRegistry';
+import { COUNTER_TYPE_GENERIC } from '../renderer/objects/counter/constants';
 
 function createGameAssets(overrides: Partial<GameAssets> = {}): GameAssets {
   return {
@@ -643,6 +646,154 @@ describe('loadablesRegistry', () => {
         const items = getStaticItems([deckEntry], 'deck');
         expect(items).toEqual([]);
       });
+    });
+  });
+
+  // ct-8vh: the UI-view read decorates the raw registry with a synthetic
+  // Generic counter so `Load Counter…` is always reachable from the picker
+  // and the per-type action layer naturally registers `load-counter`.
+  describe('getLoadableEntriesForUi — synthetic Generic counter injection', () => {
+    it('synthesizes a counter entry with a Generic item when none is declared', () => {
+      // Empty registry — no plugin loaded.
+      const view = getLoadableEntriesForUi();
+      const counterEntry = view.find((e) => e.type === COUNTER_LOADABLE_TYPE);
+      expect(counterEntry).toBeDefined();
+      expect(counterEntry?.mode).toBe('additive');
+      expect(counterEntry?.source.kind).toBe('static');
+      if (counterEntry?.source.kind === 'static') {
+        expect(counterEntry.source.items).toHaveLength(1);
+        expect(counterEntry.source.items[0].typeId).toBe(COUNTER_TYPE_GENERIC);
+        expect(counterEntry.source.items[0].label).toBe('Generic');
+      }
+    });
+
+    it('synthesizes the counter entry alongside other declared loadables', () => {
+      const scenarioEntry: LoadableEntry<{ file: string }> = {
+        type: 'scenario',
+        label: 'Scenario',
+        mode: 'replace',
+        source: {
+          kind: 'static',
+          items: [{ typeId: 's1', label: 'S1', data: { file: 's1.json' } }],
+        },
+      };
+      setLoadableEntries([scenarioEntry], createGameAssets());
+
+      const view = getLoadableEntriesForUi();
+      // Scenario entry preserved.
+      expect(view.some((e) => e.type === 'scenario')).toBe(true);
+      // Counter entry synthesized.
+      const counterEntry = view.find((e) => e.type === COUNTER_LOADABLE_TYPE);
+      expect(counterEntry).toBeDefined();
+    });
+
+    it('prepends Generic to an existing plugin-declared counter entry', () => {
+      const counterEntry: LoadableEntry = {
+        type: COUNTER_LOADABLE_TYPE,
+        label: 'Counter',
+        mode: 'additive',
+        source: {
+          kind: 'static',
+          items: [
+            {
+              typeId: 'damage',
+              label: 'Damage',
+              data: {
+                color: 0xff0000,
+                text: 'DMG',
+                min: 0,
+                max: 99,
+                startingValue: 0,
+              },
+            },
+            {
+              typeId: 'threat',
+              label: 'Threat',
+              data: { color: 0x0000ff, min: 0, max: 20, startingValue: 0 },
+            },
+          ],
+        },
+      };
+      setLoadableEntries([counterEntry], createGameAssets());
+
+      const view = getLoadableEntriesForUi();
+      const decorated = view.find((e) => e.type === COUNTER_LOADABLE_TYPE);
+      expect(decorated).toBeDefined();
+      if (decorated?.source.kind === 'static') {
+        expect(decorated.source.items).toHaveLength(3);
+        // Generic prepended, then plugin-declared typed counters.
+        expect(decorated.source.items[0].typeId).toBe(COUNTER_TYPE_GENERIC);
+        expect(decorated.source.items[1].typeId).toBe('damage');
+        expect(decorated.source.items[2].typeId).toBe('threat');
+      }
+    });
+
+    it('does not prepend a second Generic when the plugin already declares one', () => {
+      const counterEntry: LoadableEntry = {
+        type: COUNTER_LOADABLE_TYPE,
+        label: 'Counter',
+        mode: 'additive',
+        source: {
+          kind: 'static',
+          items: [
+            {
+              typeId: COUNTER_TYPE_GENERIC,
+              label: 'My Generic',
+              data: {
+                color: 0xaaaaaa,
+                min: -5,
+                max: 5,
+                startingValue: 0,
+              },
+            },
+          ],
+        },
+      };
+      setLoadableEntries([counterEntry], createGameAssets());
+
+      const view = getLoadableEntriesForUi();
+      const decorated = view.find((e) => e.type === COUNTER_LOADABLE_TYPE);
+      if (decorated?.source.kind === 'static') {
+        expect(decorated.source.items).toHaveLength(1);
+        // Plugin's own Generic-id declaration wins; label preserved.
+        expect(decorated.source.items[0].label).toBe('My Generic');
+      }
+    });
+
+    it('does not mutate the underlying registry — getLoadableEntries stays raw', () => {
+      const counterEntry: LoadableEntry = {
+        type: COUNTER_LOADABLE_TYPE,
+        label: 'Counter',
+        mode: 'additive',
+        source: {
+          kind: 'static',
+          items: [
+            {
+              typeId: 'damage',
+              label: 'Damage',
+              data: {
+                color: 0xff0000,
+                min: 0,
+                max: 99,
+                startingValue: 0,
+              },
+            },
+          ],
+        },
+      };
+      setLoadableEntries([counterEntry], createGameAssets());
+
+      // First read the decorated view — this used to mutate the underlying
+      // entry in a buggy implementation; this test pins the contract.
+      getLoadableEntriesForUi();
+
+      const raw = getLoadableEntries();
+      const rawCounter = raw.find((e) => e.type === COUNTER_LOADABLE_TYPE);
+      if (rawCounter?.source.kind === 'static') {
+        // Raw entry still has exactly the plugin-declared item set.
+        expect(rawCounter.source.items).toHaveLength(1);
+        expect(rawCounter.source.items[0].typeId).toBe('damage');
+      }
     });
   });
 });

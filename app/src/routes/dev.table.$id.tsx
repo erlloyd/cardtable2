@@ -44,7 +44,7 @@ import {
   setDeckInputProvider,
   type DeckInputResult,
 } from '../content/loadHandler';
-import { getLoadableEntries } from '../content/loadablesRegistry';
+import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
 import type { LoadableEntry } from '@cardtable2/shared';
 
 // Lazy load the Board component
@@ -126,7 +126,7 @@ function DevTable() {
     presetType?: string;
   }>({ open: false });
   const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntries(),
+    getLoadableEntriesForUi(),
   );
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
@@ -160,7 +160,7 @@ function DevTable() {
   // `table.$id.tsx`'s pattern, ct-rde) drives re-derivation when those
   // sources fire.
   useEffect(() => {
-    const entries = getLoadableEntries();
+    const entries = getLoadableEntriesForUi();
     setLoadables(entries);
     unregisterLoadablesActions();
     if (entries.length > 0) {

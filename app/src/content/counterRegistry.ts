@@ -34,7 +34,7 @@ import {
   type LoadableEntry,
   type LoadableStaticItem,
 } from '@cardtable2/shared';
-import { getLoadableEntries, getStaticItems } from './loadablesRegistry';
+import { getLoadableEntriesForUi, getStaticItems } from './loadablesRegistry';
 
 /**
  * Resolved counter type definition: the parsed `CounterTypeDef` payload
@@ -155,7 +155,10 @@ export function parseCounterTypeDef(
 export function getAllCounterTypeDefs(
   entries?: LoadableEntry[],
 ): ResolvedCounterTypeDef[] {
-  const source = entries ?? getLoadableEntries();
+  // Use the UI view so the synthetic Generic counter (ct-8vh) is always
+  // resolvable — both via `getCounterTypeDef('generic')` (picker handler) and
+  // `getAllCounterTypeDefs()` (future consumers listing every counter type).
+  const source = entries ?? getLoadableEntriesForUi();
   const items = getStaticItems<unknown>(source, COUNTER_LOADABLE_TYPE);
   return resolveItems(items);
 }
@@ -172,7 +175,10 @@ export function getCounterTypeDef(
   typeId: string,
   entries?: LoadableEntry[],
 ): ResolvedCounterTypeDef | undefined {
-  const source = entries ?? getLoadableEntries();
+  // Use the UI view so the synthetic Generic counter (ct-8vh) is always
+  // resolvable — both via `getCounterTypeDef('generic')` (picker handler) and
+  // `getAllCounterTypeDefs()` (future consumers listing every counter type).
+  const source = entries ?? getLoadableEntriesForUi();
   const items = getStaticItems<unknown>(source, COUNTER_LOADABLE_TYPE);
 
   for (const item of items) {

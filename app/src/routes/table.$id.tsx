@@ -60,7 +60,7 @@ import {
   setDeckInputProvider,
   type DeckInputResult,
 } from '../content/loadHandler';
-import { getLoadableEntries } from '../content/loadablesRegistry';
+import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
 import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
 import { dbg } from '../dev/dbg';
@@ -134,7 +134,7 @@ function Table() {
     presetType?: string;
   }>({ open: false });
   const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntries(),
+    getLoadableEntriesForUi(),
   );
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
@@ -241,7 +241,7 @@ function Table() {
   // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
   // here whenever gameAssets change so plugin switches drop stale entries.
   useEffect(() => {
-    const entries = getLoadableEntries();
+    const entries = getLoadableEntriesForUi();
     setLoadables(entries);
     unregisterLoadablesActions();
     if (entries.length > 0) {

@@ -57,7 +57,7 @@
         "kind": "static",
         "items": [
           {
-            "id": "damage",
+            "typeId": "damage",
             "label": "Damage",
             "data": {
               "color": 15871769,
@@ -68,7 +68,7 @@
             }
           },
           {
-            "id": "threat",
+            "typeId": "threat",
             "label": "Threat",
             "data": {
               "color": 3447003,

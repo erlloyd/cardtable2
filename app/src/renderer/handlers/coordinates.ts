@@ -10,7 +10,7 @@ import type { RendererContext } from '../RendererContext';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
-import { getCounterSize } from '../objects/counter/utils';
+import { getCounterDimensions } from '../objects/counter/utils';
 
 /**
  * Handle request-screen-coords message
@@ -74,9 +74,9 @@ export function handleRequestScreenCoords(
           width = radius * 2;
           height = radius * 2;
         } else if (obj._kind === ObjectKind.Counter) {
-          const radius = (getCounterSize(obj) * cameraScale) / dpr;
-          width = radius * 2;
-          height = radius * 2;
+          const dims = getCounterDimensions(obj);
+          width = (dims.width * cameraScale) / dpr;
+          height = (dims.height * cameraScale) / dpr;
         }
 
         screenCoords.push({

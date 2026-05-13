@@ -9,7 +9,7 @@ import type { TextureLoader } from '../services/TextureLoader';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
-import { getCounterSize } from '../objects/counter/utils';
+import { getCounterDimensions } from '../objects/counter/utils';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
 import type { HoverManager } from './HoverManager';
@@ -1031,10 +1031,9 @@ export class VisualManager {
           width = radius * 2;
           height = radius * 2;
         } else if (obj._kind === ObjectKind.Counter) {
-          const radius =
-            (getCounterSize(obj) * this.cameraScale) / devicePixelRatio;
-          width = radius * 2;
-          height = radius * 2;
+          const dims = getCounterDimensions(obj);
+          width = (dims.width * this.cameraScale) / devicePixelRatio;
+          height = (dims.height * this.cameraScale) / devicePixelRatio;
         }
 
         screenCoords.push({

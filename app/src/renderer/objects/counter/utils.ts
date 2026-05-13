@@ -3,8 +3,9 @@ import {
   COUNTER_DEFAULT_COLOR,
   COUNTER_DEFAULT_MAX,
   COUNTER_DEFAULT_MIN,
-  COUNTER_DEFAULT_SIZE,
   COUNTER_DEFAULT_STARTING_VALUE,
+  COUNTER_PILL_HEIGHT,
+  COUNTER_PILL_WIDTH,
   COUNTER_TYPE_GENERIC,
 } from './constants';
 import type { CounterMeta } from './types';
@@ -116,13 +117,16 @@ export function getCounterCurrentValue(obj: TableObject): number {
 }
 
 /**
- * Get the size (radius) for a counter.
+ * Get the pill dimensions (width, height) for a counter in world units.
  *
- * Retained for the legacy circle render and screen-coordinate calculations
- * (coordinates.ts, VisualManager.ts, behaviors.ts) until the pill render
- * bead (ct-yxh) replaces these call sites with pill geometry. Returns the
- * default; `size` is no longer part of CounterMeta.
+ * Counters render as a horizontal rounded-rectangle pill (ct-yxh). The
+ * dimensions are fixed by `COUNTER_PILL_WIDTH` / `COUNTER_PILL_HEIGHT`;
+ * the parameter is retained for symmetry with the other object kinds and
+ * to leave room for per-instance sizing if a future bead introduces it.
  */
-export function getCounterSize(_obj: TableObject): number {
-  return COUNTER_DEFAULT_SIZE;
+export function getCounterDimensions(_obj: TableObject): {
+  width: number;
+  height: number;
+} {
+  return { width: COUNTER_PILL_WIDTH, height: COUNTER_PILL_HEIGHT };
 }

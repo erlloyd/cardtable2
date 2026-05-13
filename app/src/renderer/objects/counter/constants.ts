@@ -30,10 +30,35 @@ export const COUNTER_VALUE_TEXT_COLOR = 0xffffff;
 export const COUNTER_VALUE_STROKE_COLOR = 0x000000;
 export const COUNTER_VALUE_STROKE_WIDTH = 3;
 
-/** +/- glyph styling (visual only in this bead; ct-d2p wires events). */
+/** +/- glyph styling. Event wiring lands in ct-d2p. */
 export const COUNTER_ZONE_GLYPH_FONT_SIZE = 24;
 export const COUNTER_ZONE_GLYPH_COLOR = 0xffffff;
+/** Glyph alpha at rest (no hover, value not at boundary). */
 export const COUNTER_ZONE_GLYPH_ALPHA = 0.55;
+/** Glyph alpha while the side zone is hovered or actively pressed. */
+export const COUNTER_ZONE_GLYPH_ALPHA_ACTIVE = 1.0;
+/**
+ * Glyph alpha when the corresponding boundary is reached (plus at max,
+ * minus at min). The zone stops responding to taps in this state.
+ */
+export const COUNTER_ZONE_GLYPH_ALPHA_BOUNDARY = 0.25;
+
+/**
+ * Tint overlay drawn behind the +/- glyph when its zone is hovered (ct-d2p).
+ * A low-alpha white overlay sits on top of the pill body, brightening the
+ * relevant third of the pill without changing the body color.
+ */
+export const COUNTER_ZONE_HOVER_TINT_COLOR = 0xffffff;
+export const COUNTER_ZONE_HOVER_TINT_ALPHA = 0.18;
+
+/**
+ * Pill-body clamp-flash overlay (ct-d2p). When a +/- tap hits a boundary,
+ * the body is briefly washed with this color to signal "blocked", then
+ * cleared. The body's underlying color is preserved (no recolor).
+ */
+export const COUNTER_CLAMP_FLASH_COLOR = 0xffffff;
+export const COUNTER_CLAMP_FLASH_ALPHA = 0.45;
+export const COUNTER_CLAMP_FLASH_DURATION_MS = 100;
 
 /** Label (`text`) styling — small, semi-opaque, top-left of center zone. */
 export const COUNTER_LABEL_FONT_SIZE = 10;

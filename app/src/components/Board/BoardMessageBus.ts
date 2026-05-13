@@ -14,6 +14,7 @@ import {
   unstackCard,
   attachCards,
   detachCard,
+  adjustCounter,
 } from '../../store/YjsActions';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
 import { resolveEffectiveAttachmentLayout } from '../../store/attachmentLayout';
@@ -287,6 +288,28 @@ export class BoardMessageBus {
               : error,
         });
         ctx.addMessage('Failed to detach card.');
+      }
+    });
+
+    // ct-d2p: Counter +/- zone tap from the renderer.
+    this.registry.register('counter-adjust', (msg, ctx) => {
+      try {
+        const result = adjustCounter(ctx.store, msg.id, msg.delta);
+        if (!result) {
+          console.warn(
+            '[BoardMessageBus] counter-adjust ignored: counter not found',
+            { id: msg.id, delta: msg.delta },
+          );
+        }
+      } catch (error) {
+        console.error('[BoardMessageBus] Counter adjust failed', {
+          id: msg.id,
+          delta: msg.delta,
+          error:
+            error instanceof Error
+              ? { message: error.message, stack: error.stack }
+              : error,
+        });
       }
     });
 

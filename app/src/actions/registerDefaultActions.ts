@@ -1,5 +1,10 @@
 import { ActionRegistry } from './ActionRegistry';
-import { CARD_ACTIONS, VIEW_ACTIONS, CONTENT_ACTIONS } from './types';
+import {
+  CARD_ACTIONS,
+  VIEW_ACTIONS,
+  CONTENT_ACTIONS,
+  type ActionContext,
+} from './types';
 import { registerAttachmentActions } from './attachmentActions';
 import type { LoadableEntry } from '@cardtable2/shared';
 import {
@@ -10,6 +15,7 @@ import {
   shuffleStack,
   detachCard,
   detachAllCards,
+  adjustCounter,
 } from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
@@ -232,6 +238,61 @@ export function registerDefaultActions(): void {
       const detached = detachAllCards(ctx.store, parentId);
       console.log(`Detached ${detached.length} cards from ${parentId}`);
     },
+  });
+
+  // ct-d2p: Counter +/- keyboard shortcuts. Available only when exactly
+  // one Counter is selected (gated via `hasCounters` + `count === 1` to
+  // match the pill's UI affordance — multi-counter batch adjusts are not
+  // in scope for this bead). `=` (unshifted form of `+` on US keyboards)
+  // and `-` are both registered as plain single-character shortcuts.
+  //
+  // Bare `'+'` is NOT registered as a shortcut because
+  // `KeyboardManager.normalizeShortcut` uses `'+'` as the modifier
+  // separator and splits `'+'.split('+')` into `['', '']`, which
+  // normalizes to the empty string and never matches a real key event.
+  // The shifted form (`Shift+=`) suffers a symmetric issue: a real
+  // `Shift+=` keypress dispatches `event.key === '+'`, which the
+  // normalizer then joins as `'Shift++'` (since `'+'` is also the join
+  // separator), so no static shortcut string can target it cleanly.
+  //
+  // See investigation bead filed via `bd create` from this task. The
+  // unshifted `=` is enough to satisfy the spec's "plus/equals" wording
+  // until the underlying parser is fixed.
+  const counterIncrementIsAvailable = (ctx: ActionContext): boolean =>
+    ctx.selection.count === 1 &&
+    ctx.selection.hasCounters &&
+    !ctx.selection.hasMixed;
+  const counterIncrementExecute = (ctx: ActionContext): void => {
+    const id = ctx.selection.ids[0];
+    adjustCounter(ctx.store, id, 1);
+  };
+  const counterDecrementExecute = (ctx: ActionContext): void => {
+    const id = ctx.selection.ids[0];
+    adjustCounter(ctx.store, id, -1);
+  };
+
+  registry.register({
+    id: 'counter-increment',
+    label: 'Increment Counter',
+    shortLabel: '+1',
+    icon: '➕',
+    shortcut: '=',
+    category: CARD_ACTIONS,
+    description: 'Increment the selected counter by 1',
+    isAvailable: counterIncrementIsAvailable,
+    execute: counterIncrementExecute,
+  });
+
+  registry.register({
+    id: 'counter-decrement',
+    label: 'Decrement Counter',
+    shortLabel: '-1',
+    icon: '➖',
+    shortcut: '-',
+    category: CARD_ACTIONS,
+    description: 'Decrement the selected counter by 1',
+    isAvailable: counterIncrementIsAvailable,
+    execute: counterDecrementExecute,
   });
 
   // Object action: Lock/Unlock (works on any object)

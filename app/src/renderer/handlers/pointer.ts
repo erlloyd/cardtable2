@@ -21,11 +21,34 @@ import {
   STACK_BADGE_SIZE,
 } from '../objects/stack/constants';
 import { getCardCount } from '../objects/stack/utils';
+import {
+  counterZoneAtPoint,
+  isCounterZoneAtBoundary,
+} from '../objects/counter/utils';
+import type { CounterZone } from '../managers/HoverManager';
 
 /**
  * Track last sent cursor style to avoid sending redundant messages
  */
 let lastCursorStyle: 'default' | 'pointer' | 'grab' | 'grabbing' = 'default';
+
+/**
+ * Classify the hovered Counter sub-zone for the given world point (ct-d2p).
+ *
+ * Returns `null` when the object isn't a Counter or the point isn't over
+ * one of the side (+/-) zones. The center "value" zone yields `null` —
+ * only side zones are interactive.
+ */
+function classifyCounterZone(
+  worldX: number,
+  worldY: number,
+  obj: TableObject,
+): CounterZone {
+  if (obj._kind !== ObjectKind.Counter) return null;
+  const zone = counterZoneAtPoint(worldX, worldY, obj);
+  if (zone === 'minus' || zone === 'plus') return zone;
+  return null;
+}
 
 /**
  * Helper: Check if a world position is in the bottom third of a stack (attach zone)
@@ -569,7 +592,8 @@ export function handlePointerMove(
 
     // Update hover state if changed
     const prevId = context.hover.getHoveredObjectId();
-    if (context.hover.setHoveredObject(newHoveredId)) {
+    const hoverChanged = context.hover.setHoveredObject(newHoveredId);
+    if (hoverChanged) {
       // Clear previous hover
       if (prevId) {
         const isSelected = context.selection.isSelected(prevId);
@@ -627,6 +651,32 @@ export function handlePointerMove(
 
       // Request render to show hover feedback
       context.app.renderer.render(context.app.stage);
+    }
+
+    // ct-d2p: Counter sub-zone hover state. Runs on every pointermove over
+    // a hovered counter (not just hover transitions) because the relevant
+    // zone changes as the pointer slides between the -/center/+ thirds
+    // without leaving the pill.
+    const counterHoverId = context.hover.getHoveredObjectId();
+    const counterObj = counterHoverId
+      ? context.sceneManager.getObject(counterHoverId)
+      : null;
+    if (counterObj && counterObj._kind === ObjectKind.Counter) {
+      const newZone = classifyCounterZone(worldPos.x, worldPos.y, counterObj);
+      if (context.hover.setHoveredCounterZone(newZone)) {
+        const isSelected = context.selection.isSelected(counterHoverId!);
+        context.visual.updateCounterZoneFeedback(
+          counterHoverId!,
+          newZone,
+          isSelected,
+          true,
+          context.sceneManager,
+        );
+        context.app.renderer.render(context.app.stage);
+      }
+    } else if (context.hover.getHoveredCounterZone() !== null) {
+      // Pointer left counter / no counter hovered — clear residual zone.
+      context.hover.setHoveredCounterZone(null);
     }
   } else {
     // Clear hover when not applicable (touch, dragging, or pinching)
@@ -976,6 +1026,36 @@ function handleSelectionOnPointerEnd(
             ids: [],
             screenCoords: [],
           });
+        }
+      }
+
+      // ct-d2p: If the click landed on a Counter's +/- zone, fire an
+      // adjust (or clamp-flash if at boundary). Selection has already been
+      // updated above so the keyboard shortcut also activates immediately.
+      if (hitResult.object._kind === ObjectKind.Counter) {
+        const zone = counterZoneAtPoint(worldX, worldY, hitResult.object);
+        if (zone === 'minus' || zone === 'plus') {
+          const atBoundary = isCounterZoneAtBoundary(hitResult.object, zone);
+          const isHovered = context.hover.getHoveredObjectId() === hitResult.id;
+          const isSelected = context.selection.isSelected(hitResult.id);
+          if (atBoundary) {
+            // Boundary tap: don't post adjust; just flash the body.
+            context.visual.flashCounterClamp(
+              hitResult.id,
+              zone,
+              isSelected,
+              isHovered,
+              context.sceneManager,
+            );
+            context.app.renderer.render(context.app.stage);
+          } else {
+            const delta = zone === 'plus' ? 1 : -1;
+            context.postResponse({
+              type: 'counter-adjust',
+              id: hitResult.id,
+              delta,
+            });
+          }
         }
       }
 

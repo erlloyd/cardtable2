@@ -130,3 +130,71 @@ export function getCounterDimensions(_obj: TableObject): {
 } {
   return { width: COUNTER_PILL_WIDTH, height: COUNTER_PILL_HEIGHT };
 }
+
+/**
+ * Sub-region of the Counter pill (ct-d2p). The pill is conceptually three
+ * horizontal thirds: minus / value / plus.
+ */
+export type CounterZoneHit = 'minus' | 'value' | 'plus';
+
+/**
+ * Hit-test a world-space point against a Counter's +/- zones (ct-d2p).
+ *
+ * Returns the zone the point falls into, or `null` if the point is
+ * outside the pill bounds entirely. The pill renders centered on
+ * `obj._pos` (see CounterBehaviors.render); zones are split at one-third
+ * and two-thirds of the pill width along the x-axis.
+ *
+ * Coordinates are transformed into the pill's local space first so that
+ * any future rotation (the counter's `_pos.r`) is respected; today the
+ * Counter is non-rotatable (canRotate: false in capabilities), but the
+ * local-coords transform is essentially free and avoids subtle bugs if
+ * that capability ever flips.
+ */
+export function counterZoneAtPoint(
+  worldX: number,
+  worldY: number,
+  obj: TableObject,
+): CounterZoneHit | null {
+  const { width, height } = getCounterDimensions(obj);
+
+  // Transform world point into the counter's local space.
+  const dx = worldX - obj._pos.x;
+  const dy = worldY - obj._pos.y;
+  const angleRad = (obj._pos.r * Math.PI) / 180;
+  const cos = Math.cos(-angleRad);
+  const sin = Math.sin(-angleRad);
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+
+  // Point must be inside the pill's bounding rect to count as a zone hit.
+  const halfW = width / 2;
+  const halfH = height / 2;
+  if (localX < -halfW || localX > halfW || localY < -halfH || localY > halfH) {
+    return null;
+  }
+
+  const third = width / 3;
+  if (localX < -third / 2 + 0) {
+    // Strictly: left third spans [-halfW, -halfW + third] = [-halfW, -third/2].
+    // The two expressions are equivalent since halfW = 3 * third / 2.
+    // We use the centered split for readability.
+  }
+  if (localX <= -halfW + third) return 'minus';
+  if (localX >= halfW - third) return 'plus';
+  return 'value';
+}
+
+/**
+ * Whether the counter's current value sits at the relevant boundary for the
+ * given side zone (ct-d2p). Used by the renderer to dim the zone glyph and
+ * by the pointer pipeline to suppress adjustments.
+ */
+export function isCounterZoneAtBoundary(
+  obj: TableObject,
+  zone: 'minus' | 'plus',
+): boolean {
+  const current = getCounterCurrentValue(obj);
+  if (zone === 'minus') return current <= getCounterMin(obj);
+  return current >= getCounterMax(obj);
+}

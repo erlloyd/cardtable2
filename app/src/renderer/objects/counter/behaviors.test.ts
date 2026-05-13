@@ -8,7 +8,11 @@ import {
   COUNTER_PILL_HEIGHT,
   COUNTER_PILL_WIDTH,
 } from './constants';
-import { getCounterDimensions } from './utils';
+import {
+  counterZoneAtPoint,
+  getCounterDimensions,
+  isCounterZoneAtBoundary,
+} from './utils';
 
 // Helper to create test counter objects with all required CounterMeta fields.
 function createTestCounter(
@@ -96,6 +100,64 @@ describe('getCounterDimensions', () => {
       width: COUNTER_PILL_WIDTH,
       height: COUNTER_PILL_HEIGHT,
     });
+  });
+});
+
+describe('counterZoneAtPoint (ct-d2p)', () => {
+  it('classifies the left third as minus', () => {
+    const counter = createTestCounter({ _pos: { x: 0, y: 0, r: 0 } });
+    // Pill width 90, third = 30, left third spans local x in [-45, -15].
+    expect(counterZoneAtPoint(-30, 0, counter)).toBe('minus');
+  });
+
+  it('classifies the right third as plus', () => {
+    const counter = createTestCounter({ _pos: { x: 0, y: 0, r: 0 } });
+    expect(counterZoneAtPoint(30, 0, counter)).toBe('plus');
+  });
+
+  it('classifies the center third as value', () => {
+    const counter = createTestCounter({ _pos: { x: 0, y: 0, r: 0 } });
+    expect(counterZoneAtPoint(0, 0, counter)).toBe('value');
+  });
+
+  it('returns null for points outside the pill bounds', () => {
+    const counter = createTestCounter({ _pos: { x: 0, y: 0, r: 0 } });
+    // x just past +45 (half-width) at y=0.
+    expect(counterZoneAtPoint(50, 0, counter)).toBeNull();
+    // y past half-height (22).
+    expect(counterZoneAtPoint(0, 30, counter)).toBeNull();
+  });
+
+  it('respects pill _pos translation', () => {
+    const counter = createTestCounter({ _pos: { x: 100, y: 50, r: 0 } });
+    // World point (130, 50) is +30 in local-x = plus zone.
+    expect(counterZoneAtPoint(130, 50, counter)).toBe('plus');
+    // World point (70, 50) is -30 in local-x = minus zone.
+    expect(counterZoneAtPoint(70, 50, counter)).toBe('minus');
+  });
+});
+
+describe('isCounterZoneAtBoundary (ct-d2p)', () => {
+  it('returns true when currentValue is at max for plus zone', () => {
+    const counter = createTestCounter({
+      meta: { currentValue: 99, max: 99 },
+    });
+    expect(isCounterZoneAtBoundary(counter, 'plus')).toBe(true);
+    expect(isCounterZoneAtBoundary(counter, 'minus')).toBe(false);
+  });
+
+  it('returns true when currentValue is at min for minus zone', () => {
+    const counter = createTestCounter({ meta: { currentValue: 0, min: 0 } });
+    expect(isCounterZoneAtBoundary(counter, 'minus')).toBe(true);
+    expect(isCounterZoneAtBoundary(counter, 'plus')).toBe(false);
+  });
+
+  it('returns false away from both boundaries', () => {
+    const counter = createTestCounter({
+      meta: { currentValue: 5, min: 0, max: 10 },
+    });
+    expect(isCounterZoneAtBoundary(counter, 'minus')).toBe(false);
+    expect(isCounterZoneAtBoundary(counter, 'plus')).toBe(false);
   });
 });
 
@@ -236,5 +298,118 @@ describe('Counter Behaviors - Rendering', () => {
     expect(container).toBeInstanceOf(Container);
     // In minimal mode only the pill body is rendered — no text calls.
     expect(mockCreateText).not.toHaveBeenCalled();
+  });
+
+  describe('state-aware zone visuals (ct-d2p)', () => {
+    function getGlyphByLabel(
+      container: Container,
+      label: string,
+    ): Text | undefined {
+      return container.children.find((c) => c.label === label) as
+        | Text
+        | undefined;
+    }
+
+    function getChildByLabel(
+      container: Container,
+      label: string,
+    ): Container | undefined {
+      return container.children.find((c) => c.label === label) as
+        | Container
+        | undefined;
+    }
+
+    it('renders both glyphs at the at-rest alpha when no zone is hovered and not at boundary', () => {
+      const counter = createTestCounter({ meta: { currentValue: 5 } });
+      const ctx: RenderContext = {
+        ...mockContext,
+        counterZoneState: { hoveredZone: null, clampFlash: false },
+      };
+      const container = CounterBehaviors.render(counter, ctx);
+      const minus = getGlyphByLabel(container, 'counter-minus-glyph');
+      const plus = getGlyphByLabel(container, 'counter-plus-glyph');
+      expect(minus?.alpha).toBeCloseTo(0.55, 5);
+      expect(plus?.alpha).toBeCloseTo(0.55, 5);
+      // No tint child either.
+      expect(
+        getChildByLabel(container, 'counter-minus-zone-tint'),
+      ).toBeUndefined();
+      expect(
+        getChildByLabel(container, 'counter-plus-zone-tint'),
+      ).toBeUndefined();
+    });
+
+    it('raises the hovered side glyph to full opacity and adds a tint overlay', () => {
+      const counter = createTestCounter({ meta: { currentValue: 5 } });
+      const ctx: RenderContext = {
+        ...mockContext,
+        counterZoneState: { hoveredZone: 'plus', clampFlash: false },
+      };
+      const container = CounterBehaviors.render(counter, ctx);
+      const plus = getGlyphByLabel(container, 'counter-plus-glyph');
+      expect(plus?.alpha).toBe(1.0);
+      // Tint overlay is present for the hovered zone, not the other.
+      expect(
+        getChildByLabel(container, 'counter-plus-zone-tint'),
+      ).toBeDefined();
+      expect(
+        getChildByLabel(container, 'counter-minus-zone-tint'),
+      ).toBeUndefined();
+    });
+
+    it('drops the plus glyph alpha to the boundary value when at max and suppresses the hover tint', () => {
+      const counter = createTestCounter({
+        meta: { currentValue: 99, max: 99 },
+      });
+      const ctx: RenderContext = {
+        ...mockContext,
+        counterZoneState: { hoveredZone: 'plus', clampFlash: false },
+      };
+      const container = CounterBehaviors.render(counter, ctx);
+      const plus = getGlyphByLabel(container, 'counter-plus-glyph');
+      expect(plus?.alpha).toBeCloseTo(0.25, 5);
+      // No tint when at the boundary — the zone is non-interactive.
+      expect(
+        getChildByLabel(container, 'counter-plus-zone-tint'),
+      ).toBeUndefined();
+    });
+
+    it('drops the minus glyph alpha to the boundary value when at min', () => {
+      const counter = createTestCounter({
+        meta: { currentValue: 0, min: 0 },
+      });
+      const ctx: RenderContext = {
+        ...mockContext,
+        counterZoneState: { hoveredZone: 'minus', clampFlash: false },
+      };
+      const container = CounterBehaviors.render(counter, ctx);
+      const minus = getGlyphByLabel(container, 'counter-minus-glyph');
+      expect(minus?.alpha).toBeCloseTo(0.25, 5);
+      expect(
+        getChildByLabel(container, 'counter-minus-zone-tint'),
+      ).toBeUndefined();
+    });
+
+    it('renders the clamp-flash overlay when counterZoneState.clampFlash is true', () => {
+      const counter = createTestCounter({
+        meta: { currentValue: 99, max: 99 },
+      });
+      const ctx: RenderContext = {
+        ...mockContext,
+        counterZoneState: { hoveredZone: 'plus', clampFlash: true },
+      };
+      const container = CounterBehaviors.render(counter, ctx);
+      expect(getChildByLabel(container, 'counter-clamp-flash')).toBeDefined();
+    });
+
+    it('omits the clamp-flash overlay when clampFlash is false', () => {
+      const counter = createTestCounter();
+      const ctx: RenderContext = {
+        ...mockContext,
+        counterZoneState: { hoveredZone: null, clampFlash: false },
+      };
+      const container = CounterBehaviors.render(counter, ctx);
+      expect(getChildByLabel(container, 'counter-clamp-flash')).toBeUndefined();
+    });
   });
 });

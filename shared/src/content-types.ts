@@ -508,6 +508,41 @@ export interface LayoutObject {
   height?: number; // Height for inline zone definitions
 }
 
+/**
+ * Scenario-declared auto-spawn of a typed counter (ct-x41).
+ *
+ * Materialises into a `Counter` table object at scenario load: the host
+ * resolves `typeId` via the counter loadable registry (see `CounterTypeDef`),
+ * copies the template fields onto the instance, and assigns `currentValue`
+ * (= `initialValue` when supplied, otherwise the type's `startingValue`).
+ *
+ * Distinct from `ComponentSetCounter` (legacy `ref`-based asset-pack catalog
+ * entries — `Counter` interface in this file). Typed-counter spawns live on
+ * the scenario root, NOT inside `componentSet`, to keep the two systems
+ * legibly separated; the loadables-registry path is the forward-compatible
+ * one and the asset-pack `counters` catalog is retained for back-compat.
+ *
+ * Unknown `typeId` at load time is a non-fatal warning (the bad entry is
+ * skipped, other spawns and the rest of the scenario still load).
+ */
+export interface ScenarioCounterSpawn {
+  /** Counter type id from the active plugin's `counter` loadables. */
+  typeId: string;
+  /**
+   * Optional world-space position. When omitted, the host applies a default
+   * placement policy (see `instantiateCounterSpawns`).
+   */
+  position?: {
+    x: number;
+    y: number;
+  };
+  /**
+   * Optional override of the type's `startingValue` for this instance. When
+   * omitted, the resolved type def's `startingValue` is used.
+   */
+  initialValue?: number;
+}
+
 export interface Scenario {
   schema: 'ct-scenario@2'; // Schema version identifier
   id: string; // Unique scenario identifier
@@ -515,6 +550,14 @@ export interface Scenario {
   version: string; // Semantic version (e.g., "1.0.0")
   packs: string[]; // Asset pack IDs required for this scenario
   componentSet?: ComponentSet; // Objects to place on the table
+  /**
+   * Typed counters to auto-spawn at scenario load (ct-x41). Each entry
+   * references a counter type id declared by the active plugin via its
+   * `loadables[]` of `type: 'counter'`. Independent of `componentSet` —
+   * legacy `componentSet.counters` is the asset-pack-derived counter and
+   * stays untouched by this field.
+   */
+  counters?: ScenarioCounterSpawn[];
 }
 
 // ============================================================================

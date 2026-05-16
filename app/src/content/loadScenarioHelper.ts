@@ -5,6 +5,7 @@ import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { registerAttachmentActions } from '../actions/attachmentActions';
 import { setLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
+import { instantiateCounterSpawns } from './counterSpawn';
 
 /**
  * Common logic for loading scenarios and adding objects to the table.
@@ -96,6 +97,30 @@ export function loadScenarioContent(
     );
     console.log(
       `${logPrefix} Registered ${pluginLoadables.length} loadable entries`,
+    );
+  }
+
+  // ct-x41: Materialise scenario-declared typed-counter auto-spawns now that
+  // the loadables registry holds the active plugin's counter type defs.
+  // Spawns are merged into the same objects map the setTimeout below sends
+  // to the store, so they participate in the same Yjs transaction batching
+  // as the componentSet objects and arrive at the renderer in one tick.
+  //
+  // Pass `pluginLoadables` explicitly rather than relying on the just-set
+  // global registry: keeps this resolution step independent of registry
+  // write order and matches the per-type resolver's documented usage
+  // (`getCounterTypeDef(typeId, entries?)` — explicit-entries path).
+  const counterSpawnObjects = instantiateCounterSpawns(
+    content.scenario.counters,
+    content.scenario.id,
+    pluginLoadables,
+  );
+  if (counterSpawnObjects.size > 0) {
+    for (const [id, obj] of counterSpawnObjects) {
+      content.objects.set(id, obj);
+    }
+    console.log(
+      `${logPrefix} Materialised ${counterSpawnObjects.size} auto-spawned counter(s)`,
     );
   }
 

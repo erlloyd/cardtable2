@@ -6,8 +6,10 @@ import type {
   TableObject,
   StackObject,
   LoadableEntry,
+  ScenarioCounterSpawn,
 } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import { COUNTER_LOADABLE_TYPE, ObjectKind } from '@cardtable2/shared';
+import type { CounterMeta } from '../renderer/objects/counter/types';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 import { getLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
 
@@ -539,6 +541,154 @@ describe('loadScenarioContent', () => {
       // Subsequent load with no loadables should empty the registry.
       loadScenarioContent(mockStore, mockContent, mockMetadata, '[Test]');
       expect(getLoadableEntries()).toEqual([]);
+    });
+  });
+
+  describe('typed-counter auto-spawn (ct-x41)', () => {
+    function counterLoadables(): LoadableEntry[] {
+      return [
+        {
+          type: COUNTER_LOADABLE_TYPE,
+          label: 'Counter',
+          mode: 'additive',
+          source: {
+            kind: 'static',
+            items: [
+              {
+                typeId: 'damage',
+                label: 'Damage',
+                data: {
+                  color: 0xf39c12,
+                  text: 'DMG',
+                  min: 0,
+                  max: 99,
+                  startingValue: 0,
+                },
+              },
+              {
+                typeId: 'threat',
+                label: 'Threat',
+                data: {
+                  color: 0x3498db,
+                  min: 0,
+                  max: 20,
+                  startingValue: 1,
+                },
+              },
+            ],
+          },
+        },
+      ];
+    }
+
+    function withCounterSpawns(
+      spawns: ScenarioCounterSpawn[],
+    ): typeof mockContent {
+      return {
+        ...mockContent,
+        scenario: { ...mockContent.scenario, counters: spawns },
+      };
+    }
+
+    afterEach(() => {
+      clearLoadableEntries();
+    });
+
+    it('materialises scenario-declared counter spawns end-to-end (loaded objects include both spawns)', () => {
+      const content = withCounterSpawns([
+        {
+          typeId: 'damage',
+          position: { x: 10, y: 20 },
+          initialValue: 5,
+        },
+        { typeId: 'threat' },
+      ]);
+
+      loadScenarioContent(
+        mockStore,
+        content,
+        mockMetadata,
+        '[Test]',
+        undefined,
+        undefined,
+        counterLoadables(),
+      );
+      vi.runAllTimers();
+
+      const setObject = mockStore.setObject as ReturnType<typeof vi.fn>;
+      // 2 stacks + 2 counters
+      expect(setObject).toHaveBeenCalledTimes(4);
+
+      const calls = setObject.mock.calls as Array<[string, TableObject]>;
+      const counterCalls = calls.filter(
+        ([, obj]) => obj._kind === ObjectKind.Counter,
+      );
+      expect(counterCalls).toHaveLength(2);
+
+      const counterMetas = counterCalls.map(
+        ([, obj]) => obj._meta as CounterMeta,
+      );
+      const byTypeId = Object.fromEntries(
+        counterMetas.map((m) => [m.typeId, m]),
+      );
+      expect(byTypeId['damage']?.currentValue).toBe(5);
+      // No override → currentValue tracks the type def's startingValue (1).
+      expect(byTypeId['threat']?.currentValue).toBe(1);
+    });
+
+    it('skips spawns with unknown typeId and still loads the rest of the scenario', () => {
+      const content = withCounterSpawns([
+        { typeId: 'nonexistent' },
+        { typeId: 'damage' },
+      ]);
+
+      loadScenarioContent(
+        mockStore,
+        content,
+        mockMetadata,
+        '[Test]',
+        undefined,
+        undefined,
+        counterLoadables(),
+      );
+      vi.runAllTimers();
+
+      const setObject = mockStore.setObject as ReturnType<typeof vi.fn>;
+      const calls = setObject.mock.calls as Array<[string, TableObject]>;
+      const counterCalls = calls.filter(
+        ([, obj]) => obj._kind === ObjectKind.Counter,
+      );
+      // Only one counter materialised; the unknown typeId was dropped.
+      expect(counterCalls).toHaveLength(1);
+      expect((counterCalls[0][1]._meta as CounterMeta).typeId).toBe('damage');
+
+      // The error log names the scenario id and the missing typeId.
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(content.scenario.id),
+        expect.objectContaining({ typeId: 'nonexistent' }),
+      );
+      // Stacks still loaded — 2 stacks + 1 counter = 3.
+      expect(setObject).toHaveBeenCalledTimes(3);
+    });
+
+    it('no counter spawns is a no-op (scenario.counters undefined)', () => {
+      loadScenarioContent(
+        mockStore,
+        mockContent,
+        mockMetadata,
+        '[Test]',
+        undefined,
+        undefined,
+        counterLoadables(),
+      );
+      vi.runAllTimers();
+
+      const setObject = mockStore.setObject as ReturnType<typeof vi.fn>;
+      const calls = setObject.mock.calls as Array<[string, TableObject]>;
+      const counterCalls = calls.filter(
+        ([, obj]) => obj._kind === ObjectKind.Counter,
+      );
+      expect(counterCalls).toHaveLength(0);
     });
   });
 });

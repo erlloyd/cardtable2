@@ -40,11 +40,14 @@ import {
  * pill with three conceptual zones — left third minus, center third value,
  * right third plus.
  *
- * The labeled and unlabeled counters are one component family in two
- * states (ct-bmk): same pill silhouette, same fill, same border, same
- * +/- treatment. When a `text` label is present the pill grows slightly
- * (by COUNTER_LABEL_HEIGHT_BUMP) and the center stacks two text lines —
- * a small bold label on top, a slightly-smaller numeric value below.
+ * The labeled and unlabeled counters share one fixed silhouette (ct-bmk):
+ * the pill is always COUNTER_PILL_WIDTH x COUNTER_PILL_HEIGHT (90x44) in
+ * both states — same fill, same border, same +/- treatment. The ONLY
+ * difference is the text layout inside: bare counters render the value
+ * centered at y=0 in the larger font; labeled counters stack a small
+ * bold label on top (COUNTER_LABEL_LINE_Y) and a slightly-smaller numeric
+ * value below (COUNTER_VALUE_LINE_Y_LABELED), both fitting inside the
+ * same 44px pill height.
  *
  * Event wiring (ct-d2p) lives in the pointer pipeline, not in a per-object
  * Pixi event handler — the pill renders as a single hit target and the
@@ -152,8 +155,8 @@ export const CounterBehaviors: ObjectBehaviors = {
         : COUNTER_ZONE_GLYPH_ALPHA;
 
     // +/- glyphs sit centered vertically on the pill in both states. The
-    // pill grows by only a few pixels in the labeled state, so a single
-    // centered y=0 works for both — no per-state offset needed.
+    // pill height is fixed (ct-bmk) so a single centered y=0 works for
+    // both labeled and bare — no per-state offset needed.
     const minusGlyph = ctx.createText({
       text: '−', // Unicode MINUS SIGN — wider and visually balanced vs ASCII '-'
       style: {

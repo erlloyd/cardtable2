@@ -66,30 +66,23 @@ export const COUNTER_CLAMP_FLASH_DURATION_MS = 100;
 
 /**
  * Label (`text`) styling — rendered as a small bold line ABOVE the value
- * line, inside the same pill silhouette (ct-bmk). When a counter has a
- * `text` value the pill grows by `COUNTER_LABEL_HEIGHT_BUMP` so two lines
- * of text fit comfortably, with the small label on top and the (slightly
- * smaller) numeric value below. The bare and labeled counters share one
- * pill silhouette — same fill color, same border, same +/- treatment.
+ * line, inside the same pill silhouette (ct-bmk). The pill dimensions are
+ * IDENTICAL in the bare and labeled states (always 90x44); only the text
+ * layout inside varies. When a `text` value is set the center stacks two
+ * lines — a small bold label on top and a slightly-smaller numeric value
+ * below — both fitting inside the same 44px pill height.
  */
 export const COUNTER_LABEL_FONT_SIZE = 11;
 export const COUNTER_LABEL_TEXT_COLOR = 0xffffff;
 export const COUNTER_LABEL_ALPHA = 0.95;
 /**
- * Extra height added to the pill when a label is present. Just enough to
- * fit the small label line above the (slightly-shrunk) numeric value
- * without crowding either line. The pill stays a single rounded-rect
- * silhouette; +/- hit-tests cover the full pill, not a sub-region.
- */
-export const COUNTER_LABEL_HEIGHT_BUMP = 6;
-/**
  * Vertical positions (local-y inside the pill) of the two text lines in
- * the labeled state. The label sits slightly above center; the value sits
- * slightly below. Tuned so both feel comfortably padded inside the taller
- * pill silhouette.
+ * the labeled state. The label sits in the top half; the value sits in
+ * the bottom half. Tuned by eye so both lines fit comfortably inside the
+ * fixed 44px pill height (-22 .. +22 local-y) without crowding.
  */
-export const COUNTER_LABEL_LINE_Y = -8;
-export const COUNTER_VALUE_LINE_Y_LABELED = 6;
+export const COUNTER_LABEL_LINE_Y = -11;
+export const COUNTER_VALUE_LINE_Y_LABELED = 7;
 
 // ============================================================================
 // CounterMeta defaults (template + instance model)

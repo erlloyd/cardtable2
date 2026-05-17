@@ -4,7 +4,6 @@ import {
   COUNTER_DEFAULT_MAX,
   COUNTER_DEFAULT_MIN,
   COUNTER_DEFAULT_STARTING_VALUE,
-  COUNTER_LABEL_HEIGHT_BUMP,
   COUNTER_PILL_HEIGHT,
   COUNTER_PILL_WIDTH,
   COUNTER_TYPE_GENERIC,
@@ -121,30 +120,26 @@ export function getCounterCurrentValue(obj: TableObject): number {
  * Get the pill dimensions (width, height) for a counter in world units.
  *
  * Counters render as a horizontal rounded-rectangle pill (ct-yxh). The
- * width is fixed by `COUNTER_PILL_WIDTH`; the height is normally
- * `COUNTER_PILL_HEIGHT`, but grows by `COUNTER_LABEL_HEIGHT_BUMP` when
- * the counter carries a `text` label (ct-bmk) — just enough extra room
- * for a small label line above the (slightly smaller) numeric value.
- * The pill remains a single rounded-rect silhouette in both states; the
- * entire pill is interactive for +/- hit-testing regardless of whether a
- * label is present.
+ * dimensions are FIXED — `COUNTER_PILL_WIDTH` x `COUNTER_PILL_HEIGHT`
+ * (90x44) — regardless of whether the counter carries a `text` label
+ * (ct-bmk). Bare and labeled counters share one silhouette; only the
+ * text layout inside varies. The entire pill is interactive for +/-
+ * hit-testing in both states.
  */
-export function getCounterDimensions(obj: TableObject): {
+export function getCounterDimensions(_obj: TableObject): {
   width: number;
   height: number;
 } {
-  const hasLabel = hasCounterLabel(obj);
   return {
     width: COUNTER_PILL_WIDTH,
-    height: hasLabel
-      ? COUNTER_PILL_HEIGHT + COUNTER_LABEL_HEIGHT_BUMP
-      : COUNTER_PILL_HEIGHT,
+    height: COUNTER_PILL_HEIGHT,
   };
 }
 
 /**
- * Whether the counter has a non-empty `text` label. Drives the
- * slight height bump on the pill (ct-bmk).
+ * Whether the counter has a non-empty `text` label. Drives the two-line
+ * stacked text layout inside the pill (ct-bmk). The pill dimensions
+ * themselves do NOT change — only the text reflow.
  */
 export function hasCounterLabel(obj: TableObject): boolean {
   const text = getCounterText(obj);

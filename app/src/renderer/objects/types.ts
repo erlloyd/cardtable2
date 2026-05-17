@@ -4,6 +4,20 @@ import type { BBox } from '../SceneManager';
 import type { GameAssets } from '../../content';
 import type { TextureLoader } from '../services/TextureLoader';
 
+/**
+ * Counter-specific visual state passed into the render context (ct-d2p).
+ *
+ * Only meaningful when the rendered object is a Counter. The pointer
+ * pipeline populates `hoveredZone` from local-coordinate hit-testing of
+ * the pill's +/- side zones; `clampFlash` is set by VisualManager for
+ * ~100ms after a tap that hit a min/max boundary, so the body briefly
+ * reads as "not responding" without changing its color.
+ */
+export interface CounterZoneState {
+  readonly hoveredZone: 'minus' | 'plus' | null;
+  readonly clampFlash: boolean;
+}
+
 // Render context provides extra info during rendering
 export interface RenderContext {
   readonly objectId?: string; // ID of the object being rendered - used for triggering visual updates after async operations
@@ -21,6 +35,7 @@ export interface RenderContext {
   readonly gameAssets?: GameAssets | null; // Game assets (cards, tokens, etc.) for texture loading - undefined during initial render before packs load, null when explicitly unset
   readonly textureLoader?: TextureLoader; // Texture loader service for loading card/token images - optional for backward compatibility
   readonly onTextureLoaded?: (url: string) => void; // Callback invoked when a texture finishes loading - used to trigger visual updates
+  readonly counterZoneState?: CounterZoneState; // ct-d2p: per-object Counter zone hover/flash state (Counter renders only)
 }
 
 // Shadow configuration

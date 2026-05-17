@@ -16,6 +16,7 @@ import {
   detachCard,
   detachAllCards,
   resetTable,
+  adjustCounter,
 } from './YjsActions';
 import {
   ObjectKind,
@@ -3219,5 +3220,108 @@ describe('YjsActions - resetTable', () => {
 
     // gameAssets stay loaded — no reason to invalidate the renderer's caches.
     expect(store.getGameAssets()).toBe(assets);
+  });
+});
+
+describe('YjsActions - adjustCounter (ct-d2p)', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table-counter-adjust');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  function makeCounter(meta: Record<string, unknown> = {}): string {
+    return createObject(store, {
+      kind: ObjectKind.Counter,
+      pos: { x: 0, y: 0, r: 0 },
+      meta,
+    });
+  }
+
+  function readCounterMeta(id: string): Record<string, unknown> {
+    const obj = toTableObject(store.getObjectYMap(id)!);
+    return obj?._meta ?? {};
+  }
+
+  it('increments currentValue by a positive delta', () => {
+    const id = makeCounter({ startingValue: 3 });
+    const result = adjustCounter(store, id, 1);
+    expect(result).toEqual({ newValue: 4, clamped: false });
+    expect(readCounterMeta(id).currentValue).toBe(4);
+  });
+
+  it('decrements currentValue by a negative delta', () => {
+    const id = makeCounter({ startingValue: 5 });
+    const result = adjustCounter(store, id, -2);
+    expect(result).toEqual({ newValue: 3, clamped: false });
+    expect(readCounterMeta(id).currentValue).toBe(3);
+  });
+
+  it('clamps at max boundary and reports clamped=true with no value change', () => {
+    const id = makeCounter({ startingValue: 99, max: 99 });
+    const result = adjustCounter(store, id, 1);
+    expect(result).toEqual({ newValue: 99, clamped: true });
+    expect(readCounterMeta(id).currentValue).toBe(99);
+  });
+
+  it('clamps at min boundary and reports clamped=true with no value change', () => {
+    const id = makeCounter({ startingValue: 0, min: 0 });
+    const result = adjustCounter(store, id, -1);
+    expect(result).toEqual({ newValue: 0, clamped: true });
+    expect(readCounterMeta(id).currentValue).toBe(0);
+  });
+
+  it('clamps a multi-step delta to the boundary (still reports the new clamped value)', () => {
+    const id = makeCounter({ startingValue: 5, max: 7 });
+    const result = adjustCounter(store, id, 10);
+    // We started at 5, requested +10, clamped to 7. The "clamped" flag in
+    // the result type is reserved for "no movement at all" boundary taps;
+    // a delta that moved the value but was capped is still reported as
+    // clamped=false because the consumer doesn't need to flash.
+    expect(result).toEqual({ newValue: 7, clamped: false });
+    expect(readCounterMeta(id).currentValue).toBe(7);
+  });
+
+  it('returns null for non-Counter kinds', () => {
+    const id = createObject(store, {
+      kind: ObjectKind.Token,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+    const result = adjustCounter(store, id, 1);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for missing object', () => {
+    const result = adjustCounter(store, 'no-such-id', 1);
+    expect(result).toBeNull();
+  });
+
+  it('preserves all other meta fields when writing the new currentValue', () => {
+    const id = makeCounter({
+      color: 0xabcdef,
+      text: 'HP',
+      min: -5,
+      max: 10,
+      startingValue: 3,
+    });
+    adjustCounter(store, id, 2);
+    const meta = readCounterMeta(id);
+    expect(meta).toMatchObject({
+      type: 'generic',
+      typeId: 'generic',
+      color: 0xabcdef,
+      text: 'HP',
+      min: -5,
+      max: 10,
+      startingValue: 3,
+      currentValue: 5,
+    });
   });
 });

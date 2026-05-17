@@ -120,13 +120,93 @@ export function getCounterCurrentValue(obj: TableObject): number {
  * Get the pill dimensions (width, height) for a counter in world units.
  *
  * Counters render as a horizontal rounded-rectangle pill (ct-yxh). The
- * dimensions are fixed by `COUNTER_PILL_WIDTH` / `COUNTER_PILL_HEIGHT`;
- * the parameter is retained for symmetry with the other object kinds and
- * to leave room for per-instance sizing if a future bead introduces it.
+ * dimensions are FIXED — `COUNTER_PILL_WIDTH` x `COUNTER_PILL_HEIGHT`
+ * (90x44) — regardless of whether the counter carries a `text` label
+ * (ct-bmk). Bare and labeled counters share one silhouette; only the
+ * text layout inside varies. The entire pill is interactive for +/-
+ * hit-testing in both states.
  */
 export function getCounterDimensions(_obj: TableObject): {
   width: number;
   height: number;
 } {
-  return { width: COUNTER_PILL_WIDTH, height: COUNTER_PILL_HEIGHT };
+  return {
+    width: COUNTER_PILL_WIDTH,
+    height: COUNTER_PILL_HEIGHT,
+  };
+}
+
+/**
+ * Whether the counter has a non-empty `text` label. Drives the two-line
+ * stacked text layout inside the pill (ct-bmk). The pill dimensions
+ * themselves do NOT change — only the text reflow.
+ */
+export function hasCounterLabel(obj: TableObject): boolean {
+  const text = getCounterText(obj);
+  return text !== undefined && text.length > 0;
+}
+
+/**
+ * Sub-region of the Counter pill (ct-d2p). The pill is conceptually three
+ * horizontal thirds: minus / value / plus.
+ */
+export type CounterZoneHit = 'minus' | 'value' | 'plus';
+
+/**
+ * Hit-test a world-space point against a Counter's +/- zones (ct-d2p).
+ *
+ * Returns the zone the point falls into, or `null` if the point is
+ * outside the pill bounds entirely. The pill renders centered on
+ * `obj._pos` (see CounterBehaviors.render); zones are split at one-third
+ * and two-thirds of the pill width along the x-axis.
+ *
+ * Coordinates are transformed into the pill's local space first so that
+ * any future rotation (the counter's `_pos.r`) is respected; today the
+ * Counter is non-rotatable (canRotate: false in capabilities), but the
+ * local-coords transform is essentially free and avoids subtle bugs if
+ * that capability ever flips.
+ */
+export function counterZoneAtPoint(
+  worldX: number,
+  worldY: number,
+  obj: TableObject,
+): CounterZoneHit | null {
+  const { width, height } = getCounterDimensions(obj);
+
+  // Transform world point into the counter's local space.
+  const dx = worldX - obj._pos.x;
+  const dy = worldY - obj._pos.y;
+  const angleRad = (obj._pos.r * Math.PI) / 180;
+  const cos = Math.cos(-angleRad);
+  const sin = Math.sin(-angleRad);
+  const localX = dx * cos - dy * sin;
+  const localY = dx * sin + dy * cos;
+
+  // Point must be inside the pill's bounding rect to count as a zone hit.
+  const halfW = width / 2;
+  const halfH = height / 2;
+  if (localX < -halfW || localX > halfW || localY < -halfH || localY > halfH) {
+    return null;
+  }
+
+  // With the two-line stacked layout (ct-bmk) the entire pill is
+  // interactive for +/- — there's no reserved label strip to exclude.
+  const third = width / 3;
+  if (localX <= -halfW + third) return 'minus';
+  if (localX >= halfW - third) return 'plus';
+  return 'value';
+}
+
+/**
+ * Whether the counter's current value sits at the relevant boundary for the
+ * given side zone (ct-d2p). Used by the renderer to dim the zone glyph and
+ * by the pointer pipeline to suppress adjustments.
+ */
+export function isCounterZoneAtBoundary(
+  obj: TableObject,
+  zone: 'minus' | 'plus',
+): boolean {
+  const current = getCounterCurrentValue(obj);
+  if (zone === 'minus') return current <= getCounterMin(obj);
+  return current >= getCounterMax(obj);
 }

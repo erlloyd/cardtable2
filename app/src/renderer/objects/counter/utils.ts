@@ -4,7 +4,7 @@ import {
   COUNTER_DEFAULT_MAX,
   COUNTER_DEFAULT_MIN,
   COUNTER_DEFAULT_STARTING_VALUE,
-  COUNTER_LABEL_STRIP_HEIGHT,
+  COUNTER_LABEL_HEIGHT_BUMP,
   COUNTER_PILL_HEIGHT,
   COUNTER_PILL_WIDTH,
   COUNTER_TYPE_GENERIC,
@@ -122,10 +122,12 @@ export function getCounterCurrentValue(obj: TableObject): number {
  *
  * Counters render as a horizontal rounded-rectangle pill (ct-yxh). The
  * width is fixed by `COUNTER_PILL_WIDTH`; the height is normally
- * `COUNTER_PILL_HEIGHT`, but grows by `COUNTER_LABEL_STRIP_HEIGHT` when
- * the counter carries a `text` label (ct-ep4). The added strip occupies
- * the top portion of the pill silhouette; the original height region
- * (the bottom portion) remains the interactive +/- zone.
+ * `COUNTER_PILL_HEIGHT`, but grows by `COUNTER_LABEL_HEIGHT_BUMP` when
+ * the counter carries a `text` label (ct-bmk) — just enough extra room
+ * for a small label line above the (slightly smaller) numeric value.
+ * The pill remains a single rounded-rect silhouette in both states; the
+ * entire pill is interactive for +/- hit-testing regardless of whether a
+ * label is present.
  */
 export function getCounterDimensions(obj: TableObject): {
   width: number;
@@ -135,34 +137,18 @@ export function getCounterDimensions(obj: TableObject): {
   return {
     width: COUNTER_PILL_WIDTH,
     height: hasLabel
-      ? COUNTER_PILL_HEIGHT + COUNTER_LABEL_STRIP_HEIGHT
+      ? COUNTER_PILL_HEIGHT + COUNTER_LABEL_HEIGHT_BUMP
       : COUNTER_PILL_HEIGHT,
   };
 }
 
 /**
  * Whether the counter has a non-empty `text` label. Drives the
- * label-strip extension of the pill height (ct-ep4).
+ * slight height bump on the pill (ct-bmk).
  */
 export function hasCounterLabel(obj: TableObject): boolean {
   const text = getCounterText(obj);
   return text !== undefined && text.length > 0;
-}
-
-/**
- * Vertical offset (in local pill coordinates) of the interactive
- * +/- region's center, relative to the pill's geometric center.
- *
- * Pill local-y spans [-height/2, +height/2]. When no label is present
- * the pill height equals `COUNTER_PILL_HEIGHT` and the interactive
- * region is the full pill — offset 0. When a label is present, the top
- * `COUNTER_LABEL_STRIP_HEIGHT` of the pill is reserved for the name and
- * the interactive region sits below it; its center is shifted down by
- * half the strip height so the value text/+/- glyphs land centered in
- * the bottom region rather than the geometric center.
- */
-export function getCounterInteractiveCenterY(obj: TableObject): number {
-  return hasCounterLabel(obj) ? COUNTER_LABEL_STRIP_HEIGHT / 2 : 0;
 }
 
 /**
@@ -208,19 +194,8 @@ export function counterZoneAtPoint(
     return null;
   }
 
-  // When a label strip is present (ct-ep4) only the interactive bottom
-  // region maps to +/- zones; the top strip is the label band. Hits in
-  // the strip itself fall through to `value` (no-op for taps) so taps on
-  // the label area don't accidentally increment/decrement.
-  const interactiveCenterY = getCounterInteractiveCenterY(obj);
-  const interactiveHalfH = COUNTER_PILL_HEIGHT / 2;
-  if (
-    localY < interactiveCenterY - interactiveHalfH ||
-    localY > interactiveCenterY + interactiveHalfH
-  ) {
-    return 'value';
-  }
-
+  // With the two-line stacked layout (ct-bmk) the entire pill is
+  // interactive for +/- — there's no reserved label strip to exclude.
   const third = width / 3;
   if (localX <= -halfW + third) return 'minus';
   if (localX >= halfW - third) return 'plus';

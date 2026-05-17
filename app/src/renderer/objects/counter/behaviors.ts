@@ -8,11 +8,12 @@ import {
   COUNTER_CLAMP_FLASH_COLOR,
   COUNTER_LABEL_ALPHA,
   COUNTER_LABEL_FONT_SIZE,
-  COUNTER_LABEL_STRIP_HEIGHT,
+  COUNTER_LABEL_LINE_Y,
   COUNTER_LABEL_TEXT_COLOR,
   COUNTER_PILL_BORDER_RADIUS,
-  COUNTER_PILL_HEIGHT,
   COUNTER_VALUE_FONT_SIZE,
+  COUNTER_VALUE_FONT_SIZE_LABELED,
+  COUNTER_VALUE_LINE_Y_LABELED,
   COUNTER_VALUE_STROKE_COLOR,
   COUNTER_VALUE_STROKE_WIDTH,
   COUNTER_VALUE_TEXT_COLOR,
@@ -28,7 +29,6 @@ import {
   getCounterColor,
   getCounterCurrentValue,
   getCounterDimensions,
-  getCounterInteractiveCenterY,
   getCounterMax,
   getCounterMin,
   getCounterText,
@@ -36,9 +36,15 @@ import {
 } from './utils';
 
 /**
- * Counter render (ct-yxh + ct-d2p): horizontal rounded-rectangle pill with
- * three conceptual zones — left third minus, center third value, right
- * third plus.
+ * Counter render (ct-yxh + ct-d2p + ct-bmk): horizontal rounded-rectangle
+ * pill with three conceptual zones — left third minus, center third value,
+ * right third plus.
+ *
+ * The labeled and unlabeled counters are one component family in two
+ * states (ct-bmk): same pill silhouette, same fill, same border, same
+ * +/- treatment. When a `text` label is present the pill grows slightly
+ * (by COUNTER_LABEL_HEIGHT_BUMP) and the center stacks two text lines —
+ * a small bold label on top, a slightly-smaller numeric value below.
  *
  * Event wiring (ct-d2p) lives in the pointer pipeline, not in a per-object
  * Pixi event handler — the pill renders as a single hit target and the
@@ -46,7 +52,8 @@ import {
  * function consumes `ctx.counterZoneState` to drive the state-aware
  * visuals:
  *
- *   - Hovered side zone: glyph alpha 1.0 + faint white tint over the zone.
+ *   - Hovered side zone: glyph alpha 1.0 + faint white tint over the zone,
+ *     clipped to the pill silhouette via a roundRect mask (ct-ep4).
  *   - At-rest side zone: glyph alpha ~0.55, no tint.
  *   - Boundary side zone (plus at max, minus at min): alpha 0.25, no
  *     hover response. The pointer pipeline also suppresses interaction.
@@ -54,10 +61,9 @@ import {
  *     covers the pill body. Set by VisualManager for ~100ms then cleared.
  *     Body color is preserved (no body recolor).
  *
- * Coordinate system: visuals are centered at the object's `_pos`. World
- * coordinates inside this render run from `-WIDTH/2 .. +WIDTH/2` on x and
- * `-HEIGHT/2 .. +HEIGHT/2` on y. Zone centers fall at `-WIDTH/3`, `0`,
- * `+WIDTH/3`.
+ * Coordinate system: visuals are centered at the object's `_pos`. Local
+ * coordinates run from `-WIDTH/2 .. +WIDTH/2` on x and `-HEIGHT/2 ..
+ * +HEIGHT/2` on y. Zone centers fall at `-WIDTH/3`, `0`, `+WIDTH/3`.
  */
 export const CounterBehaviors: ObjectBehaviors = {
   render(obj: TableObject, ctx: RenderContext): Container {
@@ -68,14 +74,7 @@ export const CounterBehaviors: ObjectBehaviors = {
     const currentValue = getCounterCurrentValue(obj);
     const atMin = currentValue <= getCounterMin(obj);
     const atMax = currentValue >= getCounterMax(obj);
-
-    // Interactive (bottom) region geometry (ct-ep4). The pill grows when a
-    // label is present so the label has its own top strip; +/- glyphs,
-    // value text, and hover/clamp visuals are anchored to the bottom
-    // (original-height) region instead of the geometric pill center.
-    const interactiveCenterY = getCounterInteractiveCenterY(obj);
-    const interactiveHeight = COUNTER_PILL_HEIGHT;
-    const interactiveTop = interactiveCenterY - interactiveHeight / 2;
+    const labeled = hasCounterLabel(obj);
 
     // Pill body: rounded rectangle fill + border
     const body = new Graphics();
@@ -103,10 +102,10 @@ export const CounterBehaviors: ObjectBehaviors = {
     const thirdWidth = width / 3;
 
     // Hover tint behind each side zone. The tint Graphics draws a flat
-    // per-third rect over the interactive (bottom) region only, then a
-    // roundRect mask clones the pill silhouette so the visible tint
-    // never extends past the pill's rounded corners (ct-ep4). Drawn
-    // before glyphs so glyphs sit on top.
+    // per-third rect over the full pill height, then a roundRect mask
+    // clones the pill silhouette so the visible tint never extends past
+    // the pill's rounded corners (ct-ep4). Drawn before glyphs so glyphs
+    // sit on top.
     if (
       (zoneState?.hoveredZone === 'minus' && !atMin) ||
       (zoneState?.hoveredZone === 'plus' && !atMax)
@@ -114,7 +113,7 @@ export const CounterBehaviors: ObjectBehaviors = {
       const isMinus = zoneState?.hoveredZone === 'minus';
       const tint = new Graphics();
       const tintX = isMinus ? -width / 2 : width / 2 - thirdWidth;
-      tint.rect(tintX, interactiveTop, thirdWidth, interactiveHeight);
+      tint.rect(tintX, -height / 2, thirdWidth, height);
       tint.fill({
         color: COUNTER_ZONE_HOVER_TINT_COLOR,
         alpha: COUNTER_ZONE_HOVER_TINT_ALPHA,
@@ -152,7 +151,9 @@ export const CounterBehaviors: ObjectBehaviors = {
         ? COUNTER_ZONE_GLYPH_ALPHA_ACTIVE
         : COUNTER_ZONE_GLYPH_ALPHA;
 
-    // Minus glyph (left zone) — centered in the interactive bottom region.
+    // +/- glyphs sit centered vertically on the pill in both states. The
+    // pill grows by only a few pixels in the labeled state, so a single
+    // centered y=0 works for both — no per-state offset needed.
     const minusGlyph = ctx.createText({
       text: '−', // Unicode MINUS SIGN — wider and visually balanced vs ASCII '-'
       style: {
@@ -163,11 +164,10 @@ export const CounterBehaviors: ObjectBehaviors = {
     });
     minusGlyph.label = 'counter-minus-glyph';
     minusGlyph.anchor.set(0.5, 0.5);
-    minusGlyph.position.set(-zoneCenterX, interactiveCenterY);
+    minusGlyph.position.set(-zoneCenterX, 0);
     minusGlyph.alpha = minusAlpha;
     container.addChild(minusGlyph);
 
-    // Plus glyph (right zone) — centered in the interactive bottom region.
     const plusGlyph = ctx.createText({
       text: '+',
       style: {
@@ -178,18 +178,21 @@ export const CounterBehaviors: ObjectBehaviors = {
     });
     plusGlyph.label = 'counter-plus-glyph';
     plusGlyph.anchor.set(0.5, 0.5);
-    plusGlyph.position.set(zoneCenterX, interactiveCenterY);
+    plusGlyph.position.set(zoneCenterX, 0);
     plusGlyph.alpha = plusAlpha;
     container.addChild(plusGlyph);
 
-    // Current value (center zone) — mirrors the stack count badge text style:
-    // large bold white with a dark stroke for legibility against any fill.
-    // Centered in the interactive bottom region rather than the pill's
-    // geometric center so a label strip above doesn't shift the value.
+    // Center value text — mirrors the stack count-badge style (white fill,
+    // dark stroke, bold). In the bare state it's the only center line and
+    // sits at y=0 with the larger font. In the labeled state it shrinks
+    // slightly and drops below center to make room for the label line
+    // above it.
     const valueText = ctx.createText({
       text: currentValue.toString(),
       style: {
-        fontSize: COUNTER_VALUE_FONT_SIZE,
+        fontSize: labeled
+          ? COUNTER_VALUE_FONT_SIZE_LABELED
+          : COUNTER_VALUE_FONT_SIZE,
         fill: COUNTER_VALUE_TEXT_COLOR,
         fontWeight: 'bold',
         stroke: {
@@ -200,15 +203,13 @@ export const CounterBehaviors: ObjectBehaviors = {
     });
     valueText.label = 'counter-value';
     valueText.anchor.set(0.5, 0.5);
-    valueText.position.set(0, interactiveCenterY);
+    valueText.position.set(0, labeled ? COUNTER_VALUE_LINE_Y_LABELED : 0);
     container.addChild(valueText);
 
-    // Optional label (`text`): rendered INSIDE a dedicated top strip of
-    // the pill (ct-ep4). When a label is present the pill grows by
-    // `COUNTER_LABEL_STRIP_HEIGHT` so this band exists; the label is
-    // anchored center-top of the strip and sits inside the pill
-    // silhouette rather than floating above it.
-    if (hasCounterLabel(obj)) {
+    // Optional label (`text`): small bold line above the value, inside the
+    // same pill silhouette (ct-bmk). No separate visual band — the label
+    // is just the upper of two stacked text lines.
+    if (labeled) {
       const labelText = getCounterText(obj);
       const label = ctx.createText({
         // hasCounterLabel guarantees this is defined and non-empty.
@@ -220,21 +221,18 @@ export const CounterBehaviors: ObjectBehaviors = {
         },
       });
       label.label = 'counter-label';
-      // Center the label vertically inside the top strip. Strip spans
-      // local-y in [-height/2, -height/2 + COUNTER_LABEL_STRIP_HEIGHT].
       label.anchor.set(0.5, 0.5);
-      label.position.set(0, -height / 2 + COUNTER_LABEL_STRIP_HEIGHT / 2);
+      label.position.set(0, COUNTER_LABEL_LINE_Y);
       label.alpha = COUNTER_LABEL_ALPHA;
       container.addChild(label);
     }
 
     // Clamp-flash overlay (ct-d2p) — sits on top of every other layer so
-    // it briefly washes the interactive region. Bounded to the bottom
-    // region with the pill-silhouette mask so the label strip stays
-    // unaffected (ct-ep4).
+    // it briefly washes the pill. Clipped to the pill silhouette so flat
+    // corners don't poke past the rounded border (ct-ep4).
     if (zoneState?.clampFlash) {
       const flash = new Graphics();
-      flash.rect(-width / 2, interactiveTop, width, interactiveHeight);
+      flash.rect(-width / 2, -height / 2, width, height);
       flash.fill({
         color: COUNTER_CLAMP_FLASH_COLOR,
         alpha: COUNTER_CLAMP_FLASH_ALPHA,

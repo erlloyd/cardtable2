@@ -23,9 +23,13 @@ export const COUNTER_BORDER_COLOR_SELECTED = 0xef4444; // Red
 /**
  * Value text styling. Mirrors the stack count-badge text style (white fill,
  * dark stroke, bold) so the counter value reads as the same kind of
- * affordance as a stack's count.
+ * affordance as a stack's count. Bare (unlabeled) counters use
+ * `COUNTER_VALUE_FONT_SIZE`; labeled counters use the smaller
+ * `COUNTER_VALUE_FONT_SIZE_LABELED` so the small label line above can fit
+ * inside a pill of nearly the same height.
  */
 export const COUNTER_VALUE_FONT_SIZE = 22;
+export const COUNTER_VALUE_FONT_SIZE_LABELED = 18;
 export const COUNTER_VALUE_TEXT_COLOR = 0xffffff;
 export const COUNTER_VALUE_STROKE_COLOR = 0x000000;
 export const COUNTER_VALUE_STROKE_WIDTH = 3;
@@ -61,22 +65,31 @@ export const COUNTER_CLAMP_FLASH_ALPHA = 0.45;
 export const COUNTER_CLAMP_FLASH_DURATION_MS = 100;
 
 /**
- * Label (`text`) styling — rendered inside a dedicated top strip at the
- * top of the pill (ct-ep4). When a counter has a `text` value the pill
- * grows by `COUNTER_LABEL_STRIP_HEIGHT` so the label has its own
- * horizontal band above the value/glyph row, never competing for the
- * tight center zone occupied by the numeric value.
+ * Label (`text`) styling — rendered as a small bold line ABOVE the value
+ * line, inside the same pill silhouette (ct-bmk). When a counter has a
+ * `text` value the pill grows by `COUNTER_LABEL_HEIGHT_BUMP` so two lines
+ * of text fit comfortably, with the small label on top and the (slightly
+ * smaller) numeric value below. The bare and labeled counters share one
+ * pill silhouette — same fill color, same border, same +/- treatment.
  */
 export const COUNTER_LABEL_FONT_SIZE = 11;
 export const COUNTER_LABEL_TEXT_COLOR = 0xffffff;
-export const COUNTER_LABEL_ALPHA = 0.85;
+export const COUNTER_LABEL_ALPHA = 0.95;
 /**
- * Extra height added to the pill when a label is present. The pill stays a
- * single rounded-rect silhouette; the strip is the top portion of that
- * silhouette where the label is rendered. Side-zone (+/-) hit-tests still
- * map only to the interactive bottom region (the original pill height).
+ * Extra height added to the pill when a label is present. Just enough to
+ * fit the small label line above the (slightly-shrunk) numeric value
+ * without crowding either line. The pill stays a single rounded-rect
+ * silhouette; +/- hit-tests cover the full pill, not a sub-region.
  */
-export const COUNTER_LABEL_STRIP_HEIGHT = 16;
+export const COUNTER_LABEL_HEIGHT_BUMP = 6;
+/**
+ * Vertical positions (local-y inside the pill) of the two text lines in
+ * the labeled state. The label sits slightly above center; the value sits
+ * slightly below. Tuned so both feel comfortably padded inside the taller
+ * pill silhouette.
+ */
+export const COUNTER_LABEL_LINE_Y = -8;
+export const COUNTER_VALUE_LINE_Y_LABELED = 6;
 
 // ============================================================================
 // CounterMeta defaults (template + instance model)

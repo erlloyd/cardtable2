@@ -60,10 +60,23 @@ export const COUNTER_CLAMP_FLASH_COLOR = 0xffffff;
 export const COUNTER_CLAMP_FLASH_ALPHA = 0.45;
 export const COUNTER_CLAMP_FLASH_DURATION_MS = 100;
 
-/** Label (`text`) styling — small, semi-opaque, top-left of center zone. */
-export const COUNTER_LABEL_FONT_SIZE = 10;
+/**
+ * Label (`text`) styling — rendered inside a dedicated top strip at the
+ * top of the pill (ct-ep4). When a counter has a `text` value the pill
+ * grows by `COUNTER_LABEL_STRIP_HEIGHT` so the label has its own
+ * horizontal band above the value/glyph row, never competing for the
+ * tight center zone occupied by the numeric value.
+ */
+export const COUNTER_LABEL_FONT_SIZE = 11;
 export const COUNTER_LABEL_TEXT_COLOR = 0xffffff;
-export const COUNTER_LABEL_ALPHA = 0.6;
+export const COUNTER_LABEL_ALPHA = 0.85;
+/**
+ * Extra height added to the pill when a label is present. The pill stays a
+ * single rounded-rect silhouette; the strip is the top portion of that
+ * silhouette where the label is rendered. Side-zone (+/-) hit-tests still
+ * map only to the interactive bottom region (the original pill height).
+ */
+export const COUNTER_LABEL_STRIP_HEIGHT = 16;
 
 // ============================================================================
 // CounterMeta defaults (template + instance model)

@@ -8,8 +8,10 @@ import {
   COUNTER_CLAMP_FLASH_COLOR,
   COUNTER_LABEL_ALPHA,
   COUNTER_LABEL_FONT_SIZE,
+  COUNTER_LABEL_STRIP_HEIGHT,
   COUNTER_LABEL_TEXT_COLOR,
   COUNTER_PILL_BORDER_RADIUS,
+  COUNTER_PILL_HEIGHT,
   COUNTER_VALUE_FONT_SIZE,
   COUNTER_VALUE_STROKE_COLOR,
   COUNTER_VALUE_STROKE_WIDTH,
@@ -26,9 +28,11 @@ import {
   getCounterColor,
   getCounterCurrentValue,
   getCounterDimensions,
+  getCounterInteractiveCenterY,
   getCounterMax,
   getCounterMin,
   getCounterText,
+  hasCounterLabel,
 } from './utils';
 
 /**
@@ -65,6 +69,14 @@ export const CounterBehaviors: ObjectBehaviors = {
     const atMin = currentValue <= getCounterMin(obj);
     const atMax = currentValue >= getCounterMax(obj);
 
+    // Interactive (bottom) region geometry (ct-ep4). The pill grows when a
+    // label is present so the label has its own top strip; +/- glyphs,
+    // value text, and hover/clamp visuals are anchored to the bottom
+    // (original-height) region instead of the geometric pill center.
+    const interactiveCenterY = getCounterInteractiveCenterY(obj);
+    const interactiveHeight = COUNTER_PILL_HEIGHT;
+    const interactiveTop = interactiveCenterY - interactiveHeight / 2;
+
     // Pill body: rounded rectangle fill + border
     const body = new Graphics();
     body.roundRect(
@@ -90,26 +102,41 @@ export const CounterBehaviors: ObjectBehaviors = {
     const zoneCenterX = width / 3; // distance from center to side-zone center
     const thirdWidth = width / 3;
 
-    // Hover tint behind each side zone — kept clipped to the third's
-    // rectangle (not rounded) so the visible edge is the pill's own border.
-    // Drawn before glyphs so glyphs sit on top.
-    if (zoneState?.hoveredZone === 'minus' && !atMin) {
+    // Hover tint behind each side zone. The tint Graphics draws a flat
+    // per-third rect over the interactive (bottom) region only, then a
+    // roundRect mask clones the pill silhouette so the visible tint
+    // never extends past the pill's rounded corners (ct-ep4). Drawn
+    // before glyphs so glyphs sit on top.
+    if (
+      (zoneState?.hoveredZone === 'minus' && !atMin) ||
+      (zoneState?.hoveredZone === 'plus' && !atMax)
+    ) {
+      const isMinus = zoneState?.hoveredZone === 'minus';
       const tint = new Graphics();
-      tint.rect(-width / 2, -height / 2, thirdWidth, height);
+      const tintX = isMinus ? -width / 2 : width / 2 - thirdWidth;
+      tint.rect(tintX, interactiveTop, thirdWidth, interactiveHeight);
       tint.fill({
         color: COUNTER_ZONE_HOVER_TINT_COLOR,
         alpha: COUNTER_ZONE_HOVER_TINT_ALPHA,
       });
-      tint.label = 'counter-minus-zone-tint';
-      container.addChild(tint);
-    } else if (zoneState?.hoveredZone === 'plus' && !atMax) {
-      const tint = new Graphics();
-      tint.rect(width / 2 - thirdWidth, -height / 2, thirdWidth, height);
-      tint.fill({
-        color: COUNTER_ZONE_HOVER_TINT_COLOR,
-        alpha: COUNTER_ZONE_HOVER_TINT_ALPHA,
-      });
-      tint.label = 'counter-plus-zone-tint';
+      tint.label = isMinus
+        ? 'counter-minus-zone-tint'
+        : 'counter-plus-zone-tint';
+
+      // Mask: clone of the pill body's roundRect so the tint is clipped
+      // to the pill silhouette (no square corners poking past the pill).
+      const tintMask = new Graphics();
+      tintMask.roundRect(
+        -width / 2,
+        -height / 2,
+        width,
+        height,
+        COUNTER_PILL_BORDER_RADIUS,
+      );
+      tintMask.fill(0xffffff);
+      tintMask.label = 'counter-zone-tint-mask';
+      container.addChild(tintMask);
+      tint.mask = tintMask;
       container.addChild(tint);
     }
 
@@ -125,7 +152,7 @@ export const CounterBehaviors: ObjectBehaviors = {
         ? COUNTER_ZONE_GLYPH_ALPHA_ACTIVE
         : COUNTER_ZONE_GLYPH_ALPHA;
 
-    // Minus glyph (left zone)
+    // Minus glyph (left zone) — centered in the interactive bottom region.
     const minusGlyph = ctx.createText({
       text: '−', // Unicode MINUS SIGN — wider and visually balanced vs ASCII '-'
       style: {
@@ -136,11 +163,11 @@ export const CounterBehaviors: ObjectBehaviors = {
     });
     minusGlyph.label = 'counter-minus-glyph';
     minusGlyph.anchor.set(0.5, 0.5);
-    minusGlyph.position.set(-zoneCenterX, 0);
+    minusGlyph.position.set(-zoneCenterX, interactiveCenterY);
     minusGlyph.alpha = minusAlpha;
     container.addChild(minusGlyph);
 
-    // Plus glyph (right zone)
+    // Plus glyph (right zone) — centered in the interactive bottom region.
     const plusGlyph = ctx.createText({
       text: '+',
       style: {
@@ -151,12 +178,14 @@ export const CounterBehaviors: ObjectBehaviors = {
     });
     plusGlyph.label = 'counter-plus-glyph';
     plusGlyph.anchor.set(0.5, 0.5);
-    plusGlyph.position.set(zoneCenterX, 0);
+    plusGlyph.position.set(zoneCenterX, interactiveCenterY);
     plusGlyph.alpha = plusAlpha;
     container.addChild(plusGlyph);
 
     // Current value (center zone) — mirrors the stack count badge text style:
     // large bold white with a dark stroke for legibility against any fill.
+    // Centered in the interactive bottom region rather than the pill's
+    // geometric center so a label strip above doesn't shift the value.
     const valueText = ctx.createText({
       text: currentValue.toString(),
       style: {
@@ -171,15 +200,19 @@ export const CounterBehaviors: ObjectBehaviors = {
     });
     valueText.label = 'counter-value';
     valueText.anchor.set(0.5, 0.5);
-    valueText.position.set(0, 0);
+    valueText.position.set(0, interactiveCenterY);
     container.addChild(valueText);
 
-    // Optional label (`text`): small, semi-opaque, top-left of center zone.
-    // Bounds of the center zone in local space: x in [-width/6, +width/6].
-    const labelText = getCounterText(obj);
-    if (labelText !== undefined && labelText.length > 0) {
+    // Optional label (`text`): rendered INSIDE a dedicated top strip of
+    // the pill (ct-ep4). When a label is present the pill grows by
+    // `COUNTER_LABEL_STRIP_HEIGHT` so this band exists; the label is
+    // anchored center-top of the strip and sits inside the pill
+    // silhouette rather than floating above it.
+    if (hasCounterLabel(obj)) {
+      const labelText = getCounterText(obj);
       const label = ctx.createText({
-        text: labelText,
+        // hasCounterLabel guarantees this is defined and non-empty.
+        text: labelText ?? '',
         style: {
           fontSize: COUNTER_LABEL_FONT_SIZE,
           fill: COUNTER_LABEL_TEXT_COLOR,
@@ -187,29 +220,39 @@ export const CounterBehaviors: ObjectBehaviors = {
         },
       });
       label.label = 'counter-label';
-      label.anchor.set(0, 0); // top-left
-      label.position.set(-width / 6 + 1, -height / 2 + 3);
+      // Center the label vertically inside the top strip. Strip spans
+      // local-y in [-height/2, -height/2 + COUNTER_LABEL_STRIP_HEIGHT].
+      label.anchor.set(0.5, 0.5);
+      label.position.set(0, -height / 2 + COUNTER_LABEL_STRIP_HEIGHT / 2);
       label.alpha = COUNTER_LABEL_ALPHA;
       container.addChild(label);
     }
 
     // Clamp-flash overlay (ct-d2p) — sits on top of every other layer so
-    // it briefly washes the entire pill. Drawn with the same rounded-rect
-    // geometry as the body so it follows the pill silhouette.
+    // it briefly washes the interactive region. Bounded to the bottom
+    // region with the pill-silhouette mask so the label strip stays
+    // unaffected (ct-ep4).
     if (zoneState?.clampFlash) {
       const flash = new Graphics();
-      flash.roundRect(
+      flash.rect(-width / 2, interactiveTop, width, interactiveHeight);
+      flash.fill({
+        color: COUNTER_CLAMP_FLASH_COLOR,
+        alpha: COUNTER_CLAMP_FLASH_ALPHA,
+      });
+      flash.label = 'counter-clamp-flash';
+
+      const flashMask = new Graphics();
+      flashMask.roundRect(
         -width / 2,
         -height / 2,
         width,
         height,
         COUNTER_PILL_BORDER_RADIUS,
       );
-      flash.fill({
-        color: COUNTER_CLAMP_FLASH_COLOR,
-        alpha: COUNTER_CLAMP_FLASH_ALPHA,
-      });
-      flash.label = 'counter-clamp-flash';
+      flashMask.fill(0xffffff);
+      flashMask.label = 'counter-clamp-flash-mask';
+      container.addChild(flashMask);
+      flash.mask = flashMask;
       container.addChild(flash);
     }
 

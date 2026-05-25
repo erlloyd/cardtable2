@@ -1149,6 +1149,80 @@ export function detachAllCards(store: YjsStore, parentId: string): string[] {
 }
 
 /**
+ * Result of an `adjustCounter` call.
+ */
+export interface AdjustCounterResult {
+  /** Counter's new `currentValue` after clamping to `[min, max]`. */
+  newValue: number;
+  /**
+   * `true` when the requested delta would have pushed `currentValue` past a
+   * boundary and was therefore clamped — that is, the value did not change
+   * at all (already at min/max in the direction requested). Callers use this
+   * to drive boundary feedback (e.g. clamp-flash) without separately reading
+   * the counter's prior value.
+   */
+  clamped: boolean;
+}
+
+/**
+ * Increment/decrement a counter's `currentValue` (ct-d2p).
+ *
+ * Reads `_meta.{currentValue,min,max}` directly from the counter's Y.Map,
+ * applies `delta`, clamps to `[min, max]`, and writes back a new `_meta`
+ * Y.Map entry. The full meta record is replaced atomically inside a Yjs
+ * transaction so multiplayer peers see a single coherent update.
+ *
+ * No-op (returns `clamped: true`) when the counter is already at the
+ * boundary in the direction requested. Also a no-op for any non-Counter
+ * object, missing counter, or `delta === 0`.
+ *
+ * @param store - YjsStore instance
+ * @param id - Counter object ID
+ * @param delta - Signed change to apply (typically +1/-1)
+ * @returns Result with the post-adjust value and a clamp flag, or `null`
+ *          when the object is missing or not a Counter.
+ */
+export function adjustCounter(
+  store: YjsStore,
+  id: string,
+  delta: number,
+): AdjustCounterResult | null {
+  const yMap = store.getObjectYMap(id);
+  if (!yMap) {
+    console.warn(`[adjustCounter] Object ${id} not found`);
+    return null;
+  }
+
+  if (yMap.get('_kind') !== ObjectKind.Counter) {
+    console.warn(`[adjustCounter] Object ${id} is not a Counter`);
+    return null;
+  }
+
+  // Defensive: a counter materialised through `createObject` always has a
+  // fully-populated `_meta`, but reading directly from Y.Map means another
+  // peer could in principle write a partial record. Fall back to the same
+  // constants `createCounterMeta` would use so we never write NaN.
+  const currentMeta = (yMap.get('_meta') as Partial<CounterMeta>) ?? {};
+  const min = currentMeta.min ?? 0;
+  const max = currentMeta.max ?? 99;
+  const startingValue = currentMeta.startingValue ?? 0;
+  const oldValue = currentMeta.currentValue ?? startingValue;
+
+  const desired = oldValue + delta;
+  const clamped = Math.max(min, Math.min(max, desired));
+
+  if (clamped === oldValue) {
+    return { newValue: oldValue, clamped: true };
+  }
+
+  store.getDoc().transact(() => {
+    yMap.set('_meta', { ...currentMeta, currentValue: clamped });
+  });
+
+  return { newValue: clamped, clamped: false };
+}
+
+/**
  * Reset the table to a test scene with various object types.
  * Useful for development and testing.
  *

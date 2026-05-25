@@ -3,16 +3,17 @@ import type { TextOptions } from 'pixi.js';
 import type { TableObject, GameAssets } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';
-import type { RenderContext } from '../objects/types';
+import type { CounterZoneState, RenderContext } from '../objects/types';
 import { createScaleStrokeWidth } from '../handlers/objects';
 import type { TextureLoader } from '../services/TextureLoader';
 import { STACK_WIDTH, STACK_HEIGHT } from '../objects/stack/constants';
 import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
 import { getCounterDimensions } from '../objects/counter/utils';
+import { COUNTER_CLAMP_FLASH_DURATION_MS } from '../objects/counter/constants';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
-import type { HoverManager } from './HoverManager';
+import type { CounterZone, HoverManager } from './HoverManager';
 import { RenderMode } from '../IRendererAdapter';
 
 /**
@@ -65,6 +66,12 @@ export class VisualManager {
 
   // Track objects hidden due to remote awareness drag (only show ghost)
   private hiddenObjectIds: Set<string> = new Set();
+
+  // ct-d2p: Counter clamp-flash state. Maps counter object IDs to the
+  // setTimeout handle that clears the flash; presence of an entry implies
+  // the flash overlay should be drawn on the next render.
+  private counterClampFlashes: Map<string, ReturnType<typeof setTimeout>> =
+    new Map();
 
   /**
    * Initialize with app reference.
@@ -476,11 +483,87 @@ export class VisualManager {
       isHovered?: boolean;
       isDragging?: boolean;
       isSelected?: boolean;
+      counterZoneState?: CounterZoneState;
       preservePosition?: boolean;
       preserveScale?: boolean;
     },
   ): void {
     this.redrawVisual(objectId, sceneManager, options);
+  }
+
+  /**
+   * Redraw a counter to reflect a change in its hovered sub-zone (ct-d2p).
+   * The zone state is supplied explicitly rather than read from HoverManager
+   * to keep this manager free of upward dependencies.
+   */
+  updateCounterZoneFeedback(
+    objectId: string,
+    hoveredZone: CounterZone,
+    isSelected: boolean,
+    isHovered: boolean,
+    sceneManager: SceneManager,
+  ): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (!visual) return;
+    const clampFlash = this.counterClampFlashes.has(objectId);
+    this.redrawVisual(objectId, sceneManager, {
+      isSelected,
+      isHovered,
+      counterZoneState: { hoveredZone, clampFlash },
+    });
+  }
+
+  /**
+   * Flash a counter's pill body to signal a clamped (min/max) tap (ct-d2p).
+   *
+   * Triggers an immediate redraw with the flash overlay, then schedules a
+   * second redraw to clear it after `COUNTER_CLAMP_FLASH_DURATION_MS`.
+   * Calling again while a flash is active resets the timer so consecutive
+   * taps don't truncate the visual.
+   */
+  flashCounterClamp(
+    objectId: string,
+    hoveredZone: CounterZone,
+    isSelected: boolean,
+    isHovered: boolean,
+    sceneManager: SceneManager,
+  ): void {
+    const visual = this.objectVisuals.get(objectId);
+    if (!visual) return;
+
+    // Reset any in-flight flash for this object so the duration restarts.
+    const existing = this.counterClampFlashes.get(objectId);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+    }
+
+    const timer = setTimeout(() => {
+      this.counterClampFlashes.delete(objectId);
+      // Re-check the object still exists; it may have been removed during
+      // the flash window. We pass the latest hover state we know about;
+      // callers that need a stricter refresh can call
+      // updateCounterZoneFeedback after the flash.
+      if (
+        this.objectVisuals.has(objectId) &&
+        sceneManager.getObject(objectId)
+      ) {
+        this.redrawVisual(objectId, sceneManager, {
+          isSelected,
+          isHovered,
+          counterZoneState: { hoveredZone, clampFlash: false },
+        });
+        if (this.app) {
+          this.app.renderer.render(this.app.stage);
+        }
+      }
+    }, COUNTER_CLAMP_FLASH_DURATION_MS);
+    this.counterClampFlashes.set(objectId, timer);
+
+    this.redrawVisual(objectId, sceneManager, {
+      isSelected,
+      isHovered,
+      counterZoneState: { hoveredZone, clampFlash: true },
+    });
   }
 
   /**
@@ -534,6 +617,7 @@ export class VisualManager {
       dragActionPreview?: 'stack' | 'attach' | null;
       isStackTarget?: boolean;
       isAttachTarget?: boolean;
+      counterZoneState?: CounterZoneState;
       preservePosition?: boolean;
       preserveScale?: boolean;
     },
@@ -546,6 +630,7 @@ export class VisualManager {
       dragActionPreview = null,
       isStackTarget = false,
       isAttachTarget = false,
+      counterZoneState,
       preservePosition = false,
       preserveScale = false,
     } = options ?? {};
@@ -659,6 +744,8 @@ export class VisualManager {
       sceneManager,
       isAttachTarget,
       dragActionPreview,
+      isHovered,
+      counterZoneState,
     );
     visual.addChild(shapeGraphic);
 
@@ -711,6 +798,7 @@ export class VisualManager {
       gameAssets: overrides.gameAssets ?? this.gameAssets,
       textureLoader: overrides.textureLoader ?? this.textureLoader ?? undefined,
       onTextureLoaded: overrides.onTextureLoaded,
+      counterZoneState: overrides.counterZoneState,
     };
 
     return ctx;
@@ -728,6 +816,8 @@ export class VisualManager {
     sceneManager: SceneManager,
     isAttachTarget: boolean = false,
     dragActionPreview: 'stack' | 'attach' | null = null,
+    isHovered: boolean = false,
+    counterZoneState?: CounterZoneState,
   ): Container {
     const behaviors = getBehaviors(obj._kind);
     return behaviors.render(
@@ -735,9 +825,11 @@ export class VisualManager {
       this.buildRenderContext({
         objectId,
         isSelected,
+        isHovered,
         isStackTarget,
         isAttachTarget,
         dragActionPreview,
+        counterZoneState,
         onTextureLoaded: (_url: string) => {
           // Skip re-render if shuffle animation is in progress (would destroy ghost rectangles)
           if (this.animationManager?.isShuffling(objectId)) {

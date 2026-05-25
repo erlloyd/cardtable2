@@ -227,3 +227,122 @@ describe('registerLoadablesActions / per-type Load <X>… actions', () => {
     ).toBeUndefined();
   });
 });
+
+describe('Counter increment/decrement actions (ct-d2p)', () => {
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+    registerDefaultActions();
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+  });
+
+  function counterContext(
+    overrides: Partial<ActionContext> = {},
+  ): ActionContext {
+    return makeContext({
+      selection: {
+        ids: ['counter-1'],
+        yMaps: [],
+        count: 1,
+        hasStacks: false,
+        hasTokens: false,
+        hasCounters: true,
+        hasMixed: false,
+        allLocked: false,
+        allUnlocked: true,
+        canAct: true,
+      },
+      ...overrides,
+    });
+  }
+
+  it('registers a counter-increment action bound to the "=" key (the unshifted form of "+")', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-increment');
+    expect(action).toBeDefined();
+    expect(action?.shortcut).toBe('=');
+  });
+
+  it('registers a counter-decrement action bound to "-"', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-decrement');
+    expect(action).toBeDefined();
+    expect(action?.shortcut).toBe('-');
+  });
+
+  it('increment is available when exactly one Counter is selected', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-increment');
+    expect(action?.isAvailable(counterContext())).toBe(true);
+  });
+
+  it('increment is NOT available when selection is empty', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-increment');
+    expect(action?.isAvailable(makeContext())).toBe(false);
+  });
+
+  it('increment is NOT available when selection contains 2+ counters', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-increment');
+    expect(
+      action?.isAvailable(
+        counterContext({
+          selection: {
+            ids: ['counter-1', 'counter-2'],
+            yMaps: [],
+            count: 2,
+            hasStacks: false,
+            hasTokens: false,
+            hasCounters: true,
+            hasMixed: false,
+            allLocked: false,
+            allUnlocked: true,
+            canAct: true,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('increment is NOT available for mixed selections', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-increment');
+    expect(
+      action?.isAvailable(
+        counterContext({
+          selection: {
+            ids: ['counter-1', 'stack-1'],
+            yMaps: [],
+            count: 2,
+            hasStacks: true,
+            hasTokens: false,
+            hasCounters: true,
+            hasMixed: true,
+            allLocked: false,
+            allUnlocked: true,
+            canAct: true,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('increment is NOT available when the sole selected object is not a counter', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-increment');
+    expect(
+      action?.isAvailable(
+        counterContext({
+          selection: {
+            ids: ['stack-1'],
+            yMaps: [],
+            count: 1,
+            hasStacks: true,
+            hasTokens: false,
+            hasCounters: false,
+            hasMixed: false,
+            allLocked: false,
+            allUnlocked: true,
+            canAct: true,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+});

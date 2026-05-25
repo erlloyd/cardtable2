@@ -354,6 +354,11 @@ export type RendererToMainMessage =
   | {
       type: 'detach-card'; // Card-on-card attachment: detach a card from its parent
       cardId: string; // Stack ID of the attached card to detach
+    }
+  | {
+      type: 'counter-adjust'; // Counter +/- zone tapped: increment/decrement currentValue
+      id: string; // Counter object ID
+      delta: number; // Signed change to apply (+1 or -1 from a zone tap)
     };
 
 // ============================================================================

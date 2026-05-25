@@ -178,9 +178,30 @@ export function handlePointerDown(
         selectedCount <= 1 &&
         isPointInUnstackHandle(worldPos.x, worldPos.y, hitResult.object);
 
+      // ct-m3h: A pointer-down on a Counter's +/- side zone is a click-only
+      // affordance — it must never promote to a drag, because even sub-pixel
+      // mouse jitter past the 3px drag-slop threshold during the down→up
+      // window would otherwise classify the interaction as a drag and gate
+      // out the counter-adjust on pointer-up. Skip drag prep entirely for
+      // those zones; the center "value" zone keeps the normal drag prep so
+      // users can still pick up a counter by its body. (Pre-fix, ~50% of
+      // rapid taps were silently dropped because rapid tapping inevitably
+      // produces 3-5px hand jitter mid-click.)
+      const counterClickZone =
+        hitResult.object._kind === ObjectKind.Counter
+          ? counterZoneAtPoint(worldPos.x, worldPos.y, hitResult.object)
+          : null;
+      const isCounterSideZoneClick =
+        counterClickZone === 'minus' || counterClickZone === 'plus';
+
       if (isUnstackHandleClick) {
         // Clicking on unstack handle - prepare for unstack drag
         context.drag.prepareUnstackDrag(hitResult.id, worldPos.x, worldPos.y);
+      } else if (isCounterSideZoneClick) {
+        // ct-m3h: Don't prepare a drag — counter +/- zones are click-only.
+        // Reset any stale prep from a previous interaction so getDraggedObjectId
+        // returns null in handlePointerMove and no drag can start.
+        context.drag.resetAll();
       } else {
         // Clicking on a card - always prepare for object drag (regardless of mode)
         context.drag.prepareObjectDrag(hitResult.id, worldPos.x, worldPos.y);

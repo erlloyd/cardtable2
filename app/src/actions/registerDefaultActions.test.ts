@@ -346,3 +346,114 @@ describe('Counter increment/decrement actions (ct-d2p)', () => {
     ).toBe(false);
   });
 });
+
+describe('Counter reset action (ca-bbu)', () => {
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+    registerDefaultActions();
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+  });
+
+  function counterSelection(ids: string[]): ActionContext {
+    return makeContext({
+      selection: {
+        ids,
+        yMaps: [],
+        count: ids.length,
+        hasStacks: false,
+        hasTokens: false,
+        hasCounters: ids.length > 0,
+        hasMixed: false,
+        allLocked: false,
+        allUnlocked: true,
+        canAct: true,
+      },
+    });
+  }
+
+  it('registers a counter-reset action in the Card Actions category', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(action).toBeDefined();
+    expect(action?.category).toBe('Card Actions');
+  });
+
+  it('counter-reset has no default keyboard shortcut', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(action?.shortcut).toBeUndefined();
+  });
+
+  it('label is singular for one counter, plural with count for many', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    const label = action?.label;
+    expect(typeof label).toBe('function');
+    if (typeof label !== 'function') return;
+    expect(label(counterSelection(['c1']))).toBe('Reset Counter');
+    expect(label(counterSelection(['c1', 'c2', 'c3']))).toBe(
+      'Reset 3 Counters',
+    );
+  });
+
+  it('is available with one counter selected', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(action?.isAvailable(counterSelection(['c1']))).toBe(true);
+  });
+
+  it('is available with multiple counters selected', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(action?.isAvailable(counterSelection(['c1', 'c2', 'c3']))).toBe(
+      true,
+    );
+  });
+
+  it('is NOT available when nothing is selected', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(action?.isAvailable(makeContext())).toBe(false);
+  });
+
+  it('is NOT available for non-counter selections', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(
+      action?.isAvailable(
+        makeContext({
+          selection: {
+            ids: ['stack-1'],
+            yMaps: [],
+            count: 1,
+            hasStacks: true,
+            hasTokens: false,
+            hasCounters: false,
+            hasMixed: false,
+            allLocked: false,
+            allUnlocked: true,
+            canAct: true,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('is NOT available for mixed selections that include a counter', () => {
+    const action = ActionRegistry.getInstance().getAction('counter-reset');
+    expect(
+      action?.isAvailable(
+        makeContext({
+          selection: {
+            ids: ['counter-1', 'stack-1'],
+            yMaps: [],
+            count: 2,
+            hasStacks: true,
+            hasTokens: false,
+            hasCounters: true,
+            hasMixed: true,
+            allLocked: false,
+            allUnlocked: true,
+            canAct: true,
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+});

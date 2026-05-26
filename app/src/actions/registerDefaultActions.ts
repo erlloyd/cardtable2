@@ -16,6 +16,7 @@ import {
   detachCard,
   detachAllCards,
   adjustCounter,
+  resetCounter,
 } from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
@@ -293,6 +294,37 @@ export function registerDefaultActions(): void {
     description: 'Decrement the selected counter by 1',
     isAvailable: counterIncrementIsAvailable,
     execute: counterDecrementExecute,
+  });
+
+  // ca-bbu: Counter reset — restore every selected counter's currentValue
+  // to its startingValue. Unlike increment/decrement (which are single-
+  // counter only to match the +/- pill UI), reset is intentionally multi-
+  // select: there's no positional ambiguity in "reset all of these".
+  // Available iff every selected object is a Counter (count > 0,
+  // hasCounters, and !hasMixed). No shortcut by default — the user can
+  // wire one later if a single-key reset becomes useful.
+  registry.register({
+    id: 'counter-reset',
+    label: (ctx) =>
+      ctx.selection.count === 1
+        ? 'Reset Counter'
+        : `Reset ${ctx.selection.count} Counters`,
+    shortLabel: 'Reset',
+    icon: '↺',
+    category: CARD_ACTIONS,
+    description: 'Reset selected counter(s) to their original starting value',
+    isAvailable: (ctx) =>
+      ctx.selection.count > 0 &&
+      ctx.selection.hasCounters &&
+      !ctx.selection.hasMixed,
+    execute: (ctx) => {
+      let reset = 0;
+      for (const id of ctx.selection.ids) {
+        const result = resetCounter(ctx.store, id);
+        if (result !== null) reset++;
+      }
+      console.log(`Reset ${reset}/${ctx.selection.ids.length} counter(s)`);
+    },
   });
 
   // Object action: Lock/Unlock (works on any object)

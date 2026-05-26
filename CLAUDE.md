@@ -2,7 +2,7 @@
 
 Cardtable 2.0: solo-first virtual card table with optional multiplayer. Manifest-only content (no game rules in code). React 19 + TypeScript + PixiJS frontend, Node 24 + y-websocket backend, PNPM monorepo.
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:7510c1e2 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -22,35 +22,32 @@ bd close <id>         # Complete work
 - Run `bd prime` for detailed command reference and session close protocol
 - Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
 
+**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
+
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds on a feature branch (never auto-push to main).
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
 
 **MANDATORY WORKFLOW:**
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - Mandatory for feature branches, NEVER for main without explicit user confirmation:
-   - Check branch: `git branch --show-current`
-   - If on `main`: STOP. Ask the user before pushing — direct pushes to main trigger production deploys. See "Branching Strategy" below.
-   - Otherwise (feature branch), push is mandatory:
-     ```bash
-     git pull --rebase
-     bd dolt push
-     git push
-     git status  # MUST show "up to date with origin"
-     ```
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
 5. **Clean up** - Clear stashes, prune remote branches
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds on a feature branch
-- NEVER stop before pushing a feature branch - that leaves work stranded locally
-- NEVER say "ready to push when you are" on a feature branch - YOU must push
-- On `main`, the opposite applies: NEVER push without explicit user confirmation
-- If a feature-branch push fails, resolve and retry until it succeeds
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
 
 ## Where to look

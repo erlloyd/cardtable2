@@ -310,8 +310,7 @@ export function registerDefaultActions(): void {
       ctx.selection.hasStacks &&
       !ctx.selection.hasMixed,
     execute: (ctx) => {
-      const zoneId = createDiscardZoneForStack(ctx.store, ctx.selection.ids[0]);
-      console.log(`[create-discard-zone] Created zone ${zoneId}`);
+      createDiscardZoneForStack(ctx.store, ctx.selection.ids[0]);
     },
   });
 

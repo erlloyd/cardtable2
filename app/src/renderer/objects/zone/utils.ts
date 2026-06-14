@@ -33,5 +33,5 @@ export function shouldSnapToGrid(obj: TableObject): boolean {
 
 /** True when the zone was created as a discard zone (flag stamped by createDiscardZoneForStack). */
 export function isDiscardZone(obj: TableObject): boolean {
-  return (obj._meta)?.isDiscardZone === true;
+  return obj._meta?.isDiscardZone === true;
 }

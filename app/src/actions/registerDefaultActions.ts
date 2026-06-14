@@ -16,6 +16,8 @@ import {
   detachCard,
   detachAllCards,
   adjustCounter,
+  createDiscardZoneForStack,
+  discardCardToZone,
 } from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
@@ -293,6 +295,55 @@ export function registerDefaultActions(): void {
     description: 'Decrement the selected counter by 1',
     isAvailable: counterIncrementIsAvailable,
     execute: counterDecrementExecute,
+  });
+
+  // Discard zone: create a discard zone for a single selected stack (ct-utq)
+  registry.register({
+    id: 'create-discard-zone',
+    label: 'Create Discard Zone',
+    shortLabel: 'Discard Zone',
+    icon: '🗃️',
+    category: CARD_ACTIONS,
+    description: 'Create a discard zone for this stack',
+    isAvailable: (ctx) =>
+      ctx.selection.count === 1 &&
+      ctx.selection.hasStacks &&
+      !ctx.selection.hasMixed,
+    execute: (ctx) => {
+      const zoneId = createDiscardZoneForStack(ctx.store, ctx.selection.ids[0]);
+      console.log(`[create-discard-zone] Created zone ${zoneId}`);
+    },
+  });
+
+  // Discard zone: route each selected card to its home zone (ct-ecl)
+  registry.register({
+    id: 'discard-card',
+    label: 'Discard',
+    shortLabel: 'Discard',
+    icon: '♻️',
+    shortcut: 'X',
+    category: CARD_ACTIONS,
+    description: 'Route selected card(s) to their home discard zone',
+    isAvailable: (ctx) => {
+      if (ctx.selection.count < 1 || !ctx.selection.hasStacks) return false;
+      return ctx.selection.ids.every((id) => {
+        const yMap = ctx.store.getObjectYMap(id);
+        if (!yMap) return false;
+        const cards = yMap.get('_cards');
+        if (!cards || cards.length === 0) return false;
+        // Check top card's home zone
+        return ctx.store.findDiscardZoneForCard(cards[0]) !== null;
+      });
+    },
+    execute: (ctx) => {
+      for (const id of ctx.selection.ids) {
+        const yMap = ctx.store.getObjectYMap(id);
+        if (!yMap) continue;
+        const cards = yMap.get('_cards');
+        if (!cards || cards.length === 0) continue;
+        discardCardToZone(ctx.store, cards[0]);
+      }
+    },
   });
 
   // Object action: Lock/Unlock (works on any object)

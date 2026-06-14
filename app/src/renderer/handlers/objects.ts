@@ -49,6 +49,9 @@ export function handleSyncObjects(
   // Ensure attachment z-ordering after all objects are added
   ensureAttachmentZOrder(context, message.objects);
 
+  // Zones must always render below all non-zone objects
+  ensureZoneZOrder(context);
+
   context.app.renderer.render(context.app.stage);
 }
 
@@ -132,6 +135,9 @@ export function handleObjectsAdded(
   // After adding, ensure attachment parent visuals render above their children
   ensureAttachmentZOrder(context, message.objects);
 
+  // Zones must always render below all non-zone objects
+  ensureZoneZOrder(context);
+
   context.app.renderer.render(context.app.stage);
 }
 
@@ -152,6 +158,9 @@ export function handleObjectsUpdated(
 
   // After updates, ensure attachment parent visuals render above their children
   ensureAttachmentZOrder(context, message.objects);
+
+  // Zones must always render below all non-zone objects
+  ensureZoneZOrder(context);
 
   context.app.renderer.render(context.app.stage);
 }
@@ -498,6 +507,28 @@ function ensureAttachmentZOrder(
           context.worldContainer.children.length - 1,
         );
       }
+    }
+  }
+}
+
+/**
+ * Helper: Push all zone visuals to the back of the world container.
+ *
+ * Zone-kind objects must always render below every non-zone object.
+ * This is called after any batch add or update that could include zones.
+ * Skips zones currently being dragged — DragManager owns z-order during drag
+ * and will restore them via the next objects-updated sync after drag ends.
+ */
+function ensureZoneZOrder(context: RendererContext): void {
+  const draggedIds = context.drag.getDraggedObjectIds();
+
+  for (const [id, obj] of context.sceneManager.getAllObjects()) {
+    if (obj._kind !== ObjectKind.Zone) continue;
+    // Leave dragged zones alone — DragManager moved them to the top intentionally
+    if (draggedIds.includes(id)) continue;
+    const visual = context.visual.getVisual(id);
+    if (visual && visual.parent === context.worldContainer) {
+      context.worldContainer.setChildIndex(visual, 0);
     }
   }
 }

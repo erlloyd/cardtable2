@@ -56,6 +56,15 @@ describe('ZoneBehaviors.getBounds', () => {
     expect(bounds.minY).toBe(-ZONE_DEFAULT_HEIGHT / 2);
     expect(bounds.maxY).toBe(ZONE_DEFAULT_HEIGHT / 2);
   });
+
+  it('uses custom width/height from meta when present', () => {
+    const zone = createTestZone({ isDiscardZone: true, width: 71, height: 96 });
+    const bounds = ZoneBehaviors.getBounds(zone);
+    expect(bounds.minX).toBe(-71 / 2);
+    expect(bounds.maxX).toBe(71 / 2);
+    expect(bounds.minY).toBe(-96 / 2);
+    expect(bounds.maxY).toBe(96 / 2);
+  });
 });
 
 describe('ZoneBehaviors.capabilities', () => {

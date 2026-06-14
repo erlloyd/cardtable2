@@ -1,5 +1,6 @@
 import RBush from 'rbush';
 import type { TableObject } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from './objects';
 
 /**
@@ -127,9 +128,13 @@ export class SceneManager {
       return { id: bbox.id, object: obj };
     });
 
-    // Sort candidates by _sortKey (higher = on top)
-    // SortKeys encode full z-ordering including parent/child relationships
+    // Sort candidates: zones always lose to non-zones (primary key), then by
+    // _sortKey descending (higher = on top) as the secondary key.
+    // This ensures a zone never steals a click from a card rendered above it.
     candidateList.sort((a, b) => {
+      const aIsZone = a.object._kind === ObjectKind.Zone ? 1 : 0;
+      const bIsZone = b.object._kind === ObjectKind.Zone ? 1 : 0;
+      if (aIsZone !== bIsZone) return aIsZone - bIsZone; // non-zone wins
       if (a.object._sortKey > b.object._sortKey) return -1;
       if (a.object._sortKey < b.object._sortKey) return 1;
       return 0;

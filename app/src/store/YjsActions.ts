@@ -17,6 +17,7 @@ import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
+import { CARD_WIDTH, CARD_HEIGHT } from '../renderer/constants';
 
 /**
  * Engine Actions for Yjs-based state manipulation (M3-T2)
@@ -200,6 +201,16 @@ export function moveObjects(
 
       // Update position directly on Y.Map
       yMap.set('_pos', pos);
+
+      // Clear discard-pile membership when the object is manually moved.
+      // A card dragged out of a zone is no longer resting in its pile; discarding
+      // again must re-form the pile rather than treating the card as still there.
+      // discardCardToZone sets _containerId AFTER calling moveObjects, so clearing
+      // here is safe for the new-pile branch (it re-sets the value immediately after).
+      const currentContainerId = yMap.get('_containerId');
+      if (currentContainerId) {
+        yMap.set('_containerId', null);
+      }
 
       // Update sortKey: preserve attachment sub-key structure, replace base prefix
       if (movedIds.has(id)) {
@@ -1383,10 +1394,17 @@ export function discardCardToZone(store: YjsStore, cardId: string): boolean {
   return extractedStackId !== null;
 }
 
-// Horizontal offset applied when placing a discard zone relative to its source
-// stack. 420 world-units clears the default zone width (400) with a small gap.
-// v1 hardcoded — ct-rdu tracks user-positioned placement.
-const DISCARD_ZONE_X_OFFSET = 420;
+// Discard zone dimensions: slightly larger than a single card.
+const DISCARD_ZONE_WIDTH = CARD_WIDTH + 8; // 71 world-units
+const DISCARD_ZONE_HEIGHT = CARD_HEIGHT + 8; // 96 world-units
+
+// Gap between the source stack's right edge and the zone's left edge.
+const DISCARD_ZONE_GAP = 8;
+
+// X offset from source stack center to discard zone center:
+//   stack right edge + gap + half zone width
+const DISCARD_ZONE_X_OFFSET =
+  CARD_WIDTH / 2 + DISCARD_ZONE_GAP + DISCARD_ZONE_WIDTH / 2;
 
 /**
  * Atomically create a discard zone for a stack and snapshot its membership.
@@ -1428,7 +1446,12 @@ export function createDiscardZoneForStack(
     const zoneId = createObject(store, {
       kind: ObjectKind.Zone,
       pos: { x: sourcePos.x + DISCARD_ZONE_X_OFFSET, y: sourcePos.y, r: 0 },
-      meta: { label: 'Discard', isDiscardZone: true },
+      meta: {
+        label: 'Discard',
+        isDiscardZone: true,
+        width: DISCARD_ZONE_WIDTH,
+        height: DISCARD_ZONE_HEIGHT,
+      },
     });
 
     const entry: DiscardZoneEntry = { memberCardIds: [...sourceCards] };

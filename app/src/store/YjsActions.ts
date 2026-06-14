@@ -11,6 +11,7 @@ import {
   sortKeyBase,
   sortKeyWithSub,
   PARENT_ON_TOP_SUB_KEY,
+  type DiscardZoneEntry,
 } from '@cardtable2/shared';
 import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
@@ -1220,6 +1221,62 @@ export function adjustCounter(
   });
 
   return { newValue: clamped, clamped: false };
+}
+
+// Horizontal offset applied when placing a discard zone relative to its source
+// stack. 420 world-units clears the default zone width (400) with a small gap.
+// v1 hardcoded — ct-rdu tracks user-positioned placement.
+const DISCARD_ZONE_X_OFFSET = 420;
+
+/**
+ * Atomically create a discard zone for a stack and snapshot its membership.
+ *
+ * Creates a Zone object offset to the right of the source stack and writes a
+ * DiscardZoneEntry whose memberCardIds is a point-in-time snapshot of the
+ * stack's _cards array. Both the zone object and the membership entry land in
+ * a single doc.transact() so no partial state is visible to peers.
+ *
+ * @param store - YjsStore instance
+ * @param sourceStackId - ID of the stack to create a discard zone for
+ * @returns The new zone's ID, or null if the source is missing or not a stack
+ */
+export function createDiscardZoneForStack(
+  store: YjsStore,
+  sourceStackId: string,
+): string | null {
+  const sourceYMap = store.getObjectYMap(sourceStackId);
+  if (!sourceYMap) {
+    console.warn(
+      `[createDiscardZoneForStack] Stack ${sourceStackId} not found`,
+    );
+    return null;
+  }
+
+  if (sourceYMap.get('_kind') !== ObjectKind.Stack) {
+    console.warn(
+      `[createDiscardZoneForStack] Object ${sourceStackId} is not a stack`,
+    );
+    return null;
+  }
+
+  const sourceCards = (sourceYMap.get('_cards')) ?? [];
+  const sourcePos = sourceYMap.get('_pos') as Position;
+
+  let newZoneId: string | null = null;
+
+  store.getDoc().transact(() => {
+    const zoneId = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: sourcePos.x + DISCARD_ZONE_X_OFFSET, y: sourcePos.y, r: 0 },
+      meta: { label: 'Discard', isDiscardZone: true },
+    });
+
+    const entry: DiscardZoneEntry = { memberCardIds: [...sourceCards] };
+    store.setDiscardZone(zoneId, entry);
+    newZoneId = zoneId;
+  });
+
+  return newZoneId;
 }
 
 /**

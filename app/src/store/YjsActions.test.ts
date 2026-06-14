@@ -17,12 +17,14 @@ import {
   detachAllCards,
   resetTable,
   adjustCounter,
+  createDiscardZoneForStack,
 } from './YjsActions';
 import {
   ObjectKind,
   type StackObject,
   type TableObject,
   parseSortKeyPrefix,
+  type DiscardZoneEntry,
 } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
@@ -3323,5 +3325,142 @@ describe('YjsActions - adjustCounter (ct-d2p)', () => {
       startingValue: 3,
       currentValue: 5,
     });
+  });
+});
+
+describe('createDiscardZoneForStack', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-discard-zone-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  it('returns null for a missing stack id', () => {
+    const result = createDiscardZoneForStack(store, 'nonexistent');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the id is not a stack', () => {
+    const zoneId = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+
+    const result = createDiscardZoneForStack(store, zoneId);
+    expect(result).toBeNull();
+  });
+
+  it('creates a Zone object with _meta.isDiscardZone true', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 100, y: 100, r: 0 },
+      cards: ['card-1', 'card-2'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const zoneYMap = store.getObjectYMap(newZoneId!);
+    expect(zoneYMap).toBeDefined();
+    expect(zoneYMap!.get('_kind')).toBe(ObjectKind.Zone);
+
+    const meta = zoneYMap!.get('_meta') as Record<string, unknown>;
+    expect(meta.isDiscardZone).toBe(true);
+  });
+
+  it('snapshots member card ids matching the stack _cards at creation time', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-a', 'card-b', 'card-c', 'card-d', 'card-e'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
+    expect(entry).toBeDefined();
+    expect(new Set(entry.memberCardIds)).toEqual(
+      new Set(['card-a', 'card-b', 'card-c', 'card-d', 'card-e']),
+    );
+    expect(entry.memberCardIds).toHaveLength(5);
+  });
+
+  it('writes a DiscardZoneEntry keyed by the new zone id', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 50, y: 50, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    expect(store.getDiscardZone(newZoneId!)).toBeDefined();
+  });
+
+  it('places the zone to the right of the source stack', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 200, y: 300, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const zonePos = store.getObjectYMap(newZoneId!)!.get('_pos') as {
+      x: number;
+      y: number;
+      r: number;
+    };
+    expect(zonePos.x).toBeGreaterThan(200);
+    expect(zonePos.y).toBe(300);
+    expect(zonePos.r).toBe(0);
+  });
+
+  it('snapshot is independent of subsequent stack mutations', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1', 'card-2'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    // Mutate the source stack after zone creation
+    store.getObjectYMap(stackId)!.set('_cards', ['card-1', 'card-2', 'card-3']);
+
+    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
+    expect(entry.memberCardIds).toHaveLength(2);
+    expect(entry.memberCardIds).not.toContain('card-3');
+  });
+
+  it('creates a zone with empty memberCardIds for an empty stack', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: [],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
+    expect(entry.memberCardIds).toEqual([]);
   });
 });

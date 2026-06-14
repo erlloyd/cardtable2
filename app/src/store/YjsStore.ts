@@ -8,6 +8,7 @@ import type {
   ActorId,
   AwarenessState,
   ObjectKind,
+  DiscardZoneEntry,
 } from '@cardtable2/shared';
 import { v4 as uuidv4 } from 'uuid';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
@@ -71,6 +72,10 @@ export class YjsStore {
   // Player hands map (hand ID -> Y.Map with name, cards, visibility)
   public hands: Y.Map<Y.Map<unknown>>;
 
+  // Discard zones map (zoneId -> DiscardZoneEntry plain object)
+  // getMap auto-creates an empty map for new docs; no migration needed.
+  public discardZones: Y.Map<DiscardZoneEntry>;
+
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
@@ -106,6 +111,9 @@ export class YjsStore {
 
     // Get or create hands map
     this.hands = this.doc.getMap('hands');
+
+    // Get or create discard zones map
+    this.discardZones = this.doc.getMap('discardZones');
 
     // Initialize awareness (M3-T4)
     this.awareness = new Awareness(this.doc);
@@ -840,6 +848,54 @@ export class YjsStore {
     this.hands.observeDeep(observer);
     return () => {
       this.hands.unobserveDeep(observer);
+    };
+  }
+
+  // ============================================================================
+  // Discard Zones Methods
+  // ============================================================================
+
+  setDiscardZone(zoneId: string, entry: DiscardZoneEntry): void {
+    this.doc.transact(() => {
+      this.discardZones.set(zoneId, entry);
+    });
+  }
+
+  getDiscardZone(zoneId: string): DiscardZoneEntry | undefined {
+    return this.discardZones.get(zoneId);
+  }
+
+  deleteDiscardZone(zoneId: string): void {
+    this.doc.transact(() => {
+      this.discardZones.delete(zoneId);
+    });
+  }
+
+  getAllDiscardZones(): Map<string, DiscardZoneEntry> {
+    const result = new Map<string, DiscardZoneEntry>();
+    this.discardZones.forEach((entry, id) => {
+      result.set(id, entry);
+    });
+    return result;
+  }
+
+  findDiscardZoneForCard(cardId: string): string | null {
+    let found: string | null = null;
+    this.discardZones.forEach((entry, zoneId) => {
+      if (found === null && entry.memberCardIds.includes(cardId)) {
+        found = zoneId;
+      }
+    });
+    return found;
+  }
+
+  onDiscardZonesChange(callback: () => void): () => void {
+    const observer = () => {
+      callback();
+    };
+    this.discardZones.observeDeep(observer);
+    return () => {
+      this.discardZones.unobserveDeep(observer);
     };
   }
 

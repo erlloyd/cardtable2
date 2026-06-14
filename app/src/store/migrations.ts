@@ -30,6 +30,9 @@ import { getDefaultProperties } from './ObjectDefaults';
  *
  * @param doc - The Yjs document
  */
+// discardZones: Y.Map — added in ct-55s. getMap auto-creates an empty map for
+// new and existing docs, so no migration entry is needed here.
+
 export function runMigrations(doc: Y.Doc): void {
   const objectsMap = doc.getMap('objects');
 

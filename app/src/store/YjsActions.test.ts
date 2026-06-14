@@ -17,12 +17,16 @@ import {
   detachAllCards,
   resetTable,
   adjustCounter,
+  createDiscardZoneForStack,
+  setCardFaceUp,
+  discardCardToZone,
 } from './YjsActions';
 import {
   ObjectKind,
   type StackObject,
   type TableObject,
   parseSortKeyPrefix,
+  type DiscardZoneEntry,
 } from '@cardtable2/shared';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
@@ -3323,5 +3327,444 @@ describe('YjsActions - adjustCounter (ct-d2p)', () => {
       startingValue: 3,
       currentValue: 5,
     });
+  });
+});
+
+describe('createDiscardZoneForStack', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-discard-zone-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  it('returns null for a missing stack id', () => {
+    const result = createDiscardZoneForStack(store, 'nonexistent');
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the id is not a stack', () => {
+    const zoneId = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+
+    const result = createDiscardZoneForStack(store, zoneId);
+    expect(result).toBeNull();
+  });
+
+  it('creates a Zone object with _meta.isDiscardZone true', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 100, y: 100, r: 0 },
+      cards: ['card-1', 'card-2'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const zoneYMap = store.getObjectYMap(newZoneId!);
+    expect(zoneYMap).toBeDefined();
+    expect(zoneYMap!.get('_kind')).toBe(ObjectKind.Zone);
+
+    const meta = zoneYMap!.get('_meta') as Record<string, unknown>;
+    expect(meta.isDiscardZone).toBe(true);
+  });
+
+  it('snapshots member card ids matching the stack _cards at creation time', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-a', 'card-b', 'card-c', 'card-d', 'card-e'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
+    expect(entry).toBeDefined();
+    expect(new Set(entry.memberCardIds)).toEqual(
+      new Set(['card-a', 'card-b', 'card-c', 'card-d', 'card-e']),
+    );
+    expect(entry.memberCardIds).toHaveLength(5);
+  });
+
+  it('writes a DiscardZoneEntry keyed by the new zone id', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 50, y: 50, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    expect(store.getDiscardZone(newZoneId!)).toBeDefined();
+  });
+
+  it('places the zone immediately to the right of the source stack', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 200, y: 300, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const zoneYMap = store.getObjectYMap(newZoneId!)!;
+    const zonePos = zoneYMap.get('_pos') as { x: number; y: number; r: number };
+
+    // Zone center = stack center + CARD_WIDTH/2 + gap + DISCARD_ZONE_WIDTH/2
+    // CARD_WIDTH=63, gap=8, DISCARD_ZONE_WIDTH=71 → offset=75
+    expect(zonePos.x).toBe(275);
+    expect(zonePos.y).toBe(300);
+    expect(zonePos.r).toBe(0);
+  });
+
+  it('creates a discard zone with card-sized dimensions in meta', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const meta = store.getObjectYMap(newZoneId!)!.get('_meta') as Record<
+      string,
+      unknown
+    >;
+    // CARD_WIDTH=63+8=71, CARD_HEIGHT=88+8=96
+    expect(meta.width).toBe(71);
+    expect(meta.height).toBe(96);
+  });
+
+  it('snapshot is independent of subsequent stack mutations', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1', 'card-2'],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    // Mutate the source stack after zone creation
+    store.getObjectYMap(stackId)!.set('_cards', ['card-1', 'card-2', 'card-3']);
+
+    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
+    expect(entry.memberCardIds).toHaveLength(2);
+    expect(entry.memberCardIds).not.toContain('card-3');
+  });
+
+  it('creates a zone with empty memberCardIds for an empty stack', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: [],
+      faceUp: true,
+    });
+
+    const newZoneId = createDiscardZoneForStack(store, stackId);
+    expect(newZoneId).not.toBeNull();
+
+    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
+    expect(entry.memberCardIds).toEqual([]);
+  });
+});
+
+describe('setCardFaceUp', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-setcardface-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    store.destroy();
+  });
+
+  it('sets a face-down stack to face-up', () => {
+    const id = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1'],
+      faceUp: false,
+    });
+
+    const result = setCardFaceUp(store, id, true);
+    expect(result).toBe(true);
+    expect(store.getObjectYMap(id)!.get('_faceUp')).toBe(true);
+  });
+
+  it('sets a face-up stack to face-down', () => {
+    const id = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1'],
+      faceUp: true,
+    });
+
+    const result = setCardFaceUp(store, id, false);
+    expect(result).toBe(true);
+    expect(store.getObjectYMap(id)!.get('_faceUp')).toBe(false);
+  });
+
+  it('is idempotent: calling twice with same value leaves state unchanged', () => {
+    const id = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-1'],
+      faceUp: false,
+    });
+
+    setCardFaceUp(store, id, true);
+    setCardFaceUp(store, id, true);
+    expect(store.getObjectYMap(id)!.get('_faceUp')).toBe(true);
+  });
+
+  it('returns false for a missing object', () => {
+    expect(setCardFaceUp(store, 'nonexistent', true)).toBe(false);
+  });
+
+  it('returns false for a non-Stack object', () => {
+    const id = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+    expect(setCardFaceUp(store, id, true)).toBe(false);
+  });
+});
+
+describe('discardCardToZone', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-discardcard-table');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    store.destroy();
+  });
+
+  function setupSourceAndZone(cards: string[], faceUp = false) {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 100, y: 100, r: 0 },
+      cards,
+      faceUp,
+    });
+    const zoneId = createDiscardZoneForStack(store, stackId)!;
+    return { stackId, zoneId };
+  }
+
+  it('returns false when the card has no home zone', () => {
+    createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['orphan-card'],
+      faceUp: false,
+    });
+    expect(discardCardToZone(store, 'orphan-card')).toBe(false);
+  });
+
+  it('returns false for a card not found in any stack', () => {
+    const { zoneId } = setupSourceAndZone(['card-1']);
+    void zoneId;
+    // 'card-99' is a member of zone but doesn't exist in any stack
+    store.setDiscardZone('fake-zone', { memberCardIds: ['card-99'] });
+    expect(discardCardToZone(store, 'card-99')).toBe(false);
+  });
+
+  it('routes a single-card stack to an empty zone (new pile path)', () => {
+    const { stackId, zoneId } = setupSourceAndZone(['card-1']);
+
+    const result = discardCardToZone(store, 'card-1');
+    expect(result).toBe(true);
+
+    // Original stack should be gone (or at least card-1 is in the zone)
+    void stackId;
+
+    // There must be a Stack with _containerId === zoneId
+    const pileIds = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileIds.length).toBe(1);
+
+    const pileYMap = store.getObjectYMap(pileIds[0])!;
+    const cards = pileYMap.get('_cards') as string[];
+    expect(cards).toContain('card-1');
+    expect(pileYMap.get('_faceUp')).toBe(true);
+  });
+
+  it('face-down card lands face-up in the zone', () => {
+    const { zoneId } = setupSourceAndZone(['card-face-down'], false);
+
+    discardCardToZone(store, 'card-face-down');
+
+    const pileIds = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileIds.length).toBe(1);
+    expect(store.getObjectYMap(pileIds[0])!.get('_faceUp')).toBe(true);
+  });
+
+  it('second discard merges onto the existing pile (merge path)', () => {
+    const { zoneId } = setupSourceAndZone(['card-1', 'card-2']);
+
+    discardCardToZone(store, 'card-1');
+
+    // Now 'card-2' is top of the source stack; create a second stack for it
+    // Actually card-2 is in the original source stack still. But card-1 was top.
+    // The source stack now has card-2 as its sole remaining card (if it was 2-card).
+    // Discard card-2 — it should merge onto the existing pile.
+    discardCardToZone(store, 'card-2');
+
+    const pileIds = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileIds.length).toBe(1);
+
+    const cards = store.getObjectYMap(pileIds[0])!.get('_cards') as string[];
+    expect(cards).toContain('card-1');
+    expect(cards).toContain('card-2');
+    expect(cards.length).toBe(2);
+  });
+
+  it('discard → drag out → discard re-routes to pile (not flip)', () => {
+    // Reproduce the "X just flips" bug: after discard then drag-out, pressing X
+    // should re-discard (move card back to pile), not merely set _faceUp=true.
+    const { stackId, zoneId } = setupSourceAndZone(['card-1']);
+
+    // First discard: card-1 moves to zone, gets _containerId=zoneId
+    expect(discardCardToZone(store, 'card-1')).toBe(true);
+
+    // Pile exists in zone
+    const pileAfterDiscard = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileAfterDiscard.length).toBe(1);
+    const pileId = pileAfterDiscard[0];
+
+    // Simulate drag-out: user moves the pile stack to a new position via moveObjects.
+    // This must clear _containerId so the card is no longer "in" the zone.
+    moveObjects(store, [{ id: pileId, pos: { x: 300, y: 300, r: 0 } }]);
+
+    // After drag-out, _containerId must be cleared
+    expect(store.getObjectYMap(pileId)!.get('_containerId')).toBeNull();
+
+    // No pile should exist in zone after drag-out
+    const pileAfterDragOut = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileAfterDragOut.length).toBe(0);
+
+    // Second discard: must re-route to zone, NOT just flip the card in place
+    expect(discardCardToZone(store, 'card-1')).toBe(true);
+
+    const pileAfterRediscard = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileAfterRediscard.length).toBe(1);
+    const cards = store
+      .getObjectYMap(pileAfterRediscard[0])!
+      .get('_cards') as string[];
+    expect(cards).toContain('card-1');
+    // Card must be face-up after discard
+    expect(store.getObjectYMap(pileAfterRediscard[0])!.get('_faceUp')).toBe(
+      true,
+    );
+
+    // stackId was a single-card stack; after discard the stack itself becomes the pile
+    void stackId;
+  });
+
+  it('moveObjects clears _containerId on moved objects', () => {
+    // Unit test for the _containerId-clear side-effect in moveObjects.
+    const { stackId, zoneId } = setupSourceAndZone(['card-1']);
+    discardCardToZone(store, 'card-1');
+
+    // card-1's stack (which may be the original stackId or a new pile id) should have _containerId
+    const pileIds = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileIds.length).toBe(1);
+    const pileId = pileIds[0];
+
+    moveObjects(store, [{ id: pileId, pos: { x: 999, y: 999, r: 0 } }]);
+    expect(store.getObjectYMap(pileId)!.get('_containerId')).toBeNull();
+    void stackId;
+  });
+
+  it('card extracted from a foreign stack routes to home zone', () => {
+    // source stack defines zone membership
+    const sourceId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: ['card-member'],
+      faceUp: true,
+    });
+    const zoneId = createDiscardZoneForStack(store, sourceId)!;
+
+    // Move card-member into a different stack (foreign stack)
+    const foreignStackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 500, y: 500, r: 0 },
+      cards: ['other-card', 'card-member'],
+      faceUp: false,
+    });
+    // Delete the original source stack (card-member is now in foreign)
+    store.deleteObject(sourceId);
+
+    const result = discardCardToZone(store, 'card-member');
+    expect(result).toBe(true);
+
+    // Foreign stack should be smaller (card-member extracted)
+    const foreignYMap = store.getObjectYMap(foreignStackId);
+    if (foreignYMap) {
+      const remainingCards = foreignYMap.get('_cards') as string[];
+      expect(remainingCards).not.toContain('card-member');
+    }
+
+    // card-member is now in the zone's pile
+    const pileIds = store.filterObjects(
+      (yMap) =>
+        yMap.get('_kind') === ObjectKind.Stack &&
+        yMap.get('_containerId') === zoneId,
+    );
+    expect(pileIds.length).toBe(1);
+    const cards = store.getObjectYMap(pileIds[0])!.get('_cards') as string[];
+    expect(cards).toContain('card-member');
+    expect(store.getObjectYMap(pileIds[0])!.get('_faceUp')).toBe(true);
   });
 });

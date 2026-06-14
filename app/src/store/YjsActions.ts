@@ -11,11 +11,13 @@ import {
   sortKeyBase,
   sortKeyWithSub,
   PARENT_ON_TOP_SUB_KEY,
+  type DiscardZoneEntry,
 } from '@cardtable2/shared';
 import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
+import { CARD_WIDTH, CARD_HEIGHT } from '../renderer/constants';
 
 /**
  * Engine Actions for Yjs-based state manipulation (M3-T2)
@@ -199,6 +201,16 @@ export function moveObjects(
 
       // Update position directly on Y.Map
       yMap.set('_pos', pos);
+
+      // Clear discard-pile membership when the object is manually moved.
+      // A card dragged out of a zone is no longer resting in its pile; discarding
+      // again must re-form the pile rather than treating the card as still there.
+      // discardCardToZone sets _containerId AFTER calling moveObjects, so clearing
+      // here is safe for the new-pile branch (it re-sets the value immediately after).
+      const currentContainerId = yMap.get('_containerId');
+      if (currentContainerId) {
+        yMap.set('_containerId', null);
+      }
 
       // Update sortKey: preserve attachment sub-key structure, replace base prefix
       if (movedIds.has(id)) {
@@ -1220,6 +1232,234 @@ export function adjustCounter(
   });
 
   return { newValue: clamped, clamped: false };
+}
+
+/**
+ * Set a stack's face-up state to an explicit value (idempotent).
+ *
+ * Unlike flipCards which toggles, this sets _faceUp unconditionally.
+ * Cards discarded to a zone always land face-up regardless of prior state.
+ *
+ * @param store - YjsStore instance
+ * @param id - Stack object ID
+ * @param faceUp - Desired face-up state
+ * @returns true if the update was applied, false if the object was missing or not a Stack
+ */
+export function setCardFaceUp(
+  store: YjsStore,
+  id: string,
+  faceUp: boolean,
+): boolean {
+  const yMap = store.getObjectYMap(id);
+  if (!yMap) {
+    console.warn(`[setCardFaceUp] Object ${id} not found`);
+    return false;
+  }
+  if (yMap.get('_kind') !== ObjectKind.Stack) {
+    console.warn(`[setCardFaceUp] Object ${id} is not a Stack`);
+    return false;
+  }
+  store.getDoc().transact(() => {
+    yMap.set('_faceUp', faceUp);
+  });
+  return true;
+}
+
+/**
+ * Find the existing pile Stack inside a discard zone.
+ *
+ * Scans all objects for a Stack whose _containerId equals zoneId.
+ * Returns the pile's object ID, or null if none exists yet.
+ */
+function findZonePile(store: YjsStore, zoneId: string): string | null {
+  let pileId: string | null = null;
+  store.forEachObject((yMap, id) => {
+    if (
+      pileId === null &&
+      yMap.get('_kind') === ObjectKind.Stack &&
+      yMap.get('_containerId') === zoneId
+    ) {
+      pileId = id;
+    }
+  });
+  return pileId;
+}
+
+/**
+ * Route a single card to its home discard zone.
+ *
+ * Steps (all in one transaction):
+ * 1. Resolve the card's home zone via findDiscardZoneForCard.
+ * 2. Extract the card from its current stack (if multi-card, unstack top card;
+ *    if single-card stack, use as-is). v1: operates on the top card of whatever
+ *    stack the card currently occupies — arbitrary middle extraction is deferred.
+ * 3. Set the extracted stack face-up.
+ * 4. Merge into the zone's existing pile (stackObjects) or move to zone and set
+ *    _containerId.
+ *
+ * @param store - YjsStore instance
+ * @param cardId - Card ID (not stack ID — looked up by membership)
+ * @returns true if routed successfully, false if card has no home zone or is not found
+ */
+export function discardCardToZone(store: YjsStore, cardId: string): boolean {
+  const zoneId = store.findDiscardZoneForCard(cardId);
+  if (!zoneId) {
+    console.warn(`[discardCardToZone] Card ${cardId} has no home zone`);
+    return false;
+  }
+
+  const zoneYMap = store.getObjectYMap(zoneId);
+  if (!zoneYMap) {
+    console.warn(`[discardCardToZone] Zone ${zoneId} not found`);
+    return false;
+  }
+  const zonePos = zoneYMap.get('_pos') as { x: number; y: number; r: number };
+
+  let extractedStackId: string | null = null;
+
+  store.getDoc().transact(() => {
+    // Find which stack currently holds this card (read inside transaction for consistency)
+    let sourceStackId: string | null = null;
+    let cardIsTopOfSource = false;
+
+    store.forEachObject((yMap, id) => {
+      if (sourceStackId !== null) return;
+      if (yMap.get('_kind') !== ObjectKind.Stack) return;
+      const cards = yMap.get('_cards');
+      if (!cards) return;
+      const idx = cards.indexOf(cardId);
+      if (idx !== -1) {
+        sourceStackId = id;
+        cardIsTopOfSource = idx === 0;
+      }
+    });
+
+    if (!sourceStackId) {
+      console.warn(`[discardCardToZone] Card ${cardId} not found in any stack`);
+      return;
+    }
+
+    const sourceCards = store
+      .getObjectYMap(sourceStackId)!
+      .get('_cards') as string[];
+    const isSingleCardStack = sourceCards.length === 1;
+
+    if (isSingleCardStack) {
+      // Already a single-card stack — use it directly
+      extractedStackId = sourceStackId;
+    } else if (cardIsTopOfSource) {
+      // Top card: unstack it to zone position (position will be overridden below)
+      extractedStackId = unstackCard(store, sourceStackId, {
+        x: zonePos.x,
+        y: zonePos.y,
+        r: 0,
+      });
+    } else {
+      // Card is not on top — swap it to top by rewriting the _cards array, then unstack
+      const sourceYMap = store.getObjectYMap(sourceStackId)!;
+      const cards = sourceYMap.get('_cards') as string[];
+      const reordered = [cardId, ...cards.filter((c) => c !== cardId)];
+      sourceYMap.set('_cards', reordered);
+      extractedStackId = unstackCard(store, sourceStackId, {
+        x: zonePos.x,
+        y: zonePos.y,
+        r: 0,
+      });
+    }
+
+    if (!extractedStackId) return;
+
+    // Ensure the extracted stack is face-up
+    const extractedYMap = store.getObjectYMap(extractedStackId)!;
+    extractedYMap.set('_faceUp', true);
+
+    const existingPileId = findZonePile(store, zoneId);
+
+    if (existingPileId && existingPileId !== extractedStackId) {
+      // Ensure the pile is face-up (stackObjects target state wins)
+      const pileYMap = store.getObjectYMap(existingPileId);
+      if (pileYMap) {
+        pileYMap.set('_faceUp', true);
+      }
+      // Merge extracted stack onto the pile
+      stackObjects(store, [extractedStackId], existingPileId);
+      // stackObjects deletes the source; the pile retains its _containerId
+    } else {
+      // No existing pile — move extracted stack into zone and mark it
+      moveObjects(store, [{ id: extractedStackId, pos: zonePos }]);
+      extractedYMap.set('_containerId', zoneId);
+    }
+  });
+
+  return extractedStackId !== null;
+}
+
+// Discard zone dimensions: slightly larger than a single card.
+const DISCARD_ZONE_WIDTH = CARD_WIDTH + 8; // 71 world-units
+const DISCARD_ZONE_HEIGHT = CARD_HEIGHT + 8; // 96 world-units
+
+// Gap between the source stack's right edge and the zone's left edge.
+const DISCARD_ZONE_GAP = 8;
+
+// X offset from source stack center to discard zone center:
+//   stack right edge + gap + half zone width
+const DISCARD_ZONE_X_OFFSET =
+  CARD_WIDTH / 2 + DISCARD_ZONE_GAP + DISCARD_ZONE_WIDTH / 2;
+
+/**
+ * Atomically create a discard zone for a stack and snapshot its membership.
+ *
+ * Creates a Zone object offset to the right of the source stack and writes a
+ * DiscardZoneEntry whose memberCardIds is a point-in-time snapshot of the
+ * stack's _cards array. Both the zone object and the membership entry land in
+ * a single doc.transact() so no partial state is visible to peers.
+ *
+ * @param store - YjsStore instance
+ * @param sourceStackId - ID of the stack to create a discard zone for
+ * @returns The new zone's ID, or null if the source is missing or not a stack
+ */
+export function createDiscardZoneForStack(
+  store: YjsStore,
+  sourceStackId: string,
+): string | null {
+  const sourceYMap = store.getObjectYMap(sourceStackId);
+  if (!sourceYMap) {
+    console.warn(
+      `[createDiscardZoneForStack] Stack ${sourceStackId} not found`,
+    );
+    return null;
+  }
+
+  if (sourceYMap.get('_kind') !== ObjectKind.Stack) {
+    console.warn(
+      `[createDiscardZoneForStack] Object ${sourceStackId} is not a stack`,
+    );
+    return null;
+  }
+
+  const sourceCards = sourceYMap.get('_cards') ?? [];
+  const sourcePos = sourceYMap.get('_pos') as Position;
+
+  let newZoneId: string | null = null;
+
+  store.getDoc().transact(() => {
+    const zoneId = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: sourcePos.x + DISCARD_ZONE_X_OFFSET, y: sourcePos.y, r: 0 },
+      meta: {
+        label: 'Discard',
+        isDiscardZone: true,
+        width: DISCARD_ZONE_WIDTH,
+        height: DISCARD_ZONE_HEIGHT,
+      },
+    });
+
+    const entry: DiscardZoneEntry = { memberCardIds: [...sourceCards] };
+    store.setDiscardZone(zoneId, entry);
+    newZoneId = zoneId;
+  });
+
+  return newZoneId;
 }
 
 /**

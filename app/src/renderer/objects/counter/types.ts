@@ -38,7 +38,12 @@ export interface CounterMeta extends Record<string, unknown> {
   min: number;
   /** Template: maximum value (clamps `currentValue`). */
   max: number;
-  /** Template: starting value used when a new instance is materialised. */
+  /**
+   * Instance: the value this counter was placed at — its reset target. Seeds
+   * `currentValue` when the instance is materialised and is what Reset returns
+   * to. Defaults to the type def's `startingValue`, but a scenario spawn's
+   * `initialValue` override captures the placed value here so Reset honours it.
+   */
   startingValue: number;
   /** Instance: current value; initialised to `startingValue` at spawn. */
   currentValue: number;

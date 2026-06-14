@@ -3398,6 +3398,25 @@ describe('YjsActions - resetCounter (ca-bbu)', () => {
     expect(readCounterMeta(id).currentValue).toBe(10);
   });
 
+  it('resets a scenario counter to its placed initialValue, not the type def 0 (ct-my2)', () => {
+    // A scenario counter spawned with initialValue=16 over a type def whose
+    // startingValue is 0 captures 16 onto the instance startingValue at spawn
+    // (see counterSpawn.buildSpawnedMeta). Reset must return to the placed
+    // value 16, not the type def's 0.
+    const id = makeCounter({
+      startingValue: 16,
+      currentValue: 16,
+      min: 0,
+      max: 99,
+    });
+    adjustCounter(store, id, -4); // currentValue = 12
+    expect(readCounterMeta(id).currentValue).toBe(12);
+
+    const result = resetCounter(store, id);
+    expect(result).toEqual({ newValue: 16, noop: false });
+    expect(readCounterMeta(id).currentValue).toBe(16);
+  });
+
   it('returns null for non-Counter kinds', () => {
     const id = createObject(store, {
       kind: ObjectKind.Token,

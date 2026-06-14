@@ -156,14 +156,17 @@ function buildSpawnedMeta(
   if (def.text !== undefined) overrides.text = def.text;
   if (def.img !== undefined) overrides.img = def.img;
 
-  // initialValue, when supplied, overrides BOTH startingValue's role as the
-  // currentValue seed and is preserved as currentValue verbatim. We do NOT
-  // overwrite startingValue itself — the template's startingValue is the
-  // record of "what the type def says"; the instance's currentValue is the
-  // record of "what we spawned at". Distinct concepts; mirrors how
-  // ct-c7c models the instance/template split.
+  // initialValue, when supplied, is the value this counter is placed at. We
+  // record it as BOTH currentValue (the live value) and startingValue (the
+  // instance's reset target). The override exists only at spawn time and
+  // cannot be recovered from the type def later, so capturing it onto the
+  // instance's startingValue is what lets Reset return to the placed value
+  // (e.g. 16) rather than the type def's startingValue (e.g. 0). When
+  // initialValue is omitted, startingValue stays def.startingValue (set
+  // above) and createCounterMeta seeds currentValue from it.
   if (spawn.initialValue !== undefined) {
     overrides.currentValue = spawn.initialValue;
+    overrides.startingValue = spawn.initialValue;
   }
 
   return createCounterMeta(overrides);

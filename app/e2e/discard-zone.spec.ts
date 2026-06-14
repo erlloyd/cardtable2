@@ -223,4 +223,141 @@ test.describe('Discard Zone — store-level loop', () => {
     expect(result[0].cardCount).toBe(2);
     expect(result[0].faceUp).toBe(true);
   });
+
+  test('discard → drag card out → X re-discards (not just flip in place)', async ({
+    page,
+  }) => {
+    // Regression for ct-g69: after a card was discarded and then dragged out of
+    // the zone, pressing X a second time must re-route the card back to the
+    // zone pile (containerId re-set), not merely set _faceUp=true in place.
+    await page.evaluate(() => {
+      const g = globalThis as unknown as PageGlobals;
+      const store = g.__TEST_STORE__!;
+
+      store.setObject('e2e-redisc-stack', {
+        _kind: 'stack',
+        _pos: { x: 0, y: 0, r: 0 },
+        _sortKey: '000001',
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: {},
+        _cards: ['e2e-redisc-card'],
+        _faceUp: false,
+      });
+      store.setObject('e2e-redisc-zone', {
+        _kind: 'zone',
+        _pos: { x: 75, y: 0, r: 0 },
+        _sortKey: '000000',
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: { isDiscardZone: true, label: 'Discard', width: 71, height: 96 },
+      });
+      store.setDiscardZone('e2e-redisc-zone', {
+        memberCardIds: ['e2e-redisc-card'],
+      });
+    });
+
+    // Step 1: Select the source stack and discard (X)
+    await page.evaluate(async () => {
+      const g = globalThis as unknown as PageGlobals;
+      g.__ctTest!.click({ x: 0, y: 0 });
+      await g.__TEST_BOARD__!.waitForSelectionSettled();
+    });
+    await page.keyboard.press('x');
+    await page.evaluate(async () => {
+      await (
+        globalThis as unknown as PageGlobals
+      ).__TEST_BOARD__!.waitForRenderer();
+    });
+
+    // Verify card landed in the zone with containerId set
+    const afterFirstDiscard = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      const all = store.getAllObjects();
+      for (const [, obj] of all) {
+        if (
+          obj._kind === 'stack' &&
+          obj._containerId === 'e2e-redisc-zone' &&
+          obj._cards?.includes('e2e-redisc-card')
+        ) {
+          return {
+            found: true,
+            containerId: obj._containerId,
+            faceUp: obj._faceUp,
+          };
+        }
+      }
+      return { found: false, containerId: null, faceUp: null };
+    });
+    expect(afterFirstDiscard.found).toBe(true);
+    expect(afterFirstDiscard.containerId).toBe('e2e-redisc-zone');
+    expect(afterFirstDiscard.faceUp).toBe(true);
+
+    // Step 2: Drag the pile OUT of the zone to a different position
+    await page.evaluate(async () => {
+      const g = globalThis as unknown as PageGlobals;
+      // Pile is now at zone position (75, 0); drag it far away
+      await g.__ctTest!.drag({ x: 75, y: 0 }, { x: -150, y: 0 }, { steps: 10 });
+      await g.__TEST_BOARD__!.waitForRenderer();
+    });
+
+    // Verify containerId was cleared after drag-out
+    const afterDragOut = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      const all = store.getAllObjects();
+      for (const [, obj] of all) {
+        if (obj._kind === 'stack' && obj._cards?.includes('e2e-redisc-card')) {
+          return { containerId: obj._containerId, pos: obj._pos };
+        }
+      }
+      return { containerId: 'NOT_FOUND', pos: null };
+    });
+    // _containerId must be null after drag-out — the fix clears it in moveObjects
+    expect(afterDragOut.containerId).toBeNull();
+
+    // Step 3: Select the dragged-out pile and press X again
+    await page.evaluate(async () => {
+      const g = globalThis as unknown as PageGlobals;
+      // Pile is now at (-150, 0) after drag-out
+      g.__ctTest!.click({ x: -150, y: 0 });
+      await g.__TEST_BOARD__!.waitForSelectionSettled();
+    });
+    await page.keyboard.press('x');
+    await page.evaluate(async () => {
+      await (
+        globalThis as unknown as PageGlobals
+      ).__TEST_BOARD__!.waitForRenderer();
+    });
+
+    // Verify the card re-discarded to the zone (not just flipped in place)
+    const afterRediscard = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      const all = store.getAllObjects();
+      for (const [, obj] of all) {
+        if (
+          obj._kind === 'stack' &&
+          obj._containerId === 'e2e-redisc-zone' &&
+          obj._cards?.includes('e2e-redisc-card')
+        ) {
+          return {
+            found: true,
+            containerId: obj._containerId,
+            faceUp: obj._faceUp,
+            pos: obj._pos,
+          };
+        }
+      }
+      return { found: false, containerId: null, faceUp: null, pos: null };
+    });
+
+    // Card must be back in the zone (containerId re-set), face-up, at zone position
+    expect(afterRediscard.found).toBe(true);
+    expect(afterRediscard.containerId).toBe('e2e-redisc-zone');
+    expect(afterRediscard.faceUp).toBe(true);
+    // Card must be at the zone position, not at the drag-out position
+    expect(afterRediscard.pos).not.toBeNull();
+    expect((afterRediscard.pos as { x: number; y: number }).x).toBe(75);
+  });
 });

@@ -9,7 +9,7 @@
  * Strategy:
  * - Seed stacks via __TEST_STORE__.setObject (deterministic ids)
  * - Seed zone membership via __TEST_STORE__.setDiscardZone
- * - Select a stack via __ctTest.tap (canvas pointer event)
+ * - Select a stack via __ctTest.click (canvas pointer event)
  * - Trigger 'Discard' action via keyboard shortcut 'X'
  * - Assert via __TEST_STORE__ that card landed face-up in the zone's pile
  */
@@ -48,8 +48,7 @@ interface PageTestBoard {
 }
 
 interface PageCtTest {
-  tap: (worldX: number, worldY: number) => Promise<void>;
-  resetCamera: () => void;
+  click: (pt: { x: number; y: number }) => void;
 }
 
 interface PageGlobals {
@@ -57,9 +56,6 @@ interface PageGlobals {
   __TEST_BOARD__?: PageTestBoard;
   __ctTest?: PageCtTest;
 }
-
-const STACK_KIND = 'stack';
-const ZONE_KIND = 'zone';
 
 async function waitForReady(page: Parameters<typeof test>[1]['page']) {
   await expect(page.locator('text=Store: ✓ Ready')).toBeVisible({
@@ -94,7 +90,7 @@ test.describe('Discard Zone — store-level loop', () => {
       const store = g.__TEST_STORE__!;
 
       store.setObject('e2e-source-stack', {
-        _kind: STACK_KIND,
+        _kind: 'stack',
         _pos: { x: 0, y: 0, r: 0 },
         _sortKey: '000001',
         _locked: false,
@@ -105,7 +101,7 @@ test.describe('Discard Zone — store-level loop', () => {
         _faceUp: false,
       });
       store.setObject('e2e-zone', {
-        _kind: ZONE_KIND,
+        _kind: 'zone',
         _pos: { x: 420, y: 0, r: 0 },
         _sortKey: '000002',
         _locked: false,
@@ -116,11 +112,10 @@ test.describe('Discard Zone — store-level loop', () => {
       store.setDiscardZone('e2e-zone', { memberCardIds: ['e2e-card-a'] });
     });
 
-    // Select the source stack via canvas tap
+    // Select the source stack via canvas click
     await page.evaluate(async () => {
       const g = globalThis as unknown as PageGlobals;
-      g.__ctTest!.resetCamera();
-      await g.__ctTest!.tap(0, 0);
+      g.__ctTest!.click({ x: 0, y: 0 });
       await g.__TEST_BOARD__!.waitForSelectionSettled();
     });
 
@@ -138,7 +133,7 @@ test.describe('Discard Zone — store-level loop', () => {
       const all = store.getAllObjects();
       for (const [, obj] of all) {
         if (
-          obj._kind === STACK_KIND &&
+          obj._kind === 'stack' &&
           obj._containerId === 'e2e-zone' &&
           obj._cards?.includes('e2e-card-a') &&
           obj._faceUp === true
@@ -158,7 +153,7 @@ test.describe('Discard Zone — store-level loop', () => {
       const store = g.__TEST_STORE__!;
 
       store.setObject('e2e-source-stack2', {
-        _kind: STACK_KIND,
+        _kind: 'stack',
         _pos: { x: 0, y: 0, r: 0 },
         _sortKey: '000001',
         _locked: false,
@@ -169,7 +164,7 @@ test.describe('Discard Zone — store-level loop', () => {
         _faceUp: false,
       });
       store.setObject('e2e-zone2', {
-        _kind: ZONE_KIND,
+        _kind: 'zone',
         _pos: { x: 420, y: 0, r: 0 },
         _sortKey: '000002',
         _locked: false,
@@ -185,8 +180,7 @@ test.describe('Discard Zone — store-level loop', () => {
     // Discard top card (e2e-card-1)
     await page.evaluate(async () => {
       const g = globalThis as unknown as PageGlobals;
-      g.__ctTest!.resetCamera();
-      await g.__ctTest!.tap(0, 0);
+      g.__ctTest!.click({ x: 0, y: 0 });
       await g.__TEST_BOARD__!.waitForSelectionSettled();
     });
     await page.keyboard.press('x');
@@ -199,7 +193,7 @@ test.describe('Discard Zone — store-level loop', () => {
     // Discard second card (e2e-card-2 is now top)
     await page.evaluate(async () => {
       const g = globalThis as unknown as PageGlobals;
-      await g.__ctTest!.tap(0, 0);
+      g.__ctTest!.click({ x: 0, y: 0 });
       await g.__TEST_BOARD__!.waitForSelectionSettled();
     });
     await page.keyboard.press('x');
@@ -214,7 +208,7 @@ test.describe('Discard Zone — store-level loop', () => {
       const all = store.getAllObjects();
       const piles: { cardCount: number; faceUp: boolean }[] = [];
       for (const [, obj] of all) {
-        if (obj._kind === STACK_KIND && obj._containerId === 'e2e-zone2') {
+        if (obj._kind === 'stack' && obj._containerId === 'e2e-zone2') {
           piles.push({
             cardCount: obj._cards?.length ?? 0,
             faceUp: obj._faceUp ?? false,

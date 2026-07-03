@@ -55,14 +55,6 @@ const mockPack1: AssetPack = {
       size: 'medium',
     },
   },
-  counters: {
-    threat: {
-      label: 'Threat',
-      min: 0,
-      max: 99,
-      start: 5,
-    },
-  },
   mats: {
     playmat: {
       image: 'playmat.jpg',
@@ -103,7 +95,7 @@ const mockContent: GameAssets = {
   },
   cardSets: mockPack1.cardSets ?? {},
   tokens: mockPack1.tokens ?? {},
-  counters: mockPack1.counters ?? {},
+  counters: {},
   mats: mockPack1.mats ?? {},
   tokenTypes: {},
   statusTypes: {},
@@ -391,31 +383,6 @@ describe('instantiateScenario', () => {
     expect(token._meta.label).toBe('Damage Token');
   });
 
-  it('should instantiate counter', () => {
-    const scenario: Scenario = {
-      schema: 'ct-scenario@2',
-      id: 'test',
-      name: 'Test',
-      version: '1.0.0',
-      packs: [],
-      componentSet: {
-        counters: [{ ref: 'threat', label: 'Threat Counter' }],
-      },
-    };
-
-    const objects = instantiateScenario(scenario, mockContent);
-
-    expect(objects.size).toBe(1);
-    const counter = [...objects.values()][0];
-
-    expect(counter._kind).toBe(ObjectKind.Counter);
-    expect(counter._meta.counterRef).toBe('threat');
-    expect(counter._meta.label).toBe('Threat Counter');
-    expect(counter._meta.value).toBe(5);
-    expect(counter._meta.min).toBe(0);
-    expect(counter._meta.max).toBe(99);
-  });
-
   it('should instantiate mat', () => {
     const scenario: Scenario = {
       schema: 'ct-scenario@2',
@@ -498,18 +465,16 @@ describe('instantiateScenario', () => {
           },
         ],
         tokens: [{ ref: 'damage' }],
-        counters: [{ ref: 'threat' }],
       },
     };
 
     const objects = instantiateScenario(scenario, mockContent);
 
-    expect(objects.size).toBe(3);
+    expect(objects.size).toBe(2);
 
     const kinds = [...objects.values()].map((o) => o._kind);
     expect(kinds).toContain(ObjectKind.Stack);
     expect(kinds).toContain(ObjectKind.Token);
-    expect(kinds).toContain(ObjectKind.Counter);
   });
 
   it('should set common object properties', () => {

@@ -2,7 +2,6 @@ import type {
   ComponentSet,
   ComponentSetStack,
   ComponentSetToken,
-  ComponentSetCounter,
   ComponentSetMat,
   ComponentSetZone,
   GameAssets,
@@ -26,7 +25,6 @@ import { calculateRowLayout, type LayoutItem } from './componentSetLayout';
 export interface ResolvedComponentSet {
   stacks?: ResolvedComponentSetStack[];
   tokens?: ComponentSetToken[];
-  counters?: ComponentSetCounter[];
   mats?: ComponentSetMat[];
   zones?: ComponentSetZone[];
 }
@@ -69,10 +67,6 @@ export function resolveComponentSet(
 
   if (set.tokens) {
     resolved.tokens = [...set.tokens];
-  }
-
-  if (set.counters) {
-    resolved.counters = [...set.counters];
   }
 
   if (set.mats) {
@@ -150,12 +144,11 @@ function generateSortKey(index: number): string {
 // Default dimensions for layout spacing
 const DEFAULT_STACK_SIZE: [number, number] = [180, 252];
 const DEFAULT_TOKEN_SIZE: [number, number] = [64, 64];
-const DEFAULT_COUNTER_SIZE: [number, number] = [64, 64];
 const DEFAULT_MAT_SIZE: [number, number] = [400, 250];
 const DEFAULT_ZONE_SIZE: [number, number] = [100, 140];
 
 interface LayoutEntry {
-  type: 'stack' | 'token' | 'counter' | 'mat' | 'zone';
+  type: 'stack' | 'token' | 'mat' | 'zone';
   index: number; // Index within its type array
   row?: number;
 }
@@ -168,7 +161,7 @@ interface LayoutEntry {
  */
 export function instantiateComponentSet(
   set: ResolvedComponentSet,
-  gameAssets: GameAssets,
+  _gameAssets: GameAssets,
 ): Map<string, TableObject> {
   // Build flat list of items for layout calculation
   const layoutItems: LayoutItem[] = [];
@@ -193,17 +186,6 @@ export function instantiateComponentSet(
         row: set.tokens[i].row,
       });
       entries.push({ type: 'token', index: i, row: set.tokens[i].row });
-    }
-  }
-
-  if (set.counters) {
-    for (let i = 0; i < set.counters.length; i++) {
-      layoutItems.push({
-        width: DEFAULT_COUNTER_SIZE[0],
-        height: DEFAULT_COUNTER_SIZE[1],
-        row: set.counters[i].row,
-      });
-      entries.push({ type: 'counter', index: i, row: set.counters[i].row });
     }
   }
 
@@ -250,15 +232,6 @@ export function instantiateComponentSet(
       case 'token':
         obj = instantiateTokenFromDef(
           set.tokens![entry.index],
-          i,
-          pos.x,
-          pos.y,
-        );
-        break;
-      case 'counter':
-        obj = instantiateCounterFromDef(
-          set.counters![entry.index],
-          gameAssets,
           i,
           pos.x,
           pos.y,
@@ -316,32 +289,6 @@ function instantiateTokenFromDef(
     _selectedBy: null,
     _meta: { tokenRef: token.ref, label: token.label },
     _faceUp: true,
-  };
-}
-
-function instantiateCounterFromDef(
-  counter: ComponentSetCounter,
-  gameAssets: GameAssets,
-  zIndex: number,
-  x: number,
-  y: number,
-): TableObject {
-  const counterDef = gameAssets.counters[counter.ref];
-
-  return {
-    _kind: ObjectKind.Counter,
-    _containerId: null,
-    _pos: createPosition(x, y),
-    _sortKey: generateSortKey(zIndex),
-    _locked: false,
-    _selectedBy: null,
-    _meta: {
-      counterRef: counter.ref,
-      label: counter.label ?? counterDef?.label,
-      value: counter.value ?? counterDef?.start,
-      min: counterDef?.min,
-      max: counterDef?.max,
-    },
   };
 }
 

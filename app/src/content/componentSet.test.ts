@@ -30,9 +30,6 @@ const mockPack: AssetPack = {
   tokens: {
     damage: { image: 'damage.png', size: 'medium' },
   },
-  counters: {
-    threat: { label: 'Threat', min: 0, max: 99, start: 5 },
-  },
   mats: {
     playmat: { image: 'playmat.jpg', size: [1920, 1080] },
   },
@@ -44,7 +41,7 @@ const mockAssets: GameAssets = {
   cards: mockPack.cards!,
   cardSets: mockPack.cardSets!,
   tokens: mockPack.tokens!,
-  counters: mockPack.counters!,
+  counters: {},
   mats: mockPack.mats!,
   tokenTypes: {},
   statusTypes: {},
@@ -138,18 +135,6 @@ describe('resolveComponentSet', () => {
     const resolved = resolveComponentSet(set, mockAssets);
 
     expect(resolved.tokens).toEqual([{ ref: 'damage', label: 'Damage Token' }]);
-  });
-
-  it('should pass through counters unchanged', () => {
-    const set: ComponentSet = {
-      counters: [{ ref: 'threat', label: 'Threat Counter' }],
-    };
-
-    const resolved = resolveComponentSet(set, mockAssets);
-
-    expect(resolved.counters).toEqual([
-      { ref: 'threat', label: 'Threat Counter' },
-    ]);
   });
 
   it('should pass through mats unchanged', () => {
@@ -256,37 +241,6 @@ describe('instantiateComponentSet', () => {
     expect(token._faceUp).toBe(true);
   });
 
-  it('should create Counter objects', () => {
-    const set: ComponentSet = {
-      counters: [{ ref: 'threat', label: 'Threat Counter' }],
-    };
-
-    const resolved = resolveComponentSet(set, mockAssets);
-    const objects = instantiateComponentSet(resolved, mockAssets);
-
-    expect(objects.size).toBe(1);
-    const [, obj] = [...objects.entries()][0];
-
-    expect(obj._kind).toBe(ObjectKind.Counter);
-    expect(obj._meta.counterRef).toBe('threat');
-    expect(obj._meta.label).toBe('Threat Counter');
-    expect(obj._meta.value).toBe(5);
-    expect(obj._meta.min).toBe(0);
-    expect(obj._meta.max).toBe(99);
-  });
-
-  it('should override counter start value when specified', () => {
-    const set: ComponentSet = {
-      counters: [{ ref: 'threat', value: 10 }],
-    };
-
-    const resolved = resolveComponentSet(set, mockAssets);
-    const objects = instantiateComponentSet(resolved, mockAssets);
-
-    const [, obj] = [...objects.entries()][0];
-    expect(obj._meta.value).toBe(10);
-  });
-
   it('should create Mat objects', () => {
     const set: ComponentSet = {
       mats: [{ ref: 'playmat', label: 'Play Area' }],
@@ -340,7 +294,6 @@ describe('instantiateComponentSet', () => {
     const set: ComponentSet = {
       stacks: [{ label: 'Deck', faceUp: false, cards: ['01001'] }],
       tokens: [{ ref: 'damage' }],
-      counters: [{ ref: 'threat' }],
       mats: [{ ref: 'playmat' }],
       zones: [{ label: 'Zone', width: 100, height: 100 }],
     };
@@ -348,12 +301,11 @@ describe('instantiateComponentSet', () => {
     const resolved = resolveComponentSet(set, mockAssets);
     const objects = instantiateComponentSet(resolved, mockAssets);
 
-    expect(objects.size).toBe(5);
+    expect(objects.size).toBe(4);
 
     const kinds = [...objects.values()].map((o) => o._kind);
     expect(kinds).toContain(ObjectKind.Stack);
     expect(kinds).toContain(ObjectKind.Token);
-    expect(kinds).toContain(ObjectKind.Counter);
     expect(kinds).toContain(ObjectKind.Mat);
     expect(kinds).toContain(ObjectKind.Zone);
   });

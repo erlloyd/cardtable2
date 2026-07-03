@@ -295,6 +295,12 @@ export class VisualManager {
 
     // Add to world container
     worldContainer.addChild(visual);
+
+    // Zones must always render below all non-zone objects.
+    // Move zone visuals to the back of the container immediately after adding.
+    if (obj._kind === ObjectKind.Zone) {
+      worldContainer.setChildIndex(visual, 0);
+    }
   }
 
   /**

@@ -50,6 +50,17 @@ export interface AttachmentData {
 }
 
 // ============================================================================
+// Discard Zone Data
+// ============================================================================
+
+// Membership is keyed by CARD ID (not stack id) because stack ids are minted
+// fresh on every split/merge (YjsActions.ts stackObjects/unstackCard). Card ids
+// are stable across the lifetime of a card object on the table.
+export interface DiscardZoneEntry {
+  memberCardIds: string[];
+}
+
+// ============================================================================
 // Player Hand Data
 // ============================================================================
 

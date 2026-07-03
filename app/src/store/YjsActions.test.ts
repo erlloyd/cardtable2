@@ -17,6 +17,7 @@ import {
   detachAllCards,
   resetTable,
   adjustCounter,
+  resetCounter,
   createDiscardZoneForStack,
   setCardFaceUp,
   discardCardToZone,
@@ -3326,6 +3327,134 @@ describe('YjsActions - adjustCounter (ct-d2p)', () => {
       max: 10,
       startingValue: 3,
       currentValue: 5,
+    });
+  });
+});
+
+describe('YjsActions - resetCounter (ca-bbu)', () => {
+  let store: YjsStore;
+
+  beforeEach(async () => {
+    store = new YjsStore('test-table-counter-reset');
+    await store.waitForReady();
+  });
+
+  afterEach(() => {
+    if (store) {
+      store.destroy();
+    }
+  });
+
+  function makeCounter(meta: Record<string, unknown> = {}): string {
+    return createObject(store, {
+      kind: ObjectKind.Counter,
+      pos: { x: 0, y: 0, r: 0 },
+      meta,
+    });
+  }
+
+  function readCounterMeta(id: string): Record<string, unknown> {
+    const obj = toTableObject(store.getObjectYMap(id)!);
+    return obj?._meta ?? {};
+  }
+
+  it('resets currentValue back to startingValue', () => {
+    const id = makeCounter({ startingValue: 3 });
+    adjustCounter(store, id, 5); // currentValue = 8
+    expect(readCounterMeta(id).currentValue).toBe(8);
+
+    const result = resetCounter(store, id);
+    expect(result).toEqual({ newValue: 3, noop: false });
+    expect(readCounterMeta(id).currentValue).toBe(3);
+  });
+
+  it('resets a counter that has been decremented below startingValue', () => {
+    const id = makeCounter({ startingValue: 5, min: 0 });
+    adjustCounter(store, id, -3); // currentValue = 2
+    expect(readCounterMeta(id).currentValue).toBe(2);
+
+    const result = resetCounter(store, id);
+    expect(result).toEqual({ newValue: 5, noop: false });
+    expect(readCounterMeta(id).currentValue).toBe(5);
+  });
+
+  it('is a noop when currentValue already equals startingValue', () => {
+    const id = makeCounter({ startingValue: 3 });
+    const result = resetCounter(store, id);
+    expect(result).toEqual({ newValue: 3, noop: true });
+    expect(readCounterMeta(id).currentValue).toBe(3);
+  });
+
+  it('clamps startingValue to [min, max] defensively', () => {
+    // Defensive guard: a corrupt template with an out-of-bounds starting
+    // value cannot resurrect the counter into an unreachable value.
+    const id = makeCounter({ startingValue: 99, min: 0, max: 10 });
+    // The initial currentValue derives from startingValue then gets clamped
+    // somewhere? Actually no — createCounterMeta uses startingValue as the
+    // currentValue seed without clamping. Let's force a known starting
+    // currentValue and verify reset clamps.
+    adjustCounter(store, id, -100); // forces clamp to min=0
+    expect(readCounterMeta(id).currentValue).toBe(0);
+
+    const result = resetCounter(store, id);
+    // startingValue=99 is out of [0, 10]; reset target should clamp to 10.
+    expect(result).toEqual({ newValue: 10, noop: false });
+    expect(readCounterMeta(id).currentValue).toBe(10);
+  });
+
+  it('resets a scenario counter to its placed initialValue, not the type def 0 (ct-my2)', () => {
+    // A scenario counter spawned with initialValue=16 over a type def whose
+    // startingValue is 0 captures 16 onto the instance startingValue at spawn
+    // (see counterSpawn.buildSpawnedMeta). Reset must return to the placed
+    // value 16, not the type def's 0.
+    const id = makeCounter({
+      startingValue: 16,
+      currentValue: 16,
+      min: 0,
+      max: 99,
+    });
+    adjustCounter(store, id, -4); // currentValue = 12
+    expect(readCounterMeta(id).currentValue).toBe(12);
+
+    const result = resetCounter(store, id);
+    expect(result).toEqual({ newValue: 16, noop: false });
+    expect(readCounterMeta(id).currentValue).toBe(16);
+  });
+
+  it('returns null for non-Counter kinds', () => {
+    const id = createObject(store, {
+      kind: ObjectKind.Token,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+    const result = resetCounter(store, id);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for missing object', () => {
+    const result = resetCounter(store, 'no-such-id');
+    expect(result).toBeNull();
+  });
+
+  it('preserves all other meta fields when writing the reset value', () => {
+    const id = makeCounter({
+      color: 0xabcdef,
+      text: 'HP',
+      min: -5,
+      max: 10,
+      startingValue: 3,
+    });
+    adjustCounter(store, id, 4); // currentValue = 7
+    resetCounter(store, id);
+    const meta = readCounterMeta(id);
+    expect(meta).toMatchObject({
+      type: 'generic',
+      typeId: 'generic',
+      color: 0xabcdef,
+      text: 'HP',
+      min: -5,
+      max: 10,
+      startingValue: 3,
+      currentValue: 3,
     });
   });
 });

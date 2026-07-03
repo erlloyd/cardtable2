@@ -1235,6 +1235,70 @@ export function adjustCounter(
 }
 
 /**
+ * Result of a `resetCounter` call (ca-bbu).
+ */
+export interface ResetCounterResult {
+  /** Counter's value after reset — equal to `startingValue` clamped to `[min, max]`. */
+  newValue: number;
+  /**
+   * `true` when the counter was already at its starting value, so no
+   * write occurred. Mirrors `AdjustCounterResult.clamped` semantics: a
+   * "nothing changed" signal that callers may use to skip animations.
+   */
+  noop: boolean;
+}
+
+/**
+ * Reset a counter's `currentValue` back to its `startingValue` (ca-bbu).
+ *
+ * Mirrors {@link adjustCounter}'s shape: reads `_meta` directly, computes
+ * the target inside a Yjs transaction, and writes back a fully-spread
+ * `_meta` so multiplayer peers see one coherent update.
+ *
+ * `startingValue` is itself clamped to `[min, max]` defensively — a
+ * corrupt template with an out-of-bounds starting value can never
+ * resurrect the counter to an unreachable value.
+ *
+ * @param store - YjsStore instance
+ * @param id - Counter object ID
+ * @returns Result with the post-reset value and a noop flag, or `null`
+ *          when the object is missing or not a Counter.
+ */
+export function resetCounter(
+  store: YjsStore,
+  id: string,
+): ResetCounterResult | null {
+  const yMap = store.getObjectYMap(id);
+  if (!yMap) {
+    console.warn(`[resetCounter] Object ${id} not found`);
+    return null;
+  }
+
+  if (yMap.get('_kind') !== ObjectKind.Counter) {
+    console.warn(`[resetCounter] Object ${id} is not a Counter`);
+    return null;
+  }
+
+  const currentMeta = (yMap.get('_meta') as Partial<CounterMeta>) ?? {};
+  const min = currentMeta.min ?? 0;
+  const max = currentMeta.max ?? 99;
+  const startingValue = currentMeta.startingValue ?? 0;
+  const oldValue = currentMeta.currentValue ?? startingValue;
+
+  const target = Math.max(min, Math.min(max, startingValue));
+
+  if (target === oldValue) {
+    return { newValue: oldValue, noop: true };
+  }
+
+  store.getDoc().transact(() => {
+    yMap.set('_meta', { ...currentMeta, currentValue: target });
+  });
+
+  return { newValue: target, noop: false };
+}
+
+/**
  * Set a stack's face-up state to an explicit value (idempotent).
  *
  * Unlike flipCards which toggles, this sets _faceUp unconditionally.

@@ -58,9 +58,12 @@ describe('instantiateCounterSpawn', () => {
     expect(meta.color).toBe(validDef.color);
     expect(meta.min).toBe(validDef.min);
     expect(meta.max).toBe(validDef.max);
-    expect(meta.startingValue).toBe(validDef.startingValue);
-    // initialValue overrides currentValue, but startingValue stays the template's.
+    // initialValue is the value this counter is placed at: it seeds BOTH
+    // currentValue (live value) and startingValue (the instance's reset
+    // target), so Reset returns here rather than to the type def's
+    // startingValue. See ct-my2.
     expect(meta.currentValue).toBe(7);
+    expect(meta.startingValue).toBe(7);
     expect(meta.text).toBe('DMG');
   });
 

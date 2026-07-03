@@ -204,13 +204,6 @@ export interface TokenDef {
   label?: string; // Optional display label
 }
 
-/** Counter definition — references a counter in the asset pack */
-export interface CounterDef {
-  ref: string; // Key in asset pack's `counters`
-  label?: string; // Optional display label
-  value?: number; // Override starting value (defaults to counter's `start`)
-}
-
 /** Mat definition — references a mat in the asset pack */
 export interface MatDef {
   ref: string; // Key in asset pack's `mats`
@@ -240,10 +233,6 @@ export interface ComponentSetToken extends TokenDef {
   row?: number;
 }
 
-export interface ComponentSetCounter extends CounterDef {
-  row?: number;
-}
-
 export interface ComponentSetMat extends MatDef {
   row?: number;
 }
@@ -256,7 +245,6 @@ export interface ComponentSetZone extends ZoneDef {
 export interface ComponentSet {
   stacks?: ComponentSetStack[];
   tokens?: ComponentSetToken[];
-  counters?: ComponentSetCounter[];
   mats?: ComponentSetMat[];
   zones?: ComponentSetZone[];
 }
@@ -432,8 +420,9 @@ export interface LoadableEntry<TData = unknown> {
  *
  * Note the distinction from the `Counter` asset-pack interface above:
  * `Counter` (`{label, min, max, start}`) is the *legacy* counter catalog
- * entry used by `ComponentSetCounter.ref`. `CounterTypeDef` is the
- * loadables-system payload for the typed-counter spawn flow.
+ * entry (formerly consumed by the now-removed `ComponentSetCounter.ref`
+ * path — see ct-4ky). `CounterTypeDef` is the loadables-system payload for
+ * the typed-counter spawn flow.
  */
 export interface CounterTypeDef {
   /** RGB number for the pill body (e.g. `0xf39c12`). */
@@ -516,11 +505,11 @@ export interface LayoutObject {
  * copies the template fields onto the instance, and assigns `currentValue`
  * (= `initialValue` when supplied, otherwise the type's `startingValue`).
  *
- * Distinct from `ComponentSetCounter` (legacy `ref`-based asset-pack catalog
- * entries — `Counter` interface in this file). Typed-counter spawns live on
- * the scenario root, NOT inside `componentSet`, to keep the two systems
- * legibly separated; the loadables-registry path is the forward-compatible
- * one and the asset-pack `counters` catalog is retained for back-compat.
+ * Distinct from the legacy `ref`-based asset-pack `Counter` catalog entries
+ * in this file (formerly wired up via `ComponentSetCounter`, removed in
+ * ct-4ky as dead code). Typed-counter spawns live on the scenario root, NOT
+ * inside `componentSet`, to keep the two systems legibly separated; the
+ * loadables-registry path is the forward-compatible one.
  *
  * Unknown `typeId` at load time is a non-fatal warning (the bad entry is
  * skipped, other spawns and the rest of the scenario still load).
@@ -553,9 +542,7 @@ export interface Scenario {
   /**
    * Typed counters to auto-spawn at scenario load (ct-x41). Each entry
    * references a counter type id declared by the active plugin via its
-   * `loadables[]` of `type: 'counter'`. Independent of `componentSet` —
-   * legacy `componentSet.counters` is the asset-pack-derived counter and
-   * stays untouched by this field.
+   * `loadables[]` of `type: 'counter'`. Independent of `componentSet`.
    */
   counters?: ScenarioCounterSpawn[];
 }

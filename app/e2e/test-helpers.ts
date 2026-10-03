@@ -3,8 +3,8 @@
  *
  * These helpers use `page.evaluate()` which runs code in the browser context;
  * `globalThis` is typed loosely because we cannot import type definitions
- * into the browser sandbox. The shared E2E ESLint config (see
- * `eslint.config.js`) relaxes the relevant `no-unsafe-*` rules for this
+ * into the browser sandbox. The `app/e2e/**` override in `.oxlintrc.json`
+ * relaxes the relevant `no-unsafe-*` rules for this
  * directory.
  */
 

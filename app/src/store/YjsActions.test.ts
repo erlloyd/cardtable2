@@ -461,7 +461,7 @@ describe('YjsActions - createObject', () => {
       const sourceObj = toTableObject(store.getObjectYMap(sourceId)!);
 
       // Apply the underlying Y.Doc's encoded state to a fresh store; this
-      // mirrors what the WebsocketProvider does on a remote peer.
+      // mirrors what the HocuspocusProvider does on a remote peer.
       const encoded = Y.encodeStateAsUpdate(store.getDoc());
 
       const peerStore = new YjsStore('peer-table');

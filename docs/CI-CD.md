@@ -12,12 +12,12 @@ GitHub Actions workflows and production hosting reference. Loaded on-demand — 
 
 ### `ci.yml` — Continuous Integration (all PRs)
 
-- Linting (ESLint)
-- Type checking (TypeScript)
-- Format checking (Prettier)
+- `pnpm check`: format check (oxfmt), lint (oxlint), type checking (TypeScript)
 - Unit tests (Vitest)
-- E2E tests (Playwright)
-- Build verification
+- E2E tests (Playwright; browsers are installed in-job)
+- Build verification (app only; the server has no build artifact)
+
+Every job uses the shared composite action `.github/actions/setup` (pnpm, Node from `.tool-versions`, `pnpm install --frozen-lockfile`).
 
 ### `deploy.yml` — Production deployment (main branch only)
 
@@ -42,7 +42,7 @@ GitHub Actions workflows and production hosting reference. Loaded on-demand — 
 
 Railway (https://railway.app/) is the current production platform:
 
-- WebSocket support for y-websocket backend
+- WebSocket support for the Hocuspocus sync backend
 - Automatic PR preview deployments for both app and server
 - Single platform for full-stack deployment
 - Container-based deployment using Docker

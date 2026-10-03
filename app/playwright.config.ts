@@ -24,7 +24,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Start both the vite dev server (port 3000) and the y-websocket server
+  // Start both the vite dev server (port 3000) and the Hocuspocus sync server
   // (port 3001) so multi-context tests like e2e/multiplayer-join.spec.ts can
   // synchronize across browser contexts. The Playwright cwd is `app/`, but
   // pnpm `--filter` resolves workspaces from the monorepo root regardless.

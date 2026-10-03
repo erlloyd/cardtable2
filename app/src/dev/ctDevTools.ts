@@ -24,7 +24,7 @@
  * After clearing, the in-memory `YjsStore` for the current table is
  * divorced from persistence.  We log a clear "reload the page"
  * instruction so the user gets a clean slate; reloading is the cheapest
- * correct action.  A connected y-websocket session can repopulate the
+ * correct action.  A connected sync-server session can repopulate the
  * recreated IDB from the server — that's expected; this helper clears
  * local persistence only.
  */
@@ -43,7 +43,7 @@ const DB_PREFIX = 'cardtable-';
 let warnedThisSession = false;
 
 const FIRST_CALL_WARNING =
-  '[ctDevTools] This deletes local table data.  Connected y-websocket ' +
+  '[ctDevTools] This deletes local table data.  Connected sync-server ' +
   'sessions can repopulate from the server.  Reload the page after this ' +
   'completes.';
 

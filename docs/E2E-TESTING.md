@@ -12,6 +12,17 @@ E2E tests get a clean `__TEST_STORE__` automatically via the fixture at `app/e2e
 
 This convention exists to fix the silent-fragility class where back-to-back runs on a long-running dev server inherit prior CRDT state.
 
+## Running the Suite: Shared-Port Hazard
+
+`app/playwright.config.ts` starts the vite dev server on port 3000 and the sync server on port 3001, both with `reuseExistingServer` outside CI. An E2E run therefore silently uses whatever is already listening on those ports, including a server started from another worktree, and the tests then run against that other checkout's code. Before a run, confirm both ports are free:
+
+```bash
+lsof -iTCP:3000 -sTCP:LISTEN
+lsof -iTCP:3001 -sTCP:LISTEN
+```
+
+Both commands should print nothing. Only free a port with `~/.claude/scripts/free-port <port>` if you started the listener yourself. First-run flakiness is tracked separately in ct-ajw.30.
+
 ## Pointer Events on Canvas
 
 When writing E2E tests that interact with canvas elements (especially React components with `onPointerDown/Up/Move` handlers):
@@ -145,7 +156,7 @@ window.__ctDevTools.clearAllTables(): Promise<{ deleted: string[]; failed: strin
 window.__ctDevTools.clearTable(tableId: string): Promise<void>
 ```
 
-`clearAllTables()` enumerates IDB via `indexedDB.databases()` (not implemented in Firefox — fall back to `clearTable` there) and deletes every database whose name starts with `cardtable-`. `clearTable(tableId)` deletes a single one. The first call per page session emits a `console.warn` describing the destructive shape; both entry points then log a "RELOAD THE PAGE" instruction on completion — the in-memory `YjsStore` for the current table is divorced from persistence after clearing, so reload is the cheapest correct action. A connected y-websocket session may repopulate the recreated IDB from the server; that's expected, the helper clears local persistence only.
+`clearAllTables()` enumerates IDB via `indexedDB.databases()` (not implemented in Firefox — fall back to `clearTable` there) and deletes every database whose name starts with `cardtable-`. `clearTable(tableId)` deletes a single one. The first call per page session emits a `console.warn` describing the destructive shape; both entry points then log a "RELOAD THE PAGE" instruction on completion — the in-memory `YjsStore` for the current table is divorced from persistence after clearing, so reload is the cheapest correct action. A connected sync-server session may repopulate the recreated IDB from the server; that's expected, the helper clears local persistence only.
 
 ### Verification discipline
 

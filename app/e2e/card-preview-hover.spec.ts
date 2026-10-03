@@ -208,7 +208,7 @@ test.describe('Card Preview Hover - Dismiss Path (ct-zqc)', () => {
     //
     // Under the full E2E suite (workers=2 on CI, more locally), the worker
     // thread, main thread, and React commit phase contend with other browser
-    // contexts, vite HMR housekeeping, and y-websocket dev-server traffic.
+    // contexts, vite HMR housekeeping, and sync-server traffic.
     // The dismiss eventually wins, but not always within a tight 1s window
     // (ct-uft observed a single full-suite failure where it took longer
     // than 1s; isolated and follow-up CI runs were green). Match the 2s

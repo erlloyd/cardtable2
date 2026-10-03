@@ -1,6 +1,6 @@
 # Claude Development Context
 
-Cardtable 2.0: solo-first virtual card table with optional multiplayer. Manifest-only content (no game rules in code). React 19 + TypeScript + PixiJS frontend, Node 24 + y-websocket backend, PNPM monorepo.
+Cardtable 2.0: solo-first virtual card table with optional multiplayer. Manifest-only content (no game rules in code). React 19 + TypeScript + PixiJS frontend, Node 26 + Hocuspocus backend, PNPM monorepo.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:7510c1e2 -->
 ## Beads Issue Tracker
@@ -151,17 +151,18 @@ All work goes on feature branches: `feature/{theme}-{description}` or `fix/{desc
 
 ## Code style — non-negotiable rules
 
-TypeScript strict mode, ESLint + Prettier, pre-commit hooks auto-format, pre-push hooks run typecheck.
+TypeScript strict mode, oxlint + oxfmt, pre-commit runs `pnpm check` (format check, lint, typecheck). There is no pre-push hook.
 
 ### NEVER suppress lint or type errors
 
 Suppression comments are FORBIDDEN without explicit user approval.
 
-- **NEVER** add `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments.
+- **NEVER** add `eslint-disable`, `oxlint-disable`, `@ts-ignore`, `@ts-expect-error`, or similar comments.
 - **ALWAYS** fix the underlying type/lint issue properly first.
 - Common solutions: type assertions, proper type imports, type guards and narrowing, refactoring to satisfy type safety.
 - **Only if** a proper fix is impossible: stop, ask the user for permission, explain why, wait for explicit approval.
 - Adding a suppression comment without asking first is a failure.
+- Exemption: `app/src/routeTree.gen.ts` is generated code committed per TanStack's recommendation; its generated `@ts-nocheck` / `eslint-disable` header, not hand-written, and is exempt from this rule.
 
 ### NEVER use `typeof` for internal type validation
 

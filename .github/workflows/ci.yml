@@ -10,86 +10,41 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-typecheck:
+  check:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
 
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate route tree types
-        run: pnpm --filter @cardtable2/app run generate-routes
-
-      - name: Run linting
-        run: pnpm run lint
-
-      - name: Run type checking
-        run: pnpm run typecheck
-
-      - name: Check formatting
-        run: pnpm run format:check
+      - name: Run checks
+        run: pnpm check
 
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
 
       - name: Run tests
-        run: pnpm run test
+        run: pnpm test
 
   e2e:
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.56.1-noble
-      options: --user 1001
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
 
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: pnpm --filter @cardtable2/app exec playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: cd app && pnpm run test:e2e
+        run: pnpm --filter @cardtable2/app run test:e2e
 
       - name: Upload Playwright Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -100,35 +55,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
 
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build app
-        run: pnpm --filter @cardtable2/app build
-
-      - name: Build server
-        run: pnpm --filter @cardtable2/server build
+      - name: Build
+        run: pnpm build
 
       - name: Upload app artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-dist
           path: app/dist/
-
-      - name: Upload server artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-dist
-          path: server/dist/

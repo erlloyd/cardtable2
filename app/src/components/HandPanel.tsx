@@ -1,4 +1,11 @@
-import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
 import type { Card, GameAssets } from '@cardtable2/shared';
@@ -45,6 +52,13 @@ export interface HandPanelProps {
   onPhantomDragActiveChange?: (active: boolean) => void;
 }
 
+interface HandCardsState {
+  handId: string;
+  cards: string[];
+}
+
+const NO_CARDS: string[] = [];
+
 const DRAG_SLOP = 5;
 // Cards are positioned at top: 0.75rem inside the container (12px at 16px base)
 const CARD_ROW_TOP_OFFSET = 12;
@@ -87,12 +101,13 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     },
     ref,
   ) {
-    const [cards, setCards] = useState<string[]>([]);
+    const [handCards, setHandCards] = useState<HandCardsState | null>(null);
     const [containerWidth, setContainerWidth] = useState(0);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    const [hoveredCardRect, setHoveredCardRect] = useState<DOMRect | null>(
-      null,
-    );
+    const [hoverAnchor, setHoverAnchor] = useState<{
+      x: number;
+      panelTop: number;
+    } | null>(null);
     const [phantomDrag, setPhantomDrag] = useState<PhantomDragState | null>(
       null,
     );
@@ -114,7 +129,6 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const cardsWrapperRef = useRef<HTMLDivElement>(null);
     const panelRootRef = useRef<HTMLDivElement>(null);
     const phantomDragRef = useRef<PhantomDragState | null>(null);
-    const phantomFeedbackRef = useRef<PhantomDragFeedback | null>(null);
     const lastTapTimeRef = useRef<Map<number, number>>(new Map());
     const headerSwipeRef = useRef<{
       startX: number;
@@ -124,33 +138,35 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const ghostElRef = useRef<HTMLDivElement>(null);
     const ghostPositionRef = useRef({ x: 0, y: 0 });
 
-    // Refs to keep prop/computed values accessible from imperative listeners
+    // Refs to keep prop/computed values accessible from imperative listeners.
+    // phantomDragRef is not mirrored here: the drag handlers write it in
+    // lockstep with setPhantomDrag.
     const activeHandIdRef = useRef(activeHandId);
-    activeHandIdRef.current = activeHandId;
     const storeRef = useRef(store);
-    storeRef.current = store;
     const boardRefRef = useRef(boardRef);
-    boardRefRef.current = boardRef;
     const onPhantomDragActiveChangeRef = useRef(onPhantomDragActiveChange);
-    onPhantomDragActiveChangeRef.current = onPhantomDragActiveChange;
-    // Keep refs in sync
-    phantomDragRef.current = phantomDrag;
-    phantomFeedbackRef.current = phantomDragFeedback ?? null;
+    const phantomFeedbackRef = useRef<PhantomDragFeedback | null>(null);
 
-    // Subscribe to hand changes
+    // Subscribe to hand changes. Cards are keyed by hand id so a stale hand's
+    // cards are never shown for a different (or no) active hand.
     useEffect(() => {
-      if (!store || !activeHandId) {
-        setCards([]);
-        return;
-      }
+      if (!activeHandId) return;
 
       const refresh = () => {
-        setCards(store.getHandCards(activeHandId));
+        setHandCards({
+          handId: activeHandId,
+          cards: store.getHandCards(activeHandId),
+        });
       };
 
       refresh();
       return store.onHandsChange(refresh);
     }, [store, activeHandId]);
+
+    const cards =
+      activeHandId && handCards?.handId === activeHandId
+        ? handCards.cards
+        : NO_CARDS;
 
     // Measure container width with ResizeObserver
     useEffect(() => {
@@ -196,9 +212,17 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     // (startOffset) doesn't shift when a card is dragged out.
     const fanLayout = computeFanLayout(cards.length, containerWidth);
     const fanLayoutRef = useRef(fanLayout);
-    fanLayoutRef.current = fanLayout;
     const cardsRef = useRef(cards);
-    cardsRef.current = cards;
+
+    useLayoutEffect(() => {
+      activeHandIdRef.current = activeHandId;
+      storeRef.current = store;
+      boardRefRef.current = boardRef;
+      onPhantomDragActiveChangeRef.current = onPhantomDragActiveChange;
+      phantomFeedbackRef.current = phantomDragFeedback ?? null;
+      fanLayoutRef.current = fanLayout;
+      cardsRef.current = cards;
+    });
 
     const handleCreateHand = () => {
       const name = `Hand ${handIds.length + 1}`;
@@ -217,7 +241,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const handlePlayCard = (cardIndex: number) => {
       if (!activeHandId) return;
       setHoveredIndex(null);
-      setHoveredCardRect(null);
+      setHoverAnchor(null);
       moveCardToBoard(
         store,
         activeHandId,
@@ -234,6 +258,21 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       },
       [gameAssets],
     );
+
+    // Phantom drag ghost image URL
+    const phantomGhostUrl = phantomDrag?.isDragging
+      ? getCardImageUrl(phantomDrag.cardId)
+      : null;
+
+    // Place the ghost at the pointer when it mounts; pointermove then moves it
+    // by direct DOM mutation.
+    const isGhostMounted = phantomGhostUrl !== null;
+    useLayoutEffect(() => {
+      const ghost = ghostElRef.current;
+      if (!isGhostMounted || !ghost) return;
+      ghost.style.left = `${ghostPositionRef.current.x}px`;
+      ghost.style.top = `${ghostPositionRef.current.y}px`;
+    }, [isGhostMounted]);
 
     const handleImageLoad = useCallback(
       (cardId: string, e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -335,7 +374,12 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         if (e.pointerType !== 'mouse') return;
         if (phantomDragRef.current?.isDragging) return;
         setHoveredIndex(index);
-        setHoveredCardRect(new DOMRect(e.clientX, e.clientY, 0, 0));
+        setHoverAnchor({
+          x: e.clientX,
+          panelTop:
+            panelRootRef.current?.getBoundingClientRect().top ??
+            window.innerHeight,
+        });
       },
       [],
     );
@@ -343,7 +387,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const handleCardPointerLeave = useCallback(() => {
       if (phantomDragRef.current?.isDragging) return;
       setHoveredIndex(null);
-      setHoveredCardRect(null);
+      setHoverAnchor(null);
     }, []);
 
     // Helper: determine drag drop target from pointer position.
@@ -446,7 +490,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
 
             // Clear hover state
             setHoveredIndex(null);
-            setHoveredCardRect(null);
+            setHoverAnchor(null);
 
             // Notify renderer and parent
             boardRefRef.current?.current?.sendRendererMessage({
@@ -632,17 +676,15 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
 
     // Hover preview position: bottom of preview 10px above hand panel top
     const PREVIEW_GAP = 10;
-    const panelTop =
-      panelRootRef.current?.getBoundingClientRect().top ?? window.innerHeight;
     const previewPosition = (() => {
-      if (hoveredIndex === null || !hoveredCardRect) return null;
+      if (hoveredIndex === null || !hoverAnchor) return null;
       const hoveredCardId = cards[hoveredIndex];
       const isLandscape = hoveredCardId && landscapeCards.has(hoveredCardId);
       const baseDims = getPreviewDimensions('medium');
       const dims = isLandscape ? getLandscapeDimensions(baseDims) : baseDims;
       return {
-        x: hoveredCardRect.x - dims.width / 2,
-        y: panelTop - PREVIEW_GAP - dims.height,
+        x: hoverAnchor.x - dims.width / 2,
+        y: hoverAnchor.panelTop - PREVIEW_GAP - dims.height,
       };
     })();
 
@@ -652,11 +694,6 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       hoveredCardCode && gameAssets
         ? (gameAssets.cards[hoveredCardCode] ?? null)
         : null;
-
-    // Phantom drag ghost image URL
-    const phantomGhostUrl = phantomDrag?.isDragging
-      ? getCardImageUrl(phantomDrag.cardId)
-      : null;
 
     return (
       <>
@@ -857,7 +894,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                 position={previewPosition}
                 onClose={() => {
                   setHoveredIndex(null);
-                  setHoveredCardRect(null);
+                  setHoverAnchor(null);
                 }}
               />
             </div>,
@@ -868,14 +905,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         {phantomDrag?.isDragging &&
           phantomGhostUrl &&
           createPortal(
-            <div
-              ref={ghostElRef}
-              className="hand-panel__phantom-ghost"
-              style={{
-                left: `${ghostPositionRef.current.x}px`,
-                top: `${ghostPositionRef.current.y}px`,
-              }}
-            >
+            <div ref={ghostElRef} className="hand-panel__phantom-ghost">
               {phantomDrag.cardId && landscapeCards.has(phantomDrag.cardId) ? (
                 <div className="hand-panel__card-landscape">
                   <img

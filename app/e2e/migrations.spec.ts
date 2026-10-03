@@ -26,7 +26,9 @@ test.describe('Migrations (M3.5-T1)', () => {
     // Create an old-style token WITHOUT _faceUp (simulates old table)
     await page.evaluate(
       ({ tokenKind }) => {
-        declare const __TEST_STORE__: TestStore;
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: TestStore;
+        };
 
         if (!__TEST_STORE__) {
           throw new Error('Store not found - this is a test-only API');
@@ -71,7 +73,9 @@ test.describe('Migrations (M3.5-T1)', () => {
 
     // Verify the migration added _faceUp property
     const tokenAfterMigration = await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: TestStore;
+      };
       if (!__TEST_STORE__) {
         throw new Error('Store not found after reload');
       }
@@ -97,7 +101,9 @@ test.describe('Migrations (M3.5-T1)', () => {
     // Create an old-style stack WITHOUT _faceUp and _cards
     await page.evaluate(
       ({ stackKind }) => {
-        declare const __TEST_STORE__: TestStore;
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: TestStore;
+        };
 
         if (!__TEST_STORE__) {
           throw new Error('Store not found');
@@ -138,7 +144,9 @@ test.describe('Migrations (M3.5-T1)', () => {
 
     // Verify the migration added both _faceUp and _cards
     const stackAfterMigration = await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: TestStore;
+      };
       if (!__TEST_STORE__) {
         throw new Error('Store not found');
       }
@@ -168,7 +176,9 @@ test.describe('Migrations (M3.5-T1)', () => {
     // Create a token WITH _faceUp set to false (should not be changed)
     await page.evaluate(
       ({ tokenKind }) => {
-        declare const __TEST_STORE__: TestStore;
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: TestStore;
+        };
 
         if (!__TEST_STORE__) {
           throw new Error('Store not found');
@@ -201,7 +211,9 @@ test.describe('Migrations (M3.5-T1)', () => {
 
     // Verify _faceUp was NOT changed (should still be false)
     const tokenAfterMigration = await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: TestStore;
+      };
       if (!__TEST_STORE__) {
         throw new Error('Store not found');
       }
@@ -227,7 +239,9 @@ test.describe('Migrations (M3.5-T1)', () => {
     // Create multiple objects with different migration needs
     await page.evaluate(
       ({ tokenKind, stackKind }) => {
-        declare const __TEST_STORE__: TestStore;
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: TestStore;
+        };
 
         if (!__TEST_STORE__) {
           throw new Error('Store not found');
@@ -303,7 +317,9 @@ test.describe('Migrations (M3.5-T1)', () => {
 
     // Verify migration results
     const objects = await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: TestStore;
+      };
       if (!__TEST_STORE__) {
         throw new Error('Store not found');
       }

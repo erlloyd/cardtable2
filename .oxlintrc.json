@@ -1,0 +1,119 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/.vite/**",
+    "**/routeTree.gen.ts"
+  ],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": "error",
+    "react/jsx-key": "error",
+    "react/no-unescaped-entities": "error",
+    "react/hooks": "off",
+    "react/refs": "warn",
+    "react/purity": "warn",
+    "react/set-state-in-effect": "warn",
+    "react/set-state-in-render": "error",
+    "react/preserve-manual-memoization": "warn",
+    "react/immutability": "error",
+    "react/static-components": "error",
+    "react/use-memo": "error",
+    "react/error-boundaries": "error",
+    "typescript/no-explicit-any": "warn",
+    "typescript/ban-ts-comment": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/restrict-plus-operands": "error",
+    "typescript/require-await": "error",
+    "typescript/only-throw-error": "error",
+    "typescript/prefer-promise-reject-errors": "error",
+    "typescript/no-deprecated": "off",
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "disallowTypeAnnotations": true
+      }
+    ],
+    "eslint/preserve-caught-error": "error",
+    "eslint/no-useless-assignment": "error",
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_"
+      }
+    ],
+    "eslint/no-empty": "error",
+    "eslint/no-case-declarations": "error",
+    "eslint/no-prototype-builtins": "error",
+    "eslint/no-fallthrough": "error",
+    "eslint/prefer-const": "error",
+    "eslint/no-var": "error",
+    "eslint/no-undef": "off",
+    "eslint/no-array-constructor": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-enum-comparison": "error"
+  },
+  "overrides": [
+    {
+      "files": ["app/e2e/**"],
+      "rules": {
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-explicit-any": "off",
+        "typescript/restrict-template-expressions": "off",
+        "typescript/require-await": "off",
+        "react/rules-of-hooks": "off"
+      }
+    },
+    {
+      "files": ["app/src/routes/**"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.{ts,tsx}"],
+      "rules": {
+        "typescript/unbound-method": "off"
+      }
+    },
+    {
+      "files": ["server/**"],
+      "env": {
+        "browser": false,
+        "node": true
+      },
+      "rules": {
+        "typescript/no-base-to-string": "off"
+      }
+    }
+  ]
+}

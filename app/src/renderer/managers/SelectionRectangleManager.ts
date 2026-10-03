@@ -1,4 +1,5 @@
-import { Graphics, Container } from 'pixi.js';
+import type { Container } from 'pixi.js';
+import { Graphics } from 'pixi.js';
 
 /**
  * SelectionRectangleManager - Manages rectangle selection state and visuals.

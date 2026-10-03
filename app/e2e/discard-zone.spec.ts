@@ -14,6 +14,7 @@
  * - Assert via __TEST_STORE__ that card landed face-up in the zone's pile
  */
 
+import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 
 interface PageTestStore {
@@ -49,6 +50,11 @@ interface PageTestBoard {
 
 interface PageCtTest {
   click: (pt: { x: number; y: number }) => void;
+  drag: (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    opts?: { steps?: number },
+  ) => Promise<void>;
 }
 
 interface PageGlobals {
@@ -57,7 +63,7 @@ interface PageGlobals {
   __ctTest?: PageCtTest;
 }
 
-async function waitForReady(page: Parameters<typeof test>[1]['page']) {
+async function waitForReady(page: Page) {
   await expect(page.locator('text=Store: ✓ Ready')).toBeVisible({
     timeout: 10000,
   });

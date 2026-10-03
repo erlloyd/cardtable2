@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { YjsStore } from '../store/YjsStore';
+import type { YjsStore } from '../store/YjsStore';
 import {
   createObject,
   clearAllSelections,

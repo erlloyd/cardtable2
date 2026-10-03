@@ -153,6 +153,7 @@ export function useTestAPI(
         delete window.__TEST_BOARD__;
       };
     }
+    return undefined;
   }, [
     showDebugUI,
     waitForRenderer,

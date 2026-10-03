@@ -2734,14 +2734,11 @@ describe('Concurrent Operations', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Simulate two actors unstacking concurrently
-      let newStack1: string | null = null;
-      let newStack2: string | null = null;
-
       // First unstack (should succeed)
-      newStack1 = unstackCard(store, stackId, { x: 200, y: 100, r: 0 });
+      const newStack1 = unstackCard(store, stackId, { x: 200, y: 100, r: 0 });
 
       // Second unstack (should also succeed - different top card now)
-      newStack2 = unstackCard(store, stackId, { x: 300, y: 100, r: 0 });
+      const newStack2 = unstackCard(store, stackId, { x: 300, y: 100, r: 0 });
 
       // Both operations should succeed
       expect(newStack1).not.toBeNull();

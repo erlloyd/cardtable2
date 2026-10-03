@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AnimationManager, Easing } from './AnimationManager';
-import { Application, Container } from 'pixi.js';
+import type { Application, Container } from 'pixi.js';
 
 describe('AnimationManager', () => {
   let animationManager: AnimationManager;

@@ -47,8 +47,9 @@ test.describe('State Persistence (M3-T1)', () => {
     // This simulates what will happen when the user interacts with the UI in M3-T2
     await page.evaluate(
       ({ stackKind, tokenKind }) => {
-        // Declare the global test store for TypeScript (exists in browser via window)
-        declare const __TEST_STORE__: TestStore;
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: TestStore;
+        };
 
         if (!__TEST_STORE__) {
           throw new Error('Store not found - this is a test-only API');
@@ -105,7 +106,9 @@ test.describe('State Persistence (M3-T1)', () => {
 
     // Verify we can still access the objects via the store
     const objectIds = await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: TestStore;
+      };
       if (!__TEST_STORE__) {
         throw new Error('Store not found after reload');
       }
@@ -119,7 +122,9 @@ test.describe('State Persistence (M3-T1)', () => {
     // Mid-test clear verifies clearAllObjects() works on a populated table
     // (the fixture's auto-clear runs only on navigation, so this is meaningful).
     await page.evaluate(() => {
-      declare const __TEST_STORE__: TestStore;
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: TestStore;
+      };
       if (__TEST_STORE__) {
         __TEST_STORE__.clearAllObjects();
       }
@@ -146,7 +151,9 @@ test.describe('State Persistence (M3-T1)', () => {
     // Add object to first table
     await page.evaluate(
       ({ tokenKind }) => {
-        declare const __TEST_STORE__: TestStore;
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: TestStore;
+        };
         if (!__TEST_STORE__) {
           throw new Error('Store not found');
         }

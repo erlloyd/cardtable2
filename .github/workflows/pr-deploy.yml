@@ -5,8 +5,8 @@ on:
 
 permissions:
   contents: read
-  packages: write  # Needed to push Docker images to GHCR
-  deployments: write  # Needed to update deployment status
+  packages: write # Needed to push Docker images to GHCR
+  deployments: write # Needed to update deployment status
 
 jobs:
   check-changes:

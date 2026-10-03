@@ -86,7 +86,7 @@ class MockWorker {
 
     // Simulate worker ready message
     setTimeout(() => {
-      this.simulateMessage({ type: 'ready' } as RendererToMainMessage);
+      this.simulateMessage({ type: 'ready' });
     }, 0);
   }
 
@@ -103,7 +103,7 @@ class MockWorker {
           this.simulateMessage({
             type: 'pong',
             data: `Pong! Received: ${msg.data}`,
-          } as RendererToMainMessage);
+          });
         } else if (msg.type === 'echo') {
           this.simulateMessage({
             type: 'echo-response',
@@ -113,7 +113,7 @@ class MockWorker {
           // Simulate canvas initialization
           this.simulateMessage({
             type: 'initialized',
-          } as RendererToMainMessage);
+          });
         }
       }
     }, 0);
@@ -167,9 +167,8 @@ class MockWorker {
 
 // Mock the renderer factory to use worker mode with MockWorker
 vi.mock('../renderer/RendererFactory', async () => {
-  const { WorkerRendererAdapter } = await import(
-    '../renderer/WorkerRendererAdapter'
-  );
+  const { WorkerRendererAdapter } =
+    await import('../renderer/WorkerRendererAdapter');
   const { RenderMode } = await import('../renderer/IRendererAdapter');
   return {
     RenderMode,
@@ -775,7 +774,7 @@ describe('Board', () => {
               borderBoxSize: [],
               contentBoxSize: [],
               devicePixelContentBoxSize: [],
-            } as ResizeObserverEntry,
+            },
           ],
           {} as ResizeObserver,
         );

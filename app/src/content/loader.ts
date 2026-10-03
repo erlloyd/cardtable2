@@ -37,7 +37,10 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
       url,
       error: message,
     });
-    throw new Error(`Network error loading asset pack from ${url}: ${message}`);
+    throw new Error(
+      `Network error loading asset pack from ${url}: ${message}`,
+      { cause: error },
+    );
   }
 
   if (!response.ok) {
@@ -62,7 +65,9 @@ export async function loadAssetPack(url: string): Promise<AssetPack> {
       url,
       error: message,
     });
-    throw new Error(`Invalid JSON in asset pack from ${url}: ${message}`);
+    throw new Error(`Invalid JSON in asset pack from ${url}: ${message}`, {
+      cause: error,
+    });
   }
 
   return validateAssetPack(data, url);
@@ -85,7 +90,9 @@ export function loadAssetPackFromString(
       source,
       error: message,
     });
-    throw new Error(`Invalid JSON in asset pack from ${source}: ${message}`);
+    throw new Error(`Invalid JSON in asset pack from ${source}: ${message}`, {
+      cause: error,
+    });
   }
 
   return validateAssetPack(data, source);
@@ -163,7 +170,9 @@ export async function loadScenario(url: string): Promise<Scenario> {
       url,
       error: message,
     });
-    throw new Error(`Network error loading scenario from ${url}: ${message}`);
+    throw new Error(`Network error loading scenario from ${url}: ${message}`, {
+      cause: error,
+    });
   }
 
   if (!response.ok) {
@@ -188,7 +197,9 @@ export async function loadScenario(url: string): Promise<Scenario> {
       url,
       error: message,
     });
-    throw new Error(`Invalid JSON in scenario from ${url}: ${message}`);
+    throw new Error(`Invalid JSON in scenario from ${url}: ${message}`, {
+      cause: error,
+    });
   }
 
   return validateScenario(data);
@@ -211,7 +222,9 @@ export function loadScenarioFromString(
       source,
       error: message,
     });
-    throw new Error(`Invalid JSON in scenario from ${source}: ${message}`);
+    throw new Error(`Invalid JSON in scenario from ${source}: ${message}`, {
+      cause: error,
+    });
   }
 
   return validateScenario(data);

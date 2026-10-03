@@ -1,6 +1,6 @@
 import type { Application, Container } from 'pixi.js';
 import type { WheelEventData } from '@cardtable2/shared';
-import { CoordinateConverter } from './CoordinateConverter';
+import type { CoordinateConverter } from './CoordinateConverter';
 
 /**
  * CameraManager - Handles camera zoom and pan operations.

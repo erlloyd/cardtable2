@@ -19,18 +19,17 @@ describe('ctTest', () => {
     // Simulate a 1000x800 canvas positioned at viewport (100, 50).
     Object.defineProperty(canvas, 'clientWidth', { value: 1000 });
     Object.defineProperty(canvas, 'clientHeight', { value: 800 });
-    canvas.getBoundingClientRect = () =>
-      ({
-        left: 100,
-        top: 50,
-        right: 1100,
-        bottom: 850,
-        width: 1000,
-        height: 800,
-        x: 100,
-        y: 50,
-        toJSON: () => ({}),
-      }) as DOMRect;
+    canvas.getBoundingClientRect = () => ({
+      left: 100,
+      top: 50,
+      right: 1100,
+      bottom: 850,
+      width: 1000,
+      height: 800,
+      x: 100,
+      y: 50,
+      toJSON: () => ({}),
+    });
     document.body.appendChild(canvas);
 
     received = [];
@@ -228,18 +227,17 @@ describe('ctTest — DPR=2 (ct-kiu.6 regression)', () => {
       value: 2260,
       configurable: true,
     });
-    canvas.getBoundingClientRect = () =>
-      ({
-        left: 0,
-        top: 0,
-        right: 1200,
-        bottom: 565,
-        width: 1200,
-        height: 565,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
+    canvas.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      right: 1200,
+      bottom: 565,
+      width: 1200,
+      height: 565,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
     document.body.appendChild(canvas);
 
     received = [];

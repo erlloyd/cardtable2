@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Application, Container, Text } from 'pixi.js';
+import type { Application } from 'pixi.js';
+import { Container, Text } from 'pixi.js';
 import { VisualManager } from './VisualManager';
 import { RenderMode } from '../IRendererAdapter';
 

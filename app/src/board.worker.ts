@@ -22,7 +22,7 @@ try {
     type: 'error',
     error: `DOMAdapter setup failed: ${error instanceof Error ? error.message : String(error)}`,
     context: 'worker-init',
-  } as RendererToMainMessage);
+  });
 }
 
 /**
@@ -54,10 +54,10 @@ self.addEventListener(
         type: 'error',
         error: `Unhandled worker error: ${errorMsg}`,
         context: 'worker',
-      } as RendererToMainMessage);
+      });
     });
   },
 );
 
 // Send ready message when worker initializes
-self.postMessage({ type: 'ready' } as RendererToMainMessage);
+self.postMessage({ type: 'ready' });

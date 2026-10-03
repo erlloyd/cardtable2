@@ -33,7 +33,7 @@ export function detectCapabilities(): RendererCapabilities {
       'function';
 
   // Check for WebGL support
-  let hasWebGL = false;
+  let hasWebGL: boolean;
   try {
     const canvas = document.createElement('canvas');
     hasWebGL = !!canvas.getContext('webgl') || !!canvas.getContext('webgl2');

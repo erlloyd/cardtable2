@@ -1,5 +1,5 @@
-import { Application, Container, Graphics, BlurFilter, Text } from 'pixi.js';
-import type { TextOptions } from 'pixi.js';
+import { Container, Graphics, BlurFilter, Text } from 'pixi.js';
+import type { TextOptions, Application } from 'pixi.js';
 import type { TableObject, GameAssets } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
 import { getBehaviors } from '../objects';

@@ -12,7 +12,7 @@ export function isStackObject(obj: TableObject): obj is StackObject {
 
 /** Full Stack object type with required fields */
 export interface StackObject extends TableObject {
-  _kind: ObjectKind.Stack;
+  _kind: typeof ObjectKind.Stack;
   _cards: string[];
   _faceUp: boolean;
 }

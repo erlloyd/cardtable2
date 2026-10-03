@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AnimationManager } from '../../managers/AnimationManager';
-import { Application, Container } from 'pixi.js';
+import type { Application, Container } from 'pixi.js';
 import { animateShuffleBurstBackgroundWobble } from './burst-background-wobble';
 import { animateShuffleWobble } from './wobble';
 

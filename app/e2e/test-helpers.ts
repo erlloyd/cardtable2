@@ -24,8 +24,8 @@ export async function dumpDebugState(page: Page, label: string): Promise<void> {
     }
 
     const objects = __TEST_STORE__.getAllObjects();
-    const objectsArray = Array.from(objects.entries()).map(
-      ([id, obj]: [string, any]) => ({
+    const objectsArray = Array.from<[string, any]>(objects.entries()).map(
+      ([id, obj]) => ({
         id,
         kind: obj._kind,
         pos: obj._pos,

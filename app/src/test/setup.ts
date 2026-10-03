@@ -31,4 +31,4 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {
     // Mock implementation
   }
-} as unknown as MockResizeObserverConstructor;
+};

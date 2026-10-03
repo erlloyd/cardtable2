@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { CARDTABLE_VERSION } from '@cardtable2/shared';
+import type { Config } from 'unique-names-generator';
 import {
   uniqueNamesGenerator,
   adjectives,
   animals,
-  Config,
 } from 'unique-names-generator';
 import { useState, useEffect } from 'react';
 import { useKonami } from 'react-konami-code';

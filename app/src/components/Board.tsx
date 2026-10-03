@@ -124,31 +124,44 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const storeRef = useRef<YjsStore>(store);
-  storeRef.current = store;
 
-  // Throttled updates (M3-T4)
-  const throttledCursorUpdate = useRef(
-    throttle((x: number, y: number) => {
-      storeRef.current.setCursor(x, y);
-    }, AWARENESS_UPDATE_INTERVAL_MS),
+  // Throttled updates (M3-T4). Ref-shaped holders (consumed as MutableRefObject
+  // by BoardMessageBus / usePointerEvents), rebuilt only when the store changes.
+  const throttledCursorUpdate = useMemo(
+    () => ({
+      current: throttle((x: number, y: number) => {
+        store.setCursor(x, y);
+      }, AWARENESS_UPDATE_INTERVAL_MS),
+    }),
+    [store],
   );
 
-  const throttledDragStateUpdate = useRef(
-    throttle(
-      (
-        gid: string,
-        primaryId: string,
-        pos: { x: number; y: number; r: number },
-        secondaryOffsets?: Record<
-          string,
-          { dx: number; dy: number; dr: number }
-        >,
-      ) => {
-        storeRef.current.setDragState(gid, primaryId, pos, secondaryOffsets);
-      },
-      AWARENESS_UPDATE_INTERVAL_MS,
-    ),
+  const throttledDragStateUpdate = useMemo(
+    () => ({
+      current: throttle(
+        (
+          gid: string,
+          primaryId: string,
+          pos: { x: number; y: number; r: number },
+          secondaryOffsets?: Record<
+            string,
+            { dx: number; dy: number; dr: number }
+          >,
+        ) => {
+          store.setDragState(gid, primaryId, pos, secondaryOffsets);
+        },
+        AWARENESS_UPDATE_INTERVAL_MS,
+      ),
+    }),
+    [store],
+  );
+
+  useEffect(
+    () => () => {
+      throttledCursorUpdate.current.cancel();
+      throttledDragStateUpdate.current.cancel();
+    },
+    [throttledCursorUpdate, throttledDragStateUpdate],
   );
 
   // Callback refs
@@ -177,12 +190,17 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Dismiss hover preview when any menu opens or phantom drag starts
-  useEffect(() => {
-    if (isMenuOpen || isPhantomDragActive) {
+  // (adjusting state during render on the false -> true transition)
+  const shouldHidePreview = Boolean(isMenuOpen || isPhantomDragActive);
+  const [prevShouldHidePreview, setPrevShouldHidePreview] =
+    useState(shouldHidePreview);
+  if (shouldHidePreview !== prevShouldHidePreview) {
+    setPrevShouldHidePreview(shouldHidePreview);
+    if (shouldHidePreview) {
       setPreviewCard(null);
       setPreviewPosition(null);
     }
-  }, [isMenuOpen, isPhantomDragActive]);
+  }
 
   // Modal preview state (mobile double-tap). Same shape as hover preview.
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -278,7 +296,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Helper: Get card from stack object
   const getCardFromStack = useCallback(
     (objectId: string): { card: Card; cardCode: string } | null => {
-      const obj = storeRef.current.getObject(objectId);
+      const obj = store.getObject(objectId);
 
       if (!obj) {
         console.warn('[Board] Cannot show preview: Object not found', {
@@ -326,7 +344,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
       return { card, cardCode: topCardCode };
     },
-    [gameAssets],
+    [gameAssets, store],
   );
 
   // Handle hover state changes from renderer (for card preview)
@@ -440,7 +458,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       if (!result) {
         return;
       }
-      const obj = storeRef.current.getObject(objectId);
+      const obj = store.getObject(objectId);
       if (!obj || obj._kind !== ObjectKind.Stack) {
         return;
       }
@@ -448,7 +466,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       setModalPreviewCard({ ...result, faceUp });
       setIsModalVisible(true);
     },
-    [getCardFromStack],
+    [getCardFromStack, store],
   );
 
   // Track cursor position for preview positioning
@@ -471,7 +489,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     const unsubscribe = renderer.onMessage((message) => {
       const context = {
         renderer,
-        store: storeRef.current,
+        store,
         setIsReady,
         setIsCanvasInitialized,
         setIsSynced,
@@ -502,6 +520,9 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   }, [
     renderer,
     messageBus,
+    store,
+    throttledCursorUpdate,
+    throttledDragStateUpdate,
     setIsReady,
     setIsCanvasInitialized,
     setIsSynced,

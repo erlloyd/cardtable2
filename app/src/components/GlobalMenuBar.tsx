@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import {
   Menu,
   MenuButton,
@@ -38,50 +38,54 @@ export function GlobalMenuBar({
   const previousModeRef = useRef<'pan' | 'select'>(interactionMode);
   const [isTouch] = useState(isTouchDevice());
 
-  // Keyboard shortcuts: V key and Space hold
+  // Keyboard shortcuts: V key and Space hold. Effect events read the latest
+  // props so the window listeners are registered once.
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    // Ignore if typing in an input
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement
+    ) {
+      return;
+    }
+
+    // V key: Switch to select mode
+    if (event.key === 'v' || event.key === 'V') {
+      event.preventDefault();
+      onInteractionModeChange('select');
+      return;
+    }
+
+    // G key: Toggle grid snap
+    if ((event.key === 'g' || event.key === 'G') && onGridSnapEnabledChange) {
+      event.preventDefault();
+      onGridSnapEnabledChange(!gridSnapEnabled);
+      return;
+    }
+
+    // Space key: Temporary pan mode (hold)
+    if (event.key === ' ' && !spaceKeyDownRef.current) {
+      event.preventDefault();
+      spaceKeyDownRef.current = true;
+      previousModeRef.current = interactionMode;
+      onInteractionModeChange('pan');
+      return;
+    }
+  });
+
+  const onKeyUp = useEffectEvent((event: KeyboardEvent) => {
+    // Space key released: Return to previous mode
+    if (event.key === ' ' && spaceKeyDownRef.current) {
+      event.preventDefault();
+      spaceKeyDownRef.current = false;
+      onInteractionModeChange(previousModeRef.current);
+      return;
+    }
+  });
+
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore if typing in an input
-      if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      // V key: Switch to select mode
-      if (event.key === 'v' || event.key === 'V') {
-        event.preventDefault();
-        onInteractionModeChange('select');
-        return;
-      }
-
-      // G key: Toggle grid snap
-      if ((event.key === 'g' || event.key === 'G') && onGridSnapEnabledChange) {
-        event.preventDefault();
-        onGridSnapEnabledChange(!gridSnapEnabled);
-        return;
-      }
-
-      // Space key: Temporary pan mode (hold)
-      if (event.key === ' ' && !spaceKeyDownRef.current) {
-        event.preventDefault();
-        spaceKeyDownRef.current = true;
-        previousModeRef.current = interactionMode;
-        onInteractionModeChange('pan');
-        return;
-      }
-    };
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      // Space key released: Return to previous mode
-      if (event.key === ' ' && spaceKeyDownRef.current) {
-        event.preventDefault();
-        spaceKeyDownRef.current = false;
-        onInteractionModeChange(previousModeRef.current);
-        return;
-      }
-    };
+    const handleKeyDown = (event: KeyboardEvent) => onKeyDown(event);
+    const handleKeyUp = (event: KeyboardEvent) => onKeyUp(event);
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -90,12 +94,7 @@ export function GlobalMenuBar({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [
-    interactionMode,
-    onInteractionModeChange,
-    gridSnapEnabled,
-    onGridSnapEnabledChange,
-  ]);
+  }, []);
 
   return (
     <div className="global-menu-bar">

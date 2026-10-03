@@ -62,7 +62,7 @@ import {
 } from '../content/loadHandler';
 import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
-import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
+import { ObjectKind } from '@cardtable2/shared';
 import { dbg } from '../dev/dbg';
 
 /**
@@ -119,7 +119,10 @@ function Table() {
     supportsPrivate: boolean;
     loading: boolean;
     error: string | null;
+    /** Bumped per open so DeckImportModal remounts with fresh input state. */
+    key: number;
   }>({
+    key: 0,
     open: false,
     labels: { siteName: '', inputPlaceholder: '' },
     supportsPrivate: false,
@@ -132,10 +135,9 @@ function Table() {
   const [loadPicker, setLoadPicker] = useState<{
     open: boolean;
     presetType?: string;
-  }>({ open: false });
-  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntriesForUi(),
-  );
+    /** Bumped per open so LoadPickerModal remounts with fresh state. */
+    key: number;
+  }>({ open: false, key: 0 });
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -144,6 +146,14 @@ function Table() {
   const [packsLoading, setPacksLoading] = useState(false);
   const [packsError, setPacksError] = useState<PacksError | null>(null);
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
+  // The loadables registry is external mutable state populated alongside
+  // gameAssets; re-read it during render whenever gameAssets changes.
+  const [loadablesAssets, setLoadablesAssets] = useState(gameAssets);
+  const [loadables, setLoadables] = useState(() => getLoadableEntriesForUi());
+  if (gameAssets !== loadablesAssets) {
+    setLoadablesAssets(gameAssets);
+    setLoadables(getLoadableEntriesForUi());
+  }
 
   // Hand panel state
   const handPanel = useHandPanel(store);
@@ -162,7 +172,12 @@ function Table() {
 
   const [isStackDragOverHand, setIsStackDragOverHand] = useState(false);
   const isStackDragOverHandRef = useRef(false);
-  isStackDragOverHandRef.current = isStackDragOverHand;
+  // Ref mirrors state so pointer handlers read the latest value synchronously;
+  // always update both together, from handlers/effects (never during render).
+  const updateStackDragOverHand = useCallback((value: boolean) => {
+    isStackDragOverHandRef.current = value;
+    setIsStackDragOverHand(value);
+  }, []);
 
   const handleBoardDragStart = useCallback(() => {
     setIsBoardDragging(true);
@@ -188,8 +203,8 @@ function Table() {
     }
 
     setIsBoardDragging(false);
-    setIsStackDragOverHand(false);
-  }, [store, handPanel]);
+    updateStackDragOverHand(false);
+  }, [store, handPanel, updateStackDragOverHand]);
 
   // Track whether a stack drag is hovering over the hand panel
   useEffect(() => {
@@ -203,7 +218,7 @@ function Table() {
         (obj) => obj.yMap.get('_kind') === ObjectKind.Stack,
       );
       if (!hasStack) {
-        if (isStackDragOverHandRef.current) setIsStackDragOverHand(false);
+        if (isStackDragOverHandRef.current) updateStackDragOverHand(false);
         return;
       }
 
@@ -219,16 +234,16 @@ function Table() {
 
       // Only update state when the value actually changes
       if (isOverPanel !== isStackDragOverHandRef.current) {
-        setIsStackDragOverHand(isOverPanel);
+        updateStackDragOverHand(isOverPanel);
       }
     };
 
     window.addEventListener('pointermove', handlePointerMove);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      setIsStackDragOverHand(false);
+      updateStackDragOverHand(false);
     };
-  }, [isBoardDragging, store]);
+  }, [isBoardDragging, store, updateStackDragOverHand]);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
@@ -241,13 +256,11 @@ function Table() {
   // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
   // here whenever gameAssets change so plugin switches drop stale entries.
   useEffect(() => {
-    const entries = getLoadableEntriesForUi();
-    setLoadables(entries);
     unregisterLoadablesActions();
-    if (entries.length > 0) {
-      registerLoadablesActions(entries);
+    if (loadables.length > 0) {
+      registerLoadablesActions(loadables);
     }
-  }, [gameAssets]);
+  }, [loadables]);
 
   // Dev-only: apply URL seed (?seed=stack-of-5) on a fresh table.
   // No-op in production and no-op when the table already has objects.
@@ -638,7 +651,7 @@ function Table() {
   }, [store]);
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
-    setLoadPicker({ open: true, presetType });
+    setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
 
   // Register the deck-input provider that opens DeckImportModal. The provider
@@ -651,13 +664,14 @@ function Table() {
       ({ labels, supportsPrivate }) =>
         new Promise<DeckInputResult | null>((resolve) => {
           deckImportResolveRef.current = resolve;
-          setDeckImport({
+          setDeckImport((prev) => ({
             open: true,
             labels,
             supportsPrivate,
             loading: false,
             error: null,
-          });
+            key: prev.key + 1,
+          }));
         }),
     );
     return () => {
@@ -687,7 +701,7 @@ function Table() {
   );
 
   const handleCloseLoadPicker = useCallback(() => {
-    setLoadPicker({ open: false });
+    setLoadPicker((prev) => ({ ...prev, open: false }));
   }, []);
 
   // Resolver for asset-pack-derived loadables. The runtime registry already
@@ -916,6 +930,7 @@ function Table() {
       {/* Deck Import Modal — opened by the loadHandler's provider branch via
           the registered deckInputProvider. */}
       <DeckImportModal
+        key={deckImport.key}
         isOpen={deckImport.open}
         onClose={handleDeckImportClose}
         onSubmit={handleDeckImportSubmit}
@@ -927,6 +942,7 @@ function Table() {
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal
+        key={`${loadPicker.key}:${loadPicker.presetType ? (loadables.find((l) => l.type === loadPicker.presetType)?.type ?? '') : ''}`}
         open={loadPicker.open}
         onClose={handleCloseLoadPicker}
         loadables={loadables}

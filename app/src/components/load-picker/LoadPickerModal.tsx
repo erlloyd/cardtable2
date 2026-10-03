@@ -125,16 +125,6 @@ export function LoadPickerModal({
   );
   const [query, setQuery] = useState('');
 
-  // Reset internal state whenever the modal opens or presetType changes
-  // — closing without resetting would leak step-2 state into the next
-  // open in two-step mode.
-  useEffect(() => {
-    if (open) {
-      setSelectedType(presetEntry ? presetEntry.type : null);
-      setQuery('');
-    }
-  }, [open, presetEntry]);
-
   // Esc closes; effective only while the modal is open so it doesn't
   // capture Esc when collapsed.
   useEffect(() => {

@@ -45,7 +45,6 @@ import {
   type DeckInputResult,
 } from '../content/loadHandler';
 import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
-import type { LoadableEntry } from '@cardtable2/shared';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
@@ -111,7 +110,10 @@ function DevTable() {
     supportsPrivate: boolean;
     loading: boolean;
     error: string | null;
+    /** Bumped per open so DeckImportModal remounts with fresh input state. */
+    key: number;
   }>({
+    key: 0,
     open: false,
     labels: { siteName: '', inputPlaceholder: '' },
     supportsPrivate: false,
@@ -124,11 +126,18 @@ function DevTable() {
   const [loadPicker, setLoadPicker] = useState<{
     open: boolean;
     presetType?: string;
-  }>({ open: false });
-  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntriesForUi(),
-  );
+    /** Bumped per open so LoadPickerModal remounts with fresh state. */
+    key: number;
+  }>({ open: false, key: 0 });
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
+  // The loadables registry is external mutable state populated alongside
+  // gameAssets; re-read it during render whenever gameAssets changes.
+  const [loadablesAssets, setLoadablesAssets] = useState(gameAssets);
+  const [loadables, setLoadables] = useState(() => getLoadableEntriesForUi());
+  if (gameAssets !== loadablesAssets) {
+    setLoadablesAssets(gameAssets);
+    setLoadables(getLoadableEntriesForUi());
+  }
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -160,13 +169,11 @@ function DevTable() {
   // `table.$id.tsx`'s pattern, ct-rde) drives re-derivation when those
   // sources fire.
   useEffect(() => {
-    const entries = getLoadableEntriesForUi();
-    setLoadables(entries);
     unregisterLoadablesActions();
-    if (entries.length > 0) {
-      registerLoadablesActions(entries);
+    if (loadables.length > 0) {
+      registerLoadablesActions(loadables);
     }
-  }, [gameAssets]);
+  }, [loadables]);
 
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
@@ -238,7 +245,7 @@ function DevTable() {
   }, [store]);
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
-    setLoadPicker({ open: true, presetType });
+    setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
 
   // Register deck-input provider — see routes/table.$id.tsx for the full doc.
@@ -247,13 +254,14 @@ function DevTable() {
       ({ labels, supportsPrivate }) =>
         new Promise<DeckInputResult | null>((resolve) => {
           deckImportResolveRef.current = resolve;
-          setDeckImport({
+          setDeckImport((prev) => ({
             open: true,
             labels,
             supportsPrivate,
             loading: false,
             error: null,
-          });
+            key: prev.key + 1,
+          }));
         }),
     );
     return () => {
@@ -281,7 +289,7 @@ function DevTable() {
   );
 
   const handleCloseLoadPicker = useCallback(() => {
-    setLoadPicker({ open: false });
+    setLoadPicker((prev) => ({ ...prev, open: false }));
   }, []);
 
   const resolveDerivedItems = useCallback<DerivedItemsResolver>((entry) => {
@@ -479,6 +487,7 @@ function DevTable() {
       {/* Deck Import Modal — opened by the loadHandler's provider branch via
           the registered deckInputProvider. */}
       <DeckImportModal
+        key={deckImport.key}
         isOpen={deckImport.open}
         onClose={handleDeckImportClose}
         onSubmit={handleDeckImportSubmit}
@@ -490,6 +499,7 @@ function DevTable() {
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal
+        key={`${loadPicker.key}:${loadPicker.presetType ? (loadables.find((l) => l.type === loadPicker.presetType)?.type ?? '') : ''}`}
         open={loadPicker.open}
         onClose={handleCloseLoadPicker}
         loadables={loadables}

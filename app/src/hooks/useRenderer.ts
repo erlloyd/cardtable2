@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import { RenderMode } from '../renderer/IRendererAdapter';
 import { createRenderer } from '../renderer/RendererFactory';
+import { useExternalResource } from './useExternalResource';
 
 export interface UseRendererResult {
   renderer: IRendererAdapter | null;
@@ -20,16 +21,7 @@ export interface UseRendererResult {
 export function useRenderer(
   mode: RenderMode | 'auto' = 'auto',
 ): UseRendererResult {
-  const rendererRef = useRef<IRendererAdapter | null>(null);
-  const [renderMode, setRenderMode] = useState<RenderMode | null>(null);
-
-  // Initialize renderer on mount
-  useEffect(() => {
-    // Prevent double initialization in React strict mode
-    if (rendererRef.current) {
-      return;
-    }
-
+  const create = useCallback(() => {
     // Check for renderMode query parameter to force a specific mode
     const params = new URLSearchParams(window.location.search);
     const renderModeParam = params.get('renderMode');
@@ -49,12 +41,7 @@ export function useRenderer(
     // Create renderer adapter
     const renderer = createRenderer(resolvedMode);
 
-    // Store renderer reference
-    rendererRef.current = renderer;
-
-    // Get the actual mode from the renderer
     const actualMode = renderer.mode;
-    setRenderMode(actualMode);
     console.log(`[useRenderer] ========================================`);
     console.log(`[useRenderer] RENDER MODE: ${actualMode}`);
     console.log(
@@ -65,18 +52,19 @@ export function useRenderer(
     );
     console.log(`[useRenderer] ========================================`);
 
-    // Cleanup on unmount
-    return () => {
-      if (rendererRef.current) {
+    return {
+      value: renderer,
+      dispose: () => {
         console.log('[useRenderer] Cleaning up renderer');
-        rendererRef.current.destroy();
-        rendererRef.current = null;
-      }
+        renderer.destroy();
+      },
     };
   }, [mode]);
 
+  const renderer = useExternalResource(create);
+
   return {
-    renderer: rendererRef.current,
-    renderMode,
+    renderer,
+    renderMode: renderer ? renderer.mode : null,
   };
 }

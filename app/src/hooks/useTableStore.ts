@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { YjsStore } from '../store/YjsStore';
 import { getWSUrl } from '../utils/backend';
+import { useExternalResource } from './useExternalResource';
 
 interface UseTableStoreOptions {
   tableId: string;
@@ -28,8 +29,6 @@ export function useTableStore({
   logPrefix = 'Table',
   onStoreReady,
 }: UseTableStoreOptions): UseTableStoreReturn {
-  const storeRef = useRef<YjsStore | null>(null);
-  const connectionStatusUnsubscribeRef = useRef<(() => void) | null>(null);
   const onStoreReadyRef = useRef(onStoreReady);
   const [isStoreReady, setIsStoreReady] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>('offline');
@@ -40,12 +39,7 @@ export function useTableStore({
   }, [onStoreReady]);
 
   // Initialize Yjs store on mount
-  useEffect(() => {
-    // Prevent double initialization in React strict mode
-    if (storeRef.current) {
-      return;
-    }
-
+  const create = useCallback(() => {
     console.log(`[${logPrefix}] Initializing YjsStore for table: ${tableId}`);
 
     // WebSocket server URL (M5-T1)
@@ -54,7 +48,7 @@ export function useTableStore({
     const wsUrl = getWSUrl();
 
     const store = new YjsStore(tableId, wsUrl);
-    storeRef.current = store;
+    let destroyed = false;
 
     // Subscribe to connection status changes (M5-T1)
     const connectionStatusUnsubscribe = store.onConnectionStatusChange(
@@ -63,7 +57,6 @@ export function useTableStore({
         console.log(`[${logPrefix}] Connection status: ${status}`);
       },
     );
-    connectionStatusUnsubscribeRef.current = connectionStatusUnsubscribe;
 
     // Expose store globally for E2E testing (development and E2E mode only)
     if (import.meta.env.DEV || import.meta.env.VITE_E2E) {
@@ -75,7 +68,7 @@ export function useTableStore({
       .waitForReady()
       .then(() => {
         // Check if this store is still the current one (not destroyed by cleanup)
-        if (storeRef.current !== store) {
+        if (destroyed) {
           return;
         }
 
@@ -93,30 +86,26 @@ export function useTableStore({
         console.error(`[${logPrefix}] Failed to initialize YjsStore:`, error);
       });
 
-    // Cleanup on unmount
-    return () => {
-      // Unsubscribe from connection status changes
-      if (connectionStatusUnsubscribeRef.current) {
-        connectionStatusUnsubscribeRef.current();
-        connectionStatusUnsubscribeRef.current = null;
-      }
+    return {
+      value: store,
+      dispose: () => {
+        destroyed = true;
+        connectionStatusUnsubscribe();
+        store.destroy();
+        setIsStoreReady(false);
 
-      // Destroy store
-      if (storeRef.current) {
-        storeRef.current.destroy();
-        storeRef.current = null;
-      }
-      setIsStoreReady(false);
-
-      // Clean up global test reference
-      if (import.meta.env.DEV || import.meta.env.VITE_E2E) {
-        delete window.__TEST_STORE__;
-      }
+        // Clean up global test reference
+        if (import.meta.env.DEV || import.meta.env.VITE_E2E) {
+          delete window.__TEST_STORE__;
+        }
+      },
     };
   }, [tableId, logPrefix]);
 
+  const store = useExternalResource(create);
+
   return {
-    store: storeRef.current,
+    store,
     isStoreReady,
     connectionStatus,
   };

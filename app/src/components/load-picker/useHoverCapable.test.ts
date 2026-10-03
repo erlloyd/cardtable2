@@ -68,11 +68,15 @@ describe('useHoverCapable', () => {
     ) => void;
 
     act(() => {
+      // Real browsers update `matches` before dispatching 'change'.
+      mql.matches = true;
       changeHandler({ matches: true } as MediaQueryListEvent);
     });
     expect(result.current).toBe(true);
 
     act(() => {
+      // Real browsers update `matches` before dispatching 'change'.
+      mql.matches = false;
       changeHandler({ matches: false } as MediaQueryListEvent);
     });
     expect(result.current).toBe(false);

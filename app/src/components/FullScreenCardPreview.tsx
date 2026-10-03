@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Card, GameAssets } from '@cardtable2/shared';
 import { resolveCardBackUrl } from '../content/loader';
@@ -48,7 +48,7 @@ export function FullScreenCardPreview({
   gameAssets,
   onClose,
 }: FullScreenCardPreviewProps) {
-  const openTimeRef = useRef(Date.now());
+  const [openTime] = useState(() => Date.now());
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,7 +81,7 @@ export function FullScreenCardPreview({
         justifyContent: 'center',
       }}
       onClick={(e) => {
-        const elapsed = Date.now() - openTimeRef.current;
+        const elapsed = Date.now() - openTime;
         if (elapsed > IGNORE_GESTURES_MS && e.target === e.currentTarget) {
           onClose();
         }

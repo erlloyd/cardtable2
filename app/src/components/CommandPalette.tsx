@@ -1,4 +1,10 @@
-import { Fragment, useState, useMemo, useEffect, useCallback } from 'react';
+import {
+  Fragment,
+  useState,
+  useMemo,
+  useCallback,
+  useSyncExternalStore,
+} from 'react';
 import {
   Combobox,
   ComboboxInput,
@@ -22,6 +28,25 @@ interface CommandPaletteProps {
   onActionExecuted: (actionId: string) => void;
 }
 
+function subscribeToActions(onChange: () => void): () => void {
+  return ActionRegistry.getInstance().subscribe(onChange);
+}
+
+// useSyncExternalStore needs a referentially stable snapshot between changes,
+// but getAllActions() builds a new array on every call.
+let lastActions: Action[] = [];
+function getActionsSnapshot(): Action[] {
+  const next = ActionRegistry.getInstance().getAllActions();
+  if (
+    next.length === lastActions.length &&
+    next.every((action, i) => action === lastActions[i])
+  ) {
+    return lastActions;
+  }
+  lastActions = next;
+  return next;
+}
+
 export function CommandPalette({
   isOpen,
   onClose,
@@ -32,35 +57,17 @@ export function CommandPalette({
   console.log('[CommandPalette] Component rendering, isOpen:', isOpen);
 
   const [query, setQuery] = useState('');
-  const [allActions, setAllActions] = useState<Action[]>([]);
-  const actionRegistry = ActionRegistry.getInstance();
-  const keyboardManager = new KeyboardManager(actionRegistry);
-
-  // Subscribe to registry changes and update actions
-  useEffect(() => {
-    // Initialize actions
-    const actions = actionRegistry.getAllActions();
-    console.log('[CommandPalette] Initial allActions:', actions.length);
-    setAllActions(actions);
-
-    // Subscribe to future changes
-    const unsubscribe = actionRegistry.subscribe(() => {
-      const updatedActions = actionRegistry.getAllActions();
-      console.log(
-        '[CommandPalette] Updated allActions:',
-        updatedActions.length,
-      );
-      setAllActions(updatedActions);
-    });
-    return unsubscribe;
-  }, [actionRegistry]);
+  const allActions = useSyncExternalStore(
+    subscribeToActions,
+    getActionsSnapshot,
+  );
 
   // Get recent actions (resolved from IDs)
   const recentActions = useMemo(() => {
     return recentActionIds
-      .map((id) => actionRegistry.getAction(id))
+      .map((id) => ActionRegistry.getInstance().getAction(id))
       .filter((action): action is Action => action !== undefined);
-  }, [recentActionIds, actionRegistry]);
+  }, [recentActionIds]);
 
   // Helper to resolve dynamic labels
   const resolveLabel = useCallback(
@@ -108,9 +115,9 @@ export function CommandPalette({
   const availableActionIds = useMemo(() => {
     if (!context || !isOpen) return new Set<string>();
 
-    const available = actionRegistry.getAvailableActions(context);
+    const available = ActionRegistry.getInstance().getAvailableActions(context);
     return new Set(available.map((a) => a.id));
-  }, [context, actionRegistry, isOpen]);
+  }, [context, isOpen]);
 
   const handleSelect = (wrappedAction: { action: Action } | null) => {
     if (!wrappedAction || !context) return;
@@ -124,7 +131,7 @@ export function CommandPalette({
     // Execute action asynchronously (fire and forget)
     void (async () => {
       try {
-        await actionRegistry.execute(action.id, context);
+        await ActionRegistry.getInstance().execute(action.id, context);
         onActionExecuted(action.id);
         setQuery('');
         onClose();
@@ -136,7 +143,9 @@ export function CommandPalette({
 
   const getShortcutDisplay = (shortcut: string | undefined): string => {
     if (!shortcut) return '';
-    return keyboardManager.getShortcutDisplay(shortcut);
+    return new KeyboardManager(ActionRegistry.getInstance()).getShortcutDisplay(
+      shortcut,
+    );
   };
 
   console.log('[CommandPalette] Rendering with:', {

@@ -30,7 +30,6 @@ import {
   type ScenarioCounterSpawn,
   type TableObject,
 } from '@cardtable2/shared';
-import { v4 as uuidv4 } from 'uuid';
 import { getCounterTypeDef } from './counterRegistry';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
 import type { CounterMeta } from '../renderer/objects/counter/types';
@@ -186,5 +185,5 @@ function generateSpawnInstanceId(): string {
   // Use UUIDs so spawn ids never collide with componentSet's local counter
   // ids (those use `cs-${timestamp}-${counter}-${rand}`); both maps may be
   // merged into one before the store update, so disjoint key spaces matter.
-  return `counter-spawn-${uuidv4()}`;
+  return `counter-spawn-${crypto.randomUUID()}`;
 }

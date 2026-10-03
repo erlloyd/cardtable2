@@ -10,7 +10,6 @@ import type {
   ObjectKind,
   DiscardZoneEntry,
 } from '@cardtable2/shared';
-import { v4 as uuidv4 } from 'uuid';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { runMigrations } from './migrations';
 import type { TableObjectYMap } from './types';
@@ -52,10 +51,7 @@ export class YjsStore {
   private isReady = false;
   private readyPromise: Promise<void>;
   private connectionStatus:
-    | 'offline'
-    | 'connecting'
-    | 'connected'
-    | 'disconnected' = 'offline'; // M5-T1
+    'offline' | 'connecting' | 'connected' | 'disconnected' = 'offline'; // M5-T1
   private connectionStatusCallbacks: Set<(status: string) => void> = new Set();
 
   // Game assets management (session-scoped)
@@ -101,7 +97,7 @@ export class YjsStore {
 
   constructor(tableId: string, wsUrl?: string) {
     this.doc = new Y.Doc();
-    this.actorId = uuidv4();
+    this.actorId = crypto.randomUUID();
 
     // Get or create objects map
     this.objects = this.doc.getMap('objects');
@@ -631,10 +627,7 @@ export class YjsStore {
    * Get current WebSocket connection status (M5-T1)
    */
   getConnectionStatus():
-    | 'offline'
-    | 'connecting'
-    | 'connected'
-    | 'disconnected' {
+    'offline' | 'connecting' | 'connected' | 'disconnected' {
     return this.connectionStatus;
   }
 
@@ -742,7 +735,7 @@ export class YjsStore {
    * @returns The hand ID
    */
   createHand(name: string): string {
-    const handId = uuidv4();
+    const handId = crypto.randomUUID();
     this.doc.transact(() => {
       const handMap = new Y.Map<unknown>();
       handMap.set('name', name);

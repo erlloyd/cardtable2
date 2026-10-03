@@ -6,14 +6,15 @@
   "description": "Cardtable 2.0 - Solo-first card table with multiplayer support",
   "scripts": {
     "dev": "pnpm --parallel --filter \"@cardtable2/app\" --filter \"@cardtable2/server\" run dev",
-    "build": "pnpm --filter '!@cardtable2/shared' -r run build",
-    "test": "pnpm -r run test",
+    "build": "pnpm -r run build",
+    "test": "vitest run",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "format": "pnpm -r run format",
     "format:check": "pnpm -r run format:check",
     "validate": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
@@ -28,19 +29,15 @@
     "lint-staged": "^15.2.0",
     "prettier": "^3.4.1",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.46.4"
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^5.0.3"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,md,yaml,css}": "prettier --write",
     "*.{js,jsx,ts,tsx}": "eslint --fix --max-warnings 0"
   },
   "engines": {
-    "node": ">=24.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=26"
   },
-  "pnpm": {
-    "overrides": {
-      "y-leveldb": "0.2.0"
-    }
-  }
+  "packageManager": "pnpm@12.8.1"
 }

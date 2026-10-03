@@ -109,6 +109,7 @@ export async function loadPluginRegistry(): Promise<PluginRegistry> {
     });
     throw new Error(
       `Failed to load plugin registry: network error - ${message}`,
+      { cause: error },
     );
   }
 
@@ -132,7 +133,9 @@ export async function loadPluginRegistry(): Promise<PluginRegistry> {
       errorId: PLUGIN_REGISTRY_PARSE_FAILED,
       error: message,
     });
-    throw new Error(`Failed to parse plugin registry JSON: ${message}`);
+    throw new Error(`Failed to parse plugin registry JSON: ${message}`, {
+      cause: error,
+    });
   }
 
   // Basic validation
@@ -183,6 +186,7 @@ export async function loadPluginManifest(
     });
     throw new Error(
       `Failed to load plugin manifest from ${manifestUrl}: network error - ${message}`,
+      { cause: error },
     );
   }
 
@@ -208,7 +212,9 @@ export async function loadPluginManifest(
       url: manifestUrl,
       error: message,
     });
-    throw new Error(`Failed to parse plugin manifest JSON: ${message}`);
+    throw new Error(`Failed to parse plugin manifest JSON: ${message}`, {
+      cause: error,
+    });
   }
 
   // Basic validation
@@ -491,7 +497,7 @@ export async function loadLocalPluginDirectory(): Promise<LocalPlugin> {
       errorId: PLUGIN_LOCAL_INDEX_PARSE_FAILED,
       error: message,
     });
-    throw new Error(`Failed to parse index.json: ${message}`);
+    throw new Error(`Failed to parse index.json: ${message}`, { cause: error });
   }
 
   // Basic validation

@@ -18,7 +18,7 @@ import type { CounterMeta } from './types';
  * single typed cast for renderer/store code.
  */
 function readCounterMeta(obj: TableObject): Partial<CounterMeta> {
-  return (obj._meta ?? {}) as Partial<CounterMeta>;
+  return obj._meta ?? {};
 }
 
 /**

@@ -183,6 +183,7 @@ test.describe('Shuffle Stack E2E', () => {
       orderChanged = result.orderChanged;
     }
 
+    if (!result) throw new Error('shuffle loop never ran');
     expect(result.sameSet).toBe(true);
     expect(result.cardCount).toBe(originalCards.length);
     // Order should have changed after retries
@@ -429,6 +430,8 @@ test.describe('Shuffle Stack E2E', () => {
 
       // Stacks remain selected after shuffle — no need to re-select for retry
     }
+
+    if (!results) throw new Error('shuffle loop never ran');
 
     // All stacks should have same set of cards
     results.forEach((result, idx) => {

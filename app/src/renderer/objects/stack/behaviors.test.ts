@@ -64,7 +64,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       createText: mockCreateText,
       createKindLabel: mockCreateKindLabel,
       scaleStrokeWidth: mockScaleStrokeWidth,
-    } as RenderContext;
+    };
   });
 
   describe('3D Effect Rendering', () => {
@@ -537,7 +537,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         },
         textureLoader: mockTextureLoader as unknown as TextureLoader,
         onTextureLoaded: mockOnTextureLoaded,
-      } as RenderContext;
+      };
     });
 
     it('should render sprite when texture is cached (face-up)', () => {

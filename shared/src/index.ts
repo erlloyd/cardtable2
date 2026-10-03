@@ -14,13 +14,14 @@ export * from './sortKey';
 // Object types on the table
 // Note: Every card or group of cards is a 'stack' (even a single card is a stack of 1)
 // Object kind enum for type-safe comparisons
-export enum ObjectKind {
-  Stack = 'stack',
-  Token = 'token',
-  Zone = 'zone',
-  Mat = 'mat',
-  Counter = 'counter',
-}
+export const ObjectKind = {
+  Stack: 'stack',
+  Token: 'token',
+  Zone: 'zone',
+  Mat: 'mat',
+  Counter: 'counter',
+} as const;
+export type ObjectKind = (typeof ObjectKind)[keyof typeof ObjectKind];
 
 // ============================================================================
 // On-Card Attachment System
@@ -140,7 +141,7 @@ export type TableObjectProps = {
 
 // Stack-specific properties (when _kind === ObjectKind.Stack)
 export interface StackObject extends TableObject {
-  _kind: ObjectKind.Stack;
+  _kind: typeof ObjectKind.Stack;
   _cards: string[]; // Array of card IDs in the stack (top to bottom)
   _faceUp: boolean; // Whether stack is face-up or face-down
   /** @see TableObject._attachedCardIds */
@@ -151,7 +152,7 @@ export interface StackObject extends TableObject {
 
 // Token-specific properties (when _kind === ObjectKind.Token)
 export interface TokenObject extends TableObject {
-  _kind: ObjectKind.Token;
+  _kind: typeof ObjectKind.Token;
   _faceUp: boolean; // Whether token is face-up or face-down
 }
 

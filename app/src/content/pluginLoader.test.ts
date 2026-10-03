@@ -781,10 +781,9 @@ describe('loadLocalPluginDirectory', () => {
     const loadPromise = loadLocalPluginDirectory();
 
     // Simulate file selection without index.json
-    mockInput.files = {
-      ...mockFiles,
+    mockInput.files = Object.assign({}, mockFiles, {
       length: mockFiles.length,
-    } as unknown as FileList;
+    }) as unknown as FileList;
 
     if (mockInput.onchange) {
       mockInput.onchange.call(mockInput as unknown as HTMLInputElement);
@@ -819,10 +818,9 @@ describe('loadLocalPluginDirectory', () => {
 
     const loadPromise = loadLocalPluginDirectory();
 
-    mockInput.files = {
-      ...mockFiles,
+    mockInput.files = Object.assign({}, mockFiles, {
       length: mockFiles.length,
-    } as unknown as FileList;
+    }) as unknown as FileList;
 
     if (mockInput.onchange) {
       mockInput.onchange.call(mockInput as unknown as HTMLInputElement);
@@ -855,10 +853,9 @@ describe('loadLocalPluginDirectory', () => {
 
     const loadPromise = loadLocalPluginDirectory();
 
-    mockInput.files = {
-      ...mockFiles,
+    mockInput.files = Object.assign({}, mockFiles, {
       length: mockFiles.length,
-    } as unknown as FileList;
+    }) as unknown as FileList;
 
     if (mockInput.onchange) {
       mockInput.onchange.call(mockInput as unknown as HTMLInputElement);
@@ -925,10 +922,9 @@ describe('loadLocalPluginDirectory', () => {
 
     const loadPromise = loadLocalPluginDirectory();
 
-    mockInput.files = {
-      ...mockFiles,
+    mockInput.files = Object.assign({}, mockFiles, {
       length: mockFiles.length,
-    } as unknown as FileList;
+    }) as unknown as FileList;
 
     if (mockInput.onchange) {
       mockInput.onchange.call(mockInput as unknown as HTMLInputElement);
@@ -990,10 +986,9 @@ describe('loadLocalPluginDirectory', () => {
 
     const loadPromise = loadLocalPluginDirectory();
 
-    mockInput.files = {
-      ...mockFiles,
+    mockInput.files = Object.assign({}, mockFiles, {
       length: mockFiles.length,
-    } as unknown as FileList;
+    }) as unknown as FileList;
 
     if (mockInput.onchange) {
       mockInput.onchange.call(mockInput as unknown as HTMLInputElement);

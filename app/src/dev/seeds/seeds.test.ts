@@ -115,7 +115,7 @@ describe('seeds', () => {
       expect(result.createdIds).toHaveLength(1);
 
       const obj = store.objects.get(result.createdIds[0]);
-      expect((obj?.get('_cards') as string[]).length).toBe(5);
+      expect(obj?.get('_cards')).toHaveLength(5);
     });
 
     it('applies two-stacks seed creating two distinct stacks', () => {

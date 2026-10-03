@@ -1,9 +1,6 @@
-import * as Y from 'yjs';
-import {
-  ObjectKind,
-  parseSortKeyPrefix,
-  formatSortKey,
-} from '@cardtable2/shared';
+import type * as Y from 'yjs';
+import type { ObjectKind } from '@cardtable2/shared';
+import { parseSortKeyPrefix, formatSortKey } from '@cardtable2/shared';
 import { getDefaultProperties } from './ObjectDefaults';
 
 /**

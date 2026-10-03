@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
-import { Texture, ImageSource } from 'pixi.js';
+import type { ImageSource } from 'pixi.js';
+import { Texture } from 'pixi.js';
 import { TextureLoader } from './TextureLoader';
 
 // Mock PixiJS constructors - each call returns a fully auto-mocked instance

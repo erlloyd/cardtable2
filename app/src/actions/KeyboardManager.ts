@@ -1,4 +1,4 @@
-import { ActionRegistry } from './ActionRegistry';
+import type { ActionRegistry } from './ActionRegistry';
 import { KEYBOARD_ACTION_EXECUTE_FAILED } from '../constants/errorIds';
 import type { ActionContext } from './types';
 

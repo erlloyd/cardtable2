@@ -16,5 +16,5 @@ export function isZoneObject(obj: TableObject): obj is ZoneObject {
 
 /** Full Zone object type with required fields */
 export interface ZoneObject extends TableObject {
-  _kind: ObjectKind.Zone;
+  _kind: typeof ObjectKind.Zone;
 }

@@ -7,10 +7,11 @@ import type {
  * Rendering mode enum.
  * Defines whether rendering happens in a Web Worker or on the main thread.
  */
-export enum RenderMode {
-  Worker = 'worker',
-  MainThread = 'main-thread',
-}
+export const RenderMode = {
+  Worker: 'worker',
+  MainThread: 'main-thread',
+} as const;
+export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
 /**
  * Unified interface for renderer communication.

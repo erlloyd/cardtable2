@@ -51,7 +51,10 @@ export class YjsStore {
   private isReady = false;
   private readyPromise: Promise<void>;
   private connectionStatus:
-    'offline' | 'connecting' | 'connected' | 'disconnected' = 'offline'; // M5-T1
+    | 'offline'
+    | 'connecting'
+    | 'connected'
+    | 'disconnected' = 'offline'; // M5-T1
   private connectionStatusCallbacks: Set<(status: string) => void> = new Set();
 
   // Game assets management (session-scoped)
@@ -620,7 +623,10 @@ export class YjsStore {
    * Get current WebSocket connection status (M5-T1)
    */
   getConnectionStatus():
-    'offline' | 'connecting' | 'connected' | 'disconnected' {
+    | 'offline'
+    | 'connecting'
+    | 'connected'
+    | 'disconnected' {
     return this.connectionStatus;
   }
 

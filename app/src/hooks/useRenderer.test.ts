@@ -58,7 +58,7 @@ describe('useRenderer', () => {
   afterEach(() => {
     // Restore original search
     Object.defineProperty(window, 'location', {
-      value: { ...window.location, search: originalSearch },
+      value: Object.assign({}, window.location, { search: originalSearch }),
       writable: true,
     });
   });

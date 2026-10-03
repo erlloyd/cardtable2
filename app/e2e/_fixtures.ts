@@ -81,7 +81,7 @@ export function skipNextAutoClear(page: Page): void {
  * To skip the auto-clear for a specific navigation, call
  * `skipNextAutoClear(page)` before `page.goto(...)`.
  */
-export const test = base.extend<Record<string, never>>({
+export const test = base.extend({
   page: async ({ page }, runTest) => {
     const originalGoto = page.goto.bind(page);
     const taggedPage = page as Page & { __skipAutoClear?: boolean };

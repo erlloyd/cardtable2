@@ -307,6 +307,49 @@ describe('ActionRegistry', () => {
     });
   });
 
+  describe('snapshot stability', () => {
+    const makeAction = (id: string): Action => ({
+      id,
+      label: id,
+      icon: id,
+      category: CARD_ACTIONS,
+      isAvailable: () => true,
+      execute: vi.fn(),
+    });
+
+    it('returns the same array until the registry changes', () => {
+      registry.register(makeAction('a'));
+      const first = registry.getAllActions();
+      expect(registry.getAllActions()).toBe(first);
+
+      registry.register(makeAction('b'));
+      const second = registry.getAllActions();
+      expect(second).not.toBe(first);
+      expect(second).toHaveLength(2);
+
+      registry.unregister('a');
+      expect(registry.getAllActions()).not.toBe(second);
+
+      const third = registry.getAllActions();
+      registry.clear();
+      expect(registry.getAllActions()).not.toBe(third);
+      expect(registry.getAllActions()).toHaveLength(0);
+    });
+
+    it('has snapshot ready before listeners are notified, via unbound methods', () => {
+      const { subscribe, getAllActions } = registry;
+      const seen: number[] = [];
+      const unsubscribe = subscribe(() => seen.push(getAllActions().length));
+
+      registry.register(makeAction('a'));
+      registry.register(makeAction('b'));
+      unsubscribe();
+      registry.register(makeAction('c'));
+
+      expect(seen).toEqual([1, 2]);
+    });
+  });
+
   describe('singleton pattern', () => {
     it('should return same instance', () => {
       const instance1 = ActionRegistry.getInstance();

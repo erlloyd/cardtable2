@@ -414,6 +414,44 @@ describe('YjsStore', () => {
       store.awareness.states.delete(fakeClientId);
     });
 
+    describe('throttled trailing updates', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('throttles setCursor to a trailing call with the latest position', () => {
+        store.setCursor(1, 1);
+        store.setCursor(2, 2);
+        store.setCursor(3, 3);
+        expect(store.getLocalAwarenessState()?.cursor).toEqual({ x: 1, y: 1 });
+
+        vi.advanceTimersByTime(100);
+        expect(store.getLocalAwarenessState()?.cursor).toEqual({ x: 3, y: 3 });
+      });
+
+      it('clearCursor cancels a pending trailing cursor update', () => {
+        store.setCursor(1, 1);
+        store.setCursor(2, 2);
+        store.clearCursor();
+
+        vi.advanceTimersByTime(100);
+        expect(store.getLocalAwarenessState()?.cursor).toBeNull();
+      });
+
+      it('clearDragState cancels a pending trailing drag update', () => {
+        store.setDragState('g1', 'obj-1', { x: 1, y: 1, r: 0 });
+        store.setDragState('g1', 'obj-1', { x: 2, y: 2, r: 0 });
+        store.clearDragState();
+
+        vi.advanceTimersByTime(100);
+        expect(store.getLocalAwarenessState()?.drag).toBeNull();
+      });
+    });
+
     it('combines cursor and drag in awareness state', () => {
       store.setCursor(100, 200);
       store.setDragState('g1', 'obj-1', { x: 50, y: 50, r: 0 });

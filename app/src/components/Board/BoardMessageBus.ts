@@ -5,7 +5,6 @@ import { isValidPosition } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
 import type { YjsStore } from '../../store/YjsStore';
 import { toTableObject } from '../../store/YjsStore';
-import type { ThrottledFunction } from '../../utils/throttle';
 import {
   moveObjects,
   selectObjects,
@@ -60,23 +59,6 @@ export interface BoardHandlerContext {
   viewportStateCallbacks: React.MutableRefObject<
     Array<(state: ViewportState) => void>
   >;
-  throttledCursorUpdate: React.MutableRefObject<
-    ThrottledFunction<(x: number, y: number) => void>
-  >;
-  throttledDragStateUpdate: React.MutableRefObject<
-    ThrottledFunction<
-      (
-        gid: string,
-        primaryId: string,
-        pos: { x: number; y: number; r: number },
-        secondaryOffsets?: Record<
-          string,
-          { dx: number; dy: number; dr: number }
-        >,
-      ) => void
-    >
-  >;
-
   // Drag callbacks for hand panel coordination
   onBoardDragStart?: () => void;
   onBoardDragEnd?: () => void;
@@ -432,11 +414,11 @@ export class BoardMessageBus {
 
     // Awareness
     this.registry.register('cursor-position', (msg, ctx) => {
-      ctx.throttledCursorUpdate.current(msg.x, msg.y);
+      ctx.store.setCursor(msg.x, msg.y);
     });
 
     this.registry.register('drag-state-update', (msg, ctx) => {
-      ctx.throttledDragStateUpdate.current(
+      ctx.store.setDragState(
         msg.gid,
         msg.primaryId,
         msg.pos,
@@ -445,7 +427,6 @@ export class BoardMessageBus {
     });
 
     this.registry.register('drag-state-clear', (_msg, ctx) => {
-      ctx.throttledDragStateUpdate.current.cancel();
       ctx.store.clearDragState();
     });
 

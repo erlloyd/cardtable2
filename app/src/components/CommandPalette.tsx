@@ -28,25 +28,6 @@ interface CommandPaletteProps {
   onActionExecuted: (actionId: string) => void;
 }
 
-function subscribeToActions(onChange: () => void): () => void {
-  return ActionRegistry.getInstance().subscribe(onChange);
-}
-
-// useSyncExternalStore needs a referentially stable snapshot between changes,
-// but getAllActions() builds a new array on every call.
-let lastActions: Action[] = [];
-function getActionsSnapshot(): Action[] {
-  const next = ActionRegistry.getInstance().getAllActions();
-  if (
-    next.length === lastActions.length &&
-    next.every((action, i) => action === lastActions[i])
-  ) {
-    return lastActions;
-  }
-  lastActions = next;
-  return next;
-}
-
 export function CommandPalette({
   isOpen,
   onClose,
@@ -57,9 +38,10 @@ export function CommandPalette({
   console.log('[CommandPalette] Component rendering, isOpen:', isOpen);
 
   const [query, setQuery] = useState('');
+  const registry = ActionRegistry.getInstance();
   const allActions = useSyncExternalStore(
-    subscribeToActions,
-    getActionsSnapshot,
+    registry.subscribe,
+    registry.getAllActions,
   );
 
   // Get recent actions (resolved from IDs)

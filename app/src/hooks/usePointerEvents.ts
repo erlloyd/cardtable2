@@ -5,7 +5,6 @@ import type {
   PointerEventData,
   MainToRendererMessage,
 } from '@cardtable2/shared';
-import type { ThrottledFunction } from '../utils/throttle';
 
 export interface PointerEventHandlers {
   onPointerDown: (event: React.PointerEvent) => void;
@@ -28,7 +27,6 @@ export interface PointerEventHandlers {
  * @param store - Yjs store instance
  * @param isCanvasInitialized - Whether canvas is initialized
  * @param isMultiSelectMode - Whether multi-select mode is enabled
- * @param throttledCursorUpdate - Throttled cursor update function ref
  * @returns Pointer event handlers
  */
 export function usePointerEvents(
@@ -37,9 +35,6 @@ export function usePointerEvents(
   store: YjsStore,
   isCanvasInitialized: boolean,
   isMultiSelectMode: boolean,
-  throttledCursorUpdate: React.MutableRefObject<
-    ThrottledFunction<(x: number, y: number) => void>
-  >,
 ): PointerEventHandlers {
   // Helper to serialize pointer events
   const serializePointerEvent = useCallback(
@@ -154,10 +149,7 @@ export function usePointerEvents(
   const handlePointerLeave = useCallback(() => {
     if (!renderer || !isCanvasInitialized) return;
 
-    // Cancel any pending throttled updates
-    throttledCursorUpdate.current.cancel();
-
-    // Clear cursor from awareness
+    // Clear cursor from awareness (store cancels any pending throttled update)
     store.clearCursor();
 
     // Notify renderer
@@ -165,7 +157,7 @@ export function usePointerEvents(
       type: 'pointer-leave',
     };
     renderer.sendMessage(message);
-  }, [renderer, isCanvasInitialized, throttledCursorUpdate, store]);
+  }, [renderer, isCanvasInitialized, store]);
 
   return {
     onPointerDown: handlePointerDown,

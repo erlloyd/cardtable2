@@ -78,6 +78,11 @@ export class YjsStore {
   // Awareness for ephemeral state (M3-T4)
   public awareness: Awareness;
 
+  // Throttled cursor update (30Hz)
+  private throttledCursorUpdate = throttle((x: number, y: number) => {
+    this.awareness.setLocalStateField('cursor', { x, y });
+  }, AWARENESS_UPDATE_INTERVAL_MS);
+
   // Throttled drag state update (30Hz)
   private throttledDragStateUpdate = throttle(
     (
@@ -532,19 +537,21 @@ export class YjsStore {
 
   /**
    * Set cursor position in world coordinates (ephemeral)
-   * Updates at 30Hz (throttling handled by caller)
+   * Throttled to 30Hz to reduce network overhead
    *
    * @param x - X coordinate in world space
    * @param y - Y coordinate in world space
    */
   setCursor(x: number, y: number): void {
-    this.awareness.setLocalStateField('cursor', { x, y });
+    this.throttledCursorUpdate(x, y);
   }
 
   /**
    * Clear cursor position (when pointer leaves canvas)
+   * Cancels any pending trailing cursor update so it cannot resurrect it.
    */
   clearCursor(): void {
+    this.throttledCursorUpdate.cancel();
     this.awareness.setLocalStateField('cursor', null);
   }
 
@@ -568,8 +575,10 @@ export class YjsStore {
 
   /**
    * Clear drag state (when drag ends)
+   * Cancels any pending trailing drag update so it cannot resurrect it.
    */
   clearDragState(): void {
+    this.throttledDragStateUpdate.cancel();
     this.awareness.setLocalStateField('drag', null);
   }
 
@@ -928,6 +937,7 @@ export class YjsStore {
    */
   destroy(): void {
     // Cancel any pending throttled awareness updates
+    this.throttledCursorUpdate.cancel();
     this.throttledDragStateUpdate.cancel();
 
     // Clean up awareness

@@ -18,7 +18,6 @@ import type { ViewportState } from '../utils/viewportPlacement';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
 import type { GameAssets } from '../content';
-import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { getCardOrientation } from '../content/utils';
 import {
   getPreviewDimensions,
@@ -124,45 +123,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Throttled updates (M3-T4). Ref-shaped holders (consumed as MutableRefObject
-  // by BoardMessageBus / usePointerEvents), rebuilt only when the store changes.
-  const throttledCursorUpdate = useMemo(
-    () => ({
-      current: throttle((x: number, y: number) => {
-        store.setCursor(x, y);
-      }, AWARENESS_UPDATE_INTERVAL_MS),
-    }),
-    [store],
-  );
-
-  const throttledDragStateUpdate = useMemo(
-    () => ({
-      current: throttle(
-        (
-          gid: string,
-          primaryId: string,
-          pos: { x: number; y: number; r: number },
-          secondaryOffsets?: Record<
-            string,
-            { dx: number; dy: number; dr: number }
-          >,
-        ) => {
-          store.setDragState(gid, primaryId, pos, secondaryOffsets);
-        },
-        AWARENESS_UPDATE_INTERVAL_MS,
-      ),
-    }),
-    [store],
-  );
-
-  useEffect(
-    () => () => {
-      throttledCursorUpdate.current.cancel();
-      throttledDragStateUpdate.current.cancel();
-    },
-    [throttledCursorUpdate, throttledDragStateUpdate],
-  );
 
   // Callback refs
   const flushCallbacksRef = useRef<Array<() => void>>([]);
@@ -505,8 +465,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         selectionSettledCallbacks: selectionSettledCallbacksRef,
         animationStateCallbacks: animationStateCallbacksRef,
         viewportStateCallbacks: viewportStateCallbacksRef,
-        throttledCursorUpdate,
-        throttledDragStateUpdate,
         onBoardDragStart,
         onBoardDragEnd,
         onPhantomDragFeedback,
@@ -521,8 +479,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     renderer,
     messageBus,
     store,
-    throttledCursorUpdate,
-    throttledDragStateUpdate,
     setIsReady,
     setIsCanvasInitialized,
     setIsSynced,
@@ -552,7 +508,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     store,
     isCanvasInitialized,
     isMultiSelectMode,
-    throttledCursorUpdate,
   );
 
   // Canvas lifecycle

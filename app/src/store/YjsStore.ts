@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { WebsocketProvider } from 'y-websocket';
+import { HocuspocusProvider } from '@hocuspocus/provider';
 import { Awareness } from 'y-protocols/awareness';
 import type {
   TableObject,
@@ -46,7 +46,7 @@ export interface ObjectChanges {
 export class YjsStore {
   private doc: Y.Doc;
   private persistence: IndexeddbPersistence | null = null;
-  private wsProvider: WebsocketProvider | null = null; // M5-T1
+  private wsProvider: HocuspocusProvider | null = null; // M5-T1
   private actorId: ActorId;
   private isReady = false;
   private readyPromise: Promise<void>;
@@ -126,25 +126,18 @@ export class YjsStore {
     // Optional - only connects if wsUrl is provided
     if (wsUrl) {
       console.log(`[YjsStore] Connecting to multiplayer server: ${wsUrl}`);
-      this.wsProvider = new WebsocketProvider(wsUrl, tableId, this.doc, {
+      this.wsProvider = new HocuspocusProvider({
+        url: wsUrl,
+        name: tableId,
+        document: this.doc,
         awareness: this.awareness,
-      });
-
-      this.wsProvider.on('status', (event: { status: string }) => {
-        console.log(`[YjsStore] WebSocket status: ${event.status}`);
-        // Map y-websocket status to our status type
-        if (event.status === 'connected') {
-          this.setConnectionStatus('connected');
-        } else if (event.status === 'disconnected') {
-          this.setConnectionStatus('disconnected');
-        } else {
-          this.setConnectionStatus('connecting');
-        }
-      });
-
-      this.wsProvider.on('connection-error', (event: Event) => {
-        console.error('[YjsStore] WebSocket connection error:', event);
-        this.setConnectionStatus('disconnected');
+        onStatus: ({ status }) => {
+          console.log(`[YjsStore] WebSocket status: ${status}`);
+          this.setConnectionStatus(status);
+        },
+        onClose: ({ event }) => {
+          console.error('[YjsStore] WebSocket closed:', event);
+        },
       });
 
       // Set initial connecting status

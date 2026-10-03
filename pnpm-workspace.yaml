@@ -5,11 +5,6 @@ packages:
 
 allowBuilds:
   esbuild: false
-  leveldown: false
-  classic-level: false
 
 minimumReleaseAgeExclude:
   - lucide-react@1.51.0
-
-overrides:
-  y-leveldb: 0.2.0

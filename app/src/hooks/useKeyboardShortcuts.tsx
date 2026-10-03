@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { KeyboardManager } from '../actions/KeyboardManager';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
@@ -21,10 +21,14 @@ export function useKeyboardShortcuts(
   onActionExecuted?: () => void,
 ): void {
   const contextRef = useRef(context);
-  contextRef.current = context;
-
   const onActionExecutedRef = useRef(onActionExecuted);
-  onActionExecutedRef.current = onActionExecuted;
+
+  // Layout effects run before the passive effect below and before any event
+  // can be dispatched after commit, so the listener always sees the latest values.
+  useLayoutEffect(() => {
+    contextRef.current = context;
+    onActionExecutedRef.current = onActionExecuted;
+  });
 
   useEffect(() => {
     if (!enabled || !contextRef.current) {

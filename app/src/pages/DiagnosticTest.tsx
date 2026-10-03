@@ -1,21 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 /**
  * Diagnostic page to test OffscreenCanvas + WebGL without PixiJS.
  * This helps isolate whether the crash is OffscreenCanvas itself or PixiJS configuration.
  */
 function DiagnosticTest() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [results, setResults] = useState<string[]>([]);
-  const [testComplete, setTestComplete] = useState(false);
+  const [results, setResults] = useState<string[] | null>(null);
+  const testComplete = results !== null;
 
-  const addResult = (message: string) => {
-    console.log(`[Diagnostic] ${message}`);
-    setResults((prev) => [...prev, message]);
-  };
+  // Runs once when the canvas element mounts (it is the external system the
+  // diagnostics probe). Collects all output and publishes it in one setState.
+  const runDiagnostics = useCallback((canvasEl: HTMLCanvasElement | null) => {
+    if (!canvasEl) return;
 
-  useEffect(() => {
-    if (!canvasRef.current) return;
+    const collected: string[] = [];
+    const addResult = (message: string) => {
+      console.log(`[Diagnostic] ${message}`);
+      collected.push(message);
+    };
 
     addResult('Starting diagnostic tests...');
     addResult(`User Agent: ${navigator.userAgent}`);
@@ -79,11 +81,8 @@ function DiagnosticTest() {
     addResult('---');
     addResult('Test 4: Transfer canvas to OffscreenCanvas and render');
     try {
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        addResult('✗ Canvas ref is null');
-      } else {
-        const offscreen = canvas.transferControlToOffscreen();
+      {
+        const offscreen = canvasEl.transferControlToOffscreen();
         addResult('✓ Canvas transferred successfully');
 
         // Try getting WebGL context from transferred canvas
@@ -221,7 +220,7 @@ function DiagnosticTest() {
 
     addResult('---');
     addResult('All tests complete!');
-    setTestComplete(true);
+    setResults(collected);
   }, []);
 
   return (
@@ -244,7 +243,7 @@ function DiagnosticTest() {
       </p>
 
       <canvas
-        ref={canvasRef}
+        ref={runDiagnostics}
         width={300}
         height={200}
         style={{
@@ -282,7 +281,7 @@ function DiagnosticTest() {
           border: '2px solid #000000',
         }}
       >
-        {results.join('\n')}
+        {(results ?? []).join('\n')}
       </pre>
 
       <div style={{ marginTop: '20px' }}>

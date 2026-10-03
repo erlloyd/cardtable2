@@ -3,30 +3,31 @@ import { useState, useEffect, useCallback } from 'react';
 const RECENT_ACTIONS_KEY = 'cardtable2:recentActions';
 const MAX_RECENT_ACTIONS = 5;
 
+function loadRecentActions(): string[] {
+  try {
+    const stored = localStorage.getItem(RECENT_ACTIONS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (item): item is string => typeof item === 'string',
+        );
+      }
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+  return [];
+}
+
 /**
  * Hook for managing command palette state
  * Handles open/close state, recently used actions, and keyboard shortcut
  */
 export function useCommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
-  const [recentActions, setRecentActions] = useState<string[]>([]);
-
-  // Load recent actions from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RECENT_ACTIONS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as unknown;
-        if (Array.isArray(parsed)) {
-          setRecentActions(
-            parsed.filter((item): item is string => typeof item === 'string'),
-          );
-        }
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
+  const [recentActions, setRecentActions] =
+    useState<string[]>(loadRecentActions);
 
   const open = useCallback(() => {
     console.log('[CommandPalette] Opening...');

@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
+
+const HOVER_QUERY = '(hover: hover) and (pointer: fine)';
 
 /**
  * Reactive `(hover: hover) and (pointer: fine)` media-query check.
@@ -19,30 +21,21 @@ import { useEffect, useState } from 'react';
  * popover with no way to dismiss.
  */
 export function useHoverCapable(): boolean {
-  // Initialize from the media query if available; otherwise assume not
-  // hover-capable. The state is updated lazily — most consumers only need
-  // the first render's value, but a user dragging a window between a
-  // touch screen and a mouse-driven monitor will see the value flip.
-  const [hoverCapable, setHoverCapable] = useState<boolean>(() =>
-    readHoverCapable(),
+  return useSyncExternalStore(
+    subscribeHoverCapable,
+    readHoverCapable,
+    () => false,
   );
+}
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mql = window.matchMedia('(hover: hover) and (pointer: fine)');
-    const handler = (e: MediaQueryListEvent) => {
-      setHoverCapable(e.matches);
-    };
-    // Sync once on mount in case the value changed between SSR and hydrate.
-    setHoverCapable(mql.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
-
-  return hoverCapable;
+function subscribeHoverCapable(onChange: () => void): () => void {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const mql = window.matchMedia(HOVER_QUERY);
+  mql.addEventListener('change', onChange);
+  return () => mql.removeEventListener('change', onChange);
 }
 
 function readHoverCapable(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  return window.matchMedia(HOVER_QUERY).matches;
 }

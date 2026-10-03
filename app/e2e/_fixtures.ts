@@ -7,7 +7,7 @@
  *
  * ## Why this exists
  *
- * The local y-websocket dev server retains CRDT documents in memory keyed by
+ * The local Hocuspocus sync server retains CRDT documents in memory keyed by
  * table id, and `testInfo.testId` is hash-deterministic — so back-to-back runs
  * of the same test against the same long-running dev server inherit prior
  * state. Authors used to call `__TEST_STORE__.clearAllObjects()` manually at
@@ -105,7 +105,7 @@ export const test = base.extend({
           await store?.waitForReady();
         });
         // Clear, then wait until the store actually reports zero objects.
-        // The y-websocket dev server retains CRDT docs in memory keyed by
+        // The Hocuspocus sync server retains CRDT docs in memory keyed by
         // table id; if a prior run populated this id, server state can race
         // back in after a single clear. Re-clear until it sticks.
         await page.waitForFunction(() => {

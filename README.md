@@ -18,9 +18,10 @@ Cardtable 2.0 is a web-based application designed to provide a flexible, perform
 ## Tech Stack
 
 - **Frontend**: React 19, TypeScript, PixiJS, TanStack Router, Vite
-- **Backend**: Node.js 24, Express 5, y-websocket
+- **Backend**: Node.js 26, Express 5, Hocuspocus
 - **State Management**: Yjs (CRDT)
 - **Testing**: Vitest (unit), Playwright (E2E)
+- **Tooling**: oxlint (type-aware) + oxfmt, TypeScript 7
 - **Build System**: PNPM workspaces (monorepo)
 - **Deployment**: GitHub Pages (app), Railway (server)
 
@@ -33,7 +34,7 @@ cardtable2/
 │   ├── e2e/            # Playwright E2E tests
 │   └── public/         # Static assets and game manifests
 ├── server/             # Backend WebSocket server
-│   ├── src/            # Express + y-websocket server
+│   ├── src/            # Express + Hocuspocus server (runs as native TypeScript, no build)
 │   └── Dockerfile      # Production container
 ├── shared/             # Shared TypeScript types
 └── _plans/             # Project planning and milestones
@@ -43,8 +44,8 @@ cardtable2/
 
 ### Prerequisites
 
-- Node.js ≥24.0.0
-- pnpm ≥9.0.0
+- Node.js ≥26 (see `.tool-versions`)
+- pnpm 12 (see `packageManager` in `package.json`). Contributors on pnpm < 12 need a one-time `pnpm self-update` (or `npm i -g pnpm@12`) before `pnpm install`.
 
 ### Installation
 
@@ -78,7 +79,8 @@ pnpm run build
 
 # Build a specific package
 pnpm --filter @cardtable2/app build
-pnpm --filter @cardtable2/server build
+
+# The server has no build step: it runs as `node src/index.ts`
 ```
 
 ### Testing
@@ -100,20 +102,26 @@ cd app && pnpm run test:watch
 ### Code Quality
 
 ```bash
-# Run linter
+# Run linter (oxlint, type-aware)
 pnpm run lint
 
 # Run type checking
 pnpm run typecheck
 
-# Format code
+# Format code (oxfmt)
 pnpm run format
 
 # Check formatting
 pnpm run format:check
 
-# Run all checks (lint + typecheck + test + build)
-pnpm run validate
+# Auto-fix formatting and lint findings
+pnpm run fix
+
+# Run format check + lint + typecheck
+pnpm check
+
+# Full validation before pushing
+pnpm check && pnpm test && pnpm build
 ```
 
 ## Development Workflow
@@ -128,8 +136,8 @@ pnpm run validate
 
 This project uses Husky for Git hooks:
 
-- **pre-commit**: Runs `lint-staged` to auto-format staged files
-- **pre-push**: Runs type checking and format verification
+- **pre-commit**: Runs `pnpm check` (format check, oxlint, typecheck)
+- There is no pre-push hook; CI runs the same checks
 
 ### CI/CD Pipeline
 
@@ -148,8 +156,8 @@ This project uses Husky for Git hooks:
 
 ### Backend Architecture
 
-- **WebSocket Server**: y-websocket for real-time CRDT synchronization
-- **Persistence**: In-memory with optional Redis/LevelDB for production
+- **WebSocket Server**: Hocuspocus for real-time CRDT synchronization, embedded in the Express server (`server/src/sync.ts`)
+- **Persistence**: In-memory only for now
 - **API**: Express 5 REST endpoints for game metadata
 
 ### Data Model
@@ -192,14 +200,14 @@ Pull requests automatically deploy preview environments to Railway with unique U
 
 1. Create a feature branch from `main`
 2. Make your changes following the code style guidelines
-3. Ensure all tests pass (`pnpm run validate`)
+3. Ensure all tests pass (`pnpm check && pnpm test && pnpm build`)
 4. Create a pull request
 
 ### Code Style
 
 - TypeScript strict mode enabled
-- ESLint + Prettier for code formatting
-- No suppression comments without approval (`@ts-ignore`, `eslint-disable`, etc.)
+- oxlint + oxfmt for linting and formatting
+- No suppression comments without approval (`@ts-ignore`, `oxlint-disable`, etc.)
 - Comprehensive test coverage required
 
 ## Troubleshooting

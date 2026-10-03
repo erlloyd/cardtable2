@@ -6,28 +6,28 @@ Detailed architectural reference for Cardtable 2.0. Loaded on-demand — see CLA
 
 Cardtable 2.0 is a solo-first virtual card table with optional multiplayer support. It's designed to handle any card/board game through manifest-only content (no game rules in code).
 
-- **Frontend**: React 19 + TypeScript + PixiJS (Vite 7)
-- **Backend**: Node 24 + Express 5 + y-websocket
+- **Frontend**: React 19 + TypeScript + PixiJS (Vite)
+- **Backend**: Node 26 + Express 5 + Hocuspocus 4.7
 - **Shared**: Common TypeScript types
 - **Monorepo**: PNPM workspaces
 
 ## Technology Stack
 
-- **Node.js**: v24 (LTS Krypton)
-- **React**: 19.2.0
-- **TanStack Router**: 1.136.1
-- **Vite**: 7.2.2
-- **Vitest**: 4.0.8
-- **Playwright**: 1.56.1
-- **Headless UI**: 2.2.9
-- **PixiJS**: 8.14.1
-- **Express**: 5.1.0
-- **Yjs (app)**: 13.6.27
-- **Yjs (server)**: 13.6.20
-- **y-websocket**: 3.0.0
-- **TypeScript**: 5.7.2
-- **ESLint**: 9.15.0
-- **Prettier**: 3.4.1
+Exact versions live in the `package.json` files (and `.tool-versions` for Node); this list names the stack only.
+
+- **Node.js**: 26
+- **React**: 19
+- **TanStack Router**
+- **Vite**
+- **Vitest**
+- **Playwright**
+- **Headless UI**
+- **PixiJS**: 8
+- **Express**: 5
+- **Yjs**
+- **Hocuspocus** (`@hocuspocus/server`, `@hocuspocus/provider`): 4.7
+- **TypeScript**: 7 (native compiler)
+- **oxlint** (type-aware, via oxlint-tsgolint) and **oxfmt**, replacing ESLint and Prettier
 
 ## Project Structure
 
@@ -46,9 +46,10 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 │   ├── public/         # Static assets (gamesIndex.json)
 │   ├── vite.config.ts
 │   └── playwright.config.ts
-├── server/             # Backend (Node + y-websocket)
+├── server/             # Backend (Node + Hocuspocus)
 │   ├── src/
-│   │   └── index.ts    # Express + WebSocket server
+│   │   ├── index.ts    # Express + ws upgrade handling
+│   │   └── sync.ts     # Hocuspocus glue: createHocuspocus, connectSocket, toFetchRequest
 │   └── Dockerfile      # Production container image
 ├── docs/               # On-demand reference docs (this folder)
 └── .github/
@@ -65,6 +66,14 @@ Cardtable 2.0 is a solo-first virtual card table with optional multiplayer suppo
 - Every card or group of cards is a "stack" (even single cards)
 - Object types: `stack`, `token`, `zone`, `mat`, `counter`
 - Yjs for CRDT-based multiplayer sync
+
+## Sync Server
+
+- Express owns the http server and the `ws` upgrade (`server/src/index.ts`).
+- Each upgraded socket is handed to the core `Hocuspocus` class via `handleConnection`; `connectSocket` in `server/src/sync.ts` forwards the socket's `message` and `close` events to the returned connection. `toFetchRequest` converts the Node request into the fetch `Request` Hocuspocus expects.
+- The client uses `HocuspocusProvider`.
+- No server persistence yet. When it is needed: the Hocuspocus `Database` extension plus `node:sqlite` (about 30 lines) and a Railway volume.
+- The server runs as native TypeScript (`node src/index.ts`), so there is no server build.
 
 ## Rendering Architecture
 

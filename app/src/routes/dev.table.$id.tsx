@@ -146,7 +146,7 @@ function DevTable() {
 
   // Register default actions (shared with table route)
   useEffect(() => {
-    registerDefaultActions();
+    return registerDefaultActions();
   }, []);
 
   // Subscribe to store gameAssets changes so the loadables-derivation effect

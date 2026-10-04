@@ -247,8 +247,12 @@ function Table() {
 
   // Register default actions (shared with dev route)
   useEffect(() => {
-    registerDefaultActions();
-    registerHandActions(ActionRegistry.getInstance());
+    const unregisterDefaults = registerDefaultActions();
+    const unregisterHand = registerHandActions(ActionRegistry.getInstance());
+    return () => {
+      unregisterDefaults();
+      unregisterHand();
+    };
   }, []);
 
   // Keep the dynamic per-type "Load <X>..." actions and the local loadables

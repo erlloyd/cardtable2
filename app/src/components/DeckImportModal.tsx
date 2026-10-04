@@ -65,15 +65,6 @@ export function DeckImportModal({
   const [isPrivate, setIsPrivate] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Reset transient input state every time the modal opens — closing without
-  // a reset would leak the previous attempt's deck id into the next open.
-  useEffect(() => {
-    if (isOpen) {
-      setDeckId('');
-      setIsPrivate(false);
-    }
-  }, [isOpen]);
-
   // Esc closes; effective only while open so it doesn't capture Esc in the
   // background.
   useEffect(() => {

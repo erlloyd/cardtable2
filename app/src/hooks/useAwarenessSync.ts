@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import type { YjsStore } from '../store/YjsStore';
 import type { AwarenessState } from '@cardtable2/shared';
@@ -19,12 +19,6 @@ export function useAwarenessSync(
   store: YjsStore,
   isSynced: boolean,
 ): void {
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const storeRef = useRef<YjsStore>(store);
-
-  // Keep store ref up to date
-  storeRef.current = store;
-
   useEffect(() => {
     // Only subscribe after renderer is initialized and synced
     if (!isSynced || !renderer) {
@@ -33,9 +27,9 @@ export function useAwarenessSync(
 
     console.log('[useAwarenessSync] Subscribing to awareness changes');
 
-    const unsubscribe = storeRef.current.onAwarenessChange((states) => {
+    const unsubscribe = store.onAwarenessChange((states) => {
       // Filter out local client (only send remote awareness)
-      const localClientId = storeRef.current.getDoc().clientID;
+      const localClientId = store.getDoc().clientID;
       const remoteStates: Array<{ clientId: number; state: AwarenessState }> =
         [];
 
@@ -52,14 +46,9 @@ export function useAwarenessSync(
       });
     });
 
-    unsubscribeRef.current = unsubscribe;
-
     return () => {
-      if (unsubscribeRef.current) {
-        console.log('[useAwarenessSync] Unsubscribing from awareness changes');
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
+      console.log('[useAwarenessSync] Unsubscribing from awareness changes');
+      unsubscribe();
     };
-  }, [isSynced, renderer]);
+  }, [isSynced, renderer, store]);
 }

@@ -117,9 +117,6 @@ playwright-report/
 # Storybook build outputs
 storybook-static
 
-# TanStack Router generated files
-**/routeTree.gen.ts
-
 # Claude Code local settings
 .claude/settings.local.json
 

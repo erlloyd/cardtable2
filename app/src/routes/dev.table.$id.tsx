@@ -7,14 +7,18 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
-import { YjsStore } from '../store/YjsStore';
 import {
   createObject,
   clearAllSelections,
   resetToTestScene,
 } from '../store/YjsActions';
-import { ObjectKind, type GameAssets } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  type GameAssets,
+  type LoadableEntry,
+} from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
 import type { TableObjectYMap } from '../store/types';
@@ -45,62 +49,31 @@ import {
   type DeckInputResult,
 } from '../content/loadHandler';
 import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
-import type { LoadableEntry } from '@cardtable2/shared';
 
 // Lazy load the Board component
 const Board = lazy(() => import('../components/Board'));
 
 export const Route = createFileRoute('/dev/table/$id')({
   component: DevTable,
+  // A new tableId needs a new store: useTableStore creates it once per mount
+  remountDeps: ({ params }) => params,
 });
 
 function DevTable() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const [objectCount, setObjectCount] = useState(0);
-
-  // Set up object change subscription when store is ready
-  const handleStoreReady = useCallback((store: YjsStore) => {
-    // Get initial object count (M3.6-T4: use objects.size directly)
-    const count = store.objects.size;
-    setObjectCount(count);
-    console.log(`[DevTable] Loaded ${count} objects from IndexedDB`);
-
-    // Subscribe to object changes
-    const unsubscribe = store.onObjectsChange((changes) => {
-      // Update object count based on current state (M3.6-T4: use objects.size directly)
-      setObjectCount(store.objects.size);
-
-      // Log changes for debugging
-      if (changes.added.length > 0) {
-        console.log(`[DevTable] Added ${changes.added.length} object(s)`);
-      }
-      if (changes.updated.length > 0) {
-        console.log(`[DevTable] Updated ${changes.updated.length} object(s)`);
-      }
-      if (changes.removed.length > 0) {
-        console.log(`[DevTable] Removed ${changes.removed.length} object(s)`);
-      }
-    });
-
-    // Store unsubscribe function for cleanup
-    unsubscribeRef.current = unsubscribe;
-
-    // Cleanup function
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
-    };
-  }, []);
 
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
-    logPrefix: 'DevTable',
-    onStoreReady: handleStoreReady,
   });
+
+  // Object count follows the store's Y.Map (M3.6-T4: use objects.size directly)
+  const subscribeObjects = useCallback(
+    (onChange: () => void) => store.onObjectsChange(onChange),
+    [store],
+  );
+  const getObjectCount = useCallback(() => store.objects.size, [store]);
+  const objectCount = useSyncExternalStore(subscribeObjects, getObjectCount);
 
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
@@ -111,7 +84,10 @@ function DevTable() {
     supportsPrivate: boolean;
     loading: boolean;
     error: string | null;
+    /** Bumped per open so DeckImportModal remounts with fresh input state. */
+    key: number;
   }>({
+    key: 0,
     open: false,
     labels: { siteName: '', inputPlaceholder: '' },
     supportsPrivate: false,
@@ -124,11 +100,20 @@ function DevTable() {
   const [loadPicker, setLoadPicker] = useState<{
     open: boolean;
     presetType?: string;
-  }>({ open: false });
-  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntriesForUi(),
-  );
+    /** Bumped per open so LoadPickerModal remounts with fresh state. */
+    key: number;
+  }>({ open: false, key: 0 });
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
+  // The loadables registry is external mutable state populated alongside
+  // gameAssets; re-read it during render whenever gameAssets changes.
+  const [loadablesAssets, setLoadablesAssets] = useState(gameAssets);
+  // Starts empty: a mount-time read of the module-level registry would
+  // snapshot the previous table's entries. Re-read when gameAssets change.
+  const [loadables, setLoadables] = useState<LoadableEntry[]>([]);
+  if (gameAssets !== loadablesAssets) {
+    setLoadablesAssets(gameAssets);
+    setLoadables(getLoadableEntriesForUi());
+  }
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -137,15 +122,13 @@ function DevTable() {
 
   // Register default actions (shared with table route)
   useEffect(() => {
-    registerDefaultActions();
+    return registerDefaultActions();
   }, []);
 
   // Subscribe to store gameAssets changes so the loadables-derivation effect
   // below can re-run when a dev tool / scenario load populates the registry.
   // Mirrors the main route's pattern (see `routes/table.$id.tsx` ~line 437).
   useEffect(() => {
-    if (!store) return;
-
     const unsubscribe = store.onGameAssetsChange((assets) => {
       setGameAssets(assets);
     });
@@ -160,18 +143,15 @@ function DevTable() {
   // `table.$id.tsx`'s pattern, ct-rde) drives re-derivation when those
   // sources fire.
   useEffect(() => {
-    const entries = getLoadableEntriesForUi();
-    setLoadables(entries);
     unregisterLoadablesActions();
-    if (entries.length > 0) {
-      registerLoadablesActions(entries);
+    if (loadables.length > 0) {
+      registerLoadablesActions(loadables);
     }
-  }, [gameAssets]);
+    return unregisterLoadablesActions;
+  }, [loadables]);
 
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
-    if (!store) return;
-
     // Spawn at random position near center
     const x = Math.random() * 400 - 200; // -200 to +200
     const y = Math.random() * 400 - 200;
@@ -190,23 +170,18 @@ function DevTable() {
 
   // Handler to clear all objects (M3-T2.5 Phase 7)
   const handleClearStore = () => {
-    if (!store) return;
-
     store.clearAllObjects();
     console.log('[DevTable] Cleared all objects from store');
   };
 
   // Handler to clear all selections (M3-T3)
   const handleClearSelections = () => {
-    if (!store) return;
-
     const cleared = clearAllSelections(store);
     console.log(`[DevTable] Cleared ${cleared} selection(s)`);
   };
 
   // Handler to reset to test scene (M3-T2.5 Phase 7)
   const handleResetToTestScene = () => {
-    if (!store) return;
     resetToTestScene(store);
   };
 
@@ -218,8 +193,6 @@ function DevTable() {
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
-    if (!store) return;
-
     const updateSelection = () => {
       // Use getObjectsSelectedBy() - returns {id, yMap} pairs
       const selected = store.getObjectsSelectedBy(store.getActorId());
@@ -238,7 +211,7 @@ function DevTable() {
   }, [store]);
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
-    setLoadPicker({ open: true, presetType });
+    setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
 
   // Register deck-input provider — see routes/table.$id.tsx for the full doc.
@@ -247,13 +220,14 @@ function DevTable() {
       ({ labels, supportsPrivate }) =>
         new Promise<DeckInputResult | null>((resolve) => {
           deckImportResolveRef.current = resolve;
-          setDeckImport({
+          setDeckImport((prev) => ({
             open: true,
             labels,
             supportsPrivate,
             loading: false,
             error: null,
-          });
+            key: prev.key + 1,
+          }));
         }),
     );
     return () => {
@@ -281,7 +255,7 @@ function DevTable() {
   );
 
   const handleCloseLoadPicker = useCallback(() => {
-    setLoadPicker({ open: false });
+    setLoadPicker((prev) => ({ ...prev, open: false }));
   }, []);
 
   const resolveDerivedItems = useCallback<DerivedItemsResolver>((entry) => {
@@ -297,7 +271,6 @@ function DevTable() {
 
   const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
     (entry, item) => {
-      if (!store) return;
       // Dev table has no Board reference for camera state — fall back to
       // origin/un-zoomed; placement primitive returns sensible defaults.
       void handleLoadSelection(entry, item, {
@@ -427,7 +400,7 @@ function DevTable() {
       </div>
 
       <Suspense fallback={<div>Loading board...</div>}>
-        {store && isStoreReady ? (
+        {isStoreReady ? (
           <Board
             tableId={id}
             store={store}
@@ -479,6 +452,7 @@ function DevTable() {
       {/* Deck Import Modal — opened by the loadHandler's provider branch via
           the registered deckInputProvider. */}
       <DeckImportModal
+        key={deckImport.key}
         isOpen={deckImport.open}
         onClose={handleDeckImportClose}
         onSubmit={handleDeckImportSubmit}
@@ -490,6 +464,7 @@ function DevTable() {
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal
+        key={`${loadPicker.key}:${loadPicker.presetType ? (loadables.find((l) => l.type === loadPicker.presetType)?.type ?? '') : ''}`}
         open={loadPicker.open}
         onClose={handleCloseLoadPicker}
         loadables={loadables}

@@ -53,7 +53,7 @@ describe('GridSnapManager', () => {
 
     // Mock visual manager
     mockVisualManager = {
-      createText: vi.fn((options: TextOptions) => new Text(options)),
+      createText: vi.fn((options: TextOptions) => new Text({ ...options })),
       createKindLabel: vi.fn((text: string) => {
         const label = new Text({ text });
         label.anchor.set(0.5);
@@ -112,7 +112,7 @@ describe('GridSnapManager', () => {
       );
 
       // Ghost container should have one child (the ghost)
-      const ghostContainer = parentContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
       expect(ghostContainer.children.length).toBe(1);
     });
 
@@ -169,7 +169,7 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
       const initialChildCount = ghostContainer.children.length;
 
       // Second render - should reuse ghost
@@ -193,8 +193,8 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
-      const ghost = ghostContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
+      const ghost = ghostContainer.children[0];
       const initialX = ghost.x;
 
       // Move world container and update ghost
@@ -219,8 +219,8 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
-      const ghost = ghostContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
+      const ghost = ghostContainer.children[0];
 
       // 90 degrees = PI/2 radians
       expect(ghost.rotation).toBeCloseTo(Math.PI / 2);
@@ -238,8 +238,8 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
-      const ghost = ghostContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
+      const ghost = ghostContainer.children[0];
 
       expect(ghost.scale.x).toBe(cameraScale);
       expect(ghost.scale.y).toBe(cameraScale);
@@ -252,8 +252,7 @@ describe('GridSnapManager', () => {
           { id: 'valid-id', snappedPos: { x: 0, y: 0, r: 0 } },
           { id: 'valid-id-2', snappedPos: { x: 100, y: 100, r: 0 } },
         ],
-        {
-          ...mockSceneManager,
+        Object.assign({}, mockSceneManager, {
           getObject: vi.fn((id: string) => {
             if (id === 'valid-id' || id === 'valid-id-2') {
               return {
@@ -268,13 +267,13 @@ describe('GridSnapManager', () => {
             }
             return undefined;
           }),
-        } as unknown as SceneManager,
+        }),
         1.0,
         worldContainer,
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
       expect(ghostContainer.children.length).toBe(2);
 
       // Second render with only one object
@@ -327,7 +326,7 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
       // Stack should render, token should error (no behaviors in mock)
       expect(ghostContainer.children.length).toBeGreaterThanOrEqual(1);
     });
@@ -347,7 +346,7 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
       expect(ghostContainer.children.length).toBeGreaterThan(0);
 
       manager.clearGhosts();
@@ -359,7 +358,7 @@ describe('GridSnapManager', () => {
       manager.clearGhosts();
       manager.clearGhosts();
 
-      const ghostContainer = parentContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
       expect(ghostContainer.children.length).toBe(0);
     });
 
@@ -383,8 +382,8 @@ describe('GridSnapManager', () => {
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
-      const ghost = ghostContainer.children[0] as Container;
+      const ghostContainer = parentContainer.children[0];
+      const ghost = ghostContainer.children[0];
       const destroySpy = vi.spyOn(ghost, 'destroy');
 
       manager.clearGhosts();
@@ -398,8 +397,7 @@ describe('GridSnapManager', () => {
           { id: 'valid-id', snappedPos: { x: 0, y: 0, r: 0 } },
           { id: 'valid-id-2', snappedPos: { x: 100, y: 100, r: 0 } },
         ],
-        {
-          ...mockSceneManager,
+        Object.assign({}, mockSceneManager, {
           getObject: vi.fn((id: string) => {
             if (id === 'valid-id' || id === 'valid-id-2') {
               return {
@@ -414,14 +412,14 @@ describe('GridSnapManager', () => {
             }
             return undefined;
           }),
-        } as unknown as SceneManager,
+        }),
         1.0,
         worldContainer,
         mockVisualManager,
       );
 
-      const ghostContainer = parentContainer.children[0] as Container;
-      const removedGhost = ghostContainer.children[1] as Container;
+      const ghostContainer = parentContainer.children[0];
+      const removedGhost = ghostContainer.children[1];
       const destroySpy = vi.spyOn(removedGhost, 'destroy');
 
       // Render with only one object - should destroy the second ghost

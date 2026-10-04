@@ -1,4 +1,10 @@
 packages:
-  - 'shared'
-  - 'app'
-  - 'server'
+  - shared
+  - app
+  - server
+
+allowBuilds:
+  esbuild: false
+
+minimumReleaseAgeExclude:
+  - lucide-react@1.51.0

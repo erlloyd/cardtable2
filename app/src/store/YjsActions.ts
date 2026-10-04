@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { YjsStore } from './YjsStore';
 import {
   ObjectKind,
@@ -85,7 +84,7 @@ export function createObject(
   store: YjsStore,
   options: CreateObjectOptions,
 ): string {
-  const id = uuidv4();
+  const id = crypto.randomUUID();
   const sortKey = generateTopSortKey(store);
 
   // Get default properties for this kind from centralized defaults

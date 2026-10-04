@@ -1,20 +1,14 @@
 /**
  * Throttle utility for awareness updates (M3-T4)
  *
- * Re-exports lodash-es throttle with trailing edge semantics.
- * Previously used a custom implementation that had a race condition
- * between cancel() and setTimeout callbacks.
+ * Leading + trailing edge semantics: the first call runs immediately, calls
+ * inside the interval collapse into one trailing call with the latest args.
  */
 
-import { throttle as lodashThrottle, type DebouncedFunc } from 'lodash-es';
-
-/**
- * Type for throttled functions with cancel method
- * (lodash's DebouncedFunc includes cancel and flush methods)
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic function signature requires any for proper type inference
-export type ThrottledFunction<T extends (...args: any[]) => void> =
-  DebouncedFunc<T>;
+export type ThrottledFunction<T extends (...args: never[]) => void> = {
+  (...args: Parameters<T>): void;
+  cancel: () => void;
+};
 
 /**
  * Throttle a function to be called at most once per interval
@@ -34,17 +28,45 @@ export type ThrottledFunction<T extends (...args: any[]) => void> =
  * throttledUpdate(102, 202);
  * // Only executes once per 33ms with the latest values
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic function signature requires any for proper type inference
-export function throttle<T extends (...args: any[]) => void>(
+export function throttle<T extends (...args: never[]) => void>(
   fn: T,
   intervalMs: number,
 ): ThrottledFunction<T> {
-  // Use lodash throttle with trailing edge (default behavior)
-  // This ensures the latest value is always sent
-  return lodashThrottle(fn, intervalMs, {
-    leading: true,
-    trailing: true,
-  });
+  let lastInvokeTime = Number.NEGATIVE_INFINITY;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let pendingArgs: Parameters<T> | undefined;
+
+  const invoke = (args: Parameters<T>) => {
+    lastInvokeTime = Date.now();
+    fn(...args);
+  };
+
+  const throttled = (...args: Parameters<T>) => {
+    const remaining = intervalMs - (Date.now() - lastInvokeTime);
+    if (remaining <= 0) {
+      clearTimeout(timer);
+      timer = undefined;
+      pendingArgs = undefined;
+      invoke(args);
+      return;
+    }
+    pendingArgs = args;
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      const args = pendingArgs;
+      pendingArgs = undefined;
+      if (args) invoke(args);
+    }, remaining);
+  };
+
+  throttled.cancel = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    pendingArgs = undefined;
+    lastInvokeTime = Number.NEGATIVE_INFINITY;
+  };
+
+  return throttled;
 }
 
 /**

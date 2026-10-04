@@ -26,6 +26,7 @@
  *     direction is restored (`dy > 0`).
  */
 
+import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 import type { AttachmentDirection } from '@cardtable2/shared';
 
@@ -83,7 +84,7 @@ interface PageGlobals {
  * drive a real `page.mouse` drag.
  */
 async function seedTwoStacks(
-  page: Parameters<Parameters<typeof test>[1]>[0]['page'],
+  page: Page,
 ): Promise<SeededPair & { parentViewport: Pos; childViewport: Pos }> {
   return await page.evaluate(() => {
     const globals = globalThis as unknown as PageGlobals;

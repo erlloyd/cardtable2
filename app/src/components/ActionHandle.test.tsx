@@ -61,7 +61,7 @@ describe('ActionHandle', () => {
       _meta: {},
       _cards: ['card1'],
       _faceUp: true,
-    } as StackObject;
+    };
 
     // Create mock Y.Map for test object (M3.6-T5)
     testStackYMap = new Y.Map() as TableObjectYMap;

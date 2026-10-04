@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
@@ -66,10 +66,6 @@ class MockYjsStore implements Partial<YjsStore> {
   clearAllObjects(): void {
     // Mock implementation
   }
-
-  destroy(): void {
-    // Mock implementation
-  }
 }
 
 // Mock Worker
@@ -86,7 +82,7 @@ class MockWorker {
 
     // Simulate worker ready message
     setTimeout(() => {
-      this.simulateMessage({ type: 'ready' } as RendererToMainMessage);
+      this.simulateMessage({ type: 'ready' });
     }, 0);
   }
 
@@ -103,7 +99,7 @@ class MockWorker {
           this.simulateMessage({
             type: 'pong',
             data: `Pong! Received: ${msg.data}`,
-          } as RendererToMainMessage);
+          });
         } else if (msg.type === 'echo') {
           this.simulateMessage({
             type: 'echo-response',
@@ -113,7 +109,7 @@ class MockWorker {
           // Simulate canvas initialization
           this.simulateMessage({
             type: 'initialized',
-          } as RendererToMainMessage);
+          });
         }
       }
     }, 0);
@@ -167,9 +163,8 @@ class MockWorker {
 
 // Mock the renderer factory to use worker mode with MockWorker
 vi.mock('../renderer/RendererFactory', async () => {
-  const { WorkerRendererAdapter } = await import(
-    '../renderer/WorkerRendererAdapter'
-  );
+  const { WorkerRendererAdapter } =
+    await import('../renderer/WorkerRendererAdapter');
   const { RenderMode } = await import('../renderer/IRendererAdapter');
   return {
     RenderMode,
@@ -192,6 +187,11 @@ describe('Board', () => {
   let mockStore: MockYjsStore;
 
   beforeEach(() => {
+    // Unmount-time hook logs fire in afterEach; vitest flushes console output
+    // over RPC on a timer, so logs from the file's last tests can still be
+    // pending when the worker tears down (EnvironmentTeardownError).
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
     // Mock Worker constructor
     vi.stubGlobal('Worker', MockWorker);
 
@@ -205,6 +205,9 @@ describe('Board', () => {
   });
 
   afterEach(() => {
+    // Unmount while console.log is still spied (hooks run in reverse order, so
+    // the global cleanup in test/setup.ts would otherwise run after restore).
+    cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -444,17 +447,12 @@ describe('Board', () => {
         expect(postMessageSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'pointer-down',
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             event: expect.objectContaining({
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              pointerId: expect.any(Number),
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              pointerType: expect.any(String),
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              clientX: expect.any(Number),
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              clientY: expect.any(Number),
-            }),
+              pointerId: expect.any(Number) as number,
+              pointerType: expect.any(String) as string,
+              clientX: expect.any(Number) as number,
+              clientY: expect.any(Number) as number,
+            }) as unknown,
           }),
         );
       });
@@ -775,7 +773,7 @@ describe('Board', () => {
               borderBoxSize: [],
               contentBoxSize: [],
               devicePixelContentBoxSize: [],
-            } as ResizeObserverEntry,
+            },
           ],
           {} as ResizeObserver,
         );

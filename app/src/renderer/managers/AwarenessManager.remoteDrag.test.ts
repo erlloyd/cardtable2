@@ -1,8 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Container } from 'pixi.js';
 import { AwarenessManager } from './AwarenessManager';
 import type { AwarenessState } from '@cardtable2/shared';
+
+// Tests seed the private remoteAwareness map directly
+function remoteAwarenessOf(manager: AwarenessManager) {
+  return (
+    manager as unknown as {
+      remoteAwareness: Map<
+        number,
+        { state: AwarenessState; lastUpdate: number }
+      >;
+    }
+  ).remoteAwareness;
+}
 
 describe('AwarenessManager - Remote Drag Detection', () => {
   let awarenessManager: AwarenessManager;
@@ -29,7 +40,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
         actorId: 'remote-actor-1',
         cursor: { x: 100, y: 100 },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -49,7 +60,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -73,7 +84,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -97,7 +108,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -125,7 +136,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState1,
         lastUpdate: Date.now(),
       });
@@ -140,7 +151,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(67890, {
+      remoteAwarenessOf(awarenessManager).set(67890, {
         state: remoteState2,
         lastUpdate: Date.now(),
       });
@@ -168,7 +179,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -192,7 +203,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -215,7 +226,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -231,12 +242,12 @@ describe('AwarenessManager - Remote Drag Detection', () => {
         actorId: 'remote-actor-1',
         drag: {
           gid: 'gesture-123',
-          primaryId: undefined as any, // Invalid state
+          primaryId: undefined as unknown as string, // Invalid state
           pos: { x: 100, y: 200, r: 0 },
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(12345, {
+      remoteAwarenessOf(awarenessManager).set(12345, {
         state: remoteState,
         lastUpdate: Date.now(),
       });
@@ -261,7 +272,7 @@ describe('AwarenessManager - Remote Drag Detection', () => {
           ts: Date.now(),
         },
       };
-      (awarenessManager as any).remoteAwareness.set(99999, {
+      remoteAwarenessOf(awarenessManager).set(99999, {
         state: remoteState,
         lastUpdate: Date.now(),
       });

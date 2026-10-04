@@ -7,10 +7,11 @@ import type {
  * Rendering mode enum.
  * Defines whether rendering happens in a Web Worker or on the main thread.
  */
-export enum RenderMode {
-  Worker = 'worker',
-  MainThread = 'main-thread',
-}
+export const RenderMode = {
+  Worker: 'worker',
+  MainThread: 'main-thread',
+} as const;
+export type RenderMode = (typeof RenderMode)[keyof typeof RenderMode];
 
 /**
  * Unified interface for renderer communication.
@@ -44,9 +45,19 @@ export interface IRendererAdapter {
   onMessage(handler: (message: RendererToMainMessage) => void): void;
 
   /**
-   * Clean up resources.
-   * Worker mode: terminates worker
-   * Main-thread mode: destroys renderer instance
+   * Acquire the renderer's resources. Construction allocates nothing.
+   * Worker mode: spawns the worker
+   * Main-thread mode: creates the orchestrator and schedules 'ready'
+   *
+   * May be called again after disconnect() (StrictMode connect → disconnect →
+   * connect on the same instance).
    */
-  destroy(): void;
+  connect(): void;
+
+  /**
+   * Release the resources acquired by connect().
+   * Worker mode: terminates the worker
+   * Main-thread mode: cancels the pending 'ready' and destroys the orchestrator
+   */
+  disconnect(): void;
 }

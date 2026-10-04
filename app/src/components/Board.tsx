@@ -18,7 +18,6 @@ import type { ViewportState } from '../utils/viewportPlacement';
 import type { YjsStore } from '../store/YjsStore';
 import type { ActionContext } from '../actions/types';
 import type { GameAssets } from '../content';
-import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { getCardOrientation } from '../content/utils';
 import {
   getPreviewDimensions,
@@ -124,32 +123,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const storeRef = useRef<YjsStore>(store);
-  storeRef.current = store;
-
-  // Throttled updates (M3-T4)
-  const throttledCursorUpdate = useRef(
-    throttle((x: number, y: number) => {
-      storeRef.current.setCursor(x, y);
-    }, AWARENESS_UPDATE_INTERVAL_MS),
-  );
-
-  const throttledDragStateUpdate = useRef(
-    throttle(
-      (
-        gid: string,
-        primaryId: string,
-        pos: { x: number; y: number; r: number },
-        secondaryOffsets?: Record<
-          string,
-          { dx: number; dy: number; dr: number }
-        >,
-      ) => {
-        storeRef.current.setDragState(gid, primaryId, pos, secondaryOffsets);
-      },
-      AWARENESS_UPDATE_INTERVAL_MS,
-    ),
-  );
 
   // Callback refs
   const flushCallbacksRef = useRef<Array<() => void>>([]);
@@ -177,12 +150,17 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   const lastCursorPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Dismiss hover preview when any menu opens or phantom drag starts
-  useEffect(() => {
-    if (isMenuOpen || isPhantomDragActive) {
+  // (adjusting state during render on the false -> true transition)
+  const shouldHidePreview = Boolean(isMenuOpen || isPhantomDragActive);
+  const [prevShouldHidePreview, setPrevShouldHidePreview] =
+    useState(shouldHidePreview);
+  if (shouldHidePreview !== prevShouldHidePreview) {
+    setPrevShouldHidePreview(shouldHidePreview);
+    if (shouldHidePreview) {
       setPreviewCard(null);
       setPreviewPosition(null);
     }
-  }, [isMenuOpen, isPhantomDragActive]);
+  }
 
   // Modal preview state (mobile double-tap). Same shape as hover preview.
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -194,53 +172,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
-
-  // Expose imperative handle for hand-to-board phantom drag
-  useImperativeHandle(
-    ref,
-    () => ({
-      sendRendererMessage: (msg: MainToRendererMessage) => {
-        if (renderer) {
-          renderer.sendMessage(msg);
-        }
-      },
-      viewportToCanvas: (clientX: number, clientY: number) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return null;
-        const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        return {
-          x: (clientX - rect.left) * dpr,
-          y: (clientY - rect.top) * dpr,
-        };
-      },
-      clearPreview: () => {
-        setPreviewCard(null);
-        setPreviewPosition(null);
-      },
-      getViewportState: () =>
-        new Promise<ViewportState>((resolve) => {
-          if (!renderer) {
-            // No renderer yet — placement falls back to a centered, un-zoomed
-            // viewport. Width/height are 0 so the placement primitive returns
-            // the camera-origin-relative center; not ideal but better than
-            // hanging the action.
-            resolve({
-              cameraX: 0,
-              cameraY: 0,
-              cameraScale: 1,
-              viewportWidth: 0,
-              viewportHeight: 0,
-              devicePixelRatio: window.devicePixelRatio || 1,
-            });
-            return;
-          }
-          viewportStateCallbacksRef.current.push(resolve);
-          renderer.sendMessage({ type: 'request-viewport-state' });
-        }),
-    }),
-    [renderer],
-  );
 
   const {
     isReady,
@@ -275,10 +206,53 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     onGridSnapEnabledChange,
   );
 
+  // Expose imperative handle for hand-to-board phantom drag
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendRendererMessage: (msg: MainToRendererMessage) => {
+        renderer.sendMessage(msg);
+      },
+      viewportToCanvas: (clientX: number, clientY: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        return {
+          x: (clientX - rect.left) * dpr,
+          y: (clientY - rect.top) * dpr,
+        };
+      },
+      clearPreview: () => {
+        setPreviewCard(null);
+        setPreviewPosition(null);
+      },
+      getViewportState: () =>
+        new Promise<ViewportState>((resolve) => {
+          viewportStateCallbacksRef.current.push(resolve);
+          // The renderer rejects messages until PixiJS init completes (the
+          // request would be dropped and `resolve` never called). If init is
+          // still pending, the effect below sends the request once it is done.
+          if (isCanvasInitialized) {
+            renderer.sendMessage({ type: 'request-viewport-state' });
+          }
+        }),
+    }),
+    [renderer, isCanvasInitialized],
+  );
+
+  // Flush viewport-state requests that arrived before the renderer finished
+  // initializing.
+  useEffect(() => {
+    if (isCanvasInitialized && viewportStateCallbacksRef.current.length > 0) {
+      renderer.sendMessage({ type: 'request-viewport-state' });
+    }
+  }, [renderer, isCanvasInitialized]);
+
   // Helper: Get card from stack object
   const getCardFromStack = useCallback(
     (objectId: string): { card: Card; cardCode: string } | null => {
-      const obj = storeRef.current.getObject(objectId);
+      const obj = store.getObject(objectId);
 
       if (!obj) {
         console.warn('[Board] Cannot show preview: Object not found', {
@@ -326,7 +300,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
       return { card, cardCode: topCardCode };
     },
-    [gameAssets],
+    [gameAssets, store],
   );
 
   // Handle hover state changes from renderer (for card preview)
@@ -440,7 +414,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       if (!result) {
         return;
       }
-      const obj = storeRef.current.getObject(objectId);
+      const obj = store.getObject(objectId);
       if (!obj || obj._kind !== ObjectKind.Stack) {
         return;
       }
@@ -448,7 +422,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       setModalPreviewCard({ ...result, faceUp });
       setIsModalVisible(true);
     },
-    [getCardFromStack],
+    [getCardFromStack, store],
   );
 
   // Track cursor position for preview positioning
@@ -466,12 +440,10 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Message handling
   useEffect(() => {
-    if (!renderer) return;
-
     const unsubscribe = renderer.onMessage((message) => {
       const context = {
         renderer,
-        store: storeRef.current,
+        store,
         setIsReady,
         setIsCanvasInitialized,
         setIsSynced,
@@ -487,8 +459,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         selectionSettledCallbacks: selectionSettledCallbacksRef,
         animationStateCallbacks: animationStateCallbacksRef,
         viewportStateCallbacks: viewportStateCallbacksRef,
-        throttledCursorUpdate,
-        throttledDragStateUpdate,
         onBoardDragStart,
         onBoardDragEnd,
         onPhantomDragFeedback,
@@ -502,6 +472,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   }, [
     renderer,
     messageBus,
+    store,
     setIsReady,
     setIsCanvasInitialized,
     setIsSynced,
@@ -531,7 +502,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     store,
     isCanvasInitialized,
     isMultiSelectMode,
-    throttledCursorUpdate,
   );
 
   // Canvas lifecycle
@@ -597,7 +567,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     isCanvasInitialized,
     showDebugUI,
     flushCallbacksRef,
-    selectionSettledCallbacksRef,
     animationStateCallbacksRef,
   );
 
@@ -610,7 +579,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Send interaction mode changes to renderer
   useEffect(() => {
-    if (!renderer || !isCanvasInitialized) return;
+    if (!isCanvasInitialized) return;
 
     renderer.sendMessage({
       type: 'set-interaction-mode',
@@ -620,7 +589,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Send grid snap enabled changes to renderer
   useEffect(() => {
-    if (!renderer || !isCanvasInitialized) return;
+    if (!isCanvasInitialized) return;
 
     renderer.sendMessage({
       type: 'set-grid-snap-enabled',
@@ -630,7 +599,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Send game assets to renderer
   useEffect(() => {
-    if (!renderer || !isCanvasInitialized) {
+    if (!isCanvasInitialized) {
       return;
     }
 
@@ -644,7 +613,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   const handleCanvasContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
 
-    if (!renderer || !isCanvasInitialized || !onContextMenu) {
+    if (!isCanvasInitialized || !onContextMenu) {
       return;
     }
 

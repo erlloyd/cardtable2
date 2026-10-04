@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { IRendererAdapter } from '../renderer/IRendererAdapter';
 import type { YjsStore, ObjectChanges } from '../store/YjsStore';
 import { toTableObject } from '../store/YjsStore';
@@ -35,12 +35,6 @@ export function useStoreSync(
   store: YjsStore,
   isSynced: boolean,
 ): void {
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const storeRef = useRef<YjsStore>(store);
-
-  // Keep store ref up to date
-  storeRef.current = store;
-
   useEffect(() => {
     // Only subscribe after renderer is initialized and synced
     if (!isSynced || !renderer) {
@@ -49,59 +43,52 @@ export function useStoreSync(
 
     console.log('[useStoreSync] Subscribing to store changes');
 
-    const unsubscribe = storeRef.current.onObjectsChange(
-      (changes: ObjectChanges) => {
-        // Forward added objects (batched) (M3.6-T5)
-        // Convert Y.Maps to plain objects for worker serialization
-        if (changes.added.length > 0) {
-          console.log(
-            `[useStoreSync] Forwarding ${changes.added.length} added object(s)`,
-          );
-          renderer.sendMessage({
-            type: 'objects-added',
-            objects: changes.added.map(({ id, yMap }) => ({
-              id,
-              obj: toTableObject(yMap),
-            })),
-          });
-        }
+    const unsubscribe = store.onObjectsChange((changes: ObjectChanges) => {
+      // Forward added objects (batched) (M3.6-T5)
+      // Convert Y.Maps to plain objects for worker serialization
+      if (changes.added.length > 0) {
+        console.log(
+          `[useStoreSync] Forwarding ${changes.added.length} added object(s)`,
+        );
+        renderer.sendMessage({
+          type: 'objects-added',
+          objects: changes.added.map(({ id, yMap }) => ({
+            id,
+            obj: toTableObject(yMap),
+          })),
+        });
+      }
 
-        // Forward updated objects (batched) (M3.6-T5)
-        // Convert Y.Maps to plain objects for worker serialization
-        if (changes.updated.length > 0) {
-          console.log(
-            `[useStoreSync] Forwarding ${changes.updated.length} updated object(s)`,
-          );
-          renderer.sendMessage({
-            type: 'objects-updated',
-            objects: changes.updated.map(({ id, yMap }) => ({
-              id,
-              obj: toTableObject(yMap),
-            })),
-          });
-        }
+      // Forward updated objects (batched) (M3.6-T5)
+      // Convert Y.Maps to plain objects for worker serialization
+      if (changes.updated.length > 0) {
+        console.log(
+          `[useStoreSync] Forwarding ${changes.updated.length} updated object(s)`,
+        );
+        renderer.sendMessage({
+          type: 'objects-updated',
+          objects: changes.updated.map(({ id, yMap }) => ({
+            id,
+            obj: toTableObject(yMap),
+          })),
+        });
+      }
 
-        // Forward removed objects (batched)
-        if (changes.removed.length > 0) {
-          console.log(
-            `[useStoreSync] Forwarding ${changes.removed.length} removed object(s)`,
-          );
-          renderer.sendMessage({
-            type: 'objects-removed',
-            ids: changes.removed,
-          });
-        }
-      },
-    );
-
-    unsubscribeRef.current = unsubscribe;
+      // Forward removed objects (batched)
+      if (changes.removed.length > 0) {
+        console.log(
+          `[useStoreSync] Forwarding ${changes.removed.length} removed object(s)`,
+        );
+        renderer.sendMessage({
+          type: 'objects-removed',
+          ids: changes.removed,
+        });
+      }
+    });
 
     return () => {
-      if (unsubscribeRef.current) {
-        console.log('[useStoreSync] Unsubscribing from store changes');
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
+      console.log('[useStoreSync] Unsubscribing from store changes');
+      unsubscribe();
     };
-  }, [isSynced, renderer]);
+  }, [isSynced, renderer, store]);
 }

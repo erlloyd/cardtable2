@@ -1,43 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { YjsStore } from './YjsStore';
 import type { DiscardZoneEntry } from '@cardtable2/shared';
 
-// Mock y-indexeddb to avoid IndexedDB in tests
-vi.mock('y-indexeddb', () => ({
-  IndexeddbPersistence: class MockIndexeddbPersistence {
-    private listeners: Map<string, Array<() => void>> = new Map();
-
-    constructor(_dbName: string, _doc: unknown) {
-      setTimeout(() => {
-        const syncedListeners = this.listeners.get('synced') || [];
-        syncedListeners.forEach((listener) => listener());
-      }, 0);
-    }
-
-    on(event: string, listener: () => void) {
-      if (!this.listeners.has(event)) {
-        this.listeners.set(event, []);
-      }
-      this.listeners.get(event)!.push(listener);
-    }
-
-    destroy() {
-      this.listeners.clear();
-    }
-  },
-}));
-
 describe('YjsStore discard zone methods', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    store.destroy();
   });
 
   describe('setDiscardZone / getDiscardZone', () => {

@@ -23,18 +23,23 @@ cd app && pnpm run test:e2e
 # Run E2E tests with UI
 cd app && pnpm run test:e2e:ui
 
-# Run linting
+# Run linting (oxlint)
 pnpm run lint
 
 # Run type checking
 pnpm run typecheck
 
-# Run full validation (lint, typecheck, test, build)
-pnpm run validate
+# Format check + lint + typecheck
+pnpm check
 
-# Format code
-pnpm run format
+# Full validation
+pnpm check && pnpm test && pnpm build
+
+# Auto-fix formatting and lint findings
+pnpm run fix
 ```
+
+The server has no build step: it runs as `node src/index.ts` (`node --watch` in dev).
 
 ## Testing Workflow
 
@@ -69,30 +74,26 @@ The following checks MUST pass before pushing (enforced by Git hooks and CI):
 
 **Git hooks:**
 
-- **pre-commit**: `npx lint-staged` (auto-formats staged files)
-- **pre-push**:
-  - `pnpm run typecheck` (TypeScript type checking)
-  - `pnpm run format:check` (Prettier formatting verification)
+- **pre-commit**: `pnpm check` (format check, oxlint, typecheck)
+- There is no pre-push hook
 
 **CI checks (on PRs):**
 
-1. Lint: `pnpm run lint` (ESLint)
-2. Type check: `pnpm run typecheck` (TypeScript)
-3. Format check: `pnpm run format:check` (Prettier)
-4. Unit tests: `pnpm run test` (Vitest)
-5. E2E tests: `cd app && pnpm run test:e2e` (Playwright)
-6. Build: `pnpm --filter @cardtable2/app build` + `pnpm --filter @cardtable2/server build`
+1. Checks: `pnpm check` (oxfmt format check, oxlint, TypeScript typecheck)
+2. Unit tests: `pnpm test` (Vitest)
+3. E2E tests: `cd app && pnpm run test:e2e` (Playwright)
+4. Build: `pnpm build` (app only; the server has no build artifact)
 
 **Quick validation before pushing:**
 
 ```bash
-pnpm run validate  # lint + typecheck + test + build
+pnpm check && pnpm test && pnpm build
 ```
 
 **Fix common issues:**
 
 ```bash
-pnpm run format      # Auto-fix formatting issues
+pnpm run fix         # Auto-fix formatting and lint findings
 pnpm run lint        # Check for lint errors
 pnpm run typecheck   # Check for type errors
 ```
@@ -100,7 +101,8 @@ pnpm run typecheck   # Check for type errors
 ## Container Deployment
 
 - **Docker support**: Multi-stage Dockerfiles for production builds
-- **Base image**: Node.js 24-slim for minimal footprint
+- **Base image**: Node.js 26-slim for minimal footprint
+- **Server image**: ships `server/src` and runs `node src/index.ts` directly (no build step)
 - **Process manager**: Tini for proper signal handling and zombie reaping
 - **Registry**: Images pushed to GitHub Container Registry (ghcr.io)
 - **Production runtime**: Railway container platform

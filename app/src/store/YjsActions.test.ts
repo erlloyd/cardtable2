@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { YjsStore, type ObjectChanges, toTableObject } from './YjsStore';
 import {
@@ -29,44 +29,11 @@ import {
   type DiscardZoneEntry,
 } from '@cardtable2/shared';
 
-// Mock y-indexeddb to avoid IndexedDB in tests
-vi.mock('y-indexeddb', () => ({
-  IndexeddbPersistence: class MockIndexeddbPersistence {
-    private listeners: Map<string, Array<() => void>> = new Map();
-
-    constructor(_dbName: string, _doc: unknown) {
-      // Immediately trigger synced event to simulate quick load
-      setTimeout(() => {
-        const syncedListeners = this.listeners.get('synced') || [];
-        syncedListeners.forEach((listener) => listener());
-      }, 0);
-    }
-
-    on(event: string, listener: () => void) {
-      if (!this.listeners.has(event)) {
-        this.listeners.set(event, []);
-      }
-      this.listeners.get(event)!.push(listener);
-    }
-
-    destroy() {
-      this.listeners.clear();
-    }
-  },
-}));
-
 describe('YjsActions - createObject', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('Basic Object Creation', () => {
@@ -461,7 +428,7 @@ describe('YjsActions - createObject', () => {
       const sourceObj = toTableObject(store.getObjectYMap(sourceId)!);
 
       // Apply the underlying Y.Doc's encoded state to a fresh store; this
-      // mirrors what the WebsocketProvider does on a remote peer.
+      // mirrors what the HocuspocusProvider does on a remote peer.
       const encoded = Y.encodeStateAsUpdate(store.getDoc());
 
       const peerStore = new YjsStore('peer-table');
@@ -472,8 +439,6 @@ describe('YjsActions - createObject', () => {
       expect(peerObj._meta).toEqual(sourceObj._meta);
       expect(peerObj._meta.typeId).toBe('threat');
       expect(peerObj._meta.currentValue).toBe(17);
-
-      peerStore.destroy();
     });
   });
 
@@ -521,15 +486,8 @@ describe('YjsActions - createObject', () => {
 describe('YjsActions - moveObjects', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('Single Object Movement', () => {
@@ -799,16 +757,9 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
   let store: YjsStore;
   let actorId: string;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
     actorId = store.getActorId();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('selectObjects', () => {
@@ -1152,15 +1103,8 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 describe('YjsActions - exhaustCards (M3.5-T2)', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('Basic Exhaust/Ready Toggle', () => {
@@ -1431,15 +1375,8 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
 describe('YjsActions - flipCards (M3.5-T1)', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('Basic Flip Toggle', () => {
@@ -1720,15 +1657,8 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 describe('YjsActions - stackObjects (M3.5-T3)', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('Basic Stack Merging', () => {
@@ -2193,15 +2123,8 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
 describe('YjsActions - unstackCard', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('Basic Unstacking', () => {
@@ -2399,15 +2322,8 @@ describe('YjsActions - unstackCard', () => {
 describe('shuffleStack', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-shuffle-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   it('should randomize card order in stack', () => {
@@ -2595,15 +2511,8 @@ describe('shuffleStack', () => {
 describe('Concurrent Operations', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-concurrent-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('stackObjects race conditions', () => {
@@ -2734,14 +2643,11 @@ describe('Concurrent Operations', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Simulate two actors unstacking concurrently
-      let newStack1: string | null = null;
-      let newStack2: string | null = null;
-
       // First unstack (should succeed)
-      newStack1 = unstackCard(store, stackId, { x: 200, y: 100, r: 0 });
+      const newStack1 = unstackCard(store, stackId, { x: 200, y: 100, r: 0 });
 
       // Second unstack (should also succeed - different top card now)
-      newStack2 = unstackCard(store, stackId, { x: 300, y: 100, r: 0 });
+      const newStack2 = unstackCard(store, stackId, { x: 300, y: 100, r: 0 });
 
       // Both operations should succeed
       expect(newStack1).not.toBeNull();
@@ -2816,13 +2722,8 @@ describe('parseSortKeyPrefix', () => {
 describe('YjsActions - attachCards', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore(`test-room-attach-${Date.now()}`);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  });
-
-  afterEach(() => {
-    store.destroy();
   });
 
   describe('SortKey Assignment', () => {
@@ -3144,15 +3045,8 @@ describe('YjsActions - attachCards', () => {
 describe('YjsActions - resetTable', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-reset-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   it('clears placed objects', () => {
@@ -3230,15 +3124,8 @@ describe('YjsActions - resetTable', () => {
 describe('YjsActions - adjustCounter (ct-d2p)', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table-counter-adjust');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   function makeCounter(meta: Record<string, unknown> = {}): string {
@@ -3333,15 +3220,8 @@ describe('YjsActions - adjustCounter (ct-d2p)', () => {
 describe('createDiscardZoneForStack', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-discard-zone-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   it('returns null for a missing stack id', () => {
@@ -3490,13 +3370,8 @@ describe('createDiscardZoneForStack', () => {
 describe('setCardFaceUp', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-setcardface-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    store.destroy();
   });
 
   it('sets a face-down stack to face-up', () => {
@@ -3554,13 +3429,8 @@ describe('setCardFaceUp', () => {
 describe('discardCardToZone', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-discardcard-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    store.destroy();
   });
 
   function setupSourceAndZone(cards: string[], faceUp = false) {

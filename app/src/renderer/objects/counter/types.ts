@@ -51,5 +51,5 @@ export function isCounterObject(obj: TableObject): obj is CounterObject {
 
 /** Full Counter object type with required fields */
 export interface CounterObject extends TableObject {
-  _kind: ObjectKind.Counter;
+  _kind: typeof ObjectKind.Counter;
 }

@@ -1,14 +1,18 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { setupWSConnection } from '@y/websocket-server/utils';
 import cors from 'cors';
-import { createProxyHandler } from './proxyHandler.js';
+import { createProxyHandler } from './proxyHandler.ts';
+import { MAX_PAYLOAD_BYTES, connectSocket, createHocuspocus } from './sync.ts';
 
 // Server entry point for Railway deployment
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({
+  noServer: true,
+  maxPayload: MAX_PAYLOAD_BYTES,
+});
+const hocuspocus = createHocuspocus();
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -64,26 +68,16 @@ app.get<{ path: string[] | string }>(
   }),
 );
 
-// WebSocket upgrade handling with y-websocket integration (M5-T1)
+// WebSocket upgrade handling (M5-T1)
 server.on('upgrade', (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
   });
 });
 
-// y-websocket connection handling (M5-T1)
-// Uses the official y-websocket server utilities for proper Yjs sync
+// Hocuspocus handles Yjs sync (initial state, updates, awareness) per socket
 wss.on('connection', (ws, request) => {
-  const url = request.url || '';
-  console.log(`[Server] New WebSocket connection: ${url}`);
-
-  // setupWSConnection handles all Yjs synchronization automatically
-  // It manages:
-  // - Initial sync (sending current document state)
-  // - Applying updates from clients
-  // - Broadcasting updates to other clients
-  // - Awareness state propagation (30Hz, no need to log every message)
-  setupWSConnection(ws, request);
+  connectSocket(hocuspocus, ws, request);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

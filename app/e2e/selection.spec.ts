@@ -3,7 +3,7 @@
  *
  * Note: Playwright's page.evaluate() runs in the browser context, so we
  * access `globalThis` loosely to reach test-only globals like __TEST_STORE__.
- * The shared E2E ESLint config (see eslint.config.js) relaxes the relevant
+ * The `app/e2e/**` override in `.oxlintrc.json` relaxes the relevant
  * `no-unsafe-*` and `no-explicit-any` rules for this directory.
  */
 

@@ -47,7 +47,7 @@ test.describe('Multiplayer JOIN with late pluginId (ct-c69)', () => {
     browser,
   }, testInfo) => {
     // Unique table id per test EXECUTION keeps us isolated even when the
-    // dev y-websocket server retains state across runs of the same test
+    // dev Hocuspocus sync server retains state across runs of the same test
     // (testInfo.testId is hash-deterministic, so without `Date.now()` the
     // server state from a prior pass would leak into this one).
     const tableId = `mp-join-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}-${Date.now()}`;

@@ -2,15 +2,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore } from './YjsStore';
 import type { TableObject, StackObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
+import * as Y from 'yjs';
+import {
+  Awareness,
+  applyAwarenessUpdate,
+  encodeAwarenessUpdate,
+} from 'y-protocols/awareness';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
 vi.mock('y-indexeddb', () => ({
   IndexeddbPersistence: class MockIndexeddbPersistence {
     private listeners: Map<string, Array<() => void>> = new Map();
+    private syncTimer: ReturnType<typeof setTimeout>;
 
     constructor(_dbName: string, _doc: unknown) {
       // Immediately trigger synced event to simulate quick load
-      setTimeout(() => {
+      this.syncTimer = setTimeout(() => {
         const syncedListeners = this.listeners.get('synced') || [];
         syncedListeners.forEach((listener) => listener());
       }, 0);
@@ -24,7 +31,9 @@ vi.mock('y-indexeddb', () => ({
     }
 
     destroy() {
+      clearTimeout(this.syncTimer);
       this.listeners.clear();
+      return Promise.resolve();
     }
   },
 }));
@@ -35,13 +44,12 @@ describe('YjsStore', () => {
 
   beforeEach(async () => {
     store = new YjsStore(testTableId);
+    store.connect();
     await store.waitForReady();
   });
 
   afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
+    store.disconnect();
   });
 
   describe('Initialization', () => {
@@ -57,15 +65,15 @@ describe('YjsStore', () => {
       const actorId1 = store.getActorId();
       const actorId2 = store2.getActorId();
       expect(actorId1).not.toBe(actorId2);
-      store2.destroy();
     });
 
     it('waits for ready before resolving', async () => {
       const newStore = new YjsStore('wait-test-table');
+      newStore.connect();
       const readyPromise = newStore.waitForReady();
       expect(readyPromise).toBeInstanceOf(Promise);
       await readyPromise; // Should not hang
-      newStore.destroy();
+      newStore.disconnect();
     });
 
     it('provides access to Y.Doc', () => {
@@ -394,9 +402,18 @@ describe('YjsStore', () => {
     });
 
     it('gets remote awareness states (excluding local)', () => {
-      // Manually inject a fake remote state
+      // Manually inject a fake remote state into the live awareness states
+      // map, which onAwarenessChange hands to its callback
+      let liveStates: Map<number, unknown> | undefined;
+      const unsubscribe = store.onAwarenessChange((states) => {
+        liveStates = states;
+      });
+      store.setCursor(1, 1);
+      unsubscribe();
+      if (!liveStates) throw new Error('awareness change never fired');
+
       const fakeClientId = 999999;
-      store.awareness.states.set(fakeClientId, {
+      liveStates.set(fakeClientId, {
         actorId: 'fake-actor',
         cursor: { x: 100, y: 200 },
       });
@@ -409,9 +426,44 @@ describe('YjsStore', () => {
       // Should NOT have our local state
       const localClientId = store.getDoc().clientID;
       expect(remoteStates.has(localClientId)).toBe(false);
+    });
 
-      // Clean up
-      store.awareness.states.delete(fakeClientId);
+    describe('throttled trailing updates', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('throttles setCursor to a trailing call with the latest position', () => {
+        store.setCursor(1, 1);
+        store.setCursor(2, 2);
+        store.setCursor(3, 3);
+        expect(store.getLocalAwarenessState()?.cursor).toEqual({ x: 1, y: 1 });
+
+        vi.advanceTimersByTime(100);
+        expect(store.getLocalAwarenessState()?.cursor).toEqual({ x: 3, y: 3 });
+      });
+
+      it('clearCursor cancels a pending trailing cursor update', () => {
+        store.setCursor(1, 1);
+        store.setCursor(2, 2);
+        store.clearCursor();
+
+        vi.advanceTimersByTime(100);
+        expect(store.getLocalAwarenessState()?.cursor).toBeNull();
+      });
+
+      it('clearDragState cancels a pending trailing drag update', () => {
+        store.setDragState('g1', 'obj-1', { x: 1, y: 1, r: 0 });
+        store.setDragState('g1', 'obj-1', { x: 2, y: 2, r: 0 });
+        store.clearDragState();
+
+        vi.advanceTimersByTime(100);
+        expect(store.getLocalAwarenessState()?.drag).toBeNull();
+      });
     });
 
     it('combines cursor and drag in awareness state', () => {
@@ -612,8 +664,8 @@ describe('YjsStore', () => {
         // Only throw on second call (during setGameAssets, not initial subscription)
         callCount++;
         if (callCount > 1) {
-          // eslint-disable-next-line @typescript-eslint/only-throw-error
-          throw 'String error';
+          const nonError: unknown = 'String error';
+          throw nonError;
         }
       });
 
@@ -681,18 +733,108 @@ describe('YjsStore', () => {
     });
   });
 
-  describe('Cleanup', () => {
-    it('can be safely destroyed', () => {
-      const localStore = new YjsStore('destroy-test');
-      expect(() => localStore.destroy()).not.toThrow();
+  describe('Lifecycle', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
     });
 
-    it('can be destroyed multiple times without error', () => {
-      const localStore = new YjsStore('destroy-multi-test');
-      expect(() => {
-        localStore.destroy();
-        localStore.destroy();
-      }).not.toThrow();
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('constructor holds no timers', () => {
+      const localStore = new YjsStore('lifecycle-ctor');
+      expect(vi.getTimerCount()).toBe(0);
+      expect(localStore.isReady()).toBe(false);
+    });
+
+    it('connect() then disconnect() leaves no timers', () => {
+      const localStore = new YjsStore('lifecycle-timers');
+      localStore.connect();
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      localStore.disconnect();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('connect() while connected throws', () => {
+      const localStore = new YjsStore('lifecycle-double');
+      localStore.connect();
+      expect(() => localStore.connect()).toThrow();
+      localStore.disconnect();
+    });
+
+    it('reconnects on the same instance and becomes ready once per connection', () => {
+      const localStore = new YjsStore('lifecycle-reconnect');
+      const onReady = vi.fn();
+      localStore.onReadyChange(() => {
+        if (localStore.isReady()) onReady();
+      });
+
+      localStore.connect();
+      localStore.disconnect();
+      expect(localStore.isReady()).toBe(false);
+      vi.runAllTimers();
+      expect(onReady).not.toHaveBeenCalled();
+
+      localStore.connect();
+      vi.advanceTimersByTime(1);
+      expect(localStore.isReady()).toBe(true);
+      expect(onReady).toHaveBeenCalledTimes(1);
+
+      localStore.disconnect();
+      expect(localStore.isReady()).toBe(false);
+      expect(localStore.getConnectionStatus()).toBe('offline');
+    });
+
+    it('a peer accepts awareness state after the store disconnects and reconnects', () => {
+      const localStore = new YjsStore('lifecycle-awareness-clock');
+      const peer = new Awareness(new Y.Doc());
+      const relay = (from: Awareness | null) => {
+        if (!from) throw new Error('store has no awareness');
+        applyAwarenessUpdate(
+          peer,
+          encodeAwarenessUpdate(from, [from.clientID]),
+          'test',
+        );
+      };
+
+      localStore.connect();
+      localStore.setCursor(1, 1);
+      vi.advanceTimersByTime(100);
+      relay(localStore['awareness']);
+      const clientId = localStore['doc'].clientID;
+      expect(peer.getStates().get(clientId)?.cursor).toEqual({ x: 1, y: 1 });
+
+      localStore.disconnect();
+      localStore.connect();
+      localStore.setCursor(7, 8);
+      vi.advanceTimersByTime(100);
+      relay(localStore['awareness']);
+
+      expect(peer.getStates().get(clientId)?.cursor).toEqual({ x: 7, y: 8 });
+      localStore.disconnect();
+    });
+
+    it('awareness setters are no-ops while disconnected', () => {
+      const localStore = new YjsStore('lifecycle-awareness');
+      localStore.setCursor(1, 2);
+      localStore.setDragState('g', 'p', { x: 0, y: 0, r: 0 });
+      expect(vi.getTimerCount()).toBe(0);
+      expect(localStore.getLocalAwarenessState()).toBeNull();
+    });
+
+    it('doc operations work without connecting', () => {
+      const localStore = new YjsStore('lifecycle-doc-only');
+      localStore.setObject('a', {
+        _kind: ObjectKind.Token,
+        _containerId: null,
+        _pos: { x: 0, y: 0, r: 0 },
+        _sortKey: '000001',
+        _locked: false,
+        _selectedBy: null,
+        _meta: {},
+      });
+      expect(localStore.objects.size).toBe(1);
     });
   });
 });

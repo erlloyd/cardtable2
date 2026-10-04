@@ -27,7 +27,10 @@ import {
   unregisterLoadablesActions,
 } from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
-import { registerAttachmentActions } from '../actions/attachmentActions';
+import {
+  clearAttachmentActions,
+  registerAttachmentActions,
+} from '../actions/attachmentActions';
 import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
@@ -93,6 +96,8 @@ const Board = lazy(() => import('../components/Board'));
 
 export const Route = createFileRoute('/table/$id')({
   component: Table,
+  // A new tableId needs a new store: useTableStore creates it once per mount
+  remountDeps: ({ params }) => params,
 });
 
 function Table() {
@@ -101,7 +106,6 @@ function Table() {
   const navigate = useNavigate();
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
-    logPrefix: 'Table',
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
@@ -119,7 +123,10 @@ function Table() {
     supportsPrivate: boolean;
     loading: boolean;
     error: string | null;
+    /** Bumped per open so DeckImportModal remounts with fresh input state. */
+    key: number;
   }>({
+    key: 0,
     open: false,
     labels: { siteName: '', inputPlaceholder: '' },
     supportsPrivate: false,
@@ -132,10 +139,9 @@ function Table() {
   const [loadPicker, setLoadPicker] = useState<{
     open: boolean;
     presetType?: string;
-  }>({ open: false });
-  const [loadables, setLoadables] = useState<LoadableEntry[]>(() =>
-    getLoadableEntriesForUi(),
-  );
+    /** Bumped per open so LoadPickerModal remounts with fresh state. */
+    key: number;
+  }>({ open: false, key: 0 });
   const [interactionMode, setInteractionMode] = useState<'pan' | 'select'>(
     'pan',
   );
@@ -144,6 +150,17 @@ function Table() {
   const [packsLoading, setPacksLoading] = useState(false);
   const [packsError, setPacksError] = useState<PacksError | null>(null);
   const [gameAssets, setGameAssets] = useState<GameAssets | null>(null);
+  // The loadables registry is external mutable state populated alongside
+  // gameAssets; re-read it during render whenever gameAssets changes.
+  const [loadablesAssets, setLoadablesAssets] = useState(gameAssets);
+  // Starts empty: the registry is module-level, so a mount-time read would
+  // snapshot the previous table's entries (its unmount cleanup runs after this
+  // render). The registry is re-read when this table's gameAssets arrive.
+  const [loadables, setLoadables] = useState<LoadableEntry[]>([]);
+  if (gameAssets !== loadablesAssets) {
+    setLoadablesAssets(gameAssets);
+    setLoadables(getLoadableEntriesForUi());
+  }
 
   // Hand panel state
   const handPanel = useHandPanel(store);
@@ -162,7 +179,12 @@ function Table() {
 
   const [isStackDragOverHand, setIsStackDragOverHand] = useState(false);
   const isStackDragOverHandRef = useRef(false);
-  isStackDragOverHandRef.current = isStackDragOverHand;
+  // Ref mirrors state so pointer handlers read the latest value synchronously;
+  // always update both together, from handlers/effects (never during render).
+  const updateStackDragOverHand = useCallback((value: boolean) => {
+    isStackDragOverHandRef.current = value;
+    setIsStackDragOverHand(value);
+  }, []);
 
   const handleBoardDragStart = useCallback(() => {
     setIsBoardDragging(true);
@@ -170,7 +192,7 @@ function Table() {
 
   // Drop logic: when drag ends while hovering over hand panel, move stacks to hand
   const handleBoardDragEnd = useCallback(() => {
-    if (isStackDragOverHandRef.current && store) {
+    if (isStackDragOverHandRef.current) {
       // Auto-create hand if none exist
       let targetHandId = handPanel.activeHandId;
       if (!targetHandId) {
@@ -188,12 +210,12 @@ function Table() {
     }
 
     setIsBoardDragging(false);
-    setIsStackDragOverHand(false);
-  }, [store, handPanel]);
+    updateStackDragOverHand(false);
+  }, [store, handPanel, updateStackDragOverHand]);
 
   // Track whether a stack drag is hovering over the hand panel
   useEffect(() => {
-    if (!isBoardDragging || !store) return;
+    if (!isBoardDragging) return;
 
     const handlePointerMove = (e: PointerEvent) => {
       // Check selection on each move (not at effect setup) because
@@ -203,7 +225,7 @@ function Table() {
         (obj) => obj.yMap.get('_kind') === ObjectKind.Stack,
       );
       if (!hasStack) {
-        if (isStackDragOverHandRef.current) setIsStackDragOverHand(false);
+        if (isStackDragOverHandRef.current) updateStackDragOverHand(false);
         return;
       }
 
@@ -219,41 +241,55 @@ function Table() {
 
       // Only update state when the value actually changes
       if (isOverPanel !== isStackDragOverHandRef.current) {
-        setIsStackDragOverHand(isOverPanel);
+        updateStackDragOverHand(isOverPanel);
       }
     };
 
     window.addEventListener('pointermove', handlePointerMove);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
-      setIsStackDragOverHand(false);
+      updateStackDragOverHand(false);
     };
-  }, [isBoardDragging, store]);
+  }, [isBoardDragging, store, updateStackDragOverHand]);
 
   // Register default actions (shared with dev route)
   useEffect(() => {
-    registerDefaultActions();
-    registerHandActions(ActionRegistry.getInstance());
+    const unregisterDefaults = registerDefaultActions();
+    const unregisterHand = registerHandActions(ActionRegistry.getInstance());
+    return () => {
+      unregisterDefaults();
+      unregisterHand();
+    };
   }, []);
+
+  // Attachment actions and the loadables registry are module-level state
+  // populated by this table's plugin load; clear both on unmount so the next
+  // table doesn't inherit them.
+  useEffect(
+    () => () => {
+      clearAttachmentActions(ActionRegistry.getInstance());
+      clearLoadableEntries();
+    },
+    [],
+  );
 
   // Keep the dynamic per-type "Load <X>..." actions and the local loadables
   // state in sync with the active plugin's runtime registry. The registry is
   // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
   // here whenever gameAssets change so plugin switches drop stale entries.
   useEffect(() => {
-    const entries = getLoadableEntriesForUi();
-    setLoadables(entries);
     unregisterLoadablesActions();
-    if (entries.length > 0) {
-      registerLoadablesActions(entries);
+    if (loadables.length > 0) {
+      registerLoadablesActions(loadables);
     }
-  }, [gameAssets]);
+    return unregisterLoadablesActions;
+  }, [loadables]);
 
   // Dev-only: apply URL seed (?seed=stack-of-5) on a fresh table.
   // No-op in production and no-op when the table already has objects.
   useEffect(() => {
     if (!import.meta.env.DEV && !import.meta.env.VITE_E2E) return;
-    if (!store || !isStoreReady) return;
+    if (!isStoreReady) return;
 
     const seedName = new URLSearchParams(location.search).get('seed');
     if (!seedName) return;
@@ -279,7 +315,7 @@ function Table() {
   //     here (no scenario auto-load — the user picks one via the unified
   //     "Load Scenario…" picker, matching registered-plugin UX; see ct-7kx).
   useEffect(() => {
-    if (!store || !isStoreReady) {
+    if (!isStoreReady) {
       return;
     }
 
@@ -364,9 +400,11 @@ function Table() {
   // other metadata properties change. The effect only needs to run once when the
   // store becomes ready.
   useEffect(() => {
-    if (!store || !isStoreReady) {
+    if (!isStoreReady) {
       return;
     }
+
+    let cancelled = false;
 
     const loadContent = async () => {
       setPacksLoading(true);
@@ -387,6 +425,7 @@ function Table() {
         // in-flight cache dedupes any concurrent callers (e.g. Load Scenario).
         console.log('[Table] Loading plugin assets for:', pluginId);
         const assets = await loadPluginAssets(pluginId);
+        if (cancelled) return;
         store.setGameAssets(assets);
         registerAttachmentActions(ActionRegistry.getInstance(), assets);
 
@@ -430,14 +469,13 @@ function Table() {
 
     store.metadata.observe(observer);
     return () => {
+      cancelled = true;
       store.metadata.unobserve(observer);
     };
   }, [store, isStoreReady]);
 
   // Subscribe to store gameAssets changes
   useEffect(() => {
-    if (!store) return;
-
     const unsubscribe = store.onGameAssetsChange((assets) => {
       setGameAssets(assets);
     });
@@ -478,7 +516,9 @@ function Table() {
   // - Y.Doc is optimized for operational transforms on structured data, not large immutable objects
   // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and load assets per-client
   useEffect(() => {
-    if (!store || !isStoreReady) return;
+    if (!isStoreReady) return;
+
+    let cancelled = false;
 
     const observer = (
       _event: unknown,
@@ -547,6 +587,8 @@ function Table() {
 
       void loadPluginAssets(pluginId)
         .then((assets) => {
+          if (cancelled) return;
+
           // Stale-load race-check applies only to scenario-driven loads,
           // where the scenario can change mid-fetch. For bare-pluginId we
           // skip the check (pluginId is set-once on table create).
@@ -606,6 +648,7 @@ function Table() {
 
     store.metadata.observe(observer);
     return () => {
+      cancelled = true;
       store.metadata.unobserve(observer);
     };
   }, [store, isStoreReady]);
@@ -618,8 +661,6 @@ function Table() {
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
-    if (!store) return;
-
     const updateSelection = () => {
       // Use getObjectsSelectedBy() - returns {id, yMap} pairs
       const selected = store.getObjectsSelectedBy(store.getActorId());
@@ -638,7 +679,7 @@ function Table() {
   }, [store]);
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
-    setLoadPicker({ open: true, presetType });
+    setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
 
   // Register the deck-input provider that opens DeckImportModal. The provider
@@ -651,13 +692,14 @@ function Table() {
       ({ labels, supportsPrivate }) =>
         new Promise<DeckInputResult | null>((resolve) => {
           deckImportResolveRef.current = resolve;
-          setDeckImport({
+          setDeckImport((prev) => ({
             open: true,
             labels,
             supportsPrivate,
             loading: false,
             error: null,
-          });
+            key: prev.key + 1,
+          }));
         }),
     );
     return () => {
@@ -687,7 +729,7 @@ function Table() {
   );
 
   const handleCloseLoadPicker = useCallback(() => {
-    setLoadPicker({ open: false });
+    setLoadPicker((prev) => ({ ...prev, open: false }));
   }, []);
 
   // Resolver for asset-pack-derived loadables. The runtime registry already
@@ -707,7 +749,6 @@ function Table() {
 
   const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
     (entry, item) => {
-      if (!store) return;
       const board = boardRef.current;
       void handleLoadSelection(entry, item, {
         store,
@@ -777,7 +818,7 @@ function Table() {
   return (
     <div className="table">
       <Suspense fallback={<div className="board-fullscreen" />}>
-        {!store || !isStoreReady ? (
+        {!isStoreReady ? (
           <div className="board-fullscreen" />
         ) : packsLoading ? (
           <div className="board-fullscreen" />
@@ -829,9 +870,7 @@ function Table() {
                   className="table-error-button table-error-button-secondary"
                   data-testid="table-error-dismiss"
                   onClick={() => {
-                    if (store) {
-                      resetTable(store);
-                    }
+                    resetTable(store);
                     setPacksError(null);
                     setPacksLoading(false);
                   }}
@@ -868,7 +907,7 @@ function Table() {
       </Suspense>
 
       {/* Hand Panel */}
-      {store && isStoreReady && !packsLoading && !packsError && (
+      {isStoreReady && !packsLoading && !packsError && (
         <HandPanel
           ref={handPanelRef}
           store={store}
@@ -916,6 +955,7 @@ function Table() {
       {/* Deck Import Modal — opened by the loadHandler's provider branch via
           the registered deckInputProvider. */}
       <DeckImportModal
+        key={deckImport.key}
         isOpen={deckImport.open}
         onClose={handleDeckImportClose}
         onSubmit={handleDeckImportSubmit}
@@ -927,6 +967,7 @@ function Table() {
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal
+        key={`${loadPicker.key}:${loadPicker.presetType ? (loadables.find((l) => l.type === loadPicker.presetType)?.type ?? '') : ''}`}
         open={loadPicker.open}
         onClose={handleCloseLoadPicker}
         loadables={loadables}

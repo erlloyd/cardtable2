@@ -24,6 +24,7 @@ export class ActionRegistry {
   private static instance: ActionRegistry;
   private actions: Map<string, Action> = new Map();
   private listeners: Set<ChangeListener> = new Set();
+  private snapshot: Action[] = [];
 
   private constructor() {
     // Singleton pattern
@@ -34,17 +35,18 @@ export class ActionRegistry {
    * @param listener Callback function to call when actions are registered/unregistered
    * @returns Unsubscribe function
    */
-  public subscribe(listener: ChangeListener): () => void {
+  public subscribe = (listener: ChangeListener): (() => void) => {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
-  }
+  };
 
   /**
-   * Notify all listeners of a change
+   * Rebuild the stable snapshot and notify all listeners of a change
    */
   private notifyListeners(): void {
+    this.snapshot = Array.from(this.actions.values());
     for (const listener of this.listeners) {
       listener();
     }
@@ -148,12 +150,13 @@ export class ActionRegistry {
   }
 
   /**
-   * Get all registered actions (useful for debugging)
+   * Get all registered actions. The returned array is a stable snapshot,
+   * replaced only when actions are registered/unregistered/cleared, so it can
+   * be used directly as a useSyncExternalStore snapshot. Callers must not
+   * mutate it.
    * @returns Array of all actions
    */
-  public getAllActions(): Action[] {
-    return Array.from(this.actions.values());
-  }
+  public getAllActions = (): Action[] => this.snapshot;
 
   /**
    * Clear all registered actions (useful for testing)

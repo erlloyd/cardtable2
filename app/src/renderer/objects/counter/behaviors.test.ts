@@ -169,7 +169,7 @@ describe('Counter Behaviors - Rendering', () => {
 
   beforeEach(() => {
     mockCreateText = vi.fn((options: TextOptions) => {
-      const text = new Text(options);
+      const text = new Text({ ...options });
       text.resolution = 6; // Simulated zoom-aware resolution
       return text;
     });
@@ -200,7 +200,7 @@ describe('Counter Behaviors - Rendering', () => {
       createText: mockCreateText,
       createKindLabel: mockCreateKindLabel,
       scaleStrokeWidth: mockScaleStrokeWidth,
-    } as RenderContext;
+    };
   });
 
   it('returns a Container', () => {
@@ -314,9 +314,7 @@ describe('Counter Behaviors - Rendering', () => {
       container: Container,
       label: string,
     ): Container | undefined {
-      return container.children.find((c) => c.label === label) as
-        | Container
-        | undefined;
+      return container.children.find((c) => c.label === label);
     }
 
     it('renders both glyphs at the at-rest alpha when no zone is hovered and not at boundary', () => {

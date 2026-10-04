@@ -1,4 +1,8 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
+
+afterEach(cleanup);
 
 // Extend ResizeObserver constructor type to include lastCallback
 interface MockResizeObserverConstructor {
@@ -27,4 +31,4 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {
     // Mock implementation
   }
-} as unknown as MockResizeObserverConstructor;
+};

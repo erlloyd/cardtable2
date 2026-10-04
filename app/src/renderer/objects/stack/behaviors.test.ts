@@ -29,7 +29,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
   beforeEach(() => {
     mockCreateText = vi.fn((options: TextOptions) => {
-      const text = new Text(options);
+      const text = new Text({ ...options });
       text.resolution = 6; // Simulated zoom-aware resolution
       return text;
     });
@@ -64,7 +64,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       createText: mockCreateText,
       createKindLabel: mockCreateKindLabel,
       scaleStrokeWidth: mockScaleStrokeWidth,
-    } as RenderContext;
+    };
   });
 
   describe('3D Effect Rendering', () => {
@@ -537,7 +537,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
         },
         textureLoader: mockTextureLoader as unknown as TextureLoader,
         onTextureLoaded: mockOnTextureLoaded,
-      } as RenderContext;
+      };
     });
 
     it('should render sprite when texture is cached (face-up)', () => {
@@ -801,7 +801,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
     // The modifier renderer reads text.width to size the bar background, which
     // triggers CanvasTextMetrics in a real Text object and fails without a canvas.
     const attachmentCreateText = vi.fn((options: TextOptions) => {
-      const text = new Text(options);
+      const text = new Text({ ...options });
       text.resolution = 6;
       // Provide a fixed width so renderModifiers can measure the bar
       Object.defineProperty(text, 'width', { value: 40, writable: true });

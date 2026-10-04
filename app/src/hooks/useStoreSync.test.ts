@@ -26,7 +26,8 @@ describe('useStoreSync', () => {
     mockRenderer = {
       sendMessage: vi.fn(),
       onMessage: vi.fn(),
-      destroy: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
       mode: RenderMode.Worker,
     };
 
@@ -74,7 +75,7 @@ describe('useStoreSync', () => {
     const doc = new Y.Doc();
     const yMap = new Y.Map() as TableObjectYMap;
     doc.getMap('test').set('obj1', yMap);
-    yMap.set('_kind', 'stack' as never);
+    yMap.set('_kind', 'stack');
 
     const changes: ObjectChanges = {
       added: [
@@ -108,7 +109,7 @@ describe('useStoreSync', () => {
     const doc = new Y.Doc();
     const yMap = new Y.Map() as TableObjectYMap;
     doc.getMap('test').set('obj1', yMap);
-    yMap.set('_kind', 'stack' as never);
+    yMap.set('_kind', 'stack');
 
     const changes: ObjectChanges = {
       added: [],

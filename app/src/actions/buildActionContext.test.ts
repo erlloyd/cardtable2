@@ -31,7 +31,7 @@ function makeYMap(
     _locked: locked,
   };
   for (const [key, value] of Object.entries(obj)) {
-    yMap.set(key as keyof TableObject, value as never);
+    yMap.set(key as keyof TableObject, value);
   }
   return yMap;
 }

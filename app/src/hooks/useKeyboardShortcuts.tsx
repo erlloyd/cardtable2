@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { KeyboardManager } from '../actions/KeyboardManager';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
@@ -7,10 +7,12 @@ import type { ActionContext } from '../actions/types';
  * React hook that manages keyboard shortcuts for the action system.
  * Automatically handles keyboard events and executes registered actions.
  *
- * Uses a ref for context so the keydown listener always reads the latest
- * selection/store state without waiting for the next React render cycle.
- * This prevents a race where a keyboard event arrives after a store update
- * (e.g., selection change) but before React re-renders the effect.
+ * The keydown handler is an effect event, so it always reads the latest
+ * context/onActionExecuted (effect events update at commit) while the window
+ * listener and KeyboardManager are only rebuilt when `enabled` or the presence
+ * of a context changes. A keyboard event arriving after a store update but
+ * before React re-renders still sees the previous committed context; that gap
+ * is the same one a ref mirror updated at commit would have.
  *
  * @param context Current action context (store, selection, actorId)
  * @param enabled Whether keyboard shortcuts should be active (default: true)
@@ -20,14 +22,20 @@ export function useKeyboardShortcuts(
   enabled = true,
   onActionExecuted?: () => void,
 ): void {
-  const contextRef = useRef(context);
-  contextRef.current = context;
+  const hasContext = context !== null;
 
-  const onActionExecutedRef = useRef(onActionExecuted);
-  onActionExecutedRef.current = onActionExecuted;
+  const onKeyDown = useEffectEvent(
+    (keyboardManager: KeyboardManager, event: KeyboardEvent) => {
+      if (!context) return;
+      const handled = keyboardManager.handleKeyEvent(event, context);
+      if (handled) {
+        onActionExecuted?.();
+      }
+    },
+  );
 
   useEffect(() => {
-    if (!enabled || !contextRef.current) {
+    if (!enabled || !hasContext) {
       return;
     }
 
@@ -42,13 +50,8 @@ export function useKeyboardShortcuts(
       }
     }
 
-    // Handle keyboard events — read context from ref to always use latest state
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!contextRef.current) return;
-      const handled = keyboardManager.handleKeyEvent(event, contextRef.current);
-      if (handled) {
-        onActionExecutedRef.current?.();
-      }
+      onKeyDown(keyboardManager, event);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -56,5 +59,5 @@ export function useKeyboardShortcuts(
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [context, enabled]);
+  }, [enabled, hasContext]);
 }

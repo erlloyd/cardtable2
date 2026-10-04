@@ -83,7 +83,7 @@ describe('Index Route (GameSelect)', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockPluginRegistry),
-      } as Response);
+      });
 
     vi.stubGlobal('fetch', mockFetch);
 

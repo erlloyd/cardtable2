@@ -368,7 +368,10 @@ test.describe('Card Preview - Face-Up Filtering', () => {
     });
 
     page.on('console', (msg) => {
-      if (msg.type() === 'warn' && msg.text().includes('Cannot show preview')) {
+      if (
+        msg.type() === 'warning' &&
+        msg.text().includes('Cannot show preview')
+      ) {
         consoleWarnings.push(msg.text());
       }
     });

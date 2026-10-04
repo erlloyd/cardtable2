@@ -13,5 +13,5 @@ export function isMatObject(obj: TableObject): obj is MatObject {
 
 /** Full Mat object type with required fields */
 export interface MatObject extends TableObject {
-  _kind: ObjectKind.Mat;
+  _kind: typeof ObjectKind.Mat;
 }

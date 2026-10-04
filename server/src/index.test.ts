@@ -9,17 +9,20 @@ import {
 } from 'vitest';
 import { WebSocket } from 'ws';
 import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+import { HocuspocusProvider } from '@hocuspocus/provider';
+import type { Hocuspocus } from '@hocuspocus/server';
 import express from 'express';
-import { createServer, Server as HttpServer } from 'http';
+import type { Server as HttpServer } from 'http';
+import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { setupWSConnection } from '@y/websocket-server/utils';
-import { createProxyHandler } from './proxyHandler.js';
+import { createProxyHandler } from './proxyHandler.ts';
+import { connectSocket, createHocuspocus } from './sync.ts';
 
 // Server instance for testing
 let app: express.Application;
 let server: HttpServer;
 let wss: WebSocketServer;
+let hocuspocus: Hocuspocus;
 let serverUrl: string;
 
 beforeAll(async () => {
@@ -27,6 +30,7 @@ beforeAll(async () => {
   app = express();
   server = createServer(app);
   wss = new WebSocketServer({ noServer: true });
+  hocuspocus = createHocuspocus();
 
   // Health check endpoint
   app.get('/health', (_req, res) => {
@@ -40,9 +44,8 @@ beforeAll(async () => {
     });
   });
 
-  // y-websocket connection handling
   wss.on('connection', (ws, request) => {
-    setupWSConnection(ws, request);
+    connectSocket(hocuspocus, ws, request);
   });
 
   // Start server on random available port
@@ -149,16 +152,24 @@ describe('Y.js Synchronization', () => {
     const doc2 = new Y.Doc();
 
     // Create WebSocket providers for both clients
-    const provider1 = new WebsocketProvider(wsUrl, roomName, doc1);
-    const provider2 = new WebsocketProvider(wsUrl, roomName, doc2);
+    const provider1 = new HocuspocusProvider({
+      url: wsUrl,
+      name: roomName,
+      document: doc1,
+    });
+    const provider2 = new HocuspocusProvider({
+      url: wsUrl,
+      name: roomName,
+      document: doc2,
+    });
 
     // Wait for both providers to connect and sync
     await Promise.all([
       new Promise<void>((resolve) => {
-        provider1.on('sync', () => resolve());
+        provider1.on('synced', () => resolve());
       }),
       new Promise<void>((resolve) => {
-        provider2.on('sync', () => resolve());
+        provider2.on('synced', () => resolve());
       }),
     ]);
 
@@ -223,12 +234,20 @@ describe('Y.js Synchronization', () => {
     const doc1 = new Y.Doc();
     const doc2 = new Y.Doc();
 
-    const provider1 = new WebsocketProvider(wsUrl, roomName, doc1);
-    const provider2 = new WebsocketProvider(wsUrl, roomName, doc2);
+    const provider1 = new HocuspocusProvider({
+      url: wsUrl,
+      name: roomName,
+      document: doc1,
+    });
+    const provider2 = new HocuspocusProvider({
+      url: wsUrl,
+      name: roomName,
+      document: doc2,
+    });
 
     await Promise.all([
-      new Promise<void>((resolve) => provider1.on('sync', () => resolve())),
-      new Promise<void>((resolve) => provider2.on('sync', () => resolve())),
+      new Promise<void>((resolve) => provider1.on('synced', () => resolve())),
+      new Promise<void>((resolve) => provider2.on('synced', () => resolve())),
     ]);
 
     // Create nested structure in doc1
@@ -270,6 +289,29 @@ describe('Y.js Synchronization', () => {
   }, 10000);
 });
 
+describe('Connection lifecycle', () => {
+  it('should unload the document after its last connection closes', async () => {
+    const wsUrl = serverUrl.replace('http:', 'ws:');
+    const doc = new Y.Doc();
+    const provider = new HocuspocusProvider({
+      url: wsUrl,
+      name: `test-room-unload-${Date.now()}`,
+      document: doc,
+    });
+
+    await new Promise<void>((resolve) =>
+      provider.on('synced', () => resolve()),
+    );
+    expect(hocuspocus.getDocumentsCount()).toBeGreaterThan(0);
+
+    provider.destroy();
+
+    await vi.waitFor(() => expect(hocuspocus.getDocumentsCount()).toBe(0), {
+      timeout: 5000,
+    });
+  }, 10000);
+});
+
 describe('Room Isolation', () => {
   it('should not sync updates between different rooms', async () => {
     const room1 = `test-room-isolated-1-${Date.now()}`;
@@ -280,13 +322,21 @@ describe('Room Isolation', () => {
     const doc1 = new Y.Doc();
     const doc2 = new Y.Doc();
 
-    const provider1 = new WebsocketProvider(wsUrl, room1, doc1);
-    const provider2 = new WebsocketProvider(wsUrl, room2, doc2);
+    const provider1 = new HocuspocusProvider({
+      url: wsUrl,
+      name: room1,
+      document: doc1,
+    });
+    const provider2 = new HocuspocusProvider({
+      url: wsUrl,
+      name: room2,
+      document: doc2,
+    });
 
     // Wait for both providers to sync
     await Promise.all([
-      new Promise<void>((resolve) => provider1.on('sync', () => resolve())),
-      new Promise<void>((resolve) => provider2.on('sync', () => resolve())),
+      new Promise<void>((resolve) => provider1.on('synced', () => resolve())),
+      new Promise<void>((resolve) => provider2.on('synced', () => resolve())),
     ]);
 
     // Update doc1 in room1
@@ -325,10 +375,14 @@ describe('Room Isolation', () => {
 
     // Client 1 creates initial state
     const doc1 = new Y.Doc();
-    const provider1 = new WebsocketProvider(wsUrl, roomName, doc1);
+    const provider1 = new HocuspocusProvider({
+      url: wsUrl,
+      name: roomName,
+      document: doc1,
+    });
 
     await new Promise<void>((resolve) => {
-      provider1.on('sync', () => resolve());
+      provider1.on('synced', () => resolve());
     });
 
     const map1 = doc1.getMap('test');
@@ -339,10 +393,14 @@ describe('Room Isolation', () => {
 
     // Client 2 joins the same room
     const doc2 = new Y.Doc();
-    const provider2 = new WebsocketProvider(wsUrl, roomName, doc2);
+    const provider2 = new HocuspocusProvider({
+      url: wsUrl,
+      name: roomName,
+      document: doc2,
+    });
 
     await new Promise<void>((resolve) => {
-      provider2.on('sync', () => resolve());
+      provider2.on('synced', () => resolve());
     });
 
     // Client 2 should receive the existing state

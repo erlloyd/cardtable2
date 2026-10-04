@@ -57,12 +57,6 @@ export function GlobalMenuBar({
     }
 
     // G key: Toggle grid snap
-    if ((event.key === 'g' || event.key === 'G') && onGridSnapEnabledChange) {
-      event.preventDefault();
-      onGridSnapEnabledChange(!gridSnapEnabled);
-      return;
-    }
-
     // Space key: Temporary pan mode (hold)
     if (event.key === ' ' && !spaceKeyDownRef.current) {
       event.preventDefault();

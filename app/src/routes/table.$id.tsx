@@ -93,6 +93,8 @@ const Board = lazy(() => import('../components/Board'));
 
 export const Route = createFileRoute('/table/$id')({
   component: Table,
+  // A new tableId needs a new store: useTableStore creates it once per mount
+  remountDeps: ({ params }) => params,
 });
 
 function Table() {
@@ -101,7 +103,6 @@ function Table() {
   const navigate = useNavigate();
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
-    logPrefix: 'Table',
   });
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
@@ -185,7 +186,7 @@ function Table() {
 
   // Drop logic: when drag ends while hovering over hand panel, move stacks to hand
   const handleBoardDragEnd = useCallback(() => {
-    if (isStackDragOverHandRef.current && store) {
+    if (isStackDragOverHandRef.current) {
       // Auto-create hand if none exist
       let targetHandId = handPanel.activeHandId;
       if (!targetHandId) {
@@ -208,7 +209,7 @@ function Table() {
 
   // Track whether a stack drag is hovering over the hand panel
   useEffect(() => {
-    if (!isBoardDragging || !store) return;
+    if (!isBoardDragging) return;
 
     const handlePointerMove = (e: PointerEvent) => {
       // Check selection on each move (not at effect setup) because
@@ -270,7 +271,7 @@ function Table() {
   // No-op in production and no-op when the table already has objects.
   useEffect(() => {
     if (!import.meta.env.DEV && !import.meta.env.VITE_E2E) return;
-    if (!store || !isStoreReady) return;
+    if (!isStoreReady) return;
 
     const seedName = new URLSearchParams(location.search).get('seed');
     if (!seedName) return;
@@ -296,7 +297,7 @@ function Table() {
   //     here (no scenario auto-load — the user picks one via the unified
   //     "Load Scenario…" picker, matching registered-plugin UX; see ct-7kx).
   useEffect(() => {
-    if (!store || !isStoreReady) {
+    if (!isStoreReady) {
       return;
     }
 
@@ -381,7 +382,7 @@ function Table() {
   // other metadata properties change. The effect only needs to run once when the
   // store becomes ready.
   useEffect(() => {
-    if (!store || !isStoreReady) {
+    if (!isStoreReady) {
       return;
     }
 
@@ -453,8 +454,6 @@ function Table() {
 
   // Subscribe to store gameAssets changes
   useEffect(() => {
-    if (!store) return;
-
     const unsubscribe = store.onGameAssetsChange((assets) => {
       setGameAssets(assets);
     });
@@ -495,7 +494,7 @@ function Table() {
   // - Y.Doc is optimized for operational transforms on structured data, not large immutable objects
   // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and load assets per-client
   useEffect(() => {
-    if (!store || !isStoreReady) return;
+    if (!isStoreReady) return;
 
     const observer = (
       _event: unknown,
@@ -635,8 +634,6 @@ function Table() {
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
-    if (!store) return;
-
     const updateSelection = () => {
       // Use getObjectsSelectedBy() - returns {id, yMap} pairs
       const selected = store.getObjectsSelectedBy(store.getActorId());
@@ -725,7 +722,6 @@ function Table() {
 
   const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
     (entry, item) => {
-      if (!store) return;
       const board = boardRef.current;
       void handleLoadSelection(entry, item, {
         store,
@@ -795,7 +791,7 @@ function Table() {
   return (
     <div className="table">
       <Suspense fallback={<div className="board-fullscreen" />}>
-        {!store || !isStoreReady ? (
+        {!isStoreReady ? (
           <div className="board-fullscreen" />
         ) : packsLoading ? (
           <div className="board-fullscreen" />
@@ -847,9 +843,7 @@ function Table() {
                   className="table-error-button table-error-button-secondary"
                   data-testid="table-error-dismiss"
                   onClick={() => {
-                    if (store) {
-                      resetTable(store);
-                    }
+                    resetTable(store);
                     setPacksError(null);
                     setPacksLoading(false);
                   }}
@@ -886,7 +880,7 @@ function Table() {
       </Suspense>
 
       {/* Hand Panel */}
-      {store && isStoreReady && !packsLoading && !packsError && (
+      {isStoreReady && !packsLoading && !packsError && (
         <HandPanel
           ref={handPanelRef}
           store={store}

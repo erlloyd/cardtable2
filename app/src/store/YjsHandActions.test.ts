@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { YjsStore, toTableObject } from './YjsStore';
 import { createObject } from './YjsActions';
 import {
@@ -8,43 +8,11 @@ import {
 } from './YjsHandActions';
 import { ObjectKind, type StackObject } from '@cardtable2/shared';
 
-// Mock y-indexeddb to avoid IndexedDB in tests
-vi.mock('y-indexeddb', () => ({
-  IndexeddbPersistence: class MockIndexeddbPersistence {
-    private listeners: Map<string, Array<() => void>> = new Map();
-
-    constructor(_dbName: string, _doc: unknown) {
-      setTimeout(() => {
-        const syncedListeners = this.listeners.get('synced') || [];
-        syncedListeners.forEach((listener) => listener());
-      }, 0);
-    }
-
-    on(event: string, listener: () => void) {
-      if (!this.listeners.has(event)) {
-        this.listeners.set(event, []);
-      }
-      this.listeners.get(event)!.push(listener);
-    }
-
-    destroy() {
-      this.listeners.clear();
-    }
-  },
-}));
-
 describe('YjsHandActions', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   describe('moveCardToHand', () => {
@@ -318,15 +286,8 @@ describe('YjsHandActions', () => {
 describe('YjsStore hand methods', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore('test-table');
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    if (store) {
-      store.destroy();
-    }
   });
 
   it('creates and retrieves a hand', () => {

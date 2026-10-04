@@ -433,4 +433,54 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
       page.getByRole('button', { name: 'Scroll cards left' }),
     ).toHaveCount(0);
   });
+
+  test('switching hands never renders the empty state (ct-ajw.33)', async ({
+    page,
+  }) => {
+    const snapshotWarnings: string[] = [];
+    page.on('console', (msg) => {
+      if (/getSnapshot|Maximum update depth/.test(msg.text())) {
+        snapshotWarnings.push(msg.text());
+      }
+    });
+    await seedHand(page, 'Alpha', ['card-a']);
+    await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.addCardToHand(store.createHand('Beta'), 'card-b');
+    });
+    await expect(page.locator('.hand-panel__tab')).toHaveCount(2);
+    await expect(page.locator('.hand-panel__card')).toHaveCount(1);
+
+    await page.evaluate(() => {
+      const w = window as unknown as { __emptySeen: number };
+      w.__emptySeen = 0;
+      const isEmpty = (n: Node): boolean =>
+        n instanceof Element &&
+        (n.matches('.hand-panel__empty') ||
+          n.querySelector('.hand-panel__empty') !== null);
+      new MutationObserver((records) => {
+        for (const r of records) {
+          if (Array.from(r.addedNodes).some(isEmpty)) w.__emptySeen++;
+        }
+        if (document.querySelector('.hand-panel__empty')) w.__emptySeen++;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+
+    const alpha = page.locator('.hand-panel__tab', { hasText: 'Alpha' });
+    const beta = page.locator('.hand-panel__tab', { hasText: 'Beta' });
+    for (let i = 0; i < 5; i++) {
+      await alpha.click();
+      await expect(alpha).toHaveClass(/hand-panel__tab--active/);
+      await expect(page.locator('.hand-panel__card')).toHaveCount(1);
+      await beta.click();
+      await expect(beta).toHaveClass(/hand-panel__tab--active/);
+      await expect(page.locator('.hand-panel__card')).toHaveCount(1);
+    }
+
+    const emptySeen = await page.evaluate(
+      () => (window as unknown as { __emptySeen: number }).__emptySeen,
+    );
+    expect(emptySeen).toBe(0);
+    expect(snapshotWarnings).toEqual([]);
+  });
 });

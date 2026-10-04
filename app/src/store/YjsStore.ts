@@ -43,6 +43,8 @@ export interface ObjectChanges {
  * - Selection ownership (M3-T3)
  * - Awareness (cursors, drag ghosts) (M3-T4)
  */
+const NO_HAND_CARDS: string[] = [];
+
 export class YjsStore {
   private doc: Y.Doc;
   private persistence: IndexeddbPersistence | null = null;
@@ -776,12 +778,15 @@ export class YjsStore {
 
   /**
    * Get the cards array for a hand.
+   * The returned array is referentially stable until the hand's cards change
+   * (writes replace the array), so it can be a useSyncExternalStore snapshot.
+   * Callers must not mutate it.
    * @returns Array of card IDs, or empty array if hand not found
    */
   getHandCards(handId: string): string[] {
     const handMap = this.hands.get(handId);
-    if (!handMap) return [];
-    return (handMap.get('cards') as string[]) ?? [];
+    if (!handMap) return NO_HAND_CARDS;
+    return (handMap.get('cards') as string[]) ?? NO_HAND_CARDS;
   }
 
   /**

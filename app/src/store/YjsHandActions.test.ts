@@ -390,6 +390,19 @@ describe('YjsStore hand methods', () => {
     expect(store.removeCardFromHand(handId, -1)).toBeNull();
   });
 
+  it('getHandCards returns a stable reference until the hand changes', () => {
+    const handId = store.createHand('Test');
+    expect(store.getHandCards(handId)).toBe(store.getHandCards(handId));
+    expect(store.getHandCards('missing')).toBe(store.getHandCards('missing'));
+
+    store.addCardToHand(handId, 'card-1');
+    const before = store.getHandCards(handId);
+    expect(store.getHandCards(handId)).toBe(before);
+
+    store.addCardToHand(handId, 'card-2');
+    expect(store.getHandCards(handId)).not.toBe(before);
+  });
+
   it('fires onHandsChange when hands are modified', () => {
     const callback = vi.fn();
     const unsubscribe = store.onHandsChange(callback);

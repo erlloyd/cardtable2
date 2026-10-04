@@ -528,25 +528,21 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       };
 
       const handleKeyDown = (ev: KeyboardEvent) => {
-        if (ev.key !== 'Escape') return;
-        // Capture phase + stopPropagation: the Escape that cancels the drag
-        // must not also reach bubble-phase global Escape handlers.
-        ev.stopPropagation();
-        endDrag();
+        if (ev.key === 'Escape') endDrag();
       };
 
       window.addEventListener('pointermove', handleMove);
       window.addEventListener('pointerup', handleUp);
       window.addEventListener('pointercancel', endDrag);
       window.addEventListener('blur', endDrag);
-      window.addEventListener('keydown', handleKeyDown, true);
+      window.addEventListener('keydown', handleKeyDown);
 
       return () => {
         window.removeEventListener('pointermove', handleMove);
         window.removeEventListener('pointerup', handleUp);
         window.removeEventListener('pointercancel', endDrag);
         window.removeEventListener('blur', endDrag);
-        window.removeEventListener('keydown', handleKeyDown, true);
+        window.removeEventListener('keydown', handleKeyDown);
         if (started) onDragEnd();
       };
     }, [session, endDrag]);

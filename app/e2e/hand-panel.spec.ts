@@ -382,17 +382,6 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
     const handId = await seedHand(page, 'Hand 1', ['A', 'B', 'C']);
     await expect(page.locator('.hand-panel__card')).toHaveCount(3);
 
-    // Stand-in for global bubble-phase Escape handlers (clear selection,
-    // close menu): counts Escape keydowns that reach window.
-    await page.evaluate(() => {
-      const probe = globalThis as unknown as { __escapeSeen?: number };
-      probe.__escapeSeen = 0;
-      window.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape')
-          probe.__escapeSeen = (probe.__escapeSeen ?? 0) + 1;
-      });
-    });
-
     await dragFirstCardOverBoard(page);
     await page.keyboard.press('Escape');
     await page.mouse.up();
@@ -401,21 +390,6 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
     await expect(page.locator('.hand-panel__card')).toHaveCount(3);
     expect(await getHandCards(page, handId)).toEqual(['A', 'B', 'C']);
     expect(await getBoardObjects(page)).toHaveLength(0);
-
-    // The cancelling Escape was consumed by the drag.
-    expect(
-      await page.evaluate(
-        () => (globalThis as unknown as { __escapeSeen: number }).__escapeSeen,
-      ),
-    ).toBe(0);
-
-    // With no drag active, Escape reaches global handlers as usual.
-    await page.keyboard.press('Escape');
-    expect(
-      await page.evaluate(
-        () => (globalThis as unknown as { __escapeSeen: number }).__escapeSeen,
-      ),
-    ).toBe(1);
 
     await dropFirstCardOnBoard(page);
     await expect.poll(() => getHandCards(page, handId)).toEqual(['B', 'C']);

@@ -22,6 +22,8 @@ EXPOSE 3001
 
 WORKDIR /app/server
 
+USER node
+
 ENTRYPOINT ["tini", "--"]
 
 # Node runs the TypeScript sources directly (no build step)

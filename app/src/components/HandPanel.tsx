@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
@@ -52,11 +53,6 @@ export interface HandPanelProps {
   onPhantomDragActiveChange?: (active: boolean) => void;
 }
 
-interface HandCardsState {
-  handId: string;
-  cards: string[];
-}
-
 const NO_CARDS: string[] = [];
 
 const DRAG_SLOP = 5;
@@ -101,7 +97,6 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     },
     ref,
   ) {
-    const [handCards, setHandCards] = useState<HandCardsState | null>(null);
     const [containerWidth, setContainerWidth] = useState(0);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const [hoverAnchor, setHoverAnchor] = useState<{
@@ -146,26 +141,16 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const onPhantomDragActiveChangeRef = useRef(onPhantomDragActiveChange);
     const phantomFeedbackRef = useRef<PhantomDragFeedback | null>(null);
 
-    // Subscribe to hand changes. Cards are keyed by hand id so a stale hand's
-    // cards are never shown for a different (or no) active hand.
-    useEffect(() => {
-      if (!activeHandId) return;
-
-      const refresh = () => {
-        setHandCards({
-          handId: activeHandId,
-          cards: store.getHandCards(activeHandId),
-        });
-      };
-
-      refresh();
-      return store.onHandsChange(refresh);
-    }, [store, activeHandId]);
-
-    const cards =
-      activeHandId && handCards?.handId === activeHandId
-        ? handCards.cards
-        : NO_CARDS;
+    // Read cards straight from the store during render so the commit that
+    // changes activeHandId already shows that hand's cards (no stale or empty
+    // intermediate frame).
+    const subscribeToHands = useCallback(
+      (onChange: () => void) => store.onHandsChange(onChange),
+      [store],
+    );
+    const cards = useSyncExternalStore(subscribeToHands, () =>
+      activeHandId ? store.getHandCards(activeHandId) : NO_CARDS,
+    );
 
     // Measure container width with ResizeObserver
     useEffect(() => {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Board from './Board';
@@ -191,6 +191,11 @@ describe('Board', () => {
   let mockStore: MockYjsStore;
 
   beforeEach(() => {
+    // Unmount-time hook logs fire in afterEach; vitest flushes console output
+    // over RPC on a timer, so logs from the file's last tests can still be
+    // pending when the worker tears down (EnvironmentTeardownError).
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
     // Mock Worker constructor
     vi.stubGlobal('Worker', MockWorker);
 
@@ -204,6 +209,9 @@ describe('Board', () => {
   });
 
   afterEach(() => {
+    // Unmount while console.log is still spied (hooks run in reverse order, so
+    // the global cleanup in test/setup.ts would otherwise run after restore).
+    cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });

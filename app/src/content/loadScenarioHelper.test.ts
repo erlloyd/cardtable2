@@ -270,8 +270,8 @@ describe('loadScenarioContent', () => {
     it('should log non-Error objects as strings', () => {
       (mockStore.setObject as ReturnType<typeof vi.fn>).mockImplementationOnce(
         () => {
-          // eslint-disable-next-line @typescript-eslint/only-throw-error
-          throw 'String error';
+          const thrown: unknown = 'String error';
+          throw thrown;
         },
       );
 

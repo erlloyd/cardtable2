@@ -60,6 +60,9 @@ export class YjsStore {
   private persistence: IndexeddbPersistence | null = null;
   private wsProvider: HocuspocusProvider | null = null; // M5-T1
   private awareness: Awareness | null = null;
+  // Peers drop awareness updates whose clock is not above the last one they
+  // saw for our clientID, so a reconnected awareness resumes from here.
+  private awarenessClock: number | undefined;
   private syncTimeout: ReturnType<typeof setTimeout> | undefined;
   // Bumped on every connect()/disconnect() so callbacks from a released
   // connection can tell they are stale.
@@ -164,6 +167,12 @@ export class YjsStore {
 
     // Initialize awareness (M3-T4)
     const awareness = new Awareness(this.doc);
+    if (this.awarenessClock !== undefined) {
+      awareness.meta.set(this.doc.clientID, {
+        clock: this.awarenessClock,
+        lastUpdated: Date.now(),
+      });
+    }
     awareness.setLocalStateField('actorId', this.actorId);
     awareness.on('change', this.handleAwarenessChange);
     this.awareness = awareness;
@@ -228,7 +237,7 @@ export class YjsStore {
       },
       onClose: ({ event }) => {
         if (generation !== this.connectionGeneration) return;
-        console.error('[YjsStore] WebSocket closed:', event);
+        console.warn('[YjsStore] WebSocket closed:', event);
       },
     });
 
@@ -258,11 +267,14 @@ export class YjsStore {
     if (this.awareness) {
       this.awareness.off('change', this.handleAwarenessChange);
       this.awareness.destroy();
+      this.awarenessClock = this.awareness.meta.get(this.doc.clientID)?.clock;
       this.awareness = null;
     }
 
     if (this.persistence) {
-      void this.persistence.destroy();
+      this.persistence.destroy().catch((error: unknown) => {
+        console.error('[YjsStore] IndexedDB persistence destroy failed', error);
+      });
       this.persistence = null;
     }
 

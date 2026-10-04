@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore } from './YjsStore';
 import type { TableObject, StackObject } from '@cardtable2/shared';
 import { ObjectKind } from '@cardtable2/shared';
+import * as Y from 'yjs';
+import {
+  Awareness,
+  applyAwarenessUpdate,
+  encodeAwarenessUpdate,
+} from 'y-protocols/awareness';
 
 // Mock y-indexeddb to avoid IndexedDB in tests
 vi.mock('y-indexeddb', () => ({
@@ -27,6 +33,7 @@ vi.mock('y-indexeddb', () => ({
     destroy() {
       clearTimeout(this.syncTimer);
       this.listeners.clear();
+      return Promise.resolve();
     }
   },
 }));
@@ -657,8 +664,8 @@ describe('YjsStore', () => {
         // Only throw on second call (during setGameAssets, not initial subscription)
         callCount++;
         if (callCount > 1) {
-          // eslint-disable-next-line @typescript-eslint/only-throw-error
-          throw 'String error';
+          const nonError: unknown = 'String error';
+          throw nonError;
         }
       });
 
@@ -777,6 +784,35 @@ describe('YjsStore', () => {
       localStore.disconnect();
       expect(localStore.isReady()).toBe(false);
       expect(localStore.getConnectionStatus()).toBe('offline');
+    });
+
+    it('a peer accepts awareness state after the store disconnects and reconnects', () => {
+      const localStore = new YjsStore('lifecycle-awareness-clock');
+      const peer = new Awareness(new Y.Doc());
+      const relay = (from: Awareness | null) => {
+        if (!from) throw new Error('store has no awareness');
+        applyAwarenessUpdate(
+          peer,
+          encodeAwarenessUpdate(from, [from.clientID]),
+          'test',
+        );
+      };
+
+      localStore.connect();
+      localStore.setCursor(1, 1);
+      vi.advanceTimersByTime(100);
+      relay(localStore['awareness']);
+      const clientId = localStore['doc'].clientID;
+      expect(peer.getStates().get(clientId)?.cursor).toEqual({ x: 1, y: 1 });
+
+      localStore.disconnect();
+      localStore.connect();
+      localStore.setCursor(7, 8);
+      vi.advanceTimersByTime(100);
+      relay(localStore['awareness']);
+
+      expect(peer.getStates().get(clientId)?.cursor).toEqual({ x: 7, y: 8 });
+      localStore.disconnect();
     });
 
     it('awareness setters are no-ops while disconnected', () => {

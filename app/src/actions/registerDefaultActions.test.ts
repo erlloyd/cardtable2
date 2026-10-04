@@ -22,7 +22,10 @@ import {
   registerLoadablesActions,
   unregisterLoadablesActions,
 } from './registerDefaultActions';
-import { registerAttachmentActions } from './attachmentActions';
+import {
+  clearAttachmentActions,
+  registerAttachmentActions,
+} from './attachmentActions';
 import { registerHandActions } from './handActions';
 import type { ActionContext } from './types';
 import type { YjsStore } from '../store/YjsStore';
@@ -90,7 +93,7 @@ describe('registerDefaultActions cleanup (ct-ajw.42)', () => {
     expect(registry.size).toBe(1);
   });
 
-  it('cleanup removes attachment actions registered after the defaults (ct-ajw.57)', () => {
+  it('cleanup unregisters only its own ids; attachment actions are owned by the route (ct-ajw.61)', () => {
     const registry = ActionRegistry.getInstance();
     const cleanup = registerDefaultActions();
 
@@ -111,7 +114,8 @@ describe('registerDefaultActions cleanup (ct-ajw.42)', () => {
 
     cleanup();
 
-    expect(registry.getAction('add-token-damage')).toBeUndefined();
+    expect(registry.getAction('add-token-damage')).toBeDefined();
+    clearAttachmentActions(registry);
     expect(registry.size).toBe(0);
   });
 

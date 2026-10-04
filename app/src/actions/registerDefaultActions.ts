@@ -6,10 +6,7 @@ import {
   type Action,
   type ActionContext,
 } from './types';
-import {
-  clearAttachmentActions,
-  registerAttachmentActions,
-} from './attachmentActions';
+import { registerAttachmentActions } from './attachmentActions';
 import type { LoadableEntry } from '@cardtable2/shared';
 import {
   flipCards,
@@ -588,9 +585,6 @@ export function registerDefaultActions(): () => void {
     for (const id of registeredIds) {
       registry.unregister(id);
     }
-    // Attachment actions are registered later, asynchronously, by content
-    // loading; they belong to this table mount and must not outlive it.
-    clearAttachmentActions(registry);
   };
 }
 

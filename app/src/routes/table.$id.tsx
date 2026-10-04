@@ -27,7 +27,10 @@ import {
   unregisterLoadablesActions,
 } from '../actions/registerDefaultActions';
 import { ActionRegistry } from '../actions/ActionRegistry';
-import { registerAttachmentActions } from '../actions/attachmentActions';
+import {
+  clearAttachmentActions,
+  registerAttachmentActions,
+} from '../actions/attachmentActions';
 import { registerHandActions } from '../actions/handActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
@@ -259,9 +262,16 @@ function Table() {
     };
   }, []);
 
-  // The loadables registry is module-level state populated by this table's
-  // plugin load; clear it on unmount so the next table doesn't inherit it.
-  useEffect(() => clearLoadableEntries, []);
+  // Attachment actions and the loadables registry are module-level state
+  // populated by this table's plugin load; clear both on unmount so the next
+  // table doesn't inherit them.
+  useEffect(
+    () => () => {
+      clearAttachmentActions(ActionRegistry.getInstance());
+      clearLoadableEntries();
+    },
+    [],
+  );
 
   // Keep the dynamic per-type "Load <X>..." actions and the local loadables
   // state in sync with the active plugin's runtime registry. The registry is
@@ -394,6 +404,8 @@ function Table() {
       return;
     }
 
+    let cancelled = false;
+
     const loadContent = async () => {
       setPacksLoading(true);
       setPacksError(null);
@@ -413,6 +425,7 @@ function Table() {
         // in-flight cache dedupes any concurrent callers (e.g. Load Scenario).
         console.log('[Table] Loading plugin assets for:', pluginId);
         const assets = await loadPluginAssets(pluginId);
+        if (cancelled) return;
         store.setGameAssets(assets);
         registerAttachmentActions(ActionRegistry.getInstance(), assets);
 
@@ -456,6 +469,7 @@ function Table() {
 
     store.metadata.observe(observer);
     return () => {
+      cancelled = true;
       store.metadata.unobserve(observer);
     };
   }, [store, isStoreReady]);
@@ -503,6 +517,8 @@ function Table() {
   // - Instead, we store minimal metadata (type, pluginId, scenarioFile) and load assets per-client
   useEffect(() => {
     if (!isStoreReady) return;
+
+    let cancelled = false;
 
     const observer = (
       _event: unknown,
@@ -571,6 +587,8 @@ function Table() {
 
       void loadPluginAssets(pluginId)
         .then((assets) => {
+          if (cancelled) return;
+
           // Stale-load race-check applies only to scenario-driven loads,
           // where the scenario can change mid-fetch. For bare-pluginId we
           // skip the check (pluginId is set-once on table create).
@@ -630,6 +648,7 @@ function Table() {
 
     store.metadata.observe(observer);
     return () => {
+      cancelled = true;
       store.metadata.unobserve(observer);
     };
   }, [store, isStoreReady]);

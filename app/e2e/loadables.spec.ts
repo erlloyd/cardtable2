@@ -29,7 +29,10 @@ import { test, expect, skipNextAutoClear } from './_fixtures';
  * consistent across the loadables-related E2E surfaces.
  */
 interface LoadablesTestStore {
-  metadata: { set: (key: string, value: unknown) => void };
+  metadata: {
+    set: (key: string, value: unknown) => void;
+    get: (key: string) => unknown;
+  };
   waitForReady: () => Promise<void>;
   getGameAssets: () => unknown;
   getAllObjects: () => Map<string, unknown>;
@@ -108,6 +111,18 @@ async function getObjectCount(page: Page): Promise<number> {
     const store = (globalThis as unknown as LoadablesTestGlobalThis)
       .__TEST_STORE__;
     return store ? store.getAllObjects().size : 0;
+  });
+}
+
+/** `loadedAt` of the table's current loadedScenario metadata. */
+async function getLoadedAt(page: Page): Promise<number | undefined> {
+  return page.evaluate(() => {
+    const store = (globalThis as unknown as LoadablesTestGlobalThis)
+      .__TEST_STORE__;
+    const meta = store?.metadata.get('loadedScenario') as
+      | { loadedAt: number }
+      | undefined;
+    return meta?.loadedAt;
   });
 }
 
@@ -230,6 +245,7 @@ test.describe('Loadables — unified loading (ct-8gf.6)', () => {
     );
     const firstCount = await getObjectCount(page);
     expect(firstCount).toBeGreaterThan(0);
+    const firstLoadedAt = await getLoadedAt(page);
 
     // Second load of the same scenario. Replace mode means the table is
     // cleared and rebuilt — final count must equal first count, NOT 2x.
@@ -241,17 +257,25 @@ test.describe('Loadables — unified loading (ct-8gf.6)', () => {
       .click();
     await page.getByTestId('load-picker-item-testgame-basic').click();
 
-    // Wait for the second load to complete. We pin on "count is firstCount
-    // AND has been stable for one extra poll" via a settle helper rather than
-    // the bare equality so the intermediate replace state (clear -> add)
-    // doesn't fool us. Generous timeout for parallel-worker server contention.
+    // Wait for the second load to complete. The first load's objects already
+    // satisfy `size === firstCount`, and the second load clears synchronously
+    // but re-adds on a setTimeout(0) (loadScenarioHelper), so a bare count
+    // check can pass before the clear and be read after it (0). The
+    // loadedScenario metadata is rewritten by the second load; requiring a
+    // new `loadedAt` AND the full count proves the rebuild landed.
     await page.waitForFunction(
-      (expected: number) => {
+      ({ expected, previousLoadedAt }) => {
         const store = (globalThis as unknown as LoadablesTestGlobalThis)
           .__TEST_STORE__;
-        return (store?.getAllObjects().size ?? -1) === expected;
+        const meta = store?.metadata.get('loadedScenario') as
+          | { loadedAt: number }
+          | undefined;
+        return (
+          meta?.loadedAt !== previousLoadedAt &&
+          (store?.getAllObjects().size ?? -1) === expected
+        );
       },
-      firstCount,
+      { expected: firstCount, previousLoadedAt: firstLoadedAt },
       { timeout: 30_000 },
     );
     const secondCount = await getObjectCount(page);

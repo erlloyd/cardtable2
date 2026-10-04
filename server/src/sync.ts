@@ -2,6 +2,8 @@ import type { IncomingMessage } from 'node:http';
 import { Hocuspocus } from '@hocuspocus/server';
 import type { RawData, WebSocket } from 'ws';
 
+export const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
+
 export function createHocuspocus(): Hocuspocus {
   return new Hocuspocus({ quiet: true });
 }
@@ -32,7 +34,20 @@ export function connectSocket(
   ws: WebSocket,
   request: IncomingMessage,
 ): void {
-  const connection = hocuspocus.handleConnection(ws, toFetchRequest(request));
+  // Without a listener, a malformed frame emits an unhandled 'error' and
+  // kills the process.
+  ws.on('error', (error) => {
+    console.error('[Sync] WebSocket error:', error.message);
+  });
+
+  let connection: ReturnType<Hocuspocus['handleConnection']>;
+  try {
+    connection = hocuspocus.handleConnection(ws, toFetchRequest(request));
+  } catch (error) {
+    console.error('[Sync] Rejected connection:', error);
+    ws.close(1008, 'Invalid request');
+    return;
+  }
   ws.on('message', (data) => connection.handleMessage(toUint8Array(data)));
   ws.on('close', (code, reason) =>
     connection.handleClose(

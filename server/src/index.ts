@@ -3,12 +3,15 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import { createProxyHandler } from './proxyHandler.ts';
-import { connectSocket, createHocuspocus } from './sync.ts';
+import { MAX_PAYLOAD_BYTES, connectSocket, createHocuspocus } from './sync.ts';
 
 // Server entry point for Railway deployment
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({
+  noServer: true,
+  maxPayload: MAX_PAYLOAD_BYTES,
+});
 const hocuspocus = createHocuspocus();
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
@@ -74,9 +77,6 @@ server.on('upgrade', (request, socket, head) => {
 
 // Hocuspocus handles Yjs sync (initial state, updates, awareness) per socket
 wss.on('connection', (ws, request) => {
-  const url = request.url || '';
-  console.log(`[Server] New WebSocket connection: ${url}`);
-
   connectSocket(hocuspocus, ws, request);
 });
 

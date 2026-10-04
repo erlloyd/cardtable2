@@ -250,8 +250,9 @@ export class KeyboardManager {
    * Check if the user is typing in an input field
    */
   private isTypingContext(event: KeyboardEvent): boolean {
-    const target = event.target as HTMLElement | null;
-    if (!target) {
+    // Events dispatched on window/document have no tagName.
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
       return false;
     }
 

@@ -173,6 +173,39 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Custom hooks
   const { renderer, renderMode } = useRenderer('auto');
 
+  const {
+    isReady,
+    setIsReady,
+    isCanvasInitialized,
+    setIsCanvasInitialized,
+    messages,
+    addMessage,
+    debugCoords,
+    setDebugCoords,
+    isCameraActive,
+    setIsCameraActive,
+    isWaitingForCoords,
+    setIsWaitingForCoords,
+    cursorStyle,
+    setCursorStyle,
+    interactionMode,
+    setInteractionMode,
+    isMultiSelectMode,
+    setIsMultiSelectMode,
+    gridSnapEnabled,
+    awarenessHz,
+    setAwarenessHz,
+    isSynced,
+    setIsSynced,
+  } = useBoardState(
+    externalInteractionMode,
+    onInteractionModeChange,
+    externalIsMultiSelectMode,
+    onMultiSelectModeChange,
+    externalGridSnapEnabled,
+    onGridSnapEnabledChange,
+  );
+
   // Expose imperative handle for hand-to-board phantom drag
   useImperativeHandle(
     ref,
@@ -214,44 +247,28 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
             return;
           }
           viewportStateCallbacksRef.current.push(resolve);
-          renderer.sendMessage({ type: 'request-viewport-state' });
+          // The renderer rejects messages until PixiJS init completes (the
+          // request would be dropped and `resolve` never called). If init is
+          // still pending, the effect below sends the request once it is done.
+          if (isCanvasInitialized) {
+            renderer.sendMessage({ type: 'request-viewport-state' });
+          }
         }),
     }),
-    [renderer],
+    [renderer, isCanvasInitialized],
   );
 
-  const {
-    isReady,
-    setIsReady,
-    isCanvasInitialized,
-    setIsCanvasInitialized,
-    messages,
-    addMessage,
-    debugCoords,
-    setDebugCoords,
-    isCameraActive,
-    setIsCameraActive,
-    isWaitingForCoords,
-    setIsWaitingForCoords,
-    cursorStyle,
-    setCursorStyle,
-    interactionMode,
-    setInteractionMode,
-    isMultiSelectMode,
-    setIsMultiSelectMode,
-    gridSnapEnabled,
-    awarenessHz,
-    setAwarenessHz,
-    isSynced,
-    setIsSynced,
-  } = useBoardState(
-    externalInteractionMode,
-    onInteractionModeChange,
-    externalIsMultiSelectMode,
-    onMultiSelectModeChange,
-    externalGridSnapEnabled,
-    onGridSnapEnabledChange,
-  );
+  // Flush viewport-state requests that arrived before the renderer finished
+  // initializing.
+  useEffect(() => {
+    if (
+      renderer &&
+      isCanvasInitialized &&
+      viewportStateCallbacksRef.current.length > 0
+    ) {
+      renderer.sendMessage({ type: 'request-viewport-state' });
+    }
+  }, [renderer, isCanvasInitialized]);
 
   // Helper: Get card from stack object
   const getCardFromStack = useCallback(
@@ -573,7 +590,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     isCanvasInitialized,
     showDebugUI,
     flushCallbacksRef,
-    selectionSettledCallbacksRef,
     animationStateCallbacksRef,
   );
 

@@ -221,6 +221,36 @@ describe('KeyboardManager', () => {
       expect(executeFn).not.toHaveBeenCalled();
     });
 
+    it('should execute when the keydown target is window (no tagName)', () => {
+      const executeFn = vi.fn();
+      const action: Action = {
+        id: 'test-action',
+        label: 'Test Action',
+        icon: '🧪',
+        shortcut: 'F',
+        category: CARD_ACTIONS,
+        isAvailable: () => true,
+        execute: executeFn,
+      };
+
+      actionRegistry.register(action);
+      keyboardManager.registerShortcut('F', 'test-action');
+
+      let handled: boolean | undefined;
+      const listener = (event: KeyboardEvent) => {
+        handled = keyboardManager.handleKeyEvent(event, mockContext);
+      };
+      window.addEventListener('keydown', listener);
+      try {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
+      } finally {
+        window.removeEventListener('keydown', listener);
+      }
+
+      expect(handled).toBe(true);
+      expect(executeFn).toHaveBeenCalledWith(mockContext);
+    });
+
     it('should return false when no shortcut matches', () => {
       const event = new KeyboardEvent('keydown', {
         key: 'x',

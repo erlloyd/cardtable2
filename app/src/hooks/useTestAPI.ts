@@ -25,7 +25,6 @@ export interface TestAPI {
  * @param isCanvasInitialized - Whether canvas is initialized
  * @param showDebugUI - Whether debug UI is enabled
  * @param flushCallbacks - Ref to flush callbacks array
- * @param selectionSettledCallbacks - Ref to selection settled callbacks array
  * @param animationStateCallbacks - Ref to animation state callbacks array
  * @returns Test API functions
  */
@@ -34,7 +33,6 @@ export function useTestAPI(
   isCanvasInitialized: boolean,
   showDebugUI: boolean,
   flushCallbacks: React.MutableRefObject<Array<() => void>>,
-  selectionSettledCallbacks: React.MutableRefObject<Array<() => void>>,
   animationStateCallbacks: React.MutableRefObject<
     Array<(isAnimating: boolean) => void>
   >,
@@ -59,15 +57,12 @@ export function useTestAPI(
     });
   }, [renderer, isCanvasInitialized, flushCallbacks]);
 
-  // Wait for selection to settle after synthetic pointer events
-  const waitForSelectionSettled = useCallback((): Promise<void> => {
-    return new Promise<void>((resolve) => {
-      console.log(
-        '[useTestAPI] waitForSelectionSettled: Registering callback for selection',
-      );
-      selectionSettledCallbacks.current.push(resolve);
-    });
-  }, [selectionSettledCallbacks]);
+  // Wait for selection to settle after a pointer click. Delegates to the
+  // renderer flush, which polls until the select -> store -> sync round trip
+  // is done and also resolves if that already happened. A one-shot listener
+  // for the next `objects-selected` message would hang forever when the
+  // response lands before the test registers it.
+  const waitForSelectionSettled = waitForRenderer;
 
   // Check if animations are running
   const checkAnimationState = useCallback(

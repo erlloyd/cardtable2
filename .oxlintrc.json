@@ -25,6 +25,7 @@
     "react/only-export-components": "error",
     "react/jsx-key": "error",
     "react/no-unescaped-entities": "error",
+    // Compiler-based duplicate of rules-of-hooks; its only finding is a false positive on WebGL gl.useProgram() (DiagnosticTest.tsx).
     "react/hooks": "off",
     "react/refs": "error",
     "react/purity": "error",
@@ -52,7 +53,7 @@
     "typescript/require-await": "error",
     "typescript/only-throw-error": "error",
     "typescript/prefer-promise-reject-errors": "error",
-    "typescript/no-deprecated": "off",
+    "typescript/no-deprecated": "error",
     "typescript/consistent-type-imports": [
       "error",
       {
@@ -73,6 +74,7 @@
     "eslint/no-fallthrough": "error",
     "eslint/prefer-const": "error",
     "eslint/no-var": "error",
+    // TypeScript already reports undefined identifiers.
     "eslint/no-undef": "off",
     "eslint/no-array-constructor": "error",
     "typescript/no-unnecessary-type-constraint": "error",

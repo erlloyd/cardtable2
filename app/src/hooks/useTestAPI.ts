@@ -32,8 +32,8 @@ export function useTestAPI(
   renderer: IRendererAdapter | null,
   isCanvasInitialized: boolean,
   showDebugUI: boolean,
-  flushCallbacks: React.MutableRefObject<Array<() => void>>,
-  animationStateCallbacks: React.MutableRefObject<
+  flushCallbacks: React.RefObject<Array<() => void>>,
+  animationStateCallbacks: React.RefObject<
     Array<(isAnimating: boolean) => void>
   >,
 ): TestAPI {

@@ -51,12 +51,12 @@ export interface BoardHandlerContext {
   addMessage: (msg: string) => void;
 
   // Refs
-  flushCallbacks: React.MutableRefObject<Array<() => void>>;
-  selectionSettledCallbacks: React.MutableRefObject<Array<() => void>>;
-  animationStateCallbacks: React.MutableRefObject<
+  flushCallbacks: React.RefObject<Array<() => void>>;
+  selectionSettledCallbacks: React.RefObject<Array<() => void>>;
+  animationStateCallbacks: React.RefObject<
     Array<(isAnimating: boolean) => void>
   >;
-  viewportStateCallbacks: React.MutableRefObject<
+  viewportStateCallbacks: React.RefObject<
     Array<(state: ViewportState) => void>
   >;
   // Drag callbacks for hand panel coordination

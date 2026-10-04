@@ -169,7 +169,7 @@ describe('Counter Behaviors - Rendering', () => {
 
   beforeEach(() => {
     mockCreateText = vi.fn((options: TextOptions) => {
-      const text = new Text(options);
+      const text = new Text({ ...options });
       text.resolution = 6; // Simulated zoom-aware resolution
       return text;
     });

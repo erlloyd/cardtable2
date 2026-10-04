@@ -49,8 +49,8 @@ function GameCombobox({
               value={game}
               className="combobox-option"
             >
-              {({ active }) => (
-                <div className={active ? 'active' : ''}>
+              {({ focus }) => (
+                <div className={focus ? 'active' : ''}>
                   <div className="game-name">{game.name}</div>
                   <div className="game-description">{game.description}</div>
                 </div>

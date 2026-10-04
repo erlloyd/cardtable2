@@ -53,7 +53,7 @@ describe('GridSnapManager', () => {
 
     // Mock visual manager
     mockVisualManager = {
-      createText: vi.fn((options: TextOptions) => new Text(options)),
+      createText: vi.fn((options: TextOptions) => new Text({ ...options })),
       createKindLabel: vi.fn((text: string) => {
         const label = new Text({ text });
         label.anchor.set(0.5);

@@ -153,6 +153,8 @@ export class YjsStore {
    * Open the external resources: IndexedDB persistence, awareness and (when a
    * wsUrl was given) the WebSocket provider. Repeatable after `disconnect()`.
    * Ready fires once IndexedDB has synced (or the sync timeout elapses).
+   * The socket opens alongside IndexedDB, so StrictMode's dev double-connect
+   * produces one benign "closed before the connection is established" warning.
    */
   connect(): void {
     if (this.awareness) {

@@ -3,7 +3,9 @@
  * free; useTableStore connects in an effect and disconnects on cleanup).
  *
  * (1) A StrictMode dev load must not leave behind a discarded store whose
- *     5s IndexedDB timer fires or whose socket is closed while CONNECTING.
+ *     5s IndexedDB timer fires. (The socket opens alongside IndexedDB, so
+ *     StrictMode's dev double-connect emits one benign browser warning about a
+ *     WebSocket closed while CONNECTING; accepted.)
  * (2) Client-side navigation between tables remounts the route (remountDeps)
  *     so each table gets its own store, and returning restores the first
  *     table's state.
@@ -62,23 +64,6 @@ test.describe('YjsStore lifecycle', () => {
     expect(messages.filter((m) => /IndexedDB sync timeout/.test(m))).toEqual(
       [],
     );
-  });
-
-  // Pending ct-ajw.48 Q1: the provider currently opens together with
-  // IndexedDB, so the discarded StrictMode connection closes a CONNECTING
-  // socket. Enable once the provider opens only after IndexedDB has synced.
-  test.fixme('StrictMode load emits no premature WebSocket close', async ({
-    page,
-  }, testInfo) => {
-    const messages = await loadAndCollectConsole(
-      page,
-      `lifecycle-ws-${testInfo.testId}`,
-    );
-    expect(
-      messages.filter((m) =>
-        /closed before the connection is established/.test(m),
-      ),
-    ).toEqual([]);
   });
 
   test('switching tables keeps stores separate and restores state on return', async ({

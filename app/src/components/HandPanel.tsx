@@ -143,7 +143,6 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     // lockstep with setPhantomDrag.
     const activeHandIdRef = useRef(activeHandId);
     const storeRef = useRef(store);
-    const boardRefRef = useRef(boardRef);
     const onPhantomDragActiveChangeRef = useRef(onPhantomDragActiveChange);
     const phantomFeedbackRef = useRef<PhantomDragFeedback | null>(null);
 
@@ -217,7 +216,6 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     useLayoutEffect(() => {
       activeHandIdRef.current = activeHandId;
       storeRef.current = store;
-      boardRefRef.current = boardRef;
       onPhantomDragActiveChangeRef.current = onPhantomDragActiveChange;
       phantomFeedbackRef.current = phantomDragFeedback ?? null;
       fanLayoutRef.current = fanLayout;
@@ -493,7 +491,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             setHoverAnchor(null);
 
             // Notify renderer and parent
-            boardRefRef.current?.current?.sendRendererMessage({
+            boardRef?.current?.sendRendererMessage({
               type: 'phantom-drag-start',
             });
             onPhantomDragActiveChangeRef.current?.(true);
@@ -522,12 +520,12 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           );
 
           // Send move to renderer for stack/snap detection
-          const canvasPos = boardRefRef.current?.current?.viewportToCanvas(
+          const canvasPos = boardRef?.current?.viewportToCanvas(
             ev.clientX,
             ev.clientY,
           );
           if (canvasPos) {
-            boardRefRef.current?.current?.sendRendererMessage({
+            boardRef?.current?.sendRendererMessage({
               type: 'phantom-drag-move',
               canvasX: canvasPos.x,
               canvasY: canvasPos.y,
@@ -589,7 +587,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             }
 
             // Notify renderer and parent to clean up
-            boardRefRef.current?.current?.sendRendererMessage({
+            boardRef?.current?.sendRendererMessage({
               type: 'phantom-drag-end',
             });
             onPhantomDragActiveChangeRef.current?.(false);
@@ -606,7 +604,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         const handleCancel = () => {
           const current = phantomDragRef.current;
           if (current?.isDragging) {
-            boardRefRef.current?.current?.sendRendererMessage({
+            boardRef?.current?.sendRendererMessage({
               type: 'phantom-drag-end',
             });
             onPhantomDragActiveChangeRef.current?.(false);
@@ -630,7 +628,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
           cleanupDragListenersRef.current = null;
         };
       },
-      [handleCardTap, getDragDropTarget, computeInsertionIndex],
+      [handleCardTap, getDragDropTarget, computeInsertionIndex, boardRef],
     );
 
     // Safety cleanup on unmount

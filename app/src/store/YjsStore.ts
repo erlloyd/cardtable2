@@ -31,6 +31,10 @@ export interface ObjectChanges {
   removed: Array<string>;
 }
 
+const NO_HAND_CARDS: string[] = [];
+
+const INDEXEDDB_SYNC_TIMEOUT_MS = 5000;
+
 /**
  * YjsStore manages the Y.Doc for table state with IndexedDB persistence.
  *
@@ -42,16 +46,30 @@ export interface ObjectChanges {
  * - Engine actions (create, move, flip, rotate, stack, unstack) (M3-T2)
  * - Selection ownership (M3-T3)
  * - Awareness (cursors, drag ghosts) (M3-T4)
+ *
+ * Lifecycle: the constructor only builds the Y.Doc and its maps, so a store
+ * can be created during render and discarded without leaking anything. The
+ * external resources (IndexedDB persistence, awareness, WebSocket provider)
+ * belong to a connection opened by `connect()` and released by `disconnect()`.
+ * A disconnected store is still fully usable for Y.Doc operations.
  */
-const NO_HAND_CARDS: string[] = [];
-
 export class YjsStore {
   private doc: Y.Doc;
+  private tableId: string;
+  private wsUrl: string | undefined;
   private persistence: IndexeddbPersistence | null = null;
   private wsProvider: HocuspocusProvider | null = null; // M5-T1
+  private awareness: Awareness | null = null;
+  private syncTimeout: ReturnType<typeof setTimeout> | undefined;
+  // Bumped on every connect()/disconnect() so callbacks from a released
+  // connection can tell they are stale.
+  private connectionGeneration = 0;
   private actorId: ActorId;
-  private isReady = false;
-  private readyPromise: Promise<void>;
+  private ready = false;
+  private readyCallbacks: Set<() => void> = new Set();
+  private awarenessCallbacks: Set<
+    (states: Map<number, AwarenessState>) => void
+  > = new Set();
   private connectionStatus:
     | 'offline'
     | 'connecting'
@@ -77,12 +95,9 @@ export class YjsStore {
   // getMap auto-creates an empty map for new docs; no migration needed.
   public discardZones: Y.Map<DiscardZoneEntry>;
 
-  // Awareness for ephemeral state (M3-T4)
-  public awareness: Awareness;
-
   // Throttled cursor update (30Hz)
   private throttledCursorUpdate = throttle((x: number, y: number) => {
-    this.awareness.setLocalStateField('cursor', { x, y });
+    this.awareness?.setLocalStateField('cursor', { x, y });
   }, AWARENESS_UPDATE_INTERVAL_MS);
 
   // Throttled drag state update (30Hz)
@@ -100,10 +115,19 @@ export class YjsStore {
         secondaryOffsets,
         ts: Date.now(),
       };
-      this.awareness.setLocalStateField('drag', dragState);
+      this.awareness?.setLocalStateField('drag', dragState);
     },
     AWARENESS_UPDATE_INTERVAL_MS,
   );
+
+  private handleAwarenessChange = () => {
+    if (!this.awareness) return;
+    // Get all awareness states (Map<clientID, AwarenessState>)
+    const states = this.awareness.getStates() as Map<number, AwarenessState>;
+    for (const callback of this.awarenessCallbacks) {
+      callback(states);
+    }
+  };
 
   constructor(tableId: string, wsUrl?: string) {
     this.doc = new Y.Doc();
@@ -121,90 +145,169 @@ export class YjsStore {
     // Get or create discard zones map
     this.discardZones = this.doc.getMap('discardZones');
 
-    // Initialize awareness (M3-T4)
-    this.awareness = new Awareness(this.doc);
-    this.awareness.setLocalStateField('actorId', this.actorId);
-
-    // Set up IndexedDB persistence
-    // Database name format: cardtable-{tableId}
-    this.persistence = new IndexeddbPersistence(
-      `cardtable-${tableId}`,
-      this.doc,
-    );
-
-    // Set up WebSocket provider for multiplayer (M5-T1)
-    // Optional - only connects if wsUrl is provided
-    if (wsUrl) {
-      console.log(`[YjsStore] Connecting to multiplayer server: ${wsUrl}`);
-      this.wsProvider = new HocuspocusProvider({
-        url: wsUrl,
-        name: tableId,
-        document: this.doc,
-        awareness: this.awareness,
-        onStatus: ({ status }) => {
-          console.log(`[YjsStore] WebSocket status: ${status}`);
-          this.setConnectionStatus(status);
-        },
-        onClose: ({ event }) => {
-          console.error('[YjsStore] WebSocket closed:', event);
-        },
-      });
-
-      // Set initial connecting status
-      this.setConnectionStatus('connecting');
-
-      // Debug: Log when Y.Doc updates are sent/received
-      this.doc.on('update', (update: Uint8Array, origin: unknown) => {
-        const isRemote = origin === this.wsProvider;
-        console.log(
-          `[YjsStore] Y.Doc update: ${update.byteLength} bytes, ${isRemote ? 'FROM REMOTE' : 'LOCAL'}`,
-        );
-      });
-    } else {
-      console.log('[YjsStore] Running in offline mode (no server connection)');
-    }
-
-    // Wait for persistence to load existing state
-    this.readyPromise = new Promise<void>((resolve, reject) => {
-      if (!this.persistence) {
-        reject(new Error('Persistence not initialized'));
-        return;
-      }
-
-      this.persistence.on('synced', () => {
-        console.log('[YjsStore] IndexedDB synced, state restored');
-
-        // Run migrations to ensure all objects have required properties
-        // This runs before the store is marked as ready, ensuring objects
-        // are in the correct state before any UI interaction
-        runMigrations(this.doc);
-
-        // Clear stale selections from previous sessions (M3-T3)
-        // Each page load creates a new actor ID, so old selections are orphaned.
-        // For solo mode: always start with clean slate.
-        // For future multiplayer (M3-T4): render other actors' selections with different colors.
-        this.clearStaleSelections();
-
-        this.isReady = true;
-        resolve();
-      });
-
-      // Set a timeout in case syncing takes too long
-      setTimeout(() => {
-        if (!this.isReady) {
-          console.warn('[YjsStore] IndexedDB sync timeout, proceeding anyway');
-          this.isReady = true;
-          resolve();
-        }
-      }, 5000); // 5 second timeout
-    });
+    this.tableId = tableId;
+    this.wsUrl = wsUrl;
   }
 
   /**
-   * Wait for store to be ready (IndexedDB loaded)
+   * Open the external resources: IndexedDB persistence, awareness and (when a
+   * wsUrl was given) the WebSocket provider. Repeatable after `disconnect()`.
+   * Ready fires once IndexedDB has synced (or the sync timeout elapses).
    */
-  async waitForReady(): Promise<void> {
-    return this.readyPromise;
+  connect(): void {
+    if (this.awareness) {
+      throw new Error('YjsStore.connect() called while already connected');
+    }
+    const generation = ++this.connectionGeneration;
+
+    // Initialize awareness (M3-T4)
+    const awareness = new Awareness(this.doc);
+    awareness.setLocalStateField('actorId', this.actorId);
+    awareness.on('change', this.handleAwarenessChange);
+    this.awareness = awareness;
+
+    // Set up IndexedDB persistence
+    // Database name format: cardtable-{tableId}
+    const persistence = new IndexeddbPersistence(
+      `cardtable-${this.tableId}`,
+      this.doc,
+    );
+    this.persistence = persistence;
+
+    persistence.on('synced', () => {
+      if (generation !== this.connectionGeneration) return;
+      console.log('[YjsStore] IndexedDB synced, state restored');
+
+      // Run migrations to ensure all objects have required properties
+      // This runs before the store is marked as ready, ensuring objects
+      // are in the correct state before any UI interaction
+      runMigrations(this.doc);
+
+      // Clear stale selections from previous sessions (M3-T3)
+      // Each page load creates a new actor ID, so old selections are orphaned.
+      // For solo mode: always start with clean slate.
+      // For future multiplayer (M3-T4): render other actors' selections with different colors.
+      this.clearStaleSelections();
+
+      this.setReady(true);
+    });
+
+    // Set a timeout in case syncing takes too long
+    this.syncTimeout = setTimeout(() => {
+      this.syncTimeout = undefined;
+      if (!this.ready) {
+        console.warn('[YjsStore] IndexedDB sync timeout, proceeding anyway');
+        this.setReady(true);
+      }
+    }, INDEXEDDB_SYNC_TIMEOUT_MS);
+
+    this.openProvider(awareness, generation);
+  }
+
+  /**
+   * Set up the WebSocket provider for multiplayer (M5-T1).
+   * Optional - only connects if wsUrl was provided.
+   */
+  private openProvider(awareness: Awareness, generation: number): void {
+    if (!this.wsUrl) {
+      console.log('[YjsStore] Running in offline mode (no server connection)');
+      return;
+    }
+    console.log(`[YjsStore] Connecting to multiplayer server: ${this.wsUrl}`);
+    this.wsProvider = new HocuspocusProvider({
+      url: this.wsUrl,
+      name: this.tableId,
+      document: this.doc,
+      awareness,
+      onStatus: ({ status }) => {
+        if (generation !== this.connectionGeneration) return;
+        console.log(`[YjsStore] WebSocket status: ${status}`);
+        this.setConnectionStatus(status);
+      },
+      onClose: ({ event }) => {
+        if (generation !== this.connectionGeneration) return;
+        console.error('[YjsStore] WebSocket closed:', event);
+      },
+    });
+
+    // Set initial connecting status
+    this.setConnectionStatus('connecting');
+  }
+
+  /**
+   * Release everything `connect()` opened: timers, socket, IndexedDB handle
+   * and awareness. The Y.Doc is kept, so the store stays usable for doc
+   * operations and may be connected again.
+   */
+  disconnect(): void {
+    this.connectionGeneration++;
+
+    this.throttledCursorUpdate.cancel();
+    this.throttledDragStateUpdate.cancel();
+    clearTimeout(this.syncTimeout);
+    this.syncTimeout = undefined;
+
+    // HocuspocusProvider.destroy() also destroys the awareness it was given
+    if (this.wsProvider) {
+      this.wsProvider.destroy();
+      this.wsProvider = null;
+    }
+
+    if (this.awareness) {
+      this.awareness.off('change', this.handleAwarenessChange);
+      this.awareness.destroy();
+      this.awareness = null;
+    }
+
+    if (this.persistence) {
+      void this.persistence.destroy();
+      this.persistence = null;
+    }
+
+    this.setReady(false);
+    this.setConnectionStatus('offline');
+  }
+
+  /**
+   * Whether IndexedDB has loaded for the current connection
+   */
+  isReady(): boolean {
+    return this.ready;
+  }
+
+  /**
+   * Subscribe to readiness changes (suitable for useSyncExternalStore)
+   * @returns Unsubscribe function
+   */
+  onReadyChange(callback: () => void): () => void {
+    this.readyCallbacks.add(callback);
+    return () => {
+      this.readyCallbacks.delete(callback);
+    };
+  }
+
+  private setReady(ready: boolean): void {
+    if (this.ready === ready) return;
+    this.ready = ready;
+    for (const callback of this.readyCallbacks) {
+      callback();
+    }
+  }
+
+  /**
+   * Wait for store to be ready (IndexedDB loaded). Resolves immediately if
+   * already ready, otherwise on the next ready transition.
+   */
+  waitForReady(): Promise<void> {
+    if (this.ready) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const unsubscribe = this.onReadyChange(() => {
+        if (this.ready) {
+          unsubscribe();
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -545,6 +648,7 @@ export class YjsStore {
    * @param y - Y coordinate in world space
    */
   setCursor(x: number, y: number): void {
+    if (!this.awareness) return;
     this.throttledCursorUpdate(x, y);
   }
 
@@ -554,7 +658,7 @@ export class YjsStore {
    */
   clearCursor(): void {
     this.throttledCursorUpdate.cancel();
-    this.awareness.setLocalStateField('cursor', null);
+    this.awareness?.setLocalStateField('cursor', null);
   }
 
   /**
@@ -572,6 +676,7 @@ export class YjsStore {
     pos: { x: number; y: number; r: number },
     secondaryOffsets?: Record<string, { dx: number; dy: number; dr: number }>,
   ): void {
+    if (!this.awareness) return;
     this.throttledDragStateUpdate(gid, primaryId, pos, secondaryOffsets);
   }
 
@@ -581,7 +686,7 @@ export class YjsStore {
    */
   clearDragState(): void {
     this.throttledDragStateUpdate.cancel();
-    this.awareness.setLocalStateField('drag', null);
+    this.awareness?.setLocalStateField('drag', null);
   }
 
   /**
@@ -593,16 +698,9 @@ export class YjsStore {
   onAwarenessChange(
     callback: (states: Map<number, AwarenessState>) => void,
   ): () => void {
-    const handler = () => {
-      // Get all awareness states (Map<clientID, AwarenessState>)
-      const states = this.awareness.getStates() as Map<number, AwarenessState>;
-      callback(states);
-    };
-
-    this.awareness.on('change', handler);
-
+    this.awarenessCallbacks.add(callback);
     return () => {
-      this.awareness.off('change', handler);
+      this.awarenessCallbacks.delete(callback);
     };
   }
 
@@ -610,16 +708,17 @@ export class YjsStore {
    * Get current local awareness state (for debugging)
    */
   getLocalAwarenessState(): AwarenessState | null {
-    return this.awareness.getLocalState() as AwarenessState | null;
+    return (this.awareness?.getLocalState() as AwarenessState | null) ?? null;
   }
 
   /**
    * Get all remote awareness states (for debugging)
    */
   getRemoteAwarenessStates(): Map<number, AwarenessState> {
+    const remoteStates = new Map<number, AwarenessState>();
+    if (!this.awareness) return remoteStates;
     const localClientId = this.doc.clientID;
     const allStates = this.awareness.getStates() as Map<number, AwarenessState>;
-    const remoteStates = new Map<number, AwarenessState>();
 
     allStates.forEach((state, clientId) => {
       if (clientId !== localClientId) {
@@ -935,29 +1034,5 @@ export class YjsStore {
   getObject(id: string): TableObject | undefined {
     const yMap = this.getObjectYMap(id);
     return yMap ? toTableObject(yMap) : undefined;
-  }
-
-  /**
-   * Clean up resources
-   */
-  destroy(): void {
-    // Cancel any pending throttled awareness updates
-    this.throttledCursorUpdate.cancel();
-    this.throttledDragStateUpdate.cancel();
-
-    // Clean up awareness
-    this.awareness.destroy();
-
-    // Clean up WebSocket provider (M5-T1)
-    if (this.wsProvider) {
-      this.wsProvider.destroy();
-      this.wsProvider = null;
-    }
-
-    if (this.persistence) {
-      void this.persistence.destroy();
-      this.persistence = null;
-    }
-    this.doc.destroy();
   }
 }

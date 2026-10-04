@@ -66,10 +66,6 @@ class MockYjsStore implements Partial<YjsStore> {
   clearAllObjects(): void {
     // Mock implementation
   }
-
-  destroy(): void {
-    // Mock implementation
-  }
 }
 
 // Mock Worker

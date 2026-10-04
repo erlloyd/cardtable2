@@ -5,14 +5,12 @@ import type { YjsStore } from '../store/YjsStore';
  * Manages hand panel state: active hand, collapse state, and hand list.
  * Subscribes to store.onHandsChange() for reactive updates.
  */
-export function useHandPanel(store: YjsStore | null) {
+export function useHandPanel(store: YjsStore) {
   const [activeHandId, setActiveHandId] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [handIds, setHandIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!store) return;
-
     const refresh = () => {
       const ids = store.getHandIds();
       setHandIds(ids);

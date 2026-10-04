@@ -7,8 +7,8 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
-import type { YjsStore } from '../store/YjsStore';
 import {
   createObject,
   clearAllSelections,
@@ -51,55 +51,25 @@ const Board = lazy(() => import('../components/Board'));
 
 export const Route = createFileRoute('/dev/table/$id')({
   component: DevTable,
+  // A new tableId needs a new store: useTableStore creates it once per mount
+  remountDeps: ({ params }) => params,
 });
 
 function DevTable() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const [objectCount, setObjectCount] = useState(0);
-
-  // Set up object change subscription when store is ready
-  const handleStoreReady = useCallback((store: YjsStore) => {
-    // Get initial object count (M3.6-T4: use objects.size directly)
-    const count = store.objects.size;
-    setObjectCount(count);
-    console.log(`[DevTable] Loaded ${count} objects from IndexedDB`);
-
-    // Subscribe to object changes
-    const unsubscribe = store.onObjectsChange((changes) => {
-      // Update object count based on current state (M3.6-T4: use objects.size directly)
-      setObjectCount(store.objects.size);
-
-      // Log changes for debugging
-      if (changes.added.length > 0) {
-        console.log(`[DevTable] Added ${changes.added.length} object(s)`);
-      }
-      if (changes.updated.length > 0) {
-        console.log(`[DevTable] Updated ${changes.updated.length} object(s)`);
-      }
-      if (changes.removed.length > 0) {
-        console.log(`[DevTable] Removed ${changes.removed.length} object(s)`);
-      }
-    });
-
-    // Store unsubscribe function for cleanup
-    unsubscribeRef.current = unsubscribe;
-
-    // Cleanup function
-    return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
-      }
-    };
-  }, []);
 
   const { store, isStoreReady, connectionStatus } = useTableStore({
     tableId: id,
-    logPrefix: 'DevTable',
-    onStoreReady: handleStoreReady,
   });
+
+  // Object count follows the store's Y.Map (M3.6-T4: use objects.size directly)
+  const subscribeObjects = useCallback(
+    (onChange: () => void) => store.onObjectsChange(onChange),
+    [store],
+  );
+  const getObjectCount = useCallback(() => store.objects.size, [store]);
+  const objectCount = useSyncExternalStore(subscribeObjects, getObjectCount);
 
   const commandPalette = useCommandPalette();
   const contextMenu = useContextMenu();
@@ -153,8 +123,6 @@ function DevTable() {
   // below can re-run when a dev tool / scenario load populates the registry.
   // Mirrors the main route's pattern (see `routes/table.$id.tsx` ~line 437).
   useEffect(() => {
-    if (!store) return;
-
     const unsubscribe = store.onGameAssetsChange((assets) => {
       setGameAssets(assets);
     });
@@ -177,8 +145,6 @@ function DevTable() {
 
   // Handler to spawn a test card (M3-T2 testing)
   const handleSpawnCard = () => {
-    if (!store) return;
-
     // Spawn at random position near center
     const x = Math.random() * 400 - 200; // -200 to +200
     const y = Math.random() * 400 - 200;
@@ -197,23 +163,18 @@ function DevTable() {
 
   // Handler to clear all objects (M3-T2.5 Phase 7)
   const handleClearStore = () => {
-    if (!store) return;
-
     store.clearAllObjects();
     console.log('[DevTable] Cleared all objects from store');
   };
 
   // Handler to clear all selections (M3-T3)
   const handleClearSelections = () => {
-    if (!store) return;
-
     const cleared = clearAllSelections(store);
     console.log(`[DevTable] Cleared ${cleared} selection(s)`);
   };
 
   // Handler to reset to test scene (M3-T2.5 Phase 7)
   const handleResetToTestScene = () => {
-    if (!store) return;
     resetToTestScene(store);
   };
 
@@ -225,8 +186,6 @@ function DevTable() {
 
   // Subscribe to store changes to update selection state
   useEffect(() => {
-    if (!store) return;
-
     const updateSelection = () => {
       // Use getObjectsSelectedBy() - returns {id, yMap} pairs
       const selected = store.getObjectsSelectedBy(store.getActorId());
@@ -305,7 +264,6 @@ function DevTable() {
 
   const handleLoadPickerSelect = useCallback<LoadPickerSelectHandler>(
     (entry, item) => {
-      if (!store) return;
       // Dev table has no Board reference for camera state — fall back to
       // origin/un-zoomed; placement primitive returns sensible defaults.
       void handleLoadSelection(entry, item, {
@@ -435,7 +393,7 @@ function DevTable() {
       </div>
 
       <Suspense fallback={<div>Loading board...</div>}>
-        {store && isStoreReady ? (
+        {isStoreReady ? (
           <Board
             tableId={id}
             store={store}

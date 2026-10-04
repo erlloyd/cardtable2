@@ -38,8 +38,13 @@ vi.mock('../../store/YjsStore', () => {
       objects = mockDoc.getMap('objects');
       metadata = mockMetadata;
       hands = mockDoc.getMap('hands');
-      async waitForReady() {
-        return Promise.resolve();
+      connect() {}
+      disconnect() {}
+      isReady() {
+        return true;
+      }
+      onReadyChange(_callback: () => void) {
+        return () => {};
       }
       forEachObject(_fn: (yMap: never, id: string) => void) {
         // Mock - no objects, so this function is never called
@@ -88,7 +93,6 @@ vi.mock('../../store/YjsStore', () => {
       createHand(_name: string) {
         return 'mock-hand-id';
       }
-      destroy() {}
     },
   };
 });

@@ -7,46 +7,16 @@
  *     table refusal, successful application with correct object counts.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { YjsStore } from '../../store/YjsStore';
 import { applySeed, listSeeds, SEED_REGISTRY } from './index';
 import { ObjectKind } from '@cardtable2/shared';
 
-// Mock y-indexeddb to avoid IndexedDB in tests (mirrors YjsStore.test.ts).
-vi.mock('y-indexeddb', () => ({
-  IndexeddbPersistence: class MockIndexeddbPersistence {
-    private listeners: Map<string, Array<() => void>> = new Map();
-
-    constructor(_dbName: string, _doc: unknown) {
-      setTimeout(() => {
-        const syncedListeners = this.listeners.get('synced') || [];
-        syncedListeners.forEach((listener) => listener());
-      }, 0);
-    }
-
-    on(event: string, listener: () => void) {
-      if (!this.listeners.has(event)) {
-        this.listeners.set(event, []);
-      }
-      this.listeners.get(event)!.push(listener);
-    }
-
-    destroy() {
-      this.listeners.clear();
-    }
-  },
-}));
-
 describe('seeds', () => {
   let store: YjsStore;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     store = new YjsStore(`test-table-seed-${Math.random()}`);
-    await store.waitForReady();
-  });
-
-  afterEach(() => {
-    store.destroy();
   });
 
   describe('SEED_REGISTRY', () => {

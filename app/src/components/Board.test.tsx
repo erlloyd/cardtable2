@@ -447,17 +447,12 @@ describe('Board', () => {
         expect(postMessageSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'pointer-down',
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             event: expect.objectContaining({
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              pointerId: expect.any(Number),
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              pointerType: expect.any(String),
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              clientX: expect.any(Number),
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              clientY: expect.any(Number),
-            }),
+              pointerId: expect.any(Number) as number,
+              pointerType: expect.any(String) as string,
+              clientX: expect.any(Number) as number,
+              clientY: expect.any(Number) as number,
+            }) as unknown,
           }),
         );
       });

@@ -3,6 +3,12 @@ import { Application, Container } from 'pixi.js';
 import { VisualManager } from './VisualManager';
 import { RenderMode } from '../IRendererAdapter';
 
+// Tests seed the private objectVisuals map directly
+function objectVisualsOf(manager: VisualManager) {
+  return (manager as unknown as { objectVisuals: Map<string, Container> })
+    .objectVisuals;
+}
+
 describe('VisualManager - Hide/Show Objects', () => {
   let visualManager: VisualManager;
   let app: Application;
@@ -28,8 +34,7 @@ describe('VisualManager - Hide/Show Objects', () => {
       mockVisual.alpha = 1;
 
       // Manually add visual to internal map (simulating addObjectVisual)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (visualManager as any).objectVisuals.set(objectId, mockVisual);
+      objectVisualsOf(visualManager).set(objectId, mockVisual);
 
       visualManager.hideObject(objectId);
 
@@ -68,8 +73,7 @@ describe('VisualManager - Hide/Show Objects', () => {
       const mockVisual = new Container();
       mockVisual.alpha = 0;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (visualManager as any).objectVisuals.set(objectId, mockVisual);
+      objectVisualsOf(visualManager).set(objectId, mockVisual);
       visualManager.hideObject(objectId);
 
       visualManager.showObject(objectId);
@@ -123,8 +127,7 @@ describe('VisualManager - Hide/Show Objects', () => {
       const mockVisual = new Container();
       mockVisual.alpha = 1;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      (visualManager as any).objectVisuals.set(objectId, mockVisual);
+      objectVisualsOf(visualManager).set(objectId, mockVisual);
       visualManager.hideObject(objectId);
 
       // Simulate redraw setting alpha back to 1

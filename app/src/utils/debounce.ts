@@ -5,6 +5,11 @@
  * Used for zoom-ended messages to wait for wheel events to settle.
  */
 
+export type DebouncedFunction<T extends (...args: never[]) => void> = {
+  (...args: Parameters<T>): void;
+  cancel: () => void;
+};
+
 /**
  * Debounce a function to be called only after a delay has passed with no new calls
  *
@@ -22,33 +27,23 @@
  * debouncedSave(); // Cancels previous timer
  * debouncedSave(); // Executes after 300ms of inactivity
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Generic function signature requires any for proper type inference
-export function debounce<T extends (...args: any[]) => void>(
+export function debounce<T extends (...args: never[]) => void>(
   fn: T,
   delayMs: number,
-): T & { cancel: () => void } {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+): DebouncedFunction<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Preserving original function's this context
-  const debounced = function (this: any, ...args: Parameters<T>) {
-    // Clear existing timeout
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-    }
-
-    // Set new timeout
+  const debounced = (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
-      timeoutId = null;
-      fn.apply(this, args);
+      timeoutId = undefined;
+      fn(...args);
     }, delayMs);
-  } as T & { cancel: () => void };
+  };
 
-  // Add cancel method to clear pending timeout
   debounced.cancel = () => {
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+    clearTimeout(timeoutId);
+    timeoutId = undefined;
   };
 
   return debounced;

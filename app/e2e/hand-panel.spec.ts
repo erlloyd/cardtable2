@@ -38,6 +38,7 @@ interface PageTestStore {
   getHandIds: () => string[];
   getHandCards: (handId: string) => string[];
   addCardToHand: (handId: string, cardId: string, index?: number) => void;
+  deleteHand: (handId: string) => void;
 }
 
 interface PageCtTest {
@@ -346,6 +347,142 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
     expect(Math.abs(stack.pos.x - expectedX)).toBeLessThan(60);
     expect(Math.abs(stack.pos.y - expectedY)).toBeLessThan(60);
     await expect(page.locator('.hand-panel__card')).toHaveCount(2);
+  });
+
+  /** Mouse down on hand card 0, cross the drag slop, move over the board. */
+  async function dragFirstCardOverBoard(
+    page: Page,
+    offset = { x: 200, y: -50 },
+  ): Promise<{ x: number; y: number }> {
+    const start = await centerOf(page, '.hand-panel__card', 0);
+    const canvasBox = await page.getByTestId('board-canvas').boundingBox();
+    if (!canvasBox) throw new Error('Canvas bounding box not available');
+    const drop = {
+      x: canvasBox.x + canvasBox.width / 2 + offset.x,
+      y: canvasBox.y + canvasBox.height / 2 + offset.y,
+    };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 10, start.y - 10, { steps: 3 });
+    await page.mouse.move(drop.x, drop.y, { steps: 10 });
+    // The renderer reports the board-space drop position asynchronously.
+    await page.waitForTimeout(200);
+    return drop;
+  }
+
+  /** A normal drag-and-drop of the first hand card onto the board. */
+  async function dropFirstCardOnBoard(page: Page): Promise<void> {
+    await dragFirstCardOverBoard(page);
+    await page.mouse.up();
+  }
+
+  test('4b. Escape mid-drag cancels the drag and a new drag still works', async ({
+    page,
+  }) => {
+    const handId = await seedHand(page, 'Hand 1', ['A', 'B', 'C']);
+    await expect(page.locator('.hand-panel__card')).toHaveCount(3);
+
+    await dragFirstCardOverBoard(page);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+
+    // Card is back in the strip and nothing landed on the board.
+    await expect(page.locator('.hand-panel__card')).toHaveCount(3);
+    expect(await getHandCards(page, handId)).toEqual(['A', 'B', 'C']);
+    expect(await getBoardObjects(page)).toHaveLength(0);
+
+    await dropFirstCardOnBoard(page);
+    await expect.poll(() => getHandCards(page, handId)).toEqual(['B', 'C']);
+    await expect.poll(async () => (await getBoardObjects(page)).length).toBe(1);
+  });
+
+  test('4c. pointercancel mid-drag cancels the drag and a new drag still works', async ({
+    page,
+  }) => {
+    const handId = await seedHand(page, 'Hand 1', ['A', 'B', 'C']);
+    await expect(page.locator('.hand-panel__card')).toHaveCount(3);
+
+    await dragFirstCardOverBoard(page);
+    await page.evaluate(() => {
+      window.dispatchEvent(new PointerEvent('pointercancel'));
+    });
+    await page.mouse.up();
+
+    await expect(page.locator('.hand-panel__card')).toHaveCount(3);
+    expect(await getHandCards(page, handId)).toEqual(['A', 'B', 'C']);
+    expect(await getBoardObjects(page)).toHaveLength(0);
+
+    await dropFirstCardOnBoard(page);
+    await expect.poll(() => getHandCards(page, handId)).toEqual(['B', 'C']);
+    await expect.poll(async () => (await getBoardObjects(page)).length).toBe(1);
+  });
+
+  test('4d. dropping a hand card onto an existing stack merges into it', async ({
+    page,
+  }) => {
+    const handId = await seedHand(page, 'Hand 1', ['A', 'B']);
+    await expect(page.locator('.hand-panel__card')).toHaveCount(2);
+
+    const dpr = await page.evaluate(() => window.devicePixelRatio || 1);
+    const stackWorld = { x: 0, y: -100 };
+    await page.evaluate((pos) => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.setObject('e2e-target-stack', {
+        _kind: 'stack',
+        _pos: { x: pos.x, y: pos.y, r: 0 },
+        _sortKey: '000001',
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: {},
+        _cards: ['X'],
+        _faceUp: true,
+      });
+    }, stackWorld);
+    await expect.poll(async () => (await getBoardObjects(page)).length).toBe(1);
+
+    // world -> viewport (inverse of the mapping test 4 uses)
+    await dragFirstCardOverBoard(page, {
+      x: stackWorld.x / dpr,
+      y: stackWorld.y / dpr,
+    });
+    await page.mouse.up();
+
+    await expect.poll(() => getHandCards(page, handId)).toEqual(['B']);
+    await expect
+      .poll(async () => {
+        const board = await getBoardObjects(page);
+        return board.length === 1 ? [...board[0].cards].sort() : null;
+      })
+      .toEqual(['A', 'X']);
+  });
+
+  test('4e. active hand changing mid-drag cancels the drag', async ({
+    page,
+  }) => {
+    const hand1 = await seedHand(page, 'Hand 1', ['A', 'B', 'C']);
+    const hand2 = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      const id = store.createHand('Hand 2');
+      store.addCardToHand(id, 'D');
+      return id;
+    });
+    await expect(page.locator('.hand-panel__tab')).toHaveCount(2);
+    await expect(page.locator('.hand-panel__tab--active')).toHaveText('Hand 1');
+    await expect(page.locator('.hand-panel__card')).toHaveCount(3);
+
+    await dragFirstCardOverBoard(page);
+    // A peer deletes the hand being dragged from; the panel switches to Hand 2.
+    await page.evaluate((id) => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.deleteHand(id);
+    }, hand1);
+    await expect(page.locator('.hand-panel__tab--active')).toHaveText('Hand 2');
+    await page.mouse.up();
+
+    expect(await getBoardObjects(page)).toHaveLength(0);
+    expect(await getHandCards(page, hand2)).toEqual(['D']);
+    await expect(page.locator('.hand-panel__card')).toHaveCount(1);
   });
 
   test('5. collapse / expand: collapsed bar shows name and count', async ({

@@ -22,6 +22,7 @@ import {
   registerLoadablesActions,
   unregisterLoadablesActions,
 } from './registerDefaultActions';
+import { registerAttachmentActions } from './attachmentActions';
 import { registerHandActions } from './handActions';
 import type { ActionContext } from './types';
 import type { YjsStore } from '../store/YjsStore';
@@ -87,6 +88,31 @@ describe('registerDefaultActions cleanup (ct-ajw.42)', () => {
 
     expect(registry.getAction('unrelated')).toBeDefined();
     expect(registry.size).toBe(1);
+  });
+
+  it('cleanup removes attachment actions registered after the defaults (ct-ajw.57)', () => {
+    const registry = ActionRegistry.getInstance();
+    const cleanup = registerDefaultActions();
+
+    registerAttachmentActions(registry, {
+      packs: [],
+      cards: {},
+      cardTypes: {},
+      cardSets: {},
+      tokens: {},
+      counters: {},
+      mats: {},
+      tokenTypes: { damage: { name: 'Damage', image: '/tokens/damage.png' } },
+      statusTypes: {},
+      modifierStats: {},
+      iconTypes: {},
+    });
+    expect(registry.getAction('add-token-damage')).toBeDefined();
+
+    cleanup();
+
+    expect(registry.getAction('add-token-damage')).toBeUndefined();
+    expect(registry.size).toBe(0);
   });
 
   it('registerHandActions cleanup removes add-to-hand without a duplicate warning', () => {

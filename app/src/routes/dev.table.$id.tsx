@@ -14,7 +14,11 @@ import {
   clearAllSelections,
   resetToTestScene,
 } from '../store/YjsActions';
-import { ObjectKind, type GameAssets } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  type GameAssets,
+  type LoadableEntry,
+} from '@cardtable2/shared';
 import { useTableStore } from '../hooks/useTableStore';
 import { buildActionContext } from '../actions/buildActionContext';
 import type { TableObjectYMap } from '../store/types';
@@ -103,7 +107,9 @@ function DevTable() {
   // The loadables registry is external mutable state populated alongside
   // gameAssets; re-read it during render whenever gameAssets changes.
   const [loadablesAssets, setLoadablesAssets] = useState(gameAssets);
-  const [loadables, setLoadables] = useState(() => getLoadableEntriesForUi());
+  // Starts empty: a mount-time read of the module-level registry would
+  // snapshot the previous table's entries. Re-read when gameAssets change.
+  const [loadables, setLoadables] = useState<LoadableEntry[]>([]);
   if (gameAssets !== loadablesAssets) {
     setLoadablesAssets(gameAssets);
     setLoadables(getLoadableEntriesForUi());
@@ -141,6 +147,7 @@ function DevTable() {
     if (loadables.length > 0) {
       registerLoadablesActions(loadables);
     }
+    return unregisterLoadablesActions;
   }, [loadables]);
 
   // Handler to spawn a test card (M3-T2 testing)

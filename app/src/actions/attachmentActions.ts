@@ -58,9 +58,9 @@ export function registerAttachmentActions(
 
 /**
  * Clear all attachment-related actions
- * Called before regenerating actions for new content
+ * Called before regenerating actions for new content, and on table unmount
  */
-function clearAttachmentActions(registry: ActionRegistry): void {
+export function clearAttachmentActions(registry: ActionRegistry): void {
   // Get all registered action IDs
   const allActions = registry.getAllActions();
 

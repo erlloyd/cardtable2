@@ -62,7 +62,7 @@ import {
 } from '../content/loadHandler';
 import { getLoadableEntriesForUi } from '../content/loadablesRegistry';
 import { CONTENT_RELOAD_INVALID_METADATA } from '../constants/errorIds';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
 import { dbg } from '../dev/dbg';
 
 /**
@@ -150,7 +150,10 @@ function Table() {
   // The loadables registry is external mutable state populated alongside
   // gameAssets; re-read it during render whenever gameAssets changes.
   const [loadablesAssets, setLoadablesAssets] = useState(gameAssets);
-  const [loadables, setLoadables] = useState(() => getLoadableEntriesForUi());
+  // Starts empty: the registry is module-level, so a mount-time read would
+  // snapshot the previous table's entries (its unmount cleanup runs after this
+  // render). The registry is re-read when this table's gameAssets arrive.
+  const [loadables, setLoadables] = useState<LoadableEntry[]>([]);
   if (gameAssets !== loadablesAssets) {
     setLoadablesAssets(gameAssets);
     setLoadables(getLoadableEntriesForUi());
@@ -256,6 +259,10 @@ function Table() {
     };
   }, []);
 
+  // The loadables registry is module-level state populated by this table's
+  // plugin load; clear it on unmount so the next table doesn't inherit it.
+  useEffect(() => clearLoadableEntries, []);
+
   // Keep the dynamic per-type "Load <X>..." actions and the local loadables
   // state in sync with the active plugin's runtime registry. The registry is
   // populated by `loadPluginAssets` (table mount, ct-8gf.2); we re-derive
@@ -265,6 +272,7 @@ function Table() {
     if (loadables.length > 0) {
       registerLoadablesActions(loadables);
     }
+    return unregisterLoadablesActions;
   }, [loadables]);
 
   // Dev-only: apply URL seed (?seed=stack-of-5) on a fresh table.

@@ -22,6 +22,7 @@ import {
   registerLoadablesActions,
   unregisterLoadablesActions,
 } from './registerDefaultActions';
+import { registerHandActions } from './handActions';
 import type { ActionContext } from './types';
 import type { YjsStore } from '../store/YjsStore';
 
@@ -44,6 +45,62 @@ function makeContext(overrides: Partial<ActionContext> = {}): ActionContext {
     ...overrides,
   };
 }
+
+describe('registerDefaultActions cleanup (ct-ajw.42)', () => {
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+    vi.restoreAllMocks();
+  });
+
+  it('register -> cleanup -> register leaves no duplicates and no warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const registry = ActionRegistry.getInstance();
+
+    const cleanup = registerDefaultActions();
+    const registeredCount = registry.size;
+    expect(registeredCount).toBeGreaterThan(0);
+
+    cleanup();
+    expect(registry.size).toBe(0);
+
+    registerDefaultActions();
+    expect(registry.size).toBe(registeredCount);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('cleanup leaves unrelated actions registered', () => {
+    const registry = ActionRegistry.getInstance();
+    registry.register({
+      id: 'unrelated',
+      label: 'Unrelated',
+      icon: '?',
+      category: 'Global Actions',
+      isAvailable: () => true,
+      execute: () => {},
+    });
+
+    registerDefaultActions()();
+
+    expect(registry.getAction('unrelated')).toBeDefined();
+    expect(registry.size).toBe(1);
+  });
+
+  it('registerHandActions cleanup removes add-to-hand without a duplicate warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const registry = ActionRegistry.getInstance();
+
+    registerHandActions(registry)();
+    expect(registry.getAction('add-to-hand')).toBeUndefined();
+
+    registerHandActions(registry);
+    expect(registry.getAction('add-to-hand')).toBeDefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
 
 describe('registerDefaultActions / load actions', () => {
   beforeEach(() => {

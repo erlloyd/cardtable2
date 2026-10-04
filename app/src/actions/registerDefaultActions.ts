@@ -3,6 +3,7 @@ import {
   CARD_ACTIONS,
   VIEW_ACTIONS,
   CONTENT_ACTIONS,
+  type Action,
   type ActionContext,
 } from './types';
 import { registerAttachmentActions } from './attachmentActions';
@@ -30,12 +31,20 @@ import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
  *
  * Note: Attachment actions (tokens, status, modifiers) are registered dynamically
  * when content is loaded via registerAttachmentActions() in the content loading flow.
+ *
+ * @returns Cleanup that unregisters exactly the actions registered by this
+ * call, so it can be returned from a React effect.
  */
-export function registerDefaultActions(): void {
+export function registerDefaultActions(): () => void {
   const registry = ActionRegistry.getInstance();
+  const registeredIds: string[] = [];
+  const register = (action: Action): void => {
+    registeredIds.push(action.id);
+    registry.register(action);
+  };
 
   // Object action: Flip Cards/Tokens
-  registry.register({
+  register({
     id: 'flip-cards',
     label: 'Flip Selected Objects',
     shortLabel: 'Flip',
@@ -53,7 +62,7 @@ export function registerDefaultActions(): void {
   });
 
   // Object action: Exhaust/Ready (only for stacks)
-  registry.register({
+  register({
     id: 'exhaust-cards',
     label: (ctx) => {
       const allExhausted = areAllSelectedStacksExhausted(ctx.store);
@@ -82,7 +91,7 @@ export function registerDefaultActions(): void {
   });
 
   // Object action: Stack operations (only for stacks)
-  registry.register({
+  register({
     id: 'shuffle-stack',
     label: (ctx) =>
       ctx.selection.count === 1
@@ -126,7 +135,7 @@ export function registerDefaultActions(): void {
     },
   });
 
-  registry.register({
+  register({
     id: 'draw-card',
     label: 'Draw Card',
     shortLabel: 'Draw',
@@ -138,7 +147,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Draw card'),
   });
 
-  registry.register({
+  register({
     id: 'deal-cards',
     label: 'Deal Cards',
     shortLabel: 'Deal',
@@ -149,7 +158,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Deal cards'),
   });
 
-  registry.register({
+  register({
     id: 'stack-cards',
     label: 'Stack Cards',
     shortLabel: 'Stack',
@@ -160,7 +169,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Stack cards'),
   });
 
-  registry.register({
+  register({
     id: 'unstack-cards',
     label: 'Unstack Cards',
     shortLabel: 'Unstack',
@@ -171,7 +180,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Unstack cards'),
   });
 
-  registry.register({
+  register({
     id: 'peek-card',
     label: 'Peek at Top Card',
     shortLabel: 'Peek',
@@ -182,7 +191,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Peek at card'),
   });
 
-  registry.register({
+  register({
     id: 'reveal-card',
     label: 'Reveal Card',
     shortLabel: 'Reveal',
@@ -194,7 +203,7 @@ export function registerDefaultActions(): void {
   });
 
   // Card-on-card attachment: Detach card from parent
-  registry.register({
+  register({
     id: 'detach-card',
     label: 'Detach Card',
     shortLabel: 'Detach',
@@ -221,7 +230,7 @@ export function registerDefaultActions(): void {
   });
 
   // Card-on-card attachment: Detach all cards from parent
-  registry.register({
+  register({
     id: 'detach-all-cards',
     label: 'Detach All Cards',
     shortLabel: 'Detach All',
@@ -273,7 +282,7 @@ export function registerDefaultActions(): void {
     adjustCounter(ctx.store, id, -1);
   };
 
-  registry.register({
+  register({
     id: 'counter-increment',
     label: 'Increment Counter',
     shortLabel: '+1',
@@ -285,7 +294,7 @@ export function registerDefaultActions(): void {
     execute: counterIncrementExecute,
   });
 
-  registry.register({
+  register({
     id: 'counter-decrement',
     label: 'Decrement Counter',
     shortLabel: '-1',
@@ -298,7 +307,7 @@ export function registerDefaultActions(): void {
   });
 
   // Discard zone: create a discard zone for a single selected stack (ct-utq)
-  registry.register({
+  register({
     id: 'create-discard-zone',
     label: 'Create Discard Zone',
     shortLabel: 'Discard Zone',
@@ -315,7 +324,7 @@ export function registerDefaultActions(): void {
   });
 
   // Discard zone: route each selected card to its home zone (ct-ecl)
-  registry.register({
+  register({
     id: 'discard-card',
     label: 'Discard',
     shortLabel: 'Discard',
@@ -346,7 +355,7 @@ export function registerDefaultActions(): void {
   });
 
   // Object action: Lock/Unlock (works on any object)
-  registry.register({
+  register({
     id: 'lock-object',
     label: 'Lock Object',
     shortLabel: 'Lock',
@@ -358,7 +367,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Lock object'),
   });
 
-  registry.register({
+  register({
     id: 'unlock-object',
     label: 'Unlock Object',
     shortLabel: 'Unlock',
@@ -371,7 +380,7 @@ export function registerDefaultActions(): void {
   });
 
   // Object action: Duplicate/Delete (works on any object)
-  registry.register({
+  register({
     id: 'duplicate-object',
     label: 'Duplicate Object',
     shortLabel: 'Duplicate',
@@ -383,7 +392,7 @@ export function registerDefaultActions(): void {
     execute: () => console.log('Duplicate object'),
   });
 
-  registry.register({
+  register({
     id: 'delete-object',
     label: 'Delete Object',
     shortLabel: 'Delete',
@@ -396,7 +405,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Say Hello (only when nothing selected)
-  registry.register({
+  register({
     id: 'test-hello',
     label: 'Say Hello',
     icon: '👋',
@@ -411,7 +420,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Clear All (only when nothing selected)
-  registry.register({
+  register({
     id: 'test-clear',
     label: 'Clear All Objects',
     icon: '🗑️',
@@ -429,7 +438,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Switch to Dev Mode (only available in full mode)
-  registry.register({
+  register({
     id: 'switch-to-dev-mode',
     label: 'Switch to Dev Mode',
     icon: '🔧',
@@ -452,7 +461,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Switch to Full Mode (only available in dev mode)
-  registry.register({
+  register({
     id: 'switch-to-full-mode',
     label: 'Switch to Full Mode',
     icon: '🎮',
@@ -475,7 +484,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Reset to Test Scene (only when nothing selected)
-  registry.register({
+  register({
     id: 'reset-to-test-scene',
     label: 'Reset to Test Scene',
     icon: '🎨',
@@ -489,7 +498,7 @@ export function registerDefaultActions(): void {
   });
 
   // View action: Toggle Grid Snap
-  registry.register({
+  register({
     id: 'toggle-grid-snap',
     label: (ctx) =>
       ctx.gridSnapEnabled ? 'Disable Grid Snap' : 'Enable Grid Snap',
@@ -507,7 +516,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Reset Table
-  registry.register({
+  register({
     id: 'reset-table',
     label: 'Reset Table',
     icon: '🔄',
@@ -525,7 +534,7 @@ export function registerDefaultActions(): void {
   });
 
   // Global action: Close Table
-  registry.register({
+  register({
     id: 'close-table',
     label: 'Close Table',
     icon: '🚪',
@@ -558,7 +567,7 @@ export function registerDefaultActions(): void {
   // synthetic counter entry (with at least a Generic item, plus any plugin-
   // declared typed counters), so `registerLoadablesActions` naturally
   // produces a `load-counter` action that routes through the picker (ct-8vh).
-  registry.register({
+  register({
     id: 'load',
     label: 'Load…',
     shortLabel: 'Load',
@@ -571,6 +580,12 @@ export function registerDefaultActions(): void {
       ctx.onOpenLoadPicker?.();
     },
   });
+
+  return () => {
+    for (const id of registeredIds) {
+      registry.unregister(id);
+    }
+  };
 }
 
 /** Module-level record of the per-type Load actions that are live, so a

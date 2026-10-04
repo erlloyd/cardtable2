@@ -7,11 +7,11 @@ import { moveCardToHand } from '../store/YjsHandActions';
  * Register hand-related actions with the ActionRegistry.
  *
  * Called when the table route mounts or when hand state changes.
+ *
+ * @returns Cleanup that unregisters the hand actions, for use as an effect
+ * cleanup.
  */
-export function registerHandActions(registry: ActionRegistry): void {
-  // Clear any previously registered hand actions
-  registry.unregister('add-to-hand');
-
+export function registerHandActions(registry: ActionRegistry): () => void {
   registry.register({
     id: 'add-to-hand',
     label: (ctx) => {
@@ -49,4 +49,8 @@ export function registerHandActions(registry: ActionRegistry): void {
       }
     },
   });
+
+  return () => {
+    registry.unregister('add-to-hand');
+  };
 }

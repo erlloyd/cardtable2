@@ -7,6 +7,7 @@ import {
   afterEach,
   type MockInstance,
 } from 'vitest';
+import { StrictMode } from 'react';
 import { renderHook } from '@testing-library/react';
 import { useRenderer } from './useRenderer';
 import { RenderMode } from '../renderer/IRendererAdapter';
@@ -36,7 +37,8 @@ vi.mock('../renderer/RendererFactory', () => ({
           }
         };
       }),
-      destroy: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
       // Helper to trigger messages
       _triggerMessage: (msg: RendererToMainMessage) => {
         messageHandlers.forEach((handler) => handler(msg));
@@ -90,29 +92,53 @@ describe('useRenderer', () => {
     expect(result.current.renderMode).toBe(RenderMode.MainThread);
   });
 
-  it('cleans up renderer on unmount', () => {
+  it('connects on mount and disconnects on unmount', () => {
     const { result, unmount } = renderHook(() => useRenderer());
 
     const renderer = result.current.renderer;
-    expect(renderer).not.toBeNull();
+    expect(renderer.connect as unknown as MockInstance).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(
+      renderer.disconnect as unknown as MockInstance,
+    ).not.toHaveBeenCalled();
 
     unmount();
 
-    expect(renderer!.destroy as unknown as MockInstance).toHaveBeenCalled();
+    expect(
+      renderer.disconnect as unknown as MockInstance,
+    ).toHaveBeenCalledTimes(1);
   });
 
-  it('handles double initialization (strict mode)', () => {
-    // First render
+  it('keeps the same renderer across re-renders', () => {
     const { result, rerender } = renderHook(() => useRenderer());
 
     const firstRenderer = result.current.renderer;
-    expect(firstRenderer).not.toBeNull();
-
-    // Re-render (simulates strict mode double render)
     rerender();
 
-    // Should return the same renderer instance
     expect(result.current.renderer).toBe(firstRenderer);
+    expect(
+      firstRenderer.connect as unknown as MockInstance,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('connects, disconnects, then connects the same instance under StrictMode', () => {
+    const { result } = renderHook(() => useRenderer(), {
+      wrapper: StrictMode,
+    });
+
+    const renderer = result.current.renderer;
+    const connect = renderer.connect as unknown as MockInstance;
+    const disconnect = renderer.disconnect as unknown as MockInstance;
+
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(connect.mock.invocationCallOrder[0]).toBeLessThan(
+      disconnect.mock.invocationCallOrder[0],
+    );
+    expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(
+      connect.mock.invocationCallOrder[1],
+    );
   });
 
   // NOTE: isReady and isCanvasInitialized are now managed by Board component's

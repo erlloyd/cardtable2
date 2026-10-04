@@ -12,14 +12,14 @@ describe('useAwarenessSync', () => {
   let awarenessCallback: (states: Map<number, AwarenessState>) => void;
   let sendMessageMock: Mock;
   let onMessageMock: Mock;
-  let destroyMock: Mock;
+  let disconnectMock: Mock;
   let onAwarenessChangeMock: Mock;
   let getDocMock: Mock;
 
   beforeEach(() => {
     sendMessageMock = vi.fn();
     onMessageMock = vi.fn();
-    destroyMock = vi.fn();
+    disconnectMock = vi.fn();
 
     awarenessCallback = vi.fn();
 
@@ -40,7 +40,8 @@ describe('useAwarenessSync', () => {
     mockRenderer = {
       sendMessage: sendMessageMock,
       onMessage: onMessageMock,
-      destroy: destroyMock,
+      connect: vi.fn(),
+      disconnect: disconnectMock,
       mode: RenderMode.Worker,
     };
 

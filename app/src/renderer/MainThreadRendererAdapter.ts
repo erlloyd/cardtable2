@@ -42,23 +42,35 @@ class MainThreadRendererOrchestrator extends RendererOrchestrator {
 export class MainThreadRendererAdapter implements IRendererAdapter {
   readonly mode = RenderMode.MainThread;
 
-  private renderer: MainThreadRendererOrchestrator;
+  private renderer: MainThreadRendererOrchestrator | null = null;
+  private readyTimeout: ReturnType<typeof setTimeout> | null = null;
   private messageHandler: ((message: RendererToMainMessage) => void) | null =
     null;
-  private readySent = false;
 
-  constructor() {
-    this.renderer = new MainThreadRendererOrchestrator();
+  connect(): void {
+    const renderer = new MainThreadRendererOrchestrator();
 
     // Set up callback for messages from renderer
-    this.renderer.setCallback((message: RendererToMainMessage) => {
+    renderer.setCallback((message: RendererToMainMessage) => {
       if (this.messageHandler) {
         this.messageHandler(message);
       }
     });
+    this.renderer = renderer;
+
+    // Use setTimeout so the handler is registered before 'ready' fires
+    this.readyTimeout = setTimeout(() => {
+      this.readyTimeout = null;
+      this.messageHandler?.({ type: 'ready' });
+    }, 0);
   }
 
   sendMessage(message: MainToRendererMessage): void {
+    if (!this.renderer) {
+      throw new Error(
+        'MainThreadRendererAdapter: sendMessage while disconnected',
+      );
+    }
     // Call handleMessage directly (no postMessage needed)
     this.renderer.handleMessage(message).catch((error) => {
       console.error('[MainThreadRendererAdapter] handleMessage error:', error);
@@ -77,19 +89,14 @@ export class MainThreadRendererAdapter implements IRendererAdapter {
 
   onMessage(handler: (message: RendererToMainMessage) => void): void {
     this.messageHandler = handler;
-
-    // Send ready message only once (first time handler is set)
-    // Use setTimeout to avoid issues if handler expects async behavior
-    if (!this.readySent) {
-      this.readySent = true;
-      setTimeout(() => {
-        handler({ type: 'ready' });
-      }, 0);
-    }
   }
 
-  destroy(): void {
-    this.messageHandler = null;
-    this.renderer.destroy();
+  disconnect(): void {
+    if (this.readyTimeout !== null) {
+      clearTimeout(this.readyTimeout);
+      this.readyTimeout = null;
+    }
+    this.renderer?.destroy();
+    this.renderer = null;
   }
 }

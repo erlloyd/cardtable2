@@ -211,9 +211,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     ref,
     () => ({
       sendRendererMessage: (msg: MainToRendererMessage) => {
-        if (renderer) {
-          renderer.sendMessage(msg);
-        }
+        renderer.sendMessage(msg);
       },
       viewportToCanvas: (clientX: number, clientY: number) => {
         const canvas = canvasRef.current;
@@ -231,21 +229,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       },
       getViewportState: () =>
         new Promise<ViewportState>((resolve) => {
-          if (!renderer) {
-            // No renderer yet — placement falls back to a centered, un-zoomed
-            // viewport. Width/height are 0 so the placement primitive returns
-            // the camera-origin-relative center; not ideal but better than
-            // hanging the action.
-            resolve({
-              cameraX: 0,
-              cameraY: 0,
-              cameraScale: 1,
-              viewportWidth: 0,
-              viewportHeight: 0,
-              devicePixelRatio: window.devicePixelRatio || 1,
-            });
-            return;
-          }
           viewportStateCallbacksRef.current.push(resolve);
           // The renderer rejects messages until PixiJS init completes (the
           // request would be dropped and `resolve` never called). If init is
@@ -261,11 +244,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   // Flush viewport-state requests that arrived before the renderer finished
   // initializing.
   useEffect(() => {
-    if (
-      renderer &&
-      isCanvasInitialized &&
-      viewportStateCallbacksRef.current.length > 0
-    ) {
+    if (isCanvasInitialized && viewportStateCallbacksRef.current.length > 0) {
       renderer.sendMessage({ type: 'request-viewport-state' });
     }
   }, [renderer, isCanvasInitialized]);
@@ -461,8 +440,6 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Message handling
   useEffect(() => {
-    if (!renderer) return;
-
     const unsubscribe = renderer.onMessage((message) => {
       const context = {
         renderer,
@@ -602,7 +579,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Send interaction mode changes to renderer
   useEffect(() => {
-    if (!renderer || !isCanvasInitialized) return;
+    if (!isCanvasInitialized) return;
 
     renderer.sendMessage({
       type: 'set-interaction-mode',
@@ -612,7 +589,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Send grid snap enabled changes to renderer
   useEffect(() => {
-    if (!renderer || !isCanvasInitialized) return;
+    if (!isCanvasInitialized) return;
 
     renderer.sendMessage({
       type: 'set-grid-snap-enabled',
@@ -622,7 +599,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
   // Send game assets to renderer
   useEffect(() => {
-    if (!renderer || !isCanvasInitialized) {
+    if (!isCanvasInitialized) {
       return;
     }
 
@@ -636,7 +613,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   const handleCanvasContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
 
-    if (!renderer || !isCanvasInitialized || !onContextMenu) {
+    if (!isCanvasInitialized || !onContextMenu) {
       return;
     }
 

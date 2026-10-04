@@ -26,7 +26,8 @@ describe('useStoreSync', () => {
     mockRenderer = {
       sendMessage: vi.fn(),
       onMessage: vi.fn(),
-      destroy: vi.fn(),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
       mode: RenderMode.Worker,
     };
 

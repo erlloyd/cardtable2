@@ -171,6 +171,12 @@
       "01036"
     ]
   },
+  "tokenTypes": {
+    "damage": {
+      "name": "Damage",
+      "image": "https://card-table.app/images/table/first_player_token_marvelchampions.png"
+    }
+  },
   "tokens": {
     "first-player": {
       "image": "https://card-table.app/images/table/first_player_token_marvelchampions.png",

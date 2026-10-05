@@ -16,6 +16,10 @@ import type { SelectionManager } from './SelectionManager';
 import type { CounterZone, HoverManager } from './HoverManager';
 import { RenderMode } from '../IRendererAdapter';
 
+// Letter spacing keeps the 2px label stroke from closing gaps between glyphs
+const KIND_LABEL_FONT_SIZE = 16;
+const KIND_LABEL_LETTER_SPACING = 1;
+
 /**
  * VisualManager - Manages visual effects and object rendering.
  *
@@ -941,7 +945,7 @@ export class VisualManager {
    *   are larger and less critical for visual quality than card text
    * - Text is automatically centered (anchor 0.5) and positioned at y=0
    * - Resolution is automatically scaled by textResolutionMultiplier
-   * - Style: Arial 24px, white fill, black stroke, center-aligned
+   * - Style: Arial 16px with 1px letter spacing, white fill, black stroke, center-aligned
    *
    * @example
    * ```typescript
@@ -967,7 +971,8 @@ export class VisualManager {
         text: kind,
         style: {
           fontFamily: 'Arial',
-          fontSize: 24,
+          fontSize: KIND_LABEL_FONT_SIZE,
+          letterSpacing: KIND_LABEL_LETTER_SPACING,
           fill: 0xffffff,
           stroke: { color: 0x000000, width: 2 },
           align: 'center',
@@ -991,7 +996,8 @@ export class VisualManager {
       text: kind,
       style: {
         fontFamily: 'Arial',
-        fontSize: 24,
+        fontSize: KIND_LABEL_FONT_SIZE,
+        letterSpacing: KIND_LABEL_LETTER_SPACING,
         fill: 0xffffff, // White text
         stroke: { color: 0x000000, width: 2 }, // Black outline for readability
         align: 'center',

@@ -7,7 +7,7 @@ import {
   type ActionContext,
 } from './types';
 import { registerAttachmentActions } from './attachmentActions';
-import type { LoadableEntry } from '@cardtable2/shared';
+import { ObjectKind, type LoadableEntry } from '@cardtable2/shared';
 import {
   flipCards,
   exhaustCards,
@@ -320,6 +320,29 @@ export function registerDefaultActions(): () => void {
       !ctx.selection.hasMixed,
     execute: (ctx) => {
       createDiscardZoneForStack(ctx.store, ctx.selection.ids[0]);
+    },
+  });
+
+  // Discard zone: rename the selected zone via the host's dialog
+  register({
+    id: 'rename-discard-zone',
+    label: 'Rename…',
+    shortLabel: 'Rename',
+    icon: '✏️',
+    category: CARD_ACTIONS,
+    description: 'Rename this discard zone',
+    isAvailable: (ctx) => {
+      if (ctx.selection.count !== 1 || ctx.onOpenRenameDialog === undefined) {
+        return false;
+      }
+      const yMap = ctx.selection.yMaps[0];
+      return (
+        yMap.get('_kind') === ObjectKind.Zone &&
+        yMap.get('_meta')?.isDiscardZone === true
+      );
+    },
+    execute: (ctx) => {
+      ctx.onOpenRenameDialog?.(ctx.selection.ids[0]);
     },
   });
 

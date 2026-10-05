@@ -1285,22 +1285,35 @@ function findZonePile(store: YjsStore, zoneId: string): string | null {
 }
 
 /**
- * Route a single card to its home discard zone.
+ * Route the top card of a stack to its home discard zone.
  *
  * Steps (all in one transaction):
- * 1. Resolve the card's home zone via findDiscardZoneForCard.
- * 2. Extract the card from its current stack (if multi-card, unstack top card;
- *    if single-card stack, use as-is). v1: operates on the top card of whatever
- *    stack the card currently occupies — arbitrary middle extraction is deferred.
+ * 1. Resolve the top card's home zone via findDiscardZoneForCard.
+ * 2. Extract the top card (if multi-card stack, unstack it; if single-card
+ *    stack, use as-is).
  * 3. Set the extracted stack face-up.
  * 4. Merge into the zone's existing pile (stackObjects) or move to zone and set
  *    _containerId.
  *
  * @param store - YjsStore instance
- * @param cardId - Card ID (not stack ID — looked up by membership)
- * @returns true if routed successfully, false if card has no home zone or is not found
+ * @param sourceStackId - Stack ID whose top card is discarded (never looked up
+ *   by card id: card ids can repeat across and within stacks)
+ * @returns true if routed successfully, false if stack is missing/empty or its
+ *   top card has no home zone
  */
-export function discardCardToZone(store: YjsStore, cardId: string): boolean {
+export function discardCardToZone(
+  store: YjsStore,
+  sourceStackId: string,
+): boolean {
+  const sourceCards = store.getObjectYMap(sourceStackId)?.get('_cards');
+  if (!sourceCards || sourceCards.length === 0) {
+    console.warn(
+      `[discardCardToZone] Stack ${sourceStackId} not found or empty`,
+    );
+    return false;
+  }
+
+  const cardId = sourceCards[0];
   const zoneId = store.findDiscardZoneForCard(cardId);
   if (!zoneId) {
     console.warn(`[discardCardToZone] Card ${cardId} has no home zone`);
@@ -1317,48 +1330,11 @@ export function discardCardToZone(store: YjsStore, cardId: string): boolean {
   let extractedStackId: string | null = null;
 
   store.getDoc().transact(() => {
-    // Find which stack currently holds this card (read inside transaction for consistency)
-    let sourceStackId: string | null = null;
-    let cardIsTopOfSource = false;
-
-    store.forEachObject((yMap, id) => {
-      if (sourceStackId !== null) return;
-      if (yMap.get('_kind') !== ObjectKind.Stack) return;
-      const cards = yMap.get('_cards');
-      if (!cards) return;
-      const idx = cards.indexOf(cardId);
-      if (idx !== -1) {
-        sourceStackId = id;
-        cardIsTopOfSource = idx === 0;
-      }
-    });
-
-    if (!sourceStackId) {
-      console.warn(`[discardCardToZone] Card ${cardId} not found in any stack`);
-      return;
-    }
-
-    const sourceCards = store
-      .getObjectYMap(sourceStackId)!
-      .get('_cards') as string[];
-    const isSingleCardStack = sourceCards.length === 1;
-
-    if (isSingleCardStack) {
+    if (sourceCards.length === 1) {
       // Already a single-card stack — use it directly
       extractedStackId = sourceStackId;
-    } else if (cardIsTopOfSource) {
-      // Top card: unstack it to zone position (position will be overridden below)
-      extractedStackId = unstackCard(store, sourceStackId, {
-        x: zonePos.x,
-        y: zonePos.y,
-        r: 0,
-      });
     } else {
-      // Card is not on top — swap it to top by rewriting the _cards array, then unstack
-      const sourceYMap = store.getObjectYMap(sourceStackId)!;
-      const cards = sourceYMap.get('_cards') as string[];
-      const reordered = [cardId, ...cards.filter((c) => c !== cardId)];
-      sourceYMap.set('_cards', reordered);
+      // Unstack the top card to zone position (position overridden below)
       extractedStackId = unstackCard(store, sourceStackId, {
         x: zonePos.x,
         y: zonePos.y,

@@ -12,3 +12,6 @@ export const ZONE_BORDER_COLOR_SELECTED = 0xef4444; // Red
 export const ZONE_DISCARD_BORDER_COLOR = 0xe17055; // Warm orange — distinguishes from plain zone
 export const ZONE_DISCARD_FILL_COLOR = 0xe17055;
 export const ZONE_DISCARD_FILL_ALPHA = 0.15;
+
+// Gap between a discard zone's top edge and its label (world px)
+export const ZONE_DISCARD_LABEL_GAP = 8;

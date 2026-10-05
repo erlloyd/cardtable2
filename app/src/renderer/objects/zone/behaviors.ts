@@ -8,9 +8,11 @@ import {
   ZONE_DISCARD_BORDER_COLOR,
   ZONE_DISCARD_FILL_COLOR,
   ZONE_DISCARD_FILL_ALPHA,
+  ZONE_DISCARD_LABEL_GAP,
 } from './constants';
 import {
   getZoneColor,
+  getZoneLabel,
   getZoneWidth,
   getZoneHeight,
   isDiscardZone,
@@ -41,10 +43,15 @@ export const ZoneBehaviors: ObjectBehaviors = {
 
     // Add kind label text (unless in minimal mode)
     if (!ctx.minimal) {
-      const label = discard ? 'Discard' : obj._kind;
-      const text = ctx.createKindLabel(label);
-      text.anchor.set(0.5);
-      text.position.set(0, 0);
+      const text = ctx.createKindLabel(discard ? getZoneLabel(obj) : obj._kind);
+      if (discard) {
+        // Above the top edge so cards dropped in the zone don't cover it
+        text.anchor.set(0.5, 1);
+        text.position.set(0, -height / 2 - ZONE_DISCARD_LABEL_GAP);
+      } else {
+        text.anchor.set(0.5);
+        text.position.set(0, 0);
+      }
       container.addChild(text);
     }
 

@@ -119,8 +119,13 @@ test.describe('Discard Zone — rename', () => {
     await expect(input).toBeVisible();
     await expect(input).toHaveValue('Discard');
 
-    await input.fill('Encounter Discard');
-    await input.press('Enter');
+    // Wait for the palette to fully unmount (its Dialog restores focus to the
+    // trigger button on unmount), then type with real keyboard events so a
+    // missing focus on the rename input fails the test.
+    await expect(page.locator('.command-palette-panel')).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('Encounter Discard');
+    await page.keyboard.press('Enter');
 
     await expect(page.getByTestId('rename-zone-panel')).toBeHidden();
     await expect

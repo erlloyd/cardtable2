@@ -26,6 +26,7 @@ export function RenameZoneModal({
 }: RenameZoneModalProps) {
   const [label, setLabel] = useState(initialLabel);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -38,11 +39,24 @@ export function RenameZoneModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    const id = window.setTimeout(() => {
+    const focusInput = () => {
       inputRef.current?.focus();
       inputRef.current?.select();
-    }, 0);
-    return () => window.clearTimeout(id);
+    };
+    // The command palette's Headless UI Dialog restores focus to its trigger
+    // button when it unmounts (after its leave transition), which lands after
+    // the initial focus below. Reclaim focus whenever it escapes the panel.
+    const handleFocusIn = (e: FocusEvent) => {
+      if (e.target instanceof Node && !panelRef.current?.contains(e.target)) {
+        focusInput();
+      }
+    };
+    document.addEventListener('focusin', handleFocusIn);
+    const id = window.setTimeout(focusInput, 0);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      window.clearTimeout(id);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -71,6 +85,7 @@ export function RenameZoneModal({
       }}
     >
       <div
+        ref={panelRef}
         className="deck-import-panel"
         role="dialog"
         aria-modal="true"

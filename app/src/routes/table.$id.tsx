@@ -17,6 +17,7 @@ import { CommandPalette } from '../components/CommandPalette';
 import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
+import { useRenameZoneDialog } from '../hooks/useRenameZoneDialog';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { resetTable } from '../store/YjsActions';
@@ -678,6 +679,8 @@ function Table() {
     return unsubscribe;
   }, [store]);
 
+  const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
+
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
@@ -786,6 +789,7 @@ function Table() {
       setGridSnapEnabled,
       handPanel.activeHandId ?? undefined,
       handleOpenLoadPicker,
+      openRenameDialog,
     );
 
     if (context) {
@@ -807,6 +811,7 @@ function Table() {
     setGridSnapEnabled,
     handPanel.activeHandId,
     handleOpenLoadPicker,
+    openRenameDialog,
   ]);
 
   // Enable keyboard shortcuts
@@ -964,6 +969,8 @@ function Table() {
         loading={deckImport.loading}
         error={deckImport.error}
       />
+
+      {renameDialog}
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal

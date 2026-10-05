@@ -46,6 +46,8 @@ export interface ActionContext {
    * `presetType`, when supplied, skips the type-list step and renders the
    * item list for that loadable type directly. */
   onOpenLoadPicker?: (presetType?: string) => void;
+  /** Open the rename dialog for the given zone. */
+  onOpenRenameDialog?: (zoneId: string) => void;
 }
 
 /**

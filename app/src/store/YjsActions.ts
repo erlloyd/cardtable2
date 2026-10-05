@@ -1462,6 +1462,37 @@ export function createDiscardZoneForStack(
 }
 
 /**
+ * Rename a zone by writing `_meta.label`, preserving the rest of `_meta`.
+ * The label is trimmed; an empty result is a no-op.
+ * @returns true when the label was written
+ */
+export function setZoneLabel(
+  store: YjsStore,
+  id: string,
+  label: string,
+): boolean {
+  const trimmed = label.trim();
+  if (trimmed === '') return false;
+
+  const yMap = store.getObjectYMap(id);
+  if (!yMap) {
+    console.warn(`[setZoneLabel] Object ${id} not found`);
+    return false;
+  }
+
+  if (yMap.get('_kind') !== ObjectKind.Zone) {
+    console.warn(`[setZoneLabel] Object ${id} is not a zone`);
+    return false;
+  }
+
+  const currentMeta = yMap.get('_meta') ?? {};
+  store.getDoc().transact(() => {
+    yMap.set('_meta', { ...currentMeta, label: trimmed });
+  });
+  return true;
+}
+
+/**
  * Reset the table to a test scene with various object types.
  * Useful for development and testing.
  *

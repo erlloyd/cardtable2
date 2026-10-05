@@ -368,11 +368,7 @@ export function registerDefaultActions(): () => void {
     },
     execute: (ctx) => {
       for (const id of ctx.selection.ids) {
-        const yMap = ctx.store.getObjectYMap(id);
-        if (!yMap) continue;
-        const cards = yMap.get('_cards');
-        if (!cards || cards.length === 0) continue;
-        discardCardToZone(ctx.store, cards[0]);
+        discardCardToZone(ctx.store, id);
       }
     },
   });

@@ -230,6 +230,81 @@ test.describe('Discard Zone — store-level loop', () => {
     expect(result[0].faceUp).toBe(true);
   });
 
+  test('discard acts on the selected stack when an older zone pile holds the same card id', async ({
+    page,
+  }) => {
+    // Regression: discard used to scan stacks by card id and pick the first
+    // match (the older pile), instead of the selected stack.
+    await page.evaluate(() => {
+      const g = globalThis as unknown as PageGlobals;
+      const store = g.__TEST_STORE__!;
+      const base = {
+        _kind: 'stack',
+        _sortKey: '000001',
+        _locked: false,
+        _selectedBy: null,
+        _meta: {},
+        _faceUp: false,
+      };
+
+      store.setObject('e2e-dup-zone', {
+        _kind: 'zone',
+        _pos: { x: 420, y: 0, r: 0 },
+        _sortKey: '000000',
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: { isDiscardZone: true, label: 'Discard' },
+      });
+      store.setDiscardZone('e2e-dup-zone', {
+        memberCardIds: ['dup-A', 'dup-B', 'dup-C'],
+      });
+      // Older pile created first so it precedes the source in iteration order
+      store.setObject('e2e-dup-pile', {
+        ...base,
+        _pos: { x: 420, y: 0, r: 0 },
+        _containerId: 'e2e-dup-zone',
+        _cards: ['dup-A', 'dup-B'],
+        _faceUp: true,
+      });
+      store.setObject('e2e-dup-source', {
+        ...base,
+        _sortKey: '000002',
+        _pos: { x: 0, y: 0, r: 0 },
+        _containerId: null,
+        _cards: ['dup-A', 'dup-C'],
+      });
+    });
+
+    await page.evaluate(async () => {
+      const g = globalThis as unknown as PageGlobals;
+      g.__ctTest!.click({ x: 0, y: 0 });
+      await g.__TEST_BOARD__!.waitForSelectionSettled();
+    });
+    await page.keyboard.press('x');
+    await page.evaluate(async () => {
+      await (
+        globalThis as unknown as PageGlobals
+      ).__TEST_BOARD__!.waitForRenderer();
+    });
+
+    const result = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      const stacks: { id: string; cards: string[] }[] = [];
+      for (const [id, obj] of store.getAllObjects()) {
+        if (obj._kind === 'stack') {
+          stacks.push({ id, cards: obj._cards ?? [] });
+        }
+      }
+      return stacks;
+    });
+
+    const byId = new Map(result.map((s) => [s.id, s.cards]));
+    expect(byId.get('e2e-dup-source')).toEqual(['dup-C']);
+    expect(byId.get('e2e-dup-pile')).toEqual(['dup-A', 'dup-A', 'dup-B']);
+    expect(result.flatMap((s) => s.cards).length).toBe(4);
+  });
+
   test('discard → drag card out → X re-discards (not just flip in place)', async ({
     page,
   }) => {

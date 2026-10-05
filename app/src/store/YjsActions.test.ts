@@ -3445,27 +3445,24 @@ describe('discardCardToZone', () => {
   }
 
   it('returns false when the card has no home zone', () => {
-    createObject(store, {
+    const orphanStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
       cards: ['orphan-card'],
       faceUp: false,
     });
-    expect(discardCardToZone(store, 'orphan-card')).toBe(false);
+    expect(discardCardToZone(store, orphanStackId)).toBe(false);
   });
 
-  it('returns false for a card not found in any stack', () => {
-    const { zoneId } = setupSourceAndZone(['card-1']);
-    void zoneId;
-    // 'card-99' is a member of zone but doesn't exist in any stack
-    store.setDiscardZone('fake-zone', { memberCardIds: ['card-99'] });
-    expect(discardCardToZone(store, 'card-99')).toBe(false);
+  it('returns false for a stack id that does not exist', () => {
+    setupSourceAndZone(['card-1']);
+    expect(discardCardToZone(store, 'no-such-stack')).toBe(false);
   });
 
   it('routes a single-card stack to an empty zone (new pile path)', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
 
-    const result = discardCardToZone(store, 'card-1');
+    const result = discardCardToZone(store, stackId);
     expect(result).toBe(true);
 
     // Original stack should be gone (or at least card-1 is in the zone)
@@ -3486,9 +3483,9 @@ describe('discardCardToZone', () => {
   });
 
   it('face-down card lands face-up in the zone', () => {
-    const { zoneId } = setupSourceAndZone(['card-face-down'], false);
+    const { stackId, zoneId } = setupSourceAndZone(['card-face-down'], false);
 
-    discardCardToZone(store, 'card-face-down');
+    discardCardToZone(store, stackId);
 
     const pileIds = store.filterObjects(
       (yMap) =>
@@ -3500,15 +3497,15 @@ describe('discardCardToZone', () => {
   });
 
   it('second discard merges onto the existing pile (merge path)', () => {
-    const { zoneId } = setupSourceAndZone(['card-1', 'card-2']);
+    const { stackId, zoneId } = setupSourceAndZone(['card-1', 'card-2']);
 
-    discardCardToZone(store, 'card-1');
+    discardCardToZone(store, stackId);
 
     // Now 'card-2' is top of the source stack; create a second stack for it
     // Actually card-2 is in the original source stack still. But card-1 was top.
     // The source stack now has card-2 as its sole remaining card (if it was 2-card).
     // Discard card-2 — it should merge onto the existing pile.
-    discardCardToZone(store, 'card-2');
+    discardCardToZone(store, stackId);
 
     const pileIds = store.filterObjects(
       (yMap) =>
@@ -3529,7 +3526,7 @@ describe('discardCardToZone', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
 
     // First discard: card-1 moves to zone, gets _containerId=zoneId
-    expect(discardCardToZone(store, 'card-1')).toBe(true);
+    expect(discardCardToZone(store, stackId)).toBe(true);
 
     // Pile exists in zone
     const pileAfterDiscard = store.filterObjects(
@@ -3556,7 +3553,7 @@ describe('discardCardToZone', () => {
     expect(pileAfterDragOut.length).toBe(0);
 
     // Second discard: must re-route to zone, NOT just flip the card in place
-    expect(discardCardToZone(store, 'card-1')).toBe(true);
+    expect(discardCardToZone(store, pileId)).toBe(true);
 
     const pileAfterRediscard = store.filterObjects(
       (yMap) =>
@@ -3580,7 +3577,7 @@ describe('discardCardToZone', () => {
   it('moveObjects clears _containerId on moved objects', () => {
     // Unit test for the _containerId-clear side-effect in moveObjects.
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
-    discardCardToZone(store, 'card-1');
+    discardCardToZone(store, stackId);
 
     // card-1's stack (which may be the original stackId or a new pile id) should have _containerId
     const pileIds = store.filterObjects(
@@ -3610,20 +3607,20 @@ describe('discardCardToZone', () => {
     const foreignStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 500, y: 500, r: 0 },
-      cards: ['other-card', 'card-member'],
+      cards: ['card-member', 'other-card'],
       faceUp: false,
     });
     // Delete the original source stack (card-member is now in foreign)
     store.deleteObject(sourceId);
 
-    const result = discardCardToZone(store, 'card-member');
+    const result = discardCardToZone(store, foreignStackId);
     expect(result).toBe(true);
 
     // Foreign stack should be smaller (card-member extracted)
     const foreignYMap = store.getObjectYMap(foreignStackId);
     if (foreignYMap) {
       const remainingCards = foreignYMap.get('_cards') as string[];
-      expect(remainingCards).not.toContain('card-member');
+      expect(remainingCards).toEqual(['other-card']);
     }
 
     // card-member is now in the zone's pile

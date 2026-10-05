@@ -941,7 +941,7 @@ export class VisualManager {
    *   are larger and less critical for visual quality than card text
    * - Text is automatically centered (anchor 0.5) and positioned at y=0
    * - Resolution is automatically scaled by textResolutionMultiplier
-   * - Style: Arial 24px, white fill, black stroke, center-aligned
+   * - Style: Arial 16px with 1px letter spacing, white fill, black stroke, center-aligned
    *
    * @example
    * ```typescript
@@ -967,7 +967,8 @@ export class VisualManager {
         text: kind,
         style: {
           fontFamily: 'Arial',
-          fontSize: 24,
+          fontSize: 16,
+          letterSpacing: 1,
           fill: 0xffffff,
           stroke: { color: 0x000000, width: 2 },
           align: 'center',
@@ -991,7 +992,8 @@ export class VisualManager {
       text: kind,
       style: {
         fontFamily: 'Arial',
-        fontSize: 24,
+        fontSize: 16,
+        letterSpacing: 1,
         fill: 0xffffff, // White text
         stroke: { color: 0x000000, width: 2 }, // Black outline for readability
         align: 'center',

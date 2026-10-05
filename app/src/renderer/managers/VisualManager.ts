@@ -16,6 +16,10 @@ import type { SelectionManager } from './SelectionManager';
 import type { CounterZone, HoverManager } from './HoverManager';
 import { RenderMode } from '../IRendererAdapter';
 
+// Letter spacing keeps the 2px label stroke from closing gaps between glyphs
+const KIND_LABEL_FONT_SIZE = 16;
+const KIND_LABEL_LETTER_SPACING = 1;
+
 /**
  * VisualManager - Manages visual effects and object rendering.
  *
@@ -967,8 +971,8 @@ export class VisualManager {
         text: kind,
         style: {
           fontFamily: 'Arial',
-          fontSize: 16,
-          letterSpacing: 1,
+          fontSize: KIND_LABEL_FONT_SIZE,
+          letterSpacing: KIND_LABEL_LETTER_SPACING,
           fill: 0xffffff,
           stroke: { color: 0x000000, width: 2 },
           align: 'center',
@@ -992,8 +996,8 @@ export class VisualManager {
       text: kind,
       style: {
         fontFamily: 'Arial',
-        fontSize: 16,
-        letterSpacing: 1,
+        fontSize: KIND_LABEL_FONT_SIZE,
+        letterSpacing: KIND_LABEL_LETTER_SPACING,
         fill: 0xffffff, // White text
         stroke: { color: 0x000000, width: 2 }, // Black outline for readability
         align: 'center',

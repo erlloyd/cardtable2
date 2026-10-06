@@ -56,6 +56,9 @@ interface PageGlobals {
   };
 }
 
+/** Unstack handle centre relative to a stack centre (STACK_WIDTH 63, HEIGHT 88, BADGE 18). */
+const HANDLE_OFFSET: Point = { x: 63 / 2 - 18 / 2, y: -88 / 2 + 18 / 2 };
+
 interface Snapshot {
   id: string;
   kind: string;
@@ -211,28 +214,49 @@ async function pilesIn(page: Page, zoneId: string): Promise<Snapshot[]> {
   );
 }
 
-/** Press 'x' `times` times on the selected stack, waiting for each card to leave. */
+/**
+ * Press 'x' once on the selected stack and wait for the discard to land.
+ *
+ * `remainingAfter` is the number of cards that stay in the loose stack. With 0
+ * remaining, discardCardToZone (YjsActions.ts:1349-1352, 1371-1374) does not
+ * move a card: the single-card stack itself is moved into the zone and gets
+ * `_containerId` (it becomes the pile), or is merged into an existing pile and
+ * deleted. Both are accepted explicitly here.
+ */
+async function discardOnce(
+  page: Page,
+  stackId: string,
+  remainingAfter: number,
+): Promise<void> {
+  await page.keyboard.press('x');
+  if (remainingAfter > 0) {
+    await expect
+      .poll(async () => {
+        const stack = (await snapshot(page)).find((o) => o.id === stackId);
+        return stack?.containerId === null ? stack.cards.length : -1;
+      })
+      .toBe(remainingAfter);
+    await expect
+      .poll(async () => (await getObject(page, stackId)).selectedBy ?? null)
+      .not.toBeNull();
+    return;
+  }
+  await expect
+    .poll(async () => {
+      const stack = (await snapshot(page)).find((o) => o.id === stackId);
+      return stack === undefined || stack.containerId !== null;
+    })
+    .toBe(true);
+}
+
+/** Press 'x' `times` times on the selected stack. */
 async function discardAll(
   page: Page,
   stackId: string,
   times: number,
 ): Promise<void> {
   for (let left = times - 1; left >= 0; left--) {
-    await page.keyboard.press('x');
-    // The last card either merges into an existing pile (stack deleted) or the
-    // stack itself becomes the pile (containerId set), so count only while the
-    // stack is still loose on the board.
-    await expect
-      .poll(async () => {
-        const stack = (await snapshot(page)).find((o) => o.id === stackId);
-        return stack && stack.containerId === null ? stack.cards.length : 0;
-      })
-      .toBe(left);
-    if (left > 0) {
-      await expect
-        .poll(async () => (await getObject(page, stackId)).selectedBy ?? null)
-        .not.toBeNull();
-    }
+    await discardOnce(page, stackId, left);
   }
 }
 
@@ -282,31 +306,45 @@ test.describe('Discard home zone — per-card routing (ct-1mv.8)', () => {
     const handStack = (await snapshot(page)).filter(isHandStack)[0];
     expect(handStack.cards).toEqual([{ code: 'dup', homeZone: zoneP }]);
 
-    // Merge Q onto the hand stack with a board drag.
-    await dragStackOnto(page, Q, handStack.pos);
+    // Pull ONE card off deck Q by dragging its unstack handle (top-right corner,
+    // pointer.ts isPointInUnstackHandle), dropping the new stack onto the hand
+    // stack. The new stack is created centred on the cursor, so dropping at the
+    // hand stack's position merges it.
+    const handle = { x: Q.x + HANDLE_OFFSET.x, y: Q.y + HANDLE_OFFSET.y };
+    await dragStackOnto(page, handle, handStack.pos);
     await expect
       .poll(async () => (await getObject(page, handStack.id)).cards.length)
-      .toBe(3);
+      .toBe(2);
+    expect((await getObject(page, 'deck-q')).cards).toEqual([
+      { code: 'q1', homeZone: zoneQ },
+    ]);
     const merged = (await getObject(page, handStack.id)).cards;
-    expect(merged).toHaveLength(3);
-    expect(merged).toContainEqual({ code: 'dup', homeZone: zoneP });
-    expect(merged).toContainEqual({ code: 'dup', homeZone: zoneQ });
-    expect(merged).toContainEqual({ code: 'q1', homeZone: zoneQ });
+    expect(merged).toEqual([
+      { code: 'dup', homeZone: zoneQ },
+      { code: 'dup', homeZone: zoneP },
+    ]);
 
-    // Three 'x' presses: every entry lands in the pile of its own zone.
+    // First 'x' sends the top card (Q's) to zoneQ, leaving P's dup loose.
     await selectAt(page, handStack.pos, handStack.id);
-    await discardAll(page, handStack.id, 3);
-
-    const pilesP = await pilesIn(page, zoneP);
+    await discardOnce(page, handStack.id, 1);
+    expect((await getObject(page, handStack.id)).cards).toEqual([
+      { code: 'dup', homeZone: zoneP },
+    ]);
+    expect(await pilesIn(page, zoneP)).toHaveLength(0);
     const pilesQ = await pilesIn(page, zoneQ);
-    expect(pilesP).toHaveLength(1);
     expect(pilesQ).toHaveLength(1);
-    expect(pilesP[0].faceUp).toBe(true);
     expect(pilesQ[0].faceUp).toBe(true);
+    expect(pilesQ[0].cards).toEqual([{ code: 'dup', homeZone: zoneQ }]);
+
+    // Second 'x': the loose stack holds one card and zoneP is empty, so the
+    // stack itself becomes zoneP's pile (same id, containerId set).
+    await discardOnce(page, handStack.id, 0);
+    const pilesP = await pilesIn(page, zoneP);
+    expect(pilesP).toHaveLength(1);
+    expect(pilesP[0].id).toBe(handStack.id);
+    expect(pilesP[0].faceUp).toBe(true);
     expect(pilesP[0].cards).toEqual([{ code: 'dup', homeZone: zoneP }]);
-    expect(pilesQ[0].cards).toHaveLength(2);
-    expect(pilesQ[0].cards).toContainEqual({ code: 'dup', homeZone: zoneQ });
-    expect(pilesQ[0].cards).toContainEqual({ code: 'q1', homeZone: zoneQ });
+    expect(await pilesIn(page, zoneQ)).toHaveLength(1);
   });
 
   test('B. untagged card: visible alert names the missing zone and nothing moves', async ({

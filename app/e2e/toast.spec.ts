@@ -104,6 +104,9 @@ test.describe('Toast notifications (ct-e9m.4)', () => {
       .getByRole('alert')
       .filter({ hasText: 'Failed to load scenario' });
     await expect(toast).toBeVisible();
+    await expect(toast).not.toHaveText(
+      /Failed to load scenario.*Failed to load scenario/,
+    );
     expect(await getObjectCount(page)).toBe(0);
 
     // TOAST_DURATION_MS + 3s slack.

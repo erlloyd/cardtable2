@@ -124,3 +124,5 @@ storybook-static
 .dolt/
 *.db
 .beads-credential-key
+/.beads.gate.lock
+.beads/interactions.jsonl

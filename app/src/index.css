@@ -2317,3 +2317,66 @@ h1 {
   text-align: center;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* Toasts */
+.toaster {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(28rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border-left: 4px solid #6366f1;
+  background: #1f2937;
+  color: #f9fafb;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  animation: toast-fade-in 150ms ease-out;
+}
+
+.toast--error {
+  border-left-color: #ef4444;
+}
+
+.toast__message {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.toast__close {
+  flex-shrink: 0;
+  padding: 0 0.25rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.toast__close:hover {
+  opacity: 1;
+}
+
+@keyframes toast-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

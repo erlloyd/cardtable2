@@ -15,7 +15,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LoadableEntry } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  toCardEntries,
+  type CardEntry,
+  type LoadableEntry,
+} from '@cardtable2/shared';
+import { YjsStore } from '../store/YjsStore';
+import { createDiscardZoneForStack, createObject } from '../store/YjsActions';
 import { ActionRegistry } from './ActionRegistry';
 import {
   registerDefaultActions,
@@ -28,7 +35,6 @@ import {
 } from './attachmentActions';
 import { registerHandActions } from './handActions';
 import type { ActionContext } from './types';
-import type { YjsStore } from '../store/YjsStore';
 
 function makeContext(overrides: Partial<ActionContext> = {}): ActionContext {
   return {
@@ -431,5 +437,92 @@ describe('Counter increment/decrement actions (ct-d2p)', () => {
         }),
       ),
     ).toBe(false);
+  });
+});
+
+describe('discard-card action (ct-1mv.6)', () => {
+  let store: YjsStore;
+
+  function stackWith(cards: CardEntry[]): string {
+    return createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards,
+      faceUp: false,
+    });
+  }
+
+  function ctxFor(ids: string[]): ActionContext {
+    return makeContext({
+      store,
+      selection: {
+        ids,
+        yMaps: ids.map((id) => store.getObjectYMap(id)!),
+        count: ids.length,
+        hasStacks: true,
+        hasTokens: false,
+        hasCounters: false,
+        hasMixed: false,
+        allLocked: false,
+        allUnlocked: true,
+        canAct: true,
+      },
+    });
+  }
+
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+    registerDefaultActions();
+    store = new YjsStore('test-discard-action');
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+    vi.restoreAllMocks();
+  });
+
+  it('is available for an untagged stack', () => {
+    const id = stackWith(toCardEntries(['untagged']));
+    const action = ActionRegistry.getInstance().getAction('discard-card');
+    expect(action?.isAvailable(ctxFor([id]))).toBe(true);
+  });
+
+  it('alerts once with the count for untagged stacks and moves nothing', () => {
+    const alert = vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
+    const a = stackWith(toCardEntries(['x']));
+    const b = stackWith(toCardEntries(['y']));
+    const action = ActionRegistry.getInstance().getAction('discard-card');
+
+    void action?.execute(ctxFor([a, b]));
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert.mock.calls[0][0]).toContain('2 cards have no discard zone');
+    expect(store.getObjectYMap(a)!.get('_cards')).toEqual(toCardEntries(['x']));
+  });
+
+  it('mixed selection routes tagged stacks and alerts once for the rest', () => {
+    const alert = vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
+    const tagged = stackWith(toCardEntries(['t']));
+    const zoneId = createDiscardZoneForStack(store, tagged)!;
+    const untagged = stackWith(toCardEntries(['u']));
+    const action = ActionRegistry.getInstance().getAction('discard-card');
+
+    void action?.execute(ctxFor([tagged, untagged]));
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert.mock.calls[0][0]).toContain('1 card has no discard zone');
+    expect(store.getObjectYMap(tagged)!.get('_containerId')).toBe(zoneId);
+  });
+
+  it('does not alert when every stack routes', () => {
+    const alert = vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
+    const tagged = stackWith(toCardEntries(['t']));
+    createDiscardZoneForStack(store, tagged);
+
+    void ActionRegistry.getInstance()
+      .getAction('discard-card')
+      ?.execute(ctxFor([tagged]));
+
+    expect(alert).not.toHaveBeenCalled();
   });
 });

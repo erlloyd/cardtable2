@@ -9,6 +9,14 @@ interface TestStore {
   clearAllObjects: () => void;
 }
 
+interface LegacyTestStore extends TestStore {
+  createHand: (name: string) => string;
+  hands: Map<
+    string,
+    { get: (key: string) => unknown; set: (k: string, v: unknown) => void }
+  >;
+}
+
 test.describe('Migrations (M3.5-T1)', () => {
   test('should migrate old tokens to add missing _faceUp property', async ({
     page,
@@ -291,7 +299,7 @@ test.describe('Migrations (M3.5-T1)', () => {
           _selectedBy: null,
           _meta: {},
           _faceUp: false,
-          _cards: ['card1'],
+          _cards: [{ code: 'card1' }],
         });
       },
       { tokenKind: ObjectKind.Token, stackKind: ObjectKind.Stack },
@@ -339,8 +347,134 @@ test.describe('Migrations (M3.5-T1)', () => {
     // New objects should be unchanged
     expect(objects.newToken).toHaveProperty('_faceUp', true);
     expect(objects.newStack).toHaveProperty('_faceUp', false);
-    expect((objects.newStack as { _cards: string[] })._cards).toEqual([
-      'card1',
+    expect((objects.newStack as { _cards: unknown[] })._cards).toEqual([
+      { code: 'card1' },
     ]);
+  });
+
+  test('should migrate legacy string card entries to CardEntry in stacks and hands', async ({
+    page,
+  }, testInfo) => {
+    const tableId = `mig-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`;
+    await page.goto(`/dev/table/${tableId}`);
+    await page.waitForSelector('[data-testid="board"]');
+    await expect(page.getByText(/Store:.*✓ Ready/)).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Seed raw legacy strings, bypassing the CardEntry types
+    await page.evaluate(
+      ({ stackKind }) => {
+        const { __TEST_STORE__ } = globalThis as unknown as {
+          __TEST_STORE__?: LegacyTestStore;
+        };
+        if (!__TEST_STORE__) {
+          throw new Error('Store not found');
+        }
+        __TEST_STORE__.setObject('legacy-stack', {
+          _kind: stackKind,
+          _containerId: 'table',
+          _pos: { x: 100, y: 200, r: 0 },
+          _sortKey: '000001',
+          _locked: false,
+          _selectedBy: null,
+          _meta: {},
+          _faceUp: true,
+          _cards: ['legacy-a', 'legacy-b'],
+        });
+        const handId = __TEST_STORE__.createHand('Legacy Hand');
+        const handMap = __TEST_STORE__.hands.get(handId);
+        if (!handMap) {
+          throw new Error('Hand not found');
+        }
+        handMap.set('cards', ['legacy-h']);
+        (globalThis as unknown as { __legacyHandId?: string }).__legacyHandId =
+          handId;
+      },
+      { stackKind: ObjectKind.Stack },
+    );
+
+    // Seed is still raw strings in the live doc before reload
+    const before = await page.evaluate(() => {
+      const { __TEST_STORE__, __legacyHandId } = globalThis as unknown as {
+        __TEST_STORE__?: LegacyTestStore;
+        __legacyHandId?: string;
+      };
+      if (!__TEST_STORE__ || !__legacyHandId) {
+        throw new Error('Store not found');
+      }
+      return {
+        stackCards: (
+          __TEST_STORE__.getObject('legacy-stack') as { _cards: unknown }
+        )._cards,
+        handId: __legacyHandId,
+        handCards: __TEST_STORE__.hands.get(__legacyHandId)?.get('cards'),
+      };
+    });
+    expect(before.stackCards).toEqual(['legacy-a', 'legacy-b']);
+    expect(before.handCards).toEqual(['legacy-h']);
+
+    // Wait until the raw strings are actually in IndexedDB (not a fixed sleep)
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (dbName) =>
+              new Promise<boolean>((resolve, reject) => {
+                const open = indexedDB.open(dbName);
+                open.onerror = () => reject(new Error('indexedDB open failed'));
+                open.onsuccess = () => {
+                  const db = open.result;
+                  const req = db
+                    .transaction('updates')
+                    .objectStore('updates')
+                    .getAll();
+                  req.onerror = () =>
+                    reject(new Error('indexedDB read failed'));
+                  req.onsuccess = () => {
+                    db.close();
+                    const text = (req.result as Uint8Array[])
+                      .map((u) => new TextDecoder('latin1').decode(u))
+                      .join('');
+                    resolve(
+                      ['legacy-a', 'legacy-b', 'legacy-h'].every((c) =>
+                        text.includes(c),
+                      ),
+                    );
+                  };
+                };
+              }),
+            `cardtable-${tableId}`,
+          ),
+        { timeout: 5000 },
+      )
+      .toBe(true);
+
+    await page.reload();
+    await page.waitForSelector('[data-testid="board"]');
+    await expect(page.getByText(/Store:.*✓ Ready/)).toBeVisible({
+      timeout: 5000,
+    });
+
+    const after = await page.evaluate((handId) => {
+      const { __TEST_STORE__ } = globalThis as unknown as {
+        __TEST_STORE__?: LegacyTestStore;
+      };
+      if (!__TEST_STORE__) {
+        throw new Error('Store not found after reload');
+      }
+      return {
+        stackCards: (
+          __TEST_STORE__.getObject('legacy-stack') as { _cards: unknown }
+        )._cards,
+        handCards: __TEST_STORE__.hands.get(handId)?.get('cards'),
+      };
+    }, before.handId);
+
+    expect(after.stackCards).toEqual([
+      { code: 'legacy-a' },
+      { code: 'legacy-b' },
+    ]);
+    expect(after.handCards).toEqual([{ code: 'legacy-h' }]);
   });
 });

@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { ObjectKind } from '@cardtable2/shared';
-import { runMigrations } from './migrations';
+import {
+  runMigrations,
+  needsCardEntryMigration,
+  migrateCardEntries,
+} from './migrations';
 
 describe('migrations', () => {
   beforeEach(() => {
@@ -186,6 +190,87 @@ describe('migrations', () => {
       // Verify transaction origin is 'migration'
       const transactCall = transactSpy.mock.calls[0];
       expect(transactCall[1]).toBe('migration');
+    });
+  });
+
+  describe('card entry migration', () => {
+    function addStack(doc: Y.Doc, id: string, cards: unknown): Y.Map<unknown> {
+      const stackMap = new Y.Map<unknown>();
+      stackMap.set('_kind', ObjectKind.Stack);
+      stackMap.set('_pos', { x: 0, y: 0, r: 0 });
+      stackMap.set('_sortKey', '000001');
+      stackMap.set('_locked', false);
+      stackMap.set('_selectedBy', null);
+      stackMap.set('_containerId', null);
+      stackMap.set('_meta', {});
+      stackMap.set('_faceUp', true);
+      stackMap.set('_cards', cards);
+      doc.getMap('objects').set(id, stackMap);
+      return stackMap;
+    }
+
+    function addHand(doc: Y.Doc, id: string, cards: unknown): Y.Map<unknown> {
+      const handMap = new Y.Map<unknown>();
+      handMap.set('name', 'Hand');
+      handMap.set('cards', cards);
+      handMap.set('visibility', 'public');
+      doc.getMap('hands').set(id, handMap);
+      return handMap;
+    }
+
+    it('converts legacy string entries in stacks and hands', () => {
+      const doc = new Y.Doc();
+      const stack = addStack(doc, 's1', ['a', 'b']);
+      const hand = addHand(doc, 'h1', ['c']);
+
+      expect(needsCardEntryMigration(doc)).toBe(true);
+      runMigrations(doc);
+
+      expect(stack.get('_cards')).toEqual([{ code: 'a' }, { code: 'b' }]);
+      expect(hand.get('cards')).toEqual([{ code: 'c' }]);
+      expect(needsCardEntryMigration(doc)).toBe(false);
+    });
+
+    it('leaves a doc already on entries untouched and writes nothing', () => {
+      const doc = new Y.Doc();
+      addStack(doc, 's1', [{ code: 'a', homeZone: 'z1' }]);
+      addHand(doc, 'h1', [{ code: 'c' }]);
+      const updates: Uint8Array[] = [];
+      doc.on('update', (u: Uint8Array) => updates.push(u));
+
+      expect(needsCardEntryMigration(doc)).toBe(false);
+      runMigrations(doc);
+
+      expect(updates).toHaveLength(0);
+    });
+
+    it('converts only string elements of a mixed list, keeping order and duplicates', () => {
+      const doc = new Y.Doc();
+      const stack = addStack(doc, 's1', [
+        'a',
+        { code: 'b', homeZone: 'z1' },
+        'a',
+      ]);
+
+      migrateCardEntries(doc);
+
+      expect(stack.get('_cards')).toEqual([
+        { code: 'a' },
+        { code: 'b', homeZone: 'z1' },
+        { code: 'a' },
+      ]);
+    });
+
+    it('is idempotent', () => {
+      const doc = new Y.Doc();
+      const hand = addHand(doc, 'h1', ['x', 'x']);
+
+      runMigrations(doc);
+      const first = hand.get('cards');
+      runMigrations(doc);
+
+      expect(hand.get('cards')).toBe(first);
+      expect(first).toEqual([{ code: 'x' }, { code: 'x' }]);
     });
   });
 });

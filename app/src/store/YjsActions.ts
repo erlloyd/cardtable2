@@ -10,7 +10,8 @@ import {
   sortKeyBase,
   sortKeyWithSub,
   PARENT_ON_TOP_SUB_KEY,
-  type DiscardZoneEntry,
+  type CardEntry,
+  toCardEntries,
 } from '@cardtable2/shared';
 import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
@@ -35,7 +36,7 @@ export interface CreateObjectOptions {
   locked?: boolean;
   meta?: Record<string, unknown>;
   // Stack-specific
-  cards?: string[];
+  cards?: CardEntry[];
   faceUp?: boolean;
 }
 
@@ -127,7 +128,7 @@ export function createObject(
     const stackObject = {
       ...baseObject,
       _kind: ObjectKind.Stack,
-      _cards: options.cards ?? (defaults._cards as string[]),
+      _cards: options.cards ?? (defaults._cards as CardEntry[]),
       _faceUp: options.faceUp ?? (defaults._faceUp as boolean),
     };
     store.setObject(id, stackObject);
@@ -626,7 +627,7 @@ export function stackObjects(
   }
 
   // Get target state (wins for merged stack)
-  const targetCards = targetYMap.get('_cards') as string[];
+  const targetCards = targetYMap.get('_cards') as CardEntry[];
   if (!targetCards) {
     throw new Error(
       `[stackObjects] Target stack ${target} has no _cards array`,
@@ -634,7 +635,7 @@ export function stackObjects(
   }
 
   // Collect cards from all source stacks
-  const sourceStacksData: Array<{ id: string; cards: string[] }> = [];
+  const sourceStacksData: Array<{ id: string; cards: CardEntry[] }> = [];
 
   for (const sourceId of sourceIds) {
     const sourceYMap = store.getObjectYMap(sourceId);
@@ -655,7 +656,7 @@ export function stackObjects(
     }
 
     // Get source cards
-    const sourceCards = sourceYMap.get('_cards') as string[];
+    const sourceCards = sourceYMap.get('_cards') as CardEntry[];
     if (sourceCards && sourceCards.length > 0) {
       sourceStacksData.push({ id: sourceId, cards: sourceCards });
     }
@@ -691,7 +692,7 @@ export function stackObjects(
 
   console.log(
     `[stackObjects] Merged ${sourceStacksData.length} stack(s) into ${target}. ` +
-      `Total cards: ${(targetYMap.get('_cards') as string[]).length}`,
+      `Total cards: ${(targetYMap.get('_cards') as CardEntry[]).length}`,
   );
 
   return stackedIds;
@@ -738,7 +739,7 @@ export function unstackCard(
   }
 
   // Get source cards
-  const sourceCards = sourceYMap.get('_cards') as string[];
+  const sourceCards = sourceYMap.get('_cards') as CardEntry[];
   if (!sourceCards || sourceCards.length === 0) {
     console.warn(`[unstackCard] Stack ${stackId} has no cards`);
     return null;
@@ -780,7 +781,7 @@ export function unstackCard(
   });
 
   console.log(
-    `[unstackCard] Extracted card ${topCard} from ${stackId} to new stack ${newStackId}`,
+    `[unstackCard] Extracted card ${topCard.code} from ${stackId} to new stack ${newStackId}`,
   );
 
   return newStackId;
@@ -817,7 +818,7 @@ export function shuffleStack(store: YjsStore, stackId: string): boolean {
   }
 
   // Get cards array
-  const cards = yMap.get('_cards') as string[];
+  const cards = yMap.get('_cards') as CardEntry[];
   if (!cards || cards.length < 2) {
     console.error(
       `[shuffleStack] Stack ${stackId} has insufficient cards (${cards?.length ?? 0})`,
@@ -927,7 +928,7 @@ export function attachCards(
         sourceYMap.set('_attachedToId', undefined);
       }
 
-      const sourceCards = sourceYMap.get('_cards') as string[];
+      const sourceCards = sourceYMap.get('_cards') as CardEntry[];
       const sourceFaceUp = sourceYMap.get('_faceUp') as boolean;
 
       if (sourceCards && sourceCards.length > 1) {
@@ -1285,10 +1286,31 @@ function findZonePile(store: YjsStore, zoneId: string): string | null {
 }
 
 /**
+ * The discard zone a card entry was tagged with, or null when it has no home:
+ * no tag, or the tagged object is gone or is not a discard zone.
+ */
+export function resolveHomeZone(
+  store: YjsStore,
+  entry: CardEntry,
+): string | null {
+  if (!entry.homeZone) return null;
+  const zoneYMap = store.getObjectYMap(entry.homeZone);
+  if (
+    zoneYMap?.get('_kind') === ObjectKind.Zone &&
+    zoneYMap.get('_meta')?.isDiscardZone === true
+  ) {
+    return entry.homeZone;
+  }
+  return null;
+}
+
+export type DiscardResult = 'routed' | 'no-home' | 'invalid';
+
+/**
  * Route the top card of a stack to its home discard zone.
  *
  * Steps (all in one transaction):
- * 1. Resolve the top card's home zone via findDiscardZoneForCard.
+ * 1. Resolve the top entry's home zone via resolveHomeZone.
  * 2. Extract the top card (if multi-card stack, unstack it; if single-card
  *    stack, use as-is).
  * 3. Set the extracted stack face-up.
@@ -1298,32 +1320,25 @@ function findZonePile(store: YjsStore, zoneId: string): string | null {
  * @param store - YjsStore instance
  * @param sourceStackId - Stack ID whose top card is discarded (never looked up
  *   by card id: card ids can repeat across and within stacks)
- * @returns true if routed successfully, false if stack is missing/empty or its
- *   top card has no home zone
+ * @returns 'routed' on success, 'no-home' when the top card has no valid home
+ *   zone (nothing moves), 'invalid' when the stack is missing or empty
  */
 export function discardCardToZone(
   store: YjsStore,
   sourceStackId: string,
-): boolean {
+): DiscardResult {
   const sourceCards = store.getObjectYMap(sourceStackId)?.get('_cards');
   if (!sourceCards || sourceCards.length === 0) {
     console.warn(
       `[discardCardToZone] Stack ${sourceStackId} not found or empty`,
     );
-    return false;
+    return 'invalid';
   }
 
-  const cardId = sourceCards[0];
-  const zoneId = store.findDiscardZoneForCard(cardId);
-  if (!zoneId) {
-    console.warn(`[discardCardToZone] Card ${cardId} has no home zone`);
-    return false;
-  }
-
-  const zoneYMap = store.getObjectYMap(zoneId);
-  if (!zoneYMap) {
-    console.warn(`[discardCardToZone] Zone ${zoneId} not found`);
-    return false;
+  const zoneId = resolveHomeZone(store, sourceCards[0]);
+  const zoneYMap = zoneId ? store.getObjectYMap(zoneId) : undefined;
+  if (!zoneId || !zoneYMap) {
+    return 'no-home';
   }
   const zonePos = zoneYMap.get('_pos') as { x: number; y: number; r: number };
 
@@ -1366,7 +1381,7 @@ export function discardCardToZone(
     }
   });
 
-  return extractedStackId !== null;
+  return extractedStackId !== null ? 'routed' : 'invalid';
 }
 
 // Discard zone dimensions: slightly larger than a single card.
@@ -1382,12 +1397,12 @@ const DISCARD_ZONE_X_OFFSET =
   CARD_WIDTH / 2 + DISCARD_ZONE_GAP + DISCARD_ZONE_WIDTH / 2;
 
 /**
- * Atomically create a discard zone for a stack and snapshot its membership.
+ * Atomically create a discard zone for a stack and tag its cards.
  *
- * Creates a Zone object offset to the right of the source stack and writes a
- * DiscardZoneEntry whose memberCardIds is a point-in-time snapshot of the
- * stack's _cards array. Both the zone object and the membership entry land in
- * a single doc.transact() so no partial state is visible to peers.
+ * Creates a Zone object offset to the right of the source stack and rewrites
+ * the stack's _cards so every entry carries homeZone = the new zone id (a
+ * newer zone overwrites an older tag). Both land in a single doc.transact() so
+ * no partial state is visible to peers.
  *
  * @param store - YjsStore instance
  * @param sourceStackId - ID of the stack to create a discard zone for
@@ -1429,8 +1444,10 @@ export function createDiscardZoneForStack(
       },
     });
 
-    const entry: DiscardZoneEntry = { memberCardIds: [...sourceCards] };
-    store.setDiscardZone(zoneId, entry);
+    sourceYMap.set(
+      '_cards',
+      sourceCards.map((e) => ({ ...e, homeZone: zoneId })),
+    );
     newZoneId = zoneId;
   });
 
@@ -1512,14 +1529,14 @@ export function resetToTestScene(store: YjsStore): void {
   // Create 5 stacks (cards) - top left area with varying card counts
   const cardCounts = [1, 2, 3, 5, 1]; // Different stack sizes for visual testing
   for (let i = 0; i < 5; i++) {
-    const cards: string[] = [];
+    const codes: string[] = [];
     for (let j = 0; j < cardCounts[i]; j++) {
-      cards.push(`test-card-${i + 1}-${j + 1}`);
+      codes.push(`test-card-${i + 1}-${j + 1}`);
     }
     createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: -300 + i * 80, y: -200, r: 0 },
-      cards,
+      cards: toCardEntries(codes),
       faceUp: true,
       meta: { color: colors[i % colors.length] },
     });

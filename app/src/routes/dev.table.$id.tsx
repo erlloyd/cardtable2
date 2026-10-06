@@ -16,6 +16,7 @@ import {
 } from '../store/YjsActions';
 import {
   ObjectKind,
+  toCardEntries,
   type GameAssets,
   type LoadableEntry,
 } from '@cardtable2/shared';
@@ -160,7 +161,7 @@ function DevTable() {
     const objectId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x, y, r: 0 },
-      cards: ['test-card'],
+      cards: toCardEntries(['test-card']),
       faceUp: true,
     });
 

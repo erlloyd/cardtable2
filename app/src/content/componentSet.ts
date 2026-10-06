@@ -13,6 +13,7 @@ import {
   type TokenObject,
   type Position,
   formatSortKey,
+  toCardEntries,
 } from '@cardtable2/shared';
 import { expandDeck, namespaceDeckCards } from './instantiate';
 import { calculateRowLayout, type LayoutItem } from './componentSetLayout';
@@ -269,7 +270,7 @@ function instantiateStackFromDef(
     _locked: false,
     _selectedBy: null,
     _meta: {},
-    _cards: stack.cards,
+    _cards: toCardEntries(stack.cards),
     _faceUp: stack.faceUp,
   };
 }

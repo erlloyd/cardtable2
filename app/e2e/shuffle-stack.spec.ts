@@ -12,6 +12,11 @@
 import { test, expect } from './_fixtures';
 
 // Define minimal interfaces for type safety in page.evaluate()
+interface CardEntry {
+  code: string;
+  homeZone?: string;
+}
+
 interface TestStore {
   getAllObjects: () => Map<string, TableObject>;
   getObjectYMap: (id: string) => any;
@@ -26,7 +31,7 @@ interface TableObject {
   _kind: string;
   _pos: { x: number; y: number; r: number };
   _selectedBy: string | null;
-  _cards?: string[];
+  _cards?: CardEntry[];
   _faceUp?: boolean;
 }
 
@@ -112,7 +117,7 @@ test.describe('Shuffle Stack E2E', () => {
       return {
         stackPos: { x: viewportX, y: viewportY },
         stackId: String(stackId),
-        originalCards: [...(stack._cards ?? [])],
+        originalCards: (stack._cards ?? []).map((c) => c.code),
       };
     });
 
@@ -157,7 +162,9 @@ test.describe('Shuffle Stack E2E', () => {
           const __TEST_STORE__ = (globalThis as any)
             .__TEST_STORE__ as TestStore;
           const stackYMap = __TEST_STORE__.getObjectYMap(data.stackId);
-          const cards = stackYMap ? stackYMap.get('_cards') : null;
+          const cards: string[] | null = stackYMap
+            ? (stackYMap.get('_cards') as CardEntry[]).map((c) => c.code)
+            : null;
 
           // Check if cards are the same set
           const sameSet =
@@ -166,9 +173,10 @@ test.describe('Shuffle Stack E2E', () => {
             cards.every((card: string) => data.originalCards.includes(card));
 
           // Check if order changed
-          const orderChanged = cards?.some(
-            (card: string, idx: number) => card !== data.originalCards[idx],
-          );
+          const orderChanged =
+            cards?.some(
+              (card: string, idx: number) => card !== data.originalCards[idx],
+            ) ?? false;
 
           return {
             cardCount: cards?.length ?? 0,
@@ -345,7 +353,7 @@ test.describe('Shuffle Stack E2E', () => {
         ids: stacks.slice(1, 4).map(([id]) => String(id)),
         originalCards: stacks
           .slice(1, 4)
-          .map(([, obj]) => [...(obj._cards ?? [])]),
+          .map(([, obj]) => (obj._cards ?? []).map((c) => c.code)),
       };
     });
 
@@ -400,7 +408,9 @@ test.describe('Shuffle Stack E2E', () => {
 
           return data.ids.map((id, idx) => {
             const stackYMap = __TEST_STORE__.getObjectYMap(id);
-            const cards = stackYMap ? stackYMap.get('_cards') : null;
+            const cards: string[] | null = stackYMap
+              ? (stackYMap.get('_cards') as CardEntry[]).map((c) => c.code)
+              : null;
             const original = data.originalCards[idx];
 
             // Check if cards are the same set

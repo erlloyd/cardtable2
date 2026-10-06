@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { YjsStore } from './YjsStore';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 import type { DiscardZoneEntry } from '@cardtable2/shared';
 import {
   createDiscardZoneForStack,
@@ -162,7 +162,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const id = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards,
+      cards: cards.map((code) => ({ code, homeZone: zoneId })),
       faceUp: false,
     });
     if (containerId) {
@@ -172,14 +172,17 @@ describe('discardCardToZone with duplicate card ids', () => {
   }
 
   function cardsOf(id: string): string[] {
-    return store.getObjectYMap(id)!.get('_cards') as string[];
+    return store
+      .getObjectYMap(id)!
+      .get('_cards')!
+      .map((e) => e.code);
   }
 
   function totalCards(): number {
     let total = 0;
     store.forEachObject((yMap) => {
       if (yMap.get('_kind') === ObjectKind.Stack) {
-        total += (yMap.get('_cards') as string[]).length;
+        total += yMap.get('_cards')!.map((e) => e.code).length;
       }
     });
     return total;
@@ -187,8 +190,12 @@ describe('discardCardToZone with duplicate card ids', () => {
 
   beforeEach(() => {
     store = new YjsStore('test-discard-dupes');
-    // Zone whose members are A, B, C (temp stack defines membership)
-    const temp = makeStack(['A', 'B', 'C']);
+    const temp = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['A', 'B', 'C']),
+      faceUp: false,
+    });
     zoneId = createDiscardZoneForStack(store, temp)!;
     store.deleteObject(temp);
   });
@@ -197,7 +204,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const older = makeStack(['A', 'B']);
     const selected = makeStack(['A', 'C']);
 
-    expect(discardCardToZone(store, selected)).toBe(true);
+    expect(discardCardToZone(store, selected)).toBe('routed');
 
     expect(cardsOf(older)).toEqual(['A', 'B']);
     expect(cardsOf(selected)).toEqual(['C']);
@@ -208,7 +215,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const pile = makeStack(['A', 'B'], zoneId);
     const selected = makeStack(['A', 'C']);
 
-    expect(discardCardToZone(store, selected)).toBe(true);
+    expect(discardCardToZone(store, selected)).toBe('routed');
 
     expect(cardsOf(selected)).toEqual(['C']);
     expect(cardsOf(pile)).toEqual(['A', 'A', 'B']);
@@ -218,11 +225,11 @@ describe('discardCardToZone with duplicate card ids', () => {
   it('discards one copy at a time from a stack with duplicate ids', () => {
     const selected = makeStack(['A', 'A', 'B']);
 
-    expect(discardCardToZone(store, selected)).toBe(true);
+    expect(discardCardToZone(store, selected)).toBe('routed');
     expect(cardsOf(selected)).toEqual(['A', 'B']);
     expect(totalCards()).toBe(3);
 
-    expect(discardCardToZone(store, selected)).toBe(true);
+    expect(discardCardToZone(store, selected)).toBe('routed');
     expect(cardsOf(selected)).toEqual(['B']);
     expect(totalCards()).toBe(3);
   });

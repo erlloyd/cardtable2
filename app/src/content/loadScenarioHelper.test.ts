@@ -8,7 +8,11 @@ import type {
   LoadableEntry,
   ScenarioCounterSpawn,
 } from '@cardtable2/shared';
-import { COUNTER_LOADABLE_TYPE, ObjectKind } from '@cardtable2/shared';
+import {
+  COUNTER_LOADABLE_TYPE,
+  ObjectKind,
+  toCardEntries,
+} from '@cardtable2/shared';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { SCENARIO_OBJECT_ADD_FAILED } from '../constants/errorIds';
 import { getLoadableEntries, clearLoadableEntries } from './loadablesRegistry';
@@ -37,7 +41,7 @@ describe('loadScenarioContent', () => {
       _locked: false,
       _selectedBy: null,
       _meta: {},
-      _cards: ['CARD001'],
+      _cards: toCardEntries(['CARD001']),
       _faceUp: true,
     };
 
@@ -49,7 +53,7 @@ describe('loadScenarioContent', () => {
       _locked: false,
       _selectedBy: null,
       _meta: {},
-      _cards: ['CARD002'],
+      _cards: toCardEntries(['CARD002']),
       _faceUp: false,
     };
 
@@ -181,7 +185,7 @@ describe('loadScenarioContent', () => {
         _locked: false,
         _selectedBy: null,
         _meta: {},
-        _cards: ['CARD001'],
+        _cards: toCardEntries(['CARD001']),
         _faceUp: true,
       });
 
@@ -193,7 +197,7 @@ describe('loadScenarioContent', () => {
         _locked: false,
         _selectedBy: null,
         _meta: {},
-        _cards: ['CARD002'],
+        _cards: toCardEntries(['CARD002']),
         _faceUp: false,
       });
     });

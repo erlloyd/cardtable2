@@ -7,7 +7,11 @@ import {
   detachCard,
   detachAllCards,
 } from './YjsActions';
-import { ObjectKind, type StackObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  toCardEntries,
+  type StackObject,
+} from '@cardtable2/shared';
 
 describe('Card-on-Card Attachment Actions', () => {
   let store: YjsStore;
@@ -25,14 +29,14 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero-card'],
+        cards: toCardEntries(['hero-card']),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['upgrade-card'],
+        cards: toCardEntries(['upgrade-card']),
         faceUp: true,
       });
 
@@ -56,14 +60,14 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero-card'],
+        cards: toCardEntries(['hero-card']),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['upgrade-1', 'upgrade-2', 'upgrade-3'],
+        cards: toCardEntries(['upgrade-1', 'upgrade-2', 'upgrade-3']),
         faceUp: true,
       });
 
@@ -91,21 +95,21 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero-card'],
+        cards: toCardEntries(['hero-card']),
         faceUp: true,
       });
 
       const src1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['up-1'],
+        cards: toCardEntries(['up-1']),
         faceUp: true,
       });
 
       const src2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['up-2'],
+        cards: toCardEntries(['up-2']),
         faceUp: true,
       });
 
@@ -121,7 +125,7 @@ describe('Card-on-Card Attachment Actions', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card'],
+        cards: toCardEntries(['card']),
         faceUp: true,
       });
 
@@ -133,21 +137,21 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero'],
+        cards: toCardEntries(['hero']),
         faceUp: true,
       });
 
       const src1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['up-1'],
+        cards: toCardEntries(['up-1']),
         faceUp: true,
       });
 
       const src2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['up-2'],
+        cards: toCardEntries(['up-2']),
         faceUp: true,
       });
 
@@ -171,14 +175,14 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero'],
+        cards: toCardEntries(['hero']),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['upgrade'],
+        cards: toCardEntries(['upgrade']),
         faceUp: true,
       });
 
@@ -203,28 +207,28 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero'],
+        cards: toCardEntries(['hero']),
         faceUp: true,
       });
 
       const src1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['up-1'],
+        cards: toCardEntries(['up-1']),
         faceUp: true,
       });
 
       const src2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['up-2'],
+        cards: toCardEntries(['up-2']),
         faceUp: true,
       });
 
       const src3 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 150, y: 150, r: 0 },
-        cards: ['up-3'],
+        cards: toCardEntries(['up-3']),
         faceUp: true,
       });
 
@@ -250,7 +254,7 @@ describe('Card-on-Card Attachment Actions', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card'],
+        cards: toCardEntries(['card']),
         faceUp: true,
       });
 
@@ -269,21 +273,21 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero'],
+        cards: toCardEntries(['hero']),
         faceUp: true,
       });
 
       const src1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['up-1'],
+        cards: toCardEntries(['up-1']),
         faceUp: true,
       });
 
       const src2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['up-2'],
+        cards: toCardEntries(['up-2']),
         faceUp: true,
       });
 
@@ -307,7 +311,7 @@ describe('Card-on-Card Attachment Actions', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card'],
+        cards: toCardEntries(['card']),
         faceUp: true,
       });
 
@@ -321,14 +325,14 @@ describe('Card-on-Card Attachment Actions', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['hero'],
+        cards: toCardEntries(['hero']),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['upgrade'],
+        cards: toCardEntries(['upgrade']),
         faceUp: true,
       });
 

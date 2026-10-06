@@ -16,7 +16,11 @@ import type {
   LoadableProviderSource,
   TableObject,
 } from '@cardtable2/shared';
-import { COUNTER_LOADABLE_TYPE, ObjectKind } from '@cardtable2/shared';
+import {
+  COUNTER_LOADABLE_TYPE,
+  ObjectKind,
+  toCardEntries,
+} from '@cardtable2/shared';
 import {
   handleLoadSelection,
   readProviderLabels,
@@ -238,7 +242,7 @@ describe('handleLoadSelection — additive + card', () => {
     expect(YjsActions.createObject).toHaveBeenCalledTimes(1);
     const opts = vi.mocked(YjsActions.createObject).mock.calls[0][1];
     expect(opts.kind).toBe(ObjectKind.Stack);
-    expect(opts.cards).toEqual(['01001']);
+    expect(opts.cards).toEqual(toCardEntries(['01001']));
     // viewport center is (500,400) before jitter; jitter is bounded by
     // DEFAULT_JITTER_RADIUS (50). Using the placement primitive directly
     // ensures we landed within (500±50, 400±50).
@@ -347,7 +351,9 @@ describe('handleLoadSelection — additive + card-set', () => {
       { store, getViewportState },
     );
     const opts = vi.mocked(YjsActions.createObject).mock.calls[0][1];
-    expect(opts.cards).toEqual(['01001', '01002', '01002', '01003']);
+    expect(opts.cards).toEqual(
+      toCardEntries(['01001', '01002', '01002', '01003']),
+    );
   });
 
   it('also accepts the static-shape `cardSet` field', async () => {
@@ -373,7 +379,7 @@ describe('handleLoadSelection — additive + card-set', () => {
       { store, getViewportState },
     );
     const opts = vi.mocked(YjsActions.createObject).mock.calls[0][1];
-    expect(opts.cards).toEqual(['01025', '01026']);
+    expect(opts.cards).toEqual(toCardEntries(['01025', '01026']));
   });
 
   it('warns when the cardSet is missing from gameAssets', async () => {
@@ -629,7 +635,7 @@ describe('handleLoadSelection — additive + provider', () => {
               _locked: false,
               _selectedBy: null,
               _meta: {},
-              _cards: ['01001'],
+              _cards: toCardEntries(['01001']),
               _faceUp: true,
             } as TableObject,
           ],

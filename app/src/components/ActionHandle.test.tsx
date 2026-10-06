@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ActionHandle } from './ActionHandle';
 import type { StackObject } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
 import type { YjsStore } from '../store/YjsStore';
@@ -59,7 +59,7 @@ describe('ActionHandle', () => {
       _containerId: null,
       _locked: false,
       _meta: {},
-      _cards: ['card1'],
+      _cards: toCardEntries(['card1']),
       _faceUp: true,
     };
 

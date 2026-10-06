@@ -9,6 +9,7 @@ import type {
   AwarenessState,
   ObjectKind,
   DiscardZoneEntry,
+  CardEntry,
 } from '@cardtable2/shared';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
 import { runMigrations } from './migrations';
@@ -31,7 +32,7 @@ export interface ObjectChanges {
   removed: Array<string>;
 }
 
-const NO_HAND_CARDS: string[] = [];
+const NO_HAND_CARDS: CardEntry[] = [];
 
 const INDEXEDDB_SYNC_TIMEOUT_MS = 5000;
 
@@ -894,12 +895,12 @@ export class YjsStore {
    * The returned array is referentially stable until the hand's cards change
    * (writes replace the array), so it can be a useSyncExternalStore snapshot.
    * Callers must not mutate it.
-   * @returns Array of card IDs, or empty array if hand not found
+   * @returns Array of card entries, or empty array if hand not found
    */
-  getHandCards(handId: string): string[] {
+  getHandCards(handId: string): CardEntry[] {
     const handMap = this.hands.get(handId);
     if (!handMap) return NO_HAND_CARDS;
-    return (handMap.get('cards') as string[]) ?? NO_HAND_CARDS;
+    return (handMap.get('cards') as CardEntry[]) ?? NO_HAND_CARDS;
   }
 
   /**
@@ -914,15 +915,15 @@ export class YjsStore {
   /**
    * Add a card to a hand at the given index (or append).
    */
-  addCardToHand(handId: string, cardId: string, index?: number): void {
+  addCardToHand(handId: string, entry: CardEntry, index?: number): void {
     const handMap = this.hands.get(handId);
     if (!handMap) return;
     this.doc.transact(() => {
-      const cards = [...((handMap.get('cards') as string[]) ?? [])];
+      const cards = [...((handMap.get('cards') as CardEntry[]) ?? [])];
       if (index !== undefined && index >= 0 && index <= cards.length) {
-        cards.splice(index, 0, cardId);
+        cards.splice(index, 0, entry);
       } else {
-        cards.push(cardId);
+        cards.push(entry);
       }
       handMap.set('cards', cards);
     });
@@ -930,14 +931,14 @@ export class YjsStore {
 
   /**
    * Remove a card from a hand at the given index.
-   * @returns The removed card ID, or null if not found
+   * @returns The removed card entry, or null if not found
    */
-  removeCardFromHand(handId: string, cardIndex: number): string | null {
+  removeCardFromHand(handId: string, cardIndex: number): CardEntry | null {
     const handMap = this.hands.get(handId);
     if (!handMap) return null;
-    const cards = [...((handMap.get('cards') as string[]) ?? [])];
+    const cards = [...((handMap.get('cards') as CardEntry[]) ?? [])];
     if (cardIndex < 0 || cardIndex >= cards.length) return null;
-    let removed: string | null = null;
+    let removed: CardEntry | null = null;
     this.doc.transact(() => {
       removed = cards.splice(cardIndex, 1)[0];
       handMap.set('cards', cards);

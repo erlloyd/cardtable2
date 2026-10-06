@@ -6,6 +6,7 @@
  */
 
 import type {
+  CardEntry,
   MainToRendererMessage,
   StackObject,
   TableObject,
@@ -312,8 +313,8 @@ function updateObjectVisual(
   let isShuffle = false;
   if (hasCards && prevHasCards && !faceUpChanged) {
     try {
-      const currentCards = (obj as { _cards: string[] })._cards;
-      const prevCards = (prevObj as { _cards: string[] })._cards;
+      const currentCards = (obj as { _cards: CardEntry[] })._cards;
+      const prevCards = (prevObj as { _cards: CardEntry[] })._cards;
 
       // Validate arrays
       if (!Array.isArray(currentCards) || !Array.isArray(prevCards)) {
@@ -328,11 +329,13 @@ function updateObjectVisual(
         );
       } else {
         // Check if cards were shuffled (same set, different order)
+        // Compare by code: entries arrive as fresh clones, never reference-equal
+        const prevCodes = prevCards.map((entry) => entry.code);
         isShuffle =
           currentCards.length === prevCards.length &&
           currentCards.length >= 2 &&
-          currentCards.every((card) => prevCards.includes(card)) &&
-          currentCards.some((card, idx) => card !== prevCards[idx]);
+          currentCards.every((card) => prevCodes.includes(card.code)) &&
+          currentCards.some((card, idx) => card.code !== prevCodes[idx]);
       }
     } catch (error) {
       console.error('[ObjectsHandler] Shuffle detection failed', {

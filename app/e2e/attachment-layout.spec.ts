@@ -109,7 +109,7 @@ async function seedTwoStacks(
       _locked: false,
       _selectedBy: null,
       _meta: {},
-      _cards: ['e2e-parent-card'],
+      _cards: [{ code: 'e2e-parent-card' }],
       _faceUp: true,
     });
     store.setObject(childId, {
@@ -120,7 +120,7 @@ async function seedTwoStacks(
       _locked: false,
       _selectedBy: null,
       _meta: {},
-      _cards: ['e2e-child-card'],
+      _cards: [{ code: 'e2e-child-card' }],
       _faceUp: true,
     });
 

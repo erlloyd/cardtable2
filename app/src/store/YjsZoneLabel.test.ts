@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 import { YjsStore } from './YjsStore';
 import {
   createDiscardZoneForStack,
@@ -16,7 +16,7 @@ describe('setZoneLabel', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-a'],
+      cards: toCardEntries(['card-a']),
     });
     const created = createDiscardZoneForStack(store, stackId);
     if (!created) throw new Error('discard zone was not created');
@@ -48,7 +48,7 @@ describe('setZoneLabel', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-b'],
+      cards: toCardEntries(['card-b']),
     });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(setZoneLabel(store, stackId, 'X')).toBe(false);

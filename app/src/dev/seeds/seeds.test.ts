@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { YjsStore } from '../../store/YjsStore';
 import { applySeed, listSeeds, SEED_REGISTRY } from './index';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 
 describe('seeds', () => {
   let store: YjsStore;
@@ -76,7 +76,7 @@ describe('seeds', () => {
       const [id] = result.createdIds;
       const obj = store.objects.get(id);
       expect(obj?.get('_kind')).toBe(ObjectKind.Stack);
-      expect(obj?.get('_cards')).toEqual(['seed-card-1']);
+      expect(obj?.get('_cards')).toEqual(toCardEntries(['seed-card-1']));
     });
 
     it('applies stack-of-5 seed creating a 5-card stack', () => {

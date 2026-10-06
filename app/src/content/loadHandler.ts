@@ -22,6 +22,7 @@
 import {
   COUNTER_LOADABLE_TYPE,
   ObjectKind,
+  toCardEntries,
   type GameAssets,
   type LoadableEntry,
   type LoadableProviderLabels,
@@ -542,7 +543,7 @@ function instantiateCardStack(
   const id = createObject(store, {
     kind: ObjectKind.Stack,
     pos: position,
-    cards,
+    cards: toCardEntries(cards),
     faceUp: true,
   });
   dbg(

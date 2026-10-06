@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore } from './YjsStore';
 import type { TableObject, StackObject } from '@cardtable2/shared';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 import * as Y from 'yjs';
 import {
   Awareness,
@@ -92,7 +92,7 @@ describe('YjsStore', () => {
       _locked: false,
       _selectedBy: null,
       _meta: {},
-      _cards: ['card-1', 'card-2'],
+      _cards: toCardEntries(['card-1', 'card-2']),
       _faceUp: true,
     };
 
@@ -182,7 +182,7 @@ describe('YjsStore', () => {
       _locked: false,
       _selectedBy: null,
       _meta: {},
-      _cards: ['card-1'],
+      _cards: toCardEntries(['card-1']),
       _faceUp: true,
     };
 

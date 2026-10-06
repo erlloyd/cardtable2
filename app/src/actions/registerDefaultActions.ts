@@ -25,6 +25,15 @@ import {
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
 import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
+
+/** The single user-visible surface for "discard found no home zone". */
+function notifyNoDiscardZone(count: number): void {
+  const subject = count === 1 ? '1 card has' : `${count} cards have`;
+  window.alert(
+    `${subject} no discard zone. Use Create Discard Zone on its deck first.`,
+  );
+}
+
 /**
  * Register default actions that are available in both table and dev routes.
  * This ensures consistent functionality across all table views.
@@ -355,21 +364,16 @@ export function registerDefaultActions(): () => void {
     shortcut: 'X',
     category: CARD_ACTIONS,
     description: 'Route selected card(s) to their home discard zone',
-    isAvailable: (ctx) => {
-      if (ctx.selection.count < 1 || !ctx.selection.hasStacks) return false;
-      return ctx.selection.ids.every((id) => {
-        const yMap = ctx.store.getObjectYMap(id);
-        if (!yMap) return false;
-        const cards = yMap.get('_cards');
-        if (!cards || cards.length === 0) return false;
-        // Check top card's home zone
-        return ctx.store.findDiscardZoneForCard(cards[0]) !== null;
-      });
-    },
+    isAvailable: (ctx) =>
+      ctx.selection.ids.some(
+        (id) => (ctx.store.getObjectYMap(id)?.get('_cards')?.length ?? 0) > 0,
+      ),
     execute: (ctx) => {
+      let noHome = 0;
       for (const id of ctx.selection.ids) {
-        discardCardToZone(ctx.store, id);
+        if (discardCardToZone(ctx.store, id) === 'no-home') noHome++;
       }
+      if (noHome > 0) notifyNoDiscardZone(noHome);
     },
   });
 

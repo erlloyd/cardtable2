@@ -1,5 +1,5 @@
 import type { YjsStore } from './YjsStore';
-import { ObjectKind, type Position } from '@cardtable2/shared';
+import { ObjectKind, type CardEntry, type Position } from '@cardtable2/shared';
 import { createObject } from './YjsActions';
 
 /**
@@ -16,7 +16,7 @@ import { createObject } from './YjsActions';
  * - Deletes the stack if it was the last card
  * - Adds the card to the hand at the specified index (or appends)
  *
- * @returns The extracted card ID, or null if the operation failed
+ * @returns The extracted card entry, or null if the operation failed
  */
 export function moveCardToHand(
   store: YjsStore,
@@ -24,7 +24,7 @@ export function moveCardToHand(
   cardIndex: number,
   handId: string,
   handInsertIndex?: number,
-): string | null {
+): CardEntry | null {
   const yMap = store.getObjectYMap(stackId);
   if (!yMap) {
     console.warn(`[moveCardToHand] Stack ${stackId} not found`);
@@ -58,10 +58,10 @@ export function moveCardToHand(
     return null;
   }
 
-  let extractedCard: string | null = null;
+  let extractedCard: CardEntry | null = null;
 
   store.getDoc().transact(() => {
-    const currentCards = [...(yMap.get('_cards') as string[])];
+    const currentCards = [...(yMap.get('_cards') as CardEntry[])];
     extractedCard = currentCards.splice(cardIndex, 1)[0];
 
     if (currentCards.length === 0) {
@@ -70,7 +70,7 @@ export function moveCardToHand(
       yMap.set('_cards', currentCards);
     }
 
-    const handCards = [...((handMap.get('cards') as string[]) ?? [])];
+    const handCards = [...((handMap.get('cards') as CardEntry[]) ?? [])];
     if (
       handInsertIndex !== undefined &&
       handInsertIndex >= 0 &&
@@ -105,13 +105,13 @@ export function moveCardToHand(
  * - Deletes the stack from the board
  * - Appends all cards to the hand
  *
- * @returns The extracted card IDs, or empty array if the operation failed
+ * @returns The extracted card entries, or empty array if the operation failed
  */
 export function moveAllCardsToHand(
   store: YjsStore,
   stackId: string,
   handId: string,
-): string[] {
+): CardEntry[] {
   const yMap = store.getObjectYMap(stackId);
   if (!yMap) {
     console.warn(`[moveAllCardsToHand] Stack ${stackId} not found`);
@@ -143,7 +143,7 @@ export function moveAllCardsToHand(
   store.getDoc().transact(() => {
     store.deleteObject(stackId);
 
-    const handCards = [...((handMap.get('cards') as string[]) ?? [])];
+    const handCards = [...((handMap.get('cards') as CardEntry[]) ?? [])];
     handCards.push(...extractedCards);
     handMap.set('cards', handCards);
   });
@@ -181,7 +181,7 @@ export function moveCardToBoard(
     return null;
   }
 
-  const handCards = (handMap.get('cards') as string[]) ?? [];
+  const handCards = (handMap.get('cards') as CardEntry[]) ?? [];
   if (cardIndex < 0 || cardIndex >= handCards.length) {
     console.warn(
       `[moveCardToBoard] Card index ${cardIndex} out of range for hand ${handId} (${handCards.length} cards)`,
@@ -192,14 +192,14 @@ export function moveCardToBoard(
   let newStackId: string | null = null;
 
   store.getDoc().transact(() => {
-    const cards = [...(handMap.get('cards') as string[])];
-    const cardId = cards.splice(cardIndex, 1)[0];
+    const cards = [...(handMap.get('cards') as CardEntry[])];
+    const entry = cards.splice(cardIndex, 1)[0];
     handMap.set('cards', cards);
 
     newStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos,
-      cards: [cardId],
+      cards: [entry],
       faceUp,
     });
   });
@@ -239,7 +239,7 @@ export function reorderCardInHand(
     return;
   }
 
-  const handCards = (handMap.get('cards') as string[]) ?? [];
+  const handCards = (handMap.get('cards') as CardEntry[]) ?? [];
   if (fromIndex < 0 || fromIndex >= handCards.length) {
     console.warn(
       `[reorderCardInHand] fromIndex ${fromIndex} out of range (${handCards.length} cards)`,
@@ -250,7 +250,7 @@ export function reorderCardInHand(
   const clampedTo = Math.max(0, Math.min(toIndex, handCards.length - 1));
 
   store.getDoc().transact(() => {
-    const cards = [...(handMap.get('cards') as string[])];
+    const cards = [...(handMap.get('cards') as CardEntry[])];
     const [card] = cards.splice(fromIndex, 1);
     cards.splice(clampedTo, 0, card);
     handMap.set('cards', cards);

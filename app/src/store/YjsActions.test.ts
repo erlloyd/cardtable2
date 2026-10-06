@@ -27,7 +27,6 @@ import {
   type StackObject,
   type TableObject,
   parseSortKeyPrefix,
-  type DiscardZoneEntry,
 } from '@cardtable2/shared';
 
 describe('YjsActions - createObject', () => {
@@ -3293,7 +3292,7 @@ describe('createDiscardZoneForStack', () => {
     expect(meta.isDiscardZone).toBe(true);
   });
 
-  it('snapshots member card ids matching the stack _cards at creation time', () => {
+  it('tags every card in the stack with homeZone = the new zone id', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
@@ -3304,15 +3303,15 @@ describe('createDiscardZoneForStack', () => {
     const newZoneId = createDiscardZoneForStack(store, stackId);
     expect(newZoneId).not.toBeNull();
 
-    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
-    expect(entry).toBeDefined();
-    expect(new Set(entry.memberCardIds)).toEqual(
-      new Set(['card-a', 'card-b', 'card-c', 'card-d', 'card-e']),
+    expect(store.getObjectYMap(stackId)!.get('_cards')).toEqual(
+      ['card-a', 'card-b', 'card-c', 'card-d', 'card-e'].map((code) => ({
+        code,
+        homeZone: newZoneId,
+      })),
     );
-    expect(entry.memberCardIds).toHaveLength(5);
   });
 
-  it('writes a DiscardZoneEntry keyed by the new zone id', () => {
+  it('does not write a discardZones entry', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 50, y: 50, r: 0 },
@@ -3323,7 +3322,27 @@ describe('createDiscardZoneForStack', () => {
     const newZoneId = createDiscardZoneForStack(store, stackId);
     expect(newZoneId).not.toBeNull();
 
-    expect(store.getDiscardZone(newZoneId!)).toBeDefined();
+    expect(store.getDiscardZone(newZoneId!)).toBeUndefined();
+  });
+
+  it('retags cards that already have a home (newest zone wins)', () => {
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['card-1', 'card-2']),
+      faceUp: true,
+    });
+
+    const first = createDiscardZoneForStack(store, stackId)!;
+    const second = createDiscardZoneForStack(store, stackId)!;
+
+    expect(second).not.toBe(first);
+    expect(
+      store
+        .getObjectYMap(stackId)!
+        .get('_cards')!
+        .map((e) => e.homeZone),
+    ).toEqual([second, second]);
   });
 
   it('places the zone immediately to the right of the source stack', () => {
@@ -3367,28 +3386,7 @@ describe('createDiscardZoneForStack', () => {
     expect(meta.height).toBe(96);
   });
 
-  it('snapshot is independent of subsequent stack mutations', () => {
-    const stackId = createObject(store, {
-      kind: ObjectKind.Stack,
-      pos: { x: 0, y: 0, r: 0 },
-      cards: toCardEntries(['card-1', 'card-2']),
-      faceUp: true,
-    });
-
-    const newZoneId = createDiscardZoneForStack(store, stackId);
-    expect(newZoneId).not.toBeNull();
-
-    // Mutate the source stack after zone creation
-    store
-      .getObjectYMap(stackId)!
-      .set('_cards', toCardEntries(['card-1', 'card-2', 'card-3']));
-
-    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
-    expect(entry.memberCardIds).toHaveLength(2);
-    expect(entry.memberCardIds).not.toContain('card-3');
-  });
-
-  it('creates a zone with empty memberCardIds for an empty stack', () => {
+  it('creates a zone and leaves an empty stack empty', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
@@ -3398,9 +3396,7 @@ describe('createDiscardZoneForStack', () => {
 
     const newZoneId = createDiscardZoneForStack(store, stackId);
     expect(newZoneId).not.toBeNull();
-
-    const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
-    expect(entry.memberCardIds).toEqual([]);
+    expect(store.getObjectYMap(stackId)!.get('_cards')).toEqual([]);
   });
 });
 
@@ -3481,26 +3477,174 @@ describe('discardCardToZone', () => {
     return { stackId, zoneId };
   }
 
-  it('returns false when the card has no home zone', () => {
+  it('returns no-home and moves nothing for an untagged card', () => {
     const orphanStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: toCardEntries(['orphan-card']),
+      cards: toCardEntries(['orphan-card', 'other']),
       faceUp: false,
     });
-    expect(discardCardToZone(store, orphanStackId)).toBe(false);
+    expect(discardCardToZone(store, orphanStackId)).toBe('no-home');
+    expect(store.getObjectYMap(orphanStackId)!.get('_cards')).toEqual(
+      toCardEntries(['orphan-card', 'other']),
+    );
   });
 
-  it('returns false for a stack id that does not exist', () => {
+  it('returns no-home and moves nothing when the tagged zone was deleted', () => {
+    const { stackId, zoneId } = setupSourceAndZone(['card-1', 'card-2']);
+    store.deleteObject(zoneId);
+
+    expect(discardCardToZone(store, stackId)).toBe('no-home');
+    expect(
+      store
+        .getObjectYMap(stackId)!
+        .get('_cards')!
+        .map((e) => e.code),
+    ).toEqual(['card-1', 'card-2']);
+  });
+
+  it('returns no-home when the tagged object is not a discard zone', () => {
+    const plainZone = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+    const stackId = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: [{ code: 'card-1', homeZone: plainZone }],
+      faceUp: false,
+    });
+    expect(discardCardToZone(store, stackId)).toBe('no-home');
+  });
+
+  it('returns invalid for a stack id that does not exist', () => {
     setupSourceAndZone(['card-1']);
-    expect(discardCardToZone(store, 'no-such-stack')).toBe(false);
+    expect(discardCardToZone(store, 'no-such-stack')).toBe('invalid');
+  });
+
+  it('the discarded card keeps its homeZone tag in the pile', () => {
+    const { stackId, zoneId } = setupSourceAndZone(['card-1']);
+    expect(discardCardToZone(store, stackId)).toBe('routed');
+
+    const pileId = store.filterObjects(
+      (yMap) => yMap.get('_containerId') === zoneId,
+    )[0];
+    expect(store.getObjectYMap(pileId)!.get('_cards')).toEqual([
+      { code: 'card-1', homeZone: zoneId },
+    ]);
+  });
+
+  it('routes two cards sharing a code to their own origin zones (split and merge)', () => {
+    const originA = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['dup', 'a-only']),
+      faceUp: true,
+    });
+    const originB = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 400, r: 0 },
+      cards: toCardEntries(['dup', 'b-only']),
+      faceUp: true,
+    });
+    const zoneA = createDiscardZoneForStack(store, originA)!;
+    const zoneB = createDiscardZoneForStack(store, originB)!;
+
+    // Split one 'dup' off each origin and merge both into a third stack
+    const splitA = unstackCard(store, originA, { x: 900, y: 0, r: 0 })!;
+    const splitB = unstackCard(store, originB, { x: 900, y: 400, r: 0 })!;
+    const mixed = stackObjects(store, [splitB], splitA);
+    expect(mixed).toBeDefined();
+    const mixedCards = store.getObjectYMap(splitA)!.get('_cards')!;
+    expect(new Set(mixedCards.map((e) => e.homeZone))).toEqual(
+      new Set([zoneA, zoneB]),
+    );
+
+    const firstHome = mixedCards[0].homeZone;
+    const secondHome = mixedCards[1].homeZone;
+    expect(discardCardToZone(store, splitA)).toBe('routed');
+    expect(discardCardToZone(store, splitA)).toBe('routed');
+
+    const pileCodes = (zoneId: string) =>
+      store
+        .filterObjects((yMap) => yMap.get('_containerId') === zoneId)
+        .flatMap((id) => store.getObjectYMap(id)!.get('_cards')!)
+        .map((e) => `${e.code}@${e.homeZone}`);
+    expect(pileCodes(firstHome!)).toEqual([`dup@${firstHome}`]);
+    expect(pileCodes(secondHome!)).toEqual([`dup@${secondHome}`]);
+  });
+
+  it('merging a tagged card into a stack with its own zone does not retag it', () => {
+    const deckA = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['a-card']),
+      faceUp: true,
+    });
+    const deckB = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 400, r: 0 },
+      cards: toCardEntries(['b-card']),
+      faceUp: true,
+    });
+    const zoneA = createDiscardZoneForStack(store, deckA)!;
+    createDiscardZoneForStack(store, deckB);
+
+    stackObjects(store, [deckA], deckB);
+
+    expect(store.getObjectYMap(deckB)!.get('_cards')!).toContainEqual({
+      code: 'a-card',
+      homeZone: zoneA,
+    });
+  });
+
+  it('encounter case: card tagged by zone A merged into shuffled deck B still discards to A; B cards go to B', () => {
+    const deckA = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['a-card']),
+      faceUp: false,
+    });
+    const deckB = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 400, r: 0 },
+      cards: toCardEntries(['b1', 'b2', 'b3']),
+      faceUp: false,
+    });
+    const zoneA = createDiscardZoneForStack(store, deckA)!;
+    const zoneB = createDiscardZoneForStack(store, deckB)!;
+
+    stackObjects(store, [deckA], deckB);
+    shuffleStack(store, deckB);
+
+    const discarded: Record<string, string> = {};
+    for (let i = 0; i < 4; i++) {
+      const top = store.getObjectYMap(deckB)!.get('_cards')![0];
+      expect(discardCardToZone(store, deckB)).toBe('routed');
+      discarded[top.code] = top.homeZone!;
+    }
+
+    expect(discarded).toEqual({
+      'a-card': zoneA,
+      b1: zoneB,
+      b2: zoneB,
+      b3: zoneB,
+    });
+    const zoneOf = (code: string, zoneId: string) =>
+      store
+        .filterObjects((yMap) => yMap.get('_containerId') === zoneId)
+        .flatMap((id) => store.getObjectYMap(id)!.get('_cards')!)
+        .some((e) => e.code === code);
+    expect(zoneOf('a-card', zoneA)).toBe(true);
+    expect(zoneOf('a-card', zoneB)).toBe(false);
+    expect(zoneOf('b1', zoneB)).toBe(true);
   });
 
   it('routes a single-card stack to an empty zone (new pile path)', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
 
     const result = discardCardToZone(store, stackId);
-    expect(result).toBe(true);
+    expect(result).toBe('routed');
 
     // Original stack should be gone (or at least card-1 is in the zone)
     void stackId;
@@ -3566,7 +3710,7 @@ describe('discardCardToZone', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
 
     // First discard: card-1 moves to zone, gets _containerId=zoneId
-    expect(discardCardToZone(store, stackId)).toBe(true);
+    expect(discardCardToZone(store, stackId)).toBe('routed');
 
     // Pile exists in zone
     const pileAfterDiscard = store.filterObjects(
@@ -3593,7 +3737,7 @@ describe('discardCardToZone', () => {
     expect(pileAfterDragOut.length).toBe(0);
 
     // Second discard: must re-route to zone, NOT just flip the card in place
-    expect(discardCardToZone(store, pileId)).toBe(true);
+    expect(discardCardToZone(store, pileId)).toBe('routed');
 
     const pileAfterRediscard = store.filterObjects(
       (yMap) =>
@@ -3644,18 +3788,21 @@ describe('discardCardToZone', () => {
     });
     const zoneId = createDiscardZoneForStack(store, sourceId)!;
 
-    // Move card-member into a different stack (foreign stack)
+    // Move the tagged card into a different stack (foreign stack)
     const foreignStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 500, y: 500, r: 0 },
-      cards: toCardEntries(['card-member', 'other-card']),
+      cards: [
+        { code: 'card-member', homeZone: zoneId },
+        ...toCardEntries(['other-card']),
+      ],
       faceUp: false,
     });
     // Delete the original source stack (card-member is now in foreign)
     store.deleteObject(sourceId);
 
     const result = discardCardToZone(store, foreignStackId);
-    expect(result).toBe(true);
+    expect(result).toBe('routed');
 
     // Foreign stack should be smaller (card-member extracted)
     const foreignYMap = store.getObjectYMap(foreignStackId);

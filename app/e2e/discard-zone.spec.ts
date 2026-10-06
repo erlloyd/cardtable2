@@ -4,11 +4,12 @@
  * Covers ct-ecl acceptance criteria:
  * - First discard into empty zone creates pile face-up with _containerId === zoneId
  * - Second discard merges onto existing pile (pile grows, stays face-up)
- * - Member card sitting in a foreign stack routes to home zone (proves card-id routing)
+ * - Member card sitting in a foreign stack routes to home zone (proves per-card routing)
+ * - A card with no home zone raises a visible alert and moves nothing
  *
  * Strategy:
  * - Seed stacks via __TEST_STORE__.setObject (deterministic ids)
- * - Seed zone membership via __TEST_STORE__.setDiscardZone
+ * - Seed home-zone tags on the card entries ({ code, homeZone })
  * - Select a stack via __ctTest.click (canvas pointer event)
  * - Trigger 'Discard' action via keyboard shortcut 'X'
  * - Assert via __TEST_STORE__ that card landed face-up in the zone's pile
@@ -24,17 +25,20 @@ interface PageTestStore {
   getObjectYMap: (id: string) => { get: (k: string) => unknown } | undefined;
   clearAllObjects: () => void;
   waitForReady: () => Promise<void>;
-  setDiscardZone: (zoneId: string, entry: { memberCardIds: string[] }) => void;
-  findDiscardZoneForCard: (cardId: string) => string | null;
   filterObjects: (
     pred: (yMap: { get: (k: string) => unknown }, id: string) => boolean,
   ) => string[];
 }
 
+interface CardEntry {
+  code: string;
+  homeZone?: string;
+}
+
 interface StoreObject {
   _kind: string;
   _pos: { x: number; y: number; r: number };
-  _cards?: string[];
+  _cards?: CardEntry[];
   _faceUp?: boolean;
   _containerId?: string | null;
   _sortKey?: string;
@@ -90,7 +94,7 @@ test.describe('Discard Zone — store-level loop', () => {
   test('first discard into empty zone creates face-up pile with containerId', async ({
     page,
   }) => {
-    // Seed: one stack, one zone, membership linking them
+    // Seed: one stack whose card is tagged with the zone's id
     await page.evaluate(() => {
       const g = globalThis as unknown as PageGlobals;
       const store = g.__TEST_STORE__!;
@@ -103,7 +107,7 @@ test.describe('Discard Zone — store-level loop', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['e2e-card-a'],
+        _cards: [{ code: 'e2e-card-a', homeZone: 'e2e-zone' }],
         _faceUp: false,
       });
       store.setObject('e2e-zone', {
@@ -115,7 +119,6 @@ test.describe('Discard Zone — store-level loop', () => {
         _containerId: null,
         _meta: { isDiscardZone: true, label: 'Discard' },
       });
-      store.setDiscardZone('e2e-zone', { memberCardIds: ['e2e-card-a'] });
     });
 
     // Select the source stack via canvas click
@@ -141,7 +144,7 @@ test.describe('Discard Zone — store-level loop', () => {
         if (
           obj._kind === 'stack' &&
           obj._containerId === 'e2e-zone' &&
-          obj._cards?.includes('e2e-card-a') &&
+          obj._cards?.some((e) => e.code === 'e2e-card-a') &&
           obj._faceUp === true
         ) {
           return { found: true };
@@ -151,6 +154,51 @@ test.describe('Discard Zone — store-level loop', () => {
     });
 
     expect(result.found).toBe(true);
+  });
+
+  test('discard on a card with no home zone shows an alert and moves nothing', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.setObject('e2e-nohome-stack', {
+        _kind: 'stack',
+        _pos: { x: 0, y: 0, r: 0 },
+        _sortKey: '000001',
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: {},
+        _cards: [{ code: 'e2e-nohome-card' }],
+        _faceUp: false,
+      });
+    });
+
+    await page.evaluate(async () => {
+      const g = globalThis as unknown as PageGlobals;
+      g.__ctTest!.click({ x: 0, y: 0 });
+      await g.__TEST_BOARD__!.waitForSelectionSettled();
+    });
+
+    // keyboard.press blocks until the alert is handled, so record and accept
+    // the dialog in a listener, then assert on what it saw.
+    const dialogs: { type: string; message: string }[] = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push({ type: dialog.type(), message: dialog.message() });
+      void dialog.accept();
+    });
+    await page.keyboard.press('x');
+
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs[0].type).toBe('alert');
+    expect(dialogs[0].message).toContain('1 card has no discard zone');
+
+    const stack = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      return store.getAllObjects().get('e2e-nohome-stack');
+    });
+    expect(stack?._cards).toEqual([{ code: 'e2e-nohome-card' }]);
+    expect(stack?._containerId).toBeNull();
   });
 
   test('second discard merges onto existing pile', async ({ page }) => {
@@ -166,7 +214,10 @@ test.describe('Discard Zone — store-level loop', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['e2e-card-1', 'e2e-card-2'],
+        _cards: [
+          { code: 'e2e-card-1', homeZone: 'e2e-zone2' },
+          { code: 'e2e-card-2', homeZone: 'e2e-zone2' },
+        ],
         _faceUp: false,
       });
       store.setObject('e2e-zone2', {
@@ -177,9 +228,6 @@ test.describe('Discard Zone — store-level loop', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: { isDiscardZone: true, label: 'Discard' },
-      });
-      store.setDiscardZone('e2e-zone2', {
-        memberCardIds: ['e2e-card-1', 'e2e-card-2'],
       });
     });
 
@@ -256,15 +304,13 @@ test.describe('Discard Zone — store-level loop', () => {
         _containerId: null,
         _meta: { isDiscardZone: true, label: 'Discard' },
       });
-      store.setDiscardZone('e2e-dup-zone', {
-        memberCardIds: ['dup-A', 'dup-B', 'dup-C'],
-      });
+      const tag = (code: string) => ({ code, homeZone: 'e2e-dup-zone' });
       // Older pile created first so it precedes the source in iteration order
       store.setObject('e2e-dup-pile', {
         ...base,
         _pos: { x: 420, y: 0, r: 0 },
         _containerId: 'e2e-dup-zone',
-        _cards: ['dup-A', 'dup-B'],
+        _cards: [tag('dup-A'), tag('dup-B')],
         _faceUp: true,
       });
       store.setObject('e2e-dup-source', {
@@ -272,7 +318,7 @@ test.describe('Discard Zone — store-level loop', () => {
         _sortKey: '000002',
         _pos: { x: 0, y: 0, r: 0 },
         _containerId: null,
-        _cards: ['dup-A', 'dup-C'],
+        _cards: [tag('dup-A'), tag('dup-C')],
       });
     });
 
@@ -293,7 +339,7 @@ test.describe('Discard Zone — store-level loop', () => {
       const stacks: { id: string; cards: string[] }[] = [];
       for (const [id, obj] of store.getAllObjects()) {
         if (obj._kind === 'stack') {
-          stacks.push({ id, cards: obj._cards ?? [] });
+          stacks.push({ id, cards: (obj._cards ?? []).map((e) => e.code) });
         }
       }
       return stacks;
@@ -323,7 +369,7 @@ test.describe('Discard Zone — store-level loop', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['e2e-redisc-card'],
+        _cards: [{ code: 'e2e-redisc-card', homeZone: 'e2e-redisc-zone' }],
         _faceUp: false,
       });
       store.setObject('e2e-redisc-zone', {
@@ -334,9 +380,6 @@ test.describe('Discard Zone — store-level loop', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: { isDiscardZone: true, label: 'Discard', width: 71, height: 96 },
-      });
-      store.setDiscardZone('e2e-redisc-zone', {
-        memberCardIds: ['e2e-redisc-card'],
       });
     });
 
@@ -361,7 +404,7 @@ test.describe('Discard Zone — store-level loop', () => {
         if (
           obj._kind === 'stack' &&
           obj._containerId === 'e2e-redisc-zone' &&
-          obj._cards?.includes('e2e-redisc-card')
+          obj._cards?.some((e) => e.code === 'e2e-redisc-card')
         ) {
           return {
             found: true,
@@ -389,7 +432,10 @@ test.describe('Discard Zone — store-level loop', () => {
       const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
       const all = store.getAllObjects();
       for (const [, obj] of all) {
-        if (obj._kind === 'stack' && obj._cards?.includes('e2e-redisc-card')) {
+        if (
+          obj._kind === 'stack' &&
+          obj._cards?.some((e) => e.code === 'e2e-redisc-card')
+        ) {
           return { containerId: obj._containerId, pos: obj._pos };
         }
       }
@@ -420,7 +466,7 @@ test.describe('Discard Zone — store-level loop', () => {
         if (
           obj._kind === 'stack' &&
           obj._containerId === 'e2e-redisc-zone' &&
-          obj._cards?.includes('e2e-redisc-card')
+          obj._cards?.some((e) => e.code === 'e2e-redisc-card')
         ) {
           return {
             found: true,

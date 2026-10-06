@@ -25,6 +25,7 @@ import {
   areAllSelectedStacksReady,
 } from '../store/YjsSelectors';
 import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
+import { showToast } from '../toast/toastStore';
 
 /** The single user-visible surface for "discard found no home zone". */
 function notifyNoDiscardZone(count: number): void {
@@ -438,7 +439,7 @@ export function registerDefaultActions(): () => void {
     isAvailable: (ctx) => ctx.selection.count === 0,
     execute: () => {
       console.log('Hello from Command Palette!');
-      alert('Hello from Command Palette!');
+      showToast('Hello from Command Palette!', 'info');
     },
   });
 

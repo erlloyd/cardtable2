@@ -16,6 +16,7 @@ import {
 import { loadLocalPluginAssets, setPendingLocalPlugin } from '../content';
 import { ACTION_LOAD_PLUGIN_DIRECTORY_FAILED } from '../constants/errorIds';
 import { useDevMode } from '../hooks/useDevMode';
+import { showToast } from '../toast/toastStore';
 
 export const Route = createFileRoute('/')({
   component: GameSelect,
@@ -98,7 +99,7 @@ function GameSelect() {
         errorId: ACTION_LOAD_PLUGIN_DIRECTORY_FAILED,
         error: errorMessage,
       });
-      alert(`Failed to load plugin: ${errorMessage}`);
+      showToast(`Failed to load plugin: ${errorMessage}`, 'error');
     }
   };
 

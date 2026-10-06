@@ -30,8 +30,9 @@ import { showToast } from '../toast/toastStore';
 /** The single user-visible surface for "discard found no home zone". */
 function notifyNoDiscardZone(count: number): void {
   const subject = count === 1 ? '1 card has' : `${count} cards have`;
-  window.alert(
+  showToast(
     `${subject} no discard zone. Use Create Discard Zone on its deck first.`,
+    'info',
   );
 }
 

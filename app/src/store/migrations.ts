@@ -1,6 +1,10 @@
 import type * as Y from 'yjs';
-import type { ObjectKind } from '@cardtable2/shared';
-import { parseSortKeyPrefix, formatSortKey } from '@cardtable2/shared';
+import type { CardEntry } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  parseSortKeyPrefix,
+  formatSortKey,
+} from '@cardtable2/shared';
 import { getDefaultProperties } from './ObjectDefaults';
 
 /**
@@ -43,8 +47,9 @@ export function runMigrations(doc: Y.Doc): void {
   // Quick check: do we need to run migrations?
   const needsDefaults = needsMigration(typedObjectsMap);
   const needsSortKeyFix = needsSortKeyMigration(typedObjectsMap);
+  const needsCardEntries = needsCardEntryMigration(doc);
 
-  if (!needsDefaults && !needsSortKeyFix) {
+  if (!needsDefaults && !needsSortKeyFix && !needsCardEntries) {
     console.log('[Migrations] ✓ All objects up-to-date, skipping migration');
     return;
   }
@@ -55,6 +60,7 @@ export function runMigrations(doc: Y.Doc): void {
   doc.transact(() => {
     if (needsDefaults) ensureObjectDefaults(typedObjectsMap);
     if (needsSortKeyFix) migrateSortKeys(typedObjectsMap);
+    if (needsCardEntries) migrateCardEntries(doc);
   }, 'migration'); // Origin = 'migration' for debugging
 
   console.log('[Migrations] ✓ Migration complete');
@@ -188,6 +194,65 @@ function migrateSortKeys(objectsMap: Y.Map<Y.Map<unknown>>): void {
   if (migratedCount > 0) {
     console.log(
       `[Migrations] ✓ Migrated ${migratedCount} sortKey(s) to zero-padded format`,
+    );
+  }
+}
+
+/**
+ * Collect every card-list Y.Map that holds CardEntry[]: stacks (_cards) and
+ * hands (cards).
+ */
+function cardListHolders(
+  doc: Y.Doc,
+): Array<{ map: Y.Map<unknown>; key: '_cards' | 'cards' }> {
+  const holders: Array<{ map: Y.Map<unknown>; key: '_cards' | 'cards' }> = [];
+  doc.getMap<Y.Map<unknown>>('objects').forEach((objMap) => {
+    if (objMap.get('_kind') === ObjectKind.Stack) {
+      holders.push({ map: objMap, key: '_cards' });
+    }
+  });
+  doc.getMap<Y.Map<unknown>>('hands').forEach((handMap) => {
+    holders.push({ map: handMap, key: 'cards' });
+  });
+  return holders;
+}
+
+// Legacy tables stored plain code strings. The typeof check is a
+// deserialization boundary: persisted data predates the CardEntry type.
+function hasLegacyEntries(cards: unknown): cards is Array<string | CardEntry> {
+  return Array.isArray(cards) && cards.some((el) => typeof el === 'string');
+}
+
+/**
+ * Check if any stack or hand still holds legacy string card entries.
+ */
+export function needsCardEntryMigration(doc: Y.Doc): boolean {
+  return cardListHolders(doc).some(({ map, key }) =>
+    hasLegacyEntries(map.get(key)),
+  );
+}
+
+/**
+ * Convert legacy string card entries to { code } in stacks (_cards) and hands
+ * (cards). Existing CardEntry objects are kept as-is; order and duplicates are
+ * preserved. Arrays are written back only when something changed.
+ */
+export function migrateCardEntries(doc: Y.Doc): void {
+  let migratedLists = 0;
+  for (const { map, key } of cardListHolders(doc)) {
+    const cards = map.get(key);
+    if (!hasLegacyEntries(cards)) continue;
+    map.set(
+      key,
+      cards.map((el): CardEntry =>
+        typeof el === 'string' ? { code: el } : el,
+      ),
+    );
+    migratedLists++;
+  }
+  if (migratedLists > 0) {
+    console.log(
+      `[Migrations] ✓ Converted legacy card strings in ${migratedLists} list(s) to CardEntry`,
     );
   }
 }

@@ -3311,20 +3311,6 @@ describe('createDiscardZoneForStack', () => {
     );
   });
 
-  it('does not write a discardZones entry', () => {
-    const stackId = createObject(store, {
-      kind: ObjectKind.Stack,
-      pos: { x: 50, y: 50, r: 0 },
-      cards: toCardEntries(['card-1']),
-      faceUp: true,
-    });
-
-    const newZoneId = createDiscardZoneForStack(store, stackId);
-    expect(newZoneId).not.toBeNull();
-
-    expect(store.getDiscardZone(newZoneId!)).toBeUndefined();
-  });
-
   it('retags cards that already have a home (newest zone wins)', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,

@@ -51,7 +51,7 @@ export function useRenameZoneDialog(store: YjsStore | null): {
 
   const renameDialog = (
     <RenameZoneModal
-      key={state.key}
+      key={`rename-zone-${state.key}`}
       isOpen={state.zoneId !== null}
       onClose={close}
       onSubmit={submit}

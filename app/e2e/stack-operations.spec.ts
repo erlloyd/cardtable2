@@ -26,7 +26,7 @@ interface TableObject {
   _kind: string;
   _pos: { x: number; y: number; r: number };
   _selectedBy: string | null;
-  _cards?: string[];
+  _cards?: { code: string; homeZone?: string }[];
   _faceUp?: boolean;
 }
 

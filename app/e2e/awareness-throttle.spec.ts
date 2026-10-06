@@ -127,7 +127,7 @@ test.describe('Awareness throttle ownership (ct-ajw.34)', () => {
           _selectedBy: null,
           _containerId: null,
           _meta: {},
-          _cards: ['e2e-card-a'],
+          _cards: [{ code: 'e2e-card-a' }],
           _faceUp: true,
         },
       );

@@ -97,7 +97,7 @@ test.describe('Discard Zone — rename', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['e2e-rename-card'],
+        _cards: [{ code: 'e2e-rename-card' }],
         _faceUp: false,
       });
     });

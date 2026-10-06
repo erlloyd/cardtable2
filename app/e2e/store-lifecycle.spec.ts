@@ -87,7 +87,7 @@ test.describe('YjsStore lifecycle', () => {
           _locked: false,
           _selectedBy: null,
           _meta: {},
-          _cards: ['card-1'],
+          _cards: [{ code: 'card-1' }],
           _faceUp: true,
         });
       },

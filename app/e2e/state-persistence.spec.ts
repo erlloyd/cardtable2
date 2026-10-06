@@ -64,7 +64,7 @@ test.describe('State Persistence (M3-T1)', () => {
           _locked: false,
           _selectedBy: null,
           _meta: {},
-          _cards: ['card-1', 'card-2'],
+          _cards: [{ code: 'card-1' }, { code: 'card-2' }],
           _faceUp: true,
         });
 

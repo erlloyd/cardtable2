@@ -25,10 +25,15 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './_fixtures';
 
+interface CardEntry {
+  code: string;
+  homeZone?: string;
+}
+
 interface StoreObject {
   _kind: string;
   _pos: { x: number; y: number; r: number };
-  _cards?: string[];
+  _cards?: CardEntry[];
 }
 
 interface PageTestStore {
@@ -36,8 +41,8 @@ interface PageTestStore {
   getAllObjects: () => Map<string, StoreObject>;
   createHand: (name: string) => string;
   getHandIds: () => string[];
-  getHandCards: (handId: string) => string[];
-  addCardToHand: (handId: string, cardId: string, index?: number) => void;
+  getHandCards: (handId: string) => CardEntry[];
+  addCardToHand: (handId: string, card: CardEntry, index?: number) => void;
   deleteHand: (handId: string) => void;
 }
 
@@ -77,7 +82,7 @@ async function seedHand(
     ({ name, cards }) => {
       const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
       const id = store.createHand(name);
-      for (const card of cards) store.addCardToHand(id, card);
+      for (const code of cards) store.addCardToHand(id, { code });
       return id;
     },
     { name, cards },
@@ -89,7 +94,9 @@ async function seedHand(
 function getHandCards(page: Page, handId: string): Promise<string[]> {
   return page.evaluate(
     (id) =>
-      (globalThis as unknown as PageGlobals).__TEST_STORE__!.getHandCards(id),
+      (globalThis as unknown as PageGlobals)
+        .__TEST_STORE__!.getHandCards(id)
+        .map((card) => card.code),
     handId,
   );
 }
@@ -102,7 +109,7 @@ function getBoardObjects(
     return Array.from(store.getAllObjects().entries()).map(([id, obj]) => ({
       id,
       pos: obj._pos,
-      cards: obj._cards ?? [],
+      cards: (obj._cards ?? []).map((card) => card.code),
     }));
   });
 }
@@ -216,7 +223,7 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['drag-a', 'drag-b'],
+        _cards: [{ code: 'drag-a' }, { code: 'drag-b' }],
         _faceUp: true,
       });
       store.setObject('e2e-bystander-stack', {
@@ -227,7 +234,7 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['bystander-a'],
+        _cards: [{ code: 'bystander-a' }],
         _faceUp: true,
       });
     });
@@ -435,7 +442,7 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
         _selectedBy: null,
         _containerId: null,
         _meta: {},
-        _cards: ['X'],
+        _cards: [{ code: 'X' }],
         _faceUp: true,
       });
     }, stackWorld);
@@ -464,7 +471,7 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
     const hand2 = await page.evaluate(() => {
       const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
       const id = store.createHand('Hand 2');
-      store.addCardToHand(id, 'D');
+      store.addCardToHand(id, { code: 'D' });
       return id;
     });
     await expect(page.locator('.hand-panel__tab')).toHaveCount(2);
@@ -583,7 +590,9 @@ test.describe('HandPanel (ct-ajw.20 regression witness)', () => {
     await seedHand(page, 'Alpha', ['card-a']);
     await page.evaluate(() => {
       const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
-      store.addCardToHand(store.createHand('Beta'), 'card-b');
+      store.addCardToHand(store.createHand('Beta'), {
+        code: 'card-b',
+      });
     });
     await expect(page.locator('.hand-panel__tab')).toHaveCount(2);
     await expect(page.locator('.hand-panel__card')).toHaveCount(1);

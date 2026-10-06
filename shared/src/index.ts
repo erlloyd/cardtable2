@@ -51,20 +51,6 @@ export interface AttachmentData {
 }
 
 // ============================================================================
-// Discard Zone Data
-// ============================================================================
-
-// Membership is keyed by CARD ID (not stack id) because stack ids are not
-// stable across split/merge: unstackCard keeps the source stack's id for the
-// remaining cards and mints a new id only for the extracted card (the source is
-// deleted only when emptied); stackObjects keeps the target stack's id and
-// deletes the sources. Card ids are stable across the lifetime of a card object
-// on the table.
-export interface DiscardZoneEntry {
-  memberCardIds: string[];
-}
-
-// ============================================================================
 // Player Hand Data
 // ============================================================================
 

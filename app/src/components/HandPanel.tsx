@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
-import type { Card, GameAssets } from '@cardtable2/shared';
+import type { Card, CardEntry, GameAssets } from '@cardtable2/shared';
 import { moveCardToBoard, reorderCardInHand } from '../store/YjsHandActions';
 import { stackObjects } from '../store/YjsActions';
 import { computeFanLayout, CARD_WIDTH } from '../utils/fanLayout';
@@ -54,7 +54,7 @@ export interface HandPanelProps {
   onPhantomDragActiveChange?: (active: boolean) => void;
 }
 
-const NO_CARDS: string[] = [];
+const NO_CARDS: CardEntry[] = [];
 
 const DRAG_SLOP = 5;
 // Cards are positioned at top: 0.75rem inside the container (12px at 16px base)
@@ -315,7 +315,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         const now = Date.now();
         const lastTap = lastTapTimeRef.current.get(index) ?? 0;
         if (now - lastTap < DOUBLE_TAP_THRESHOLD) {
-          const cardId = cards[index];
+          const cardId = cards[index]?.code;
           const card =
             cardId && gameAssets ? (gameAssets.cards[cardId] ?? null) : null;
           if (card && cardId) {
@@ -608,7 +608,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const PREVIEW_GAP = 10;
     const previewPosition = (() => {
       if (hoveredIndex === null || !hoverAnchor) return null;
-      const hoveredCardId = cards[hoveredIndex];
+      const hoveredCardId = cards[hoveredIndex]?.code;
       const isLandscape = hoveredCardId && landscapeCards.has(hoveredCardId);
       const baseDims = getPreviewDimensions('medium');
       const dims = isLandscape ? getLandscapeDimensions(baseDims) : baseDims;
@@ -619,7 +619,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     })();
 
     const hoveredCardCode =
-      hoveredIndex !== null ? (cards[hoveredIndex] ?? null) : null;
+      hoveredIndex !== null ? (cards[hoveredIndex]?.code ?? null) : null;
     const hoveredCard =
       hoveredCardCode && gameAssets
         ? (gameAssets.cards[hoveredCardCode] ?? null)
@@ -709,7 +709,8 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                   // Default to fromSlot so the first render has no shift
                   const toSlot = insertionIndex ?? fromSlot;
 
-                  const elements = cards.map((cardId, index) => {
+                  const elements = cards.map((entry, index) => {
+                    const cardId = entry.code;
                     // Don't render the card being dragged (it's shown as the ghost)
                     if (isDragging && index === fromSlot) return null;
 

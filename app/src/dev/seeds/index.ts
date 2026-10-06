@@ -32,7 +32,7 @@
 
 import type { YjsStore } from '../../store/YjsStore';
 import { createObject, type CreateObjectOptions } from '../../store/YjsActions';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 
 export type SeedBuilder = () => CreateObjectOptions[];
 
@@ -49,7 +49,7 @@ export const SEED_REGISTRY: Record<string, SeedBuilder> = {
     {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['seed-card-1'],
+      cards: toCardEntries(['seed-card-1']),
       faceUp: true,
     },
   ],
@@ -59,13 +59,13 @@ export const SEED_REGISTRY: Record<string, SeedBuilder> = {
     {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: [
+      cards: toCardEntries([
         'seed-card-1',
         'seed-card-2',
         'seed-card-3',
         'seed-card-4',
         'seed-card-5',
-      ],
+      ]),
       faceUp: true,
     },
   ],
@@ -75,13 +75,13 @@ export const SEED_REGISTRY: Record<string, SeedBuilder> = {
     {
       kind: ObjectKind.Stack,
       pos: { x: -150, y: 0, r: 0 },
-      cards: ['seed-a-1', 'seed-a-2'],
+      cards: toCardEntries(['seed-a-1', 'seed-a-2']),
       faceUp: true,
     },
     {
       kind: ObjectKind.Stack,
       pos: { x: 150, y: 0, r: 0 },
-      cards: ['seed-b-1', 'seed-b-2', 'seed-b-3'],
+      cards: toCardEntries(['seed-b-1', 'seed-b-2', 'seed-b-3']),
       faceUp: true,
     },
   ],
@@ -96,13 +96,13 @@ export const SEED_REGISTRY: Record<string, SeedBuilder> = {
     {
       kind: ObjectKind.Stack,
       pos: { x: -100, y: 0, r: 0 },
-      cards: ['seed-parent-1'],
+      cards: toCardEntries(['seed-parent-1']),
       faceUp: true,
     },
     {
       kind: ObjectKind.Stack,
       pos: { x: 100, y: 0, r: 0 },
-      cards: ['seed-child-1'],
+      cards: toCardEntries(['seed-child-1']),
       faceUp: true,
     },
   ],

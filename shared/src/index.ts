@@ -54,9 +54,12 @@ export interface AttachmentData {
 // Discard Zone Data
 // ============================================================================
 
-// Membership is keyed by CARD ID (not stack id) because stack ids are minted
-// fresh on every split/merge (YjsActions.ts stackObjects/unstackCard). Card ids
-// are stable across the lifetime of a card object on the table.
+// Membership is keyed by CARD ID (not stack id) because stack ids are not
+// stable across split/merge: unstackCard keeps the source stack's id for the
+// remaining cards and mints a new id only for the extracted card (the source is
+// deleted only when emptied); stackObjects keeps the target stack's id and
+// deletes the sources. Card ids are stable across the lifetime of a card object
+// on the table.
 export interface DiscardZoneEntry {
   memberCardIds: string[];
 }
@@ -65,9 +68,24 @@ export interface DiscardZoneEntry {
 // Player Hand Data
 // ============================================================================
 
+/**
+ * One card in a stack's `_cards` or a hand's `cards`. `homeZone` is the id of
+ * the discard zone this card returns to; omitted (never written as undefined)
+ * for untagged cards. Always move whole entries; only producers of new cards
+ * build entries from codes, via `toCardEntries`.
+ */
+export interface CardEntry {
+  code: string;
+  homeZone?: string;
+}
+
+export function toCardEntries(codes: string[]): CardEntry[] {
+  return codes.map((code) => ({ code }));
+}
+
 export interface HandData {
   name: string;
-  cards: string[];
+  cards: CardEntry[];
   visibility: 'public' | 'private';
 }
 
@@ -121,7 +139,7 @@ export type TableObjectProps = {
   _selectedBy: string | null;
   _meta: Record<string, unknown>;
   // Stack-specific properties (when _kind === ObjectKind.Stack)
-  _cards?: string[];
+  _cards?: CardEntry[];
   _faceUp?: boolean;
   /**
    * On parent stacks: ordered list of attached child stack IDs.
@@ -142,7 +160,7 @@ export type TableObjectProps = {
 // Stack-specific properties (when _kind === ObjectKind.Stack)
 export interface StackObject extends TableObject {
   _kind: typeof ObjectKind.Stack;
-  _cards: string[]; // Array of card IDs in the stack (top to bottom)
+  _cards: CardEntry[]; // Cards in the stack (top to bottom)
   _faceUp: boolean; // Whether stack is face-up or face-down
   /** @see TableObject._attachedCardIds */
   _attachedCardIds?: string[];

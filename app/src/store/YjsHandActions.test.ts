@@ -6,7 +6,11 @@ import {
   moveCardToBoard,
   reorderCardInHand,
 } from './YjsHandActions';
-import { ObjectKind, type StackObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  toCardEntries,
+  type StackObject,
+} from '@cardtable2/shared';
 
 describe('YjsHandActions', () => {
   let store: YjsStore;
@@ -20,35 +24,35 @@ describe('YjsHandActions', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: true,
       });
 
       const handId = store.createHand('Test Hand');
       const result = moveCardToHand(store, stackId, 0, handId);
 
-      expect(result).toBe('card-1');
-      expect(store.getHandCards(handId)).toEqual(['card-1']);
+      expect(result).toEqual({ code: 'card-1' });
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['card-1']));
 
       // Stack should still exist with remaining cards
       const yMap = store.getObjectYMap(stackId);
       expect(yMap).toBeDefined();
-      expect(yMap!.get('_cards')).toEqual(['card-2', 'card-3']);
+      expect(yMap!.get('_cards')).toEqual(toCardEntries(['card-2', 'card-3']));
     });
 
     it('deletes stack when last card is moved to hand', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1'],
+        cards: toCardEntries(['card-1']),
         faceUp: true,
       });
 
       const handId = store.createHand('Test Hand');
       const result = moveCardToHand(store, stackId, 0, handId);
 
-      expect(result).toBe('card-1');
-      expect(store.getHandCards(handId)).toEqual(['card-1']);
+      expect(result).toEqual({ code: 'card-1' });
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['card-1']));
 
       // Stack should be deleted
       expect(store.getObjectYMap(stackId)).toBeUndefined();
@@ -58,35 +62,36 @@ describe('YjsHandActions', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: true,
       });
 
       const handId = store.createHand('Test Hand');
       const result = moveCardToHand(store, stackId, 1, handId);
 
-      expect(result).toBe('card-2');
-      expect(store.getHandCards(handId)).toEqual(['card-2']);
-      expect(store.getObjectYMap(stackId)!.get('_cards')).toEqual([
-        'card-1',
-        'card-3',
-      ]);
+      expect(result).toEqual({ code: 'card-2' });
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['card-2']));
+      expect(store.getObjectYMap(stackId)!.get('_cards')).toEqual(
+        toCardEntries(['card-1', 'card-3']),
+      );
     });
 
     it('inserts card at specific hand index', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'existing-card');
+      store.addCardToHand(handId, { code: 'existing-card' });
 
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['new-card'],
+        cards: toCardEntries(['new-card']),
         faceUp: true,
       });
 
       moveCardToHand(store, stackId, 0, handId, 0);
 
-      expect(store.getHandCards(handId)).toEqual(['new-card', 'existing-card']);
+      expect(store.getHandCards(handId)).toEqual(
+        toCardEntries(['new-card', 'existing-card']),
+      );
     });
 
     it('returns null for non-existent stack', () => {
@@ -99,7 +104,7 @@ describe('YjsHandActions', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1'],
+        cards: toCardEntries(['card-1']),
         faceUp: true,
       });
 
@@ -111,7 +116,7 @@ describe('YjsHandActions', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1'],
+        cards: toCardEntries(['card-1']),
         faceUp: true,
       });
 
@@ -124,8 +129,8 @@ describe('YjsHandActions', () => {
   describe('moveCardToBoard', () => {
     it('creates a new stack from hand card', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-1');
-      store.addCardToHand(handId, 'card-2');
+      store.addCardToHand(handId, { code: 'card-1' });
+      store.addCardToHand(handId, { code: 'card-2' });
 
       const stackId = moveCardToBoard(
         store,
@@ -143,19 +148,19 @@ describe('YjsHandActions', () => {
       expect(stackId).not.toBeNull();
 
       // Card should be removed from hand
-      expect(store.getHandCards(handId)).toEqual(['card-2']);
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['card-2']));
 
       // New stack should exist on board
       const obj = toTableObject(store.getObjectYMap(stackId!)!) as StackObject;
       expect(obj._kind).toBe(ObjectKind.Stack);
       expect(obj._pos).toEqual({ x: 100, y: 200, r: 0 });
-      expect(obj._cards).toEqual(['card-1']);
+      expect(obj._cards).toEqual(toCardEntries(['card-1']));
       expect(obj._faceUp).toBe(true);
     });
 
     it('creates face-down stack when specified', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-1');
+      store.addCardToHand(handId, { code: 'card-1' });
 
       const stackId = moveCardToBoard(
         store,
@@ -190,7 +195,7 @@ describe('YjsHandActions', () => {
 
     it('returns null for out-of-range card index', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-1');
+      store.addCardToHand(handId, { code: 'card-1' });
 
       const result = moveCardToBoard(
         store,
@@ -210,61 +215,55 @@ describe('YjsHandActions', () => {
   describe('reorderCardInHand', () => {
     it('moves a card forward in the hand', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-a');
-      store.addCardToHand(handId, 'card-b');
-      store.addCardToHand(handId, 'card-c');
-      store.addCardToHand(handId, 'card-d');
+      store.addCardToHand(handId, { code: 'card-a' });
+      store.addCardToHand(handId, { code: 'card-b' });
+      store.addCardToHand(handId, { code: 'card-c' });
+      store.addCardToHand(handId, { code: 'card-d' });
 
       reorderCardInHand(store, handId, 0, 2);
 
-      expect(store.getHandCards(handId)).toEqual([
-        'card-b',
-        'card-c',
-        'card-a',
-        'card-d',
-      ]);
+      expect(store.getHandCards(handId)).toEqual(
+        toCardEntries(['card-b', 'card-c', 'card-a', 'card-d']),
+      );
     });
 
     it('moves a card backward in the hand', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-a');
-      store.addCardToHand(handId, 'card-b');
-      store.addCardToHand(handId, 'card-c');
-      store.addCardToHand(handId, 'card-d');
+      store.addCardToHand(handId, { code: 'card-a' });
+      store.addCardToHand(handId, { code: 'card-b' });
+      store.addCardToHand(handId, { code: 'card-c' });
+      store.addCardToHand(handId, { code: 'card-d' });
 
       reorderCardInHand(store, handId, 3, 1);
 
-      expect(store.getHandCards(handId)).toEqual([
-        'card-a',
-        'card-d',
-        'card-b',
-        'card-c',
-      ]);
+      expect(store.getHandCards(handId)).toEqual(
+        toCardEntries(['card-a', 'card-d', 'card-b', 'card-c']),
+      );
     });
 
     it('is a no-op when fromIndex equals toIndex', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-a');
-      store.addCardToHand(handId, 'card-b');
+      store.addCardToHand(handId, { code: 'card-a' });
+      store.addCardToHand(handId, { code: 'card-b' });
 
       reorderCardInHand(store, handId, 1, 1);
 
-      expect(store.getHandCards(handId)).toEqual(['card-a', 'card-b']);
+      expect(store.getHandCards(handId)).toEqual(
+        toCardEntries(['card-a', 'card-b']),
+      );
     });
 
     it('clamps toIndex to valid range', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-a');
-      store.addCardToHand(handId, 'card-b');
-      store.addCardToHand(handId, 'card-c');
+      store.addCardToHand(handId, { code: 'card-a' });
+      store.addCardToHand(handId, { code: 'card-b' });
+      store.addCardToHand(handId, { code: 'card-c' });
 
       reorderCardInHand(store, handId, 0, 100);
 
-      expect(store.getHandCards(handId)).toEqual([
-        'card-b',
-        'card-c',
-        'card-a',
-      ]);
+      expect(store.getHandCards(handId)).toEqual(
+        toCardEntries(['card-b', 'card-c', 'card-a']),
+      );
     });
 
     it('does nothing for non-existent hand', () => {
@@ -273,12 +272,14 @@ describe('YjsHandActions', () => {
 
     it('does nothing for out-of-range fromIndex', () => {
       const handId = store.createHand('Test Hand');
-      store.addCardToHand(handId, 'card-a');
-      store.addCardToHand(handId, 'card-b');
+      store.addCardToHand(handId, { code: 'card-a' });
+      store.addCardToHand(handId, { code: 'card-b' });
 
       reorderCardInHand(store, handId, 5, 0);
 
-      expect(store.getHandCards(handId)).toEqual(['card-a', 'card-b']);
+      expect(store.getHandCards(handId)).toEqual(
+        toCardEntries(['card-a', 'card-b']),
+      );
     });
   });
 });
@@ -316,36 +317,42 @@ describe('YjsStore hand methods', () => {
 
   it('adds cards to a hand', () => {
     const handId = store.createHand('Test');
-    store.addCardToHand(handId, 'card-a');
-    store.addCardToHand(handId, 'card-b');
+    store.addCardToHand(handId, { code: 'card-a' });
+    store.addCardToHand(handId, { code: 'card-b' });
 
-    expect(store.getHandCards(handId)).toEqual(['card-a', 'card-b']);
+    expect(store.getHandCards(handId)).toEqual(
+      toCardEntries(['card-a', 'card-b']),
+    );
   });
 
   it('inserts card at specific index', () => {
     const handId = store.createHand('Test');
-    store.addCardToHand(handId, 'card-a');
-    store.addCardToHand(handId, 'card-b');
-    store.addCardToHand(handId, 'card-c', 1);
+    store.addCardToHand(handId, { code: 'card-a' });
+    store.addCardToHand(handId, { code: 'card-b' });
+    store.addCardToHand(handId, { code: 'card-c' }, 1);
 
-    expect(store.getHandCards(handId)).toEqual(['card-a', 'card-c', 'card-b']);
+    expect(store.getHandCards(handId)).toEqual(
+      toCardEntries(['card-a', 'card-c', 'card-b']),
+    );
   });
 
   it('removes card from hand by index', () => {
     const handId = store.createHand('Test');
-    store.addCardToHand(handId, 'card-a');
-    store.addCardToHand(handId, 'card-b');
-    store.addCardToHand(handId, 'card-c');
+    store.addCardToHand(handId, { code: 'card-a' });
+    store.addCardToHand(handId, { code: 'card-b' });
+    store.addCardToHand(handId, { code: 'card-c' });
 
     const removed = store.removeCardFromHand(handId, 1);
 
-    expect(removed).toBe('card-b');
-    expect(store.getHandCards(handId)).toEqual(['card-a', 'card-c']);
+    expect(removed).toEqual({ code: 'card-b' });
+    expect(store.getHandCards(handId)).toEqual(
+      toCardEntries(['card-a', 'card-c']),
+    );
   });
 
   it('returns null when removing from invalid index', () => {
     const handId = store.createHand('Test');
-    store.addCardToHand(handId, 'card-a');
+    store.addCardToHand(handId, { code: 'card-a' });
 
     expect(store.removeCardFromHand(handId, 5)).toBeNull();
     expect(store.removeCardFromHand(handId, -1)).toBeNull();
@@ -356,11 +363,11 @@ describe('YjsStore hand methods', () => {
     expect(store.getHandCards(handId)).toBe(store.getHandCards(handId));
     expect(store.getHandCards('missing')).toBe(store.getHandCards('missing'));
 
-    store.addCardToHand(handId, 'card-1');
+    store.addCardToHand(handId, { code: 'card-1' });
     const before = store.getHandCards(handId);
     expect(store.getHandCards(handId)).toBe(before);
 
-    store.addCardToHand(handId, 'card-2');
+    store.addCardToHand(handId, { code: 'card-2' });
     expect(store.getHandCards(handId)).not.toBe(before);
   });
 
@@ -372,7 +379,7 @@ describe('YjsStore hand methods', () => {
     expect(callback).toHaveBeenCalled();
 
     callback.mockClear();
-    store.addCardToHand(handId, 'card-1');
+    store.addCardToHand(handId, { code: 'card-1' });
     expect(callback).toHaveBeenCalled();
 
     callback.mockClear();

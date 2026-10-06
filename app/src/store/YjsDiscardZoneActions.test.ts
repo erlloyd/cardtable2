@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as Y from 'yjs';
 import { YjsStore } from './YjsStore';
-import { ObjectKind } from '@cardtable2/shared';
+import { ObjectKind, toCardEntries } from '@cardtable2/shared';
 import type { DiscardZoneEntry } from '@cardtable2/shared';
 import {
   createDiscardZoneForStack,
@@ -162,7 +162,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const id = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards,
+      cards: toCardEntries(cards),
       faceUp: false,
     });
     if (containerId) {
@@ -172,14 +172,17 @@ describe('discardCardToZone with duplicate card ids', () => {
   }
 
   function cardsOf(id: string): string[] {
-    return store.getObjectYMap(id)!.get('_cards') as string[];
+    return store
+      .getObjectYMap(id)!
+      .get('_cards')!
+      .map((e) => e.code);
   }
 
   function totalCards(): number {
     let total = 0;
     store.forEachObject((yMap) => {
       if (yMap.get('_kind') === ObjectKind.Stack) {
-        total += (yMap.get('_cards') as string[]).length;
+        total += yMap.get('_cards')!.map((e) => e.code).length;
       }
     });
     return total;

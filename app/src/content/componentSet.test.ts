@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { GameAssets, AssetPack, ComponentSet } from '@cardtable2/shared';
 import {
   ObjectKind,
+  toCardEntries,
   type StackObject,
   type TokenObject,
 } from '@cardtable2/shared';
@@ -219,7 +220,7 @@ describe('instantiateComponentSet', () => {
 
     expect(id).toBeDefined();
     expect(stack._kind).toBe(ObjectKind.Stack);
-    expect(stack._cards).toEqual(['01001', '01002']);
+    expect(stack._cards).toEqual(toCardEntries(['01001', '01002']));
     expect(stack._faceUp).toBe(false);
   });
 

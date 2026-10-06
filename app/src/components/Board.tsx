@@ -282,7 +282,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         return null;
       }
 
-      const topCardCode = stackObj._cards[0];
+      const topCardCode = stackObj._cards[0].code;
       const card = gameAssets?.cards[topCardCode];
 
       if (!card) {

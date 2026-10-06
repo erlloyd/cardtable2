@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { StackBehaviors } from './behaviors';
-import { ObjectKind, type StackObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  toCardEntries,
+  type StackObject,
+} from '@cardtable2/shared';
 import type { RenderContext } from '../types';
 import { Text, Container, type TextOptions } from 'pixi.js';
 import type { TextureLoader } from '../../services/TextureLoader';
@@ -15,7 +19,7 @@ function createTestStack(overrides?: Partial<StackObject>): StackObject {
     _locked: false,
     _selectedBy: null,
     _meta: {},
-    _cards: ['card1'],
+    _cards: toCardEntries(['card1']),
     _faceUp: true,
     ...overrides,
   };
@@ -69,7 +73,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
   describe('3D Effect Rendering', () => {
     it('renders 3D offset rectangle for stacks with 2+ cards', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       const container = StackBehaviors.render(stack, mockContext);
 
@@ -91,7 +97,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     });
 
     it('3D effect stroke width counter-scales with zoom', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       StackBehaviors.render(stack, mockContext);
 
@@ -102,7 +110,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
   describe('Count Badge Rendering', () => {
     it('renders count badge for stacks with 2+ cards', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       StackBehaviors.render(stack, mockContext);
 
@@ -162,7 +172,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     });
 
     it('count badge text uses zoom-aware resolution', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       StackBehaviors.render(stack, mockContext);
 
@@ -188,7 +200,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     });
 
     it('count badge has counter-scaled stroke width', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       StackBehaviors.render(stack, mockContext);
 
@@ -199,7 +213,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
   describe('Unstack Handle Rendering', () => {
     it('renders unstack handle for stacks with 2+ cards', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       const container = StackBehaviors.render(stack, mockContext);
 
@@ -256,7 +272,9 @@ describe('Stack Behaviors - Visual Rendering', () => {
     });
 
     it('unstack handle uses zoom-aware stroke scaling', () => {
-      const stack = createTestStack({ _cards: ['card1', 'card2'] });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1', 'card2']),
+      });
 
       StackBehaviors.render(stack, mockContext);
 
@@ -327,7 +345,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
   describe('Complex Scenarios', () => {
     it('renders all visual elements for multi-card face-down stack', () => {
       const complexStack = createTestStack({
-        _cards: ['card1', 'card2', 'card3'],
+        _cards: toCardEntries(['card1', 'card2', 'card3']),
         _faceUp: false,
       });
       // Mock gameAssets and textureLoader so fallback text is shown
@@ -542,7 +560,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should render sprite when texture is cached (face-up)', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       mockTextureLoader.get.mockReturnValue(mockTexture);
 
       // Act
@@ -558,7 +579,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should render sprite when texture is cached (face-down with card back)', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: false,
+      });
       mockTextureLoader.get.mockReturnValue(mockTexture);
 
       // Act
@@ -573,7 +597,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should render sprite when texture is cached (face-down with type back)', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: false,
+      });
       // Create new context with card back removed to test type fallback
       const contextWithoutCardBack = {
         ...mockContext,
@@ -602,7 +629,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should render placeholder when texture not cached', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       mockTextureLoader.get.mockReturnValue(undefined); // Not cached
 
       // Act
@@ -619,7 +649,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should trigger async load when texture not cached', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       mockTextureLoader.get.mockReturnValue(undefined);
 
       // Act
@@ -633,7 +666,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should call onTextureLoaded callback when texture loads', async () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       mockTextureLoader.get.mockReturnValue(undefined);
 
       // Act
@@ -649,7 +685,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should handle missing gameAssets gracefully', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       const contextWithoutAssets = {
         ...mockContext,
         gameAssets: undefined,
@@ -667,7 +706,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
     it('should handle missing card definition gracefully', () => {
       // Arrange
       const stack = createTestStack({
-        _cards: ['unknown-card'],
+        _cards: toCardEntries(['unknown-card']),
         _faceUp: true,
       });
 
@@ -682,7 +721,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should handle texture load failure gracefully', async () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       mockTextureLoader.get.mockReturnValue(undefined);
       mockTextureLoader.load.mockRejectedValue(new Error('Network error'));
 
@@ -700,7 +742,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should not trigger load if no textureLoader provided', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       const contextWithoutLoader = {
         ...mockContext,
         textureLoader: undefined,
@@ -716,7 +761,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should not trigger load if no onTextureLoaded callback provided', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: true,
+      });
       const contextWithoutCallback = {
         ...mockContext,
         onTextureLoaded: undefined,
@@ -733,7 +781,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should handle empty cards array', () => {
       // Arrange
-      const stack = createTestStack({ _cards: [], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries([]),
+        _faceUp: true,
+      });
 
       // Act
       const visual = StackBehaviors.render(stack, mockContext);
@@ -745,7 +796,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
 
     it('should handle missing back image gracefully', () => {
       // Arrange
-      const stack = createTestStack({ _cards: ['card-1'], _faceUp: false });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card-1']),
+        _faceUp: false,
+      });
       // Create context without back images
       const contextWithoutBacks = {
         ...mockContext,
@@ -1240,7 +1294,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       it('should apply counter-rotation to badge text on multi-card stacks', () => {
         const stack = createTestStack({
           _pos: { x: 0, y: 0, r: 90 },
-          _cards: ['card1', 'card2'],
+          _cards: toCardEntries(['card1', 'card2']),
         });
 
         StackBehaviors.render(stack, contextWithAssets);
@@ -1419,7 +1473,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
         onTextureLoaded: vi.fn(),
       } as RenderContext;
 
-      const stack = createTestStack({ _cards: ['card1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1']),
+        _faceUp: true,
+      });
 
       // Render many times — like the redrawVisual cascade would.
       for (let i = 0; i < 50; i++) {
@@ -1448,7 +1505,10 @@ describe('Stack Behaviors - Visual Rendering', () => {
         onTextureLoaded: vi.fn(),
       } as RenderContext;
 
-      const stack = createTestStack({ _cards: ['card1'], _faceUp: true });
+      const stack = createTestStack({
+        _cards: toCardEntries(['card1']),
+        _faceUp: true,
+      });
 
       // First render kicks off load().
       StackBehaviors.render(stack, ctx);
@@ -1510,7 +1570,7 @@ describe('Stack Behaviors - Visual Rendering', () => {
       } as RenderContext;
 
       const stack = createTestStack({
-        _cards: ['card1'],
+        _cards: toCardEntries(['card1']),
         _faceUp: true,
         _meta: {
           card1: {

@@ -5,7 +5,11 @@ import type {
   DeckDefinition,
   AssetPack,
 } from '@cardtable2/shared';
-import { ObjectKind, type StackObject } from '@cardtable2/shared';
+import {
+  ObjectKind,
+  toCardEntries,
+  type StackObject,
+} from '@cardtable2/shared';
 import {
   expandDeck,
   namespaceCardCode,
@@ -357,7 +361,7 @@ describe('instantiateScenario', () => {
     const stack = [...objects.values()][0] as StackObject;
 
     expect(stack._kind).toBe(ObjectKind.Stack);
-    expect(stack._cards).toEqual(['01001', '01001', '01002']);
+    expect(stack._cards).toEqual(toCardEntries(['01001', '01001', '01002']));
     expect(stack._faceUp).toBe(false);
   });
 

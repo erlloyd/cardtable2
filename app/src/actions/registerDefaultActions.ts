@@ -363,7 +363,7 @@ export function registerDefaultActions(): () => void {
         const cards = yMap.get('_cards');
         if (!cards || cards.length === 0) return false;
         // Check top card's home zone
-        return ctx.store.findDiscardZoneForCard(cards[0]) !== null;
+        return ctx.store.findDiscardZoneForCard(cards[0].code) !== null;
       });
     },
     execute: (ctx) => {

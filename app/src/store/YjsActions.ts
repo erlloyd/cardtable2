@@ -11,6 +11,8 @@ import {
   sortKeyWithSub,
   PARENT_ON_TOP_SUB_KEY,
   type DiscardZoneEntry,
+  type CardEntry,
+  toCardEntries,
 } from '@cardtable2/shared';
 import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
@@ -35,7 +37,7 @@ export interface CreateObjectOptions {
   locked?: boolean;
   meta?: Record<string, unknown>;
   // Stack-specific
-  cards?: string[];
+  cards?: CardEntry[];
   faceUp?: boolean;
 }
 
@@ -127,7 +129,7 @@ export function createObject(
     const stackObject = {
       ...baseObject,
       _kind: ObjectKind.Stack,
-      _cards: options.cards ?? (defaults._cards as string[]),
+      _cards: options.cards ?? (defaults._cards as CardEntry[]),
       _faceUp: options.faceUp ?? (defaults._faceUp as boolean),
     };
     store.setObject(id, stackObject);
@@ -626,7 +628,7 @@ export function stackObjects(
   }
 
   // Get target state (wins for merged stack)
-  const targetCards = targetYMap.get('_cards') as string[];
+  const targetCards = targetYMap.get('_cards') as CardEntry[];
   if (!targetCards) {
     throw new Error(
       `[stackObjects] Target stack ${target} has no _cards array`,
@@ -634,7 +636,7 @@ export function stackObjects(
   }
 
   // Collect cards from all source stacks
-  const sourceStacksData: Array<{ id: string; cards: string[] }> = [];
+  const sourceStacksData: Array<{ id: string; cards: CardEntry[] }> = [];
 
   for (const sourceId of sourceIds) {
     const sourceYMap = store.getObjectYMap(sourceId);
@@ -655,7 +657,7 @@ export function stackObjects(
     }
 
     // Get source cards
-    const sourceCards = sourceYMap.get('_cards') as string[];
+    const sourceCards = sourceYMap.get('_cards') as CardEntry[];
     if (sourceCards && sourceCards.length > 0) {
       sourceStacksData.push({ id: sourceId, cards: sourceCards });
     }
@@ -691,7 +693,7 @@ export function stackObjects(
 
   console.log(
     `[stackObjects] Merged ${sourceStacksData.length} stack(s) into ${target}. ` +
-      `Total cards: ${(targetYMap.get('_cards') as string[]).length}`,
+      `Total cards: ${(targetYMap.get('_cards') as CardEntry[]).length}`,
   );
 
   return stackedIds;
@@ -738,7 +740,7 @@ export function unstackCard(
   }
 
   // Get source cards
-  const sourceCards = sourceYMap.get('_cards') as string[];
+  const sourceCards = sourceYMap.get('_cards') as CardEntry[];
   if (!sourceCards || sourceCards.length === 0) {
     console.warn(`[unstackCard] Stack ${stackId} has no cards`);
     return null;
@@ -780,7 +782,7 @@ export function unstackCard(
   });
 
   console.log(
-    `[unstackCard] Extracted card ${topCard} from ${stackId} to new stack ${newStackId}`,
+    `[unstackCard] Extracted card ${topCard.code} from ${stackId} to new stack ${newStackId}`,
   );
 
   return newStackId;
@@ -817,7 +819,7 @@ export function shuffleStack(store: YjsStore, stackId: string): boolean {
   }
 
   // Get cards array
-  const cards = yMap.get('_cards') as string[];
+  const cards = yMap.get('_cards') as CardEntry[];
   if (!cards || cards.length < 2) {
     console.error(
       `[shuffleStack] Stack ${stackId} has insufficient cards (${cards?.length ?? 0})`,
@@ -927,7 +929,7 @@ export function attachCards(
         sourceYMap.set('_attachedToId', undefined);
       }
 
-      const sourceCards = sourceYMap.get('_cards') as string[];
+      const sourceCards = sourceYMap.get('_cards') as CardEntry[];
       const sourceFaceUp = sourceYMap.get('_faceUp') as boolean;
 
       if (sourceCards && sourceCards.length > 1) {
@@ -1313,7 +1315,7 @@ export function discardCardToZone(
     return false;
   }
 
-  const cardId = sourceCards[0];
+  const cardId = sourceCards[0].code;
   const zoneId = store.findDiscardZoneForCard(cardId);
   if (!zoneId) {
     console.warn(`[discardCardToZone] Card ${cardId} has no home zone`);
@@ -1429,7 +1431,9 @@ export function createDiscardZoneForStack(
       },
     });
 
-    const entry: DiscardZoneEntry = { memberCardIds: [...sourceCards] };
+    const entry: DiscardZoneEntry = {
+      memberCardIds: sourceCards.map((e) => e.code),
+    };
     store.setDiscardZone(zoneId, entry);
     newZoneId = zoneId;
   });
@@ -1512,14 +1516,14 @@ export function resetToTestScene(store: YjsStore): void {
   // Create 5 stacks (cards) - top left area with varying card counts
   const cardCounts = [1, 2, 3, 5, 1]; // Different stack sizes for visual testing
   for (let i = 0; i < 5; i++) {
-    const cards: string[] = [];
+    const codes: string[] = [];
     for (let j = 0; j < cardCounts[i]; j++) {
-      cards.push(`test-card-${i + 1}-${j + 1}`);
+      codes.push(`test-card-${i + 1}-${j + 1}`);
     }
     createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: -300 + i * 80, y: -200, r: 0 },
-      cards,
+      cards: toCardEntries(codes),
       faceUp: true,
       meta: { color: colors[i % colors.length] },
     });

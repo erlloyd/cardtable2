@@ -23,6 +23,7 @@ import {
 } from './YjsActions';
 import {
   ObjectKind,
+  toCardEntries,
   type StackObject,
   type TableObject,
   parseSortKeyPrefix,
@@ -41,7 +42,7 @@ describe('YjsActions - createObject', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: true,
       });
 
@@ -64,7 +65,7 @@ describe('YjsActions - createObject', () => {
         '_cards' in obj &&
         '_faceUp' in obj
       ) {
-        expect(obj._cards).toEqual(['card-1', 'card-2']);
+        expect(obj._cards).toEqual(toCardEntries(['card-1', 'card-2']));
         expect(obj._faceUp).toBe(true);
       }
     });
@@ -259,7 +260,7 @@ describe('YjsActions - createObject', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1'],
+        cards: toCardEntries(['card-1']),
       });
 
       const tokenId = createObject(store, {
@@ -601,7 +602,7 @@ describe('YjsActions - moveObjects', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: false,
       });
 
@@ -616,7 +617,9 @@ describe('YjsActions - moveObjects', () => {
         '_cards' in obj &&
         '_faceUp' in obj
       ) {
-        expect(obj._cards).toEqual(['card-1', 'card-2', 'card-3']);
+        expect(obj._cards).toEqual(
+          toCardEntries(['card-1', 'card-2', 'card-3']),
+        );
         expect(obj._faceUp).toBe(false);
       }
     });
@@ -1343,7 +1346,7 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: false,
         meta: { deckName: 'Player 1' },
         locked: false,
@@ -1365,7 +1368,7 @@ describe('YjsActions - exhaustCards (M3.5-T2)', () => {
         '_cards' in obj &&
         '_faceUp' in obj
       ) {
-        expect(obj._cards).toEqual(['card-1', 'card-2']);
+        expect(obj._cards).toEqual(toCardEntries(['card-1', 'card-2']));
         expect(obj._faceUp).toBe(false);
       }
     });
@@ -1532,7 +1535,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 45 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: true,
         meta: { deckName: 'Player 1' },
       });
@@ -1550,7 +1553,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
         '_cards' in obj &&
         '_faceUp' in obj
       ) {
-        expect(obj._cards).toEqual(['card-2', 'card-1']); // Card order reversed on flip
+        expect(obj._cards).toEqual(toCardEntries(['card-2', 'card-1'])); // Card order reversed on flip
         expect(obj._faceUp).toBe(false);
       }
     });
@@ -1561,7 +1564,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: true,
       });
 
@@ -1574,7 +1577,9 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
         '_cards' in obj &&
         '_faceUp' in obj
       ) {
-        expect(obj._cards).toEqual(['card-3', 'card-2', 'card-1']); // Reversed
+        expect(obj._cards).toEqual(
+          toCardEntries(['card-3', 'card-2', 'card-1']),
+        ); // Reversed
         expect(obj._faceUp).toBe(false);
       }
     });
@@ -1583,7 +1588,12 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['top-card', 'middle-1', 'middle-2', 'bottom-card'],
+        cards: toCardEntries([
+          'top-card',
+          'middle-1',
+          'middle-2',
+          'bottom-card',
+        ]),
         faceUp: true,
       });
 
@@ -1592,8 +1602,10 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const obj = toTableObject(store.getObjectYMap(id)!);
       if (obj && obj._kind === ObjectKind.Stack) {
         const stackObj = obj as StackObject;
-        expect(stackObj._cards[0]).toBe('bottom-card'); // Was at bottom, now at top
-        expect(stackObj._cards[stackObj._cards.length - 1]).toBe('top-card'); // Was at top, now at bottom
+        expect(stackObj._cards[0].code).toBe('bottom-card'); // Was at bottom, now at top
+        expect(stackObj._cards[stackObj._cards.length - 1].code).toBe(
+          'top-card',
+        ); // Was at top, now at bottom
       }
     });
 
@@ -1601,7 +1613,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: true,
       });
 
@@ -1609,14 +1621,18 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       flipCards(store, [id]);
       let obj = toTableObject(store.getObjectYMap(id)!);
       if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
-        expect(obj._cards).toEqual(['card-3', 'card-2', 'card-1']);
+        expect(obj._cards).toEqual(
+          toCardEntries(['card-3', 'card-2', 'card-1']),
+        );
       }
 
       // Second flip: face up, cards reversed again (back to original)
       flipCards(store, [id]);
       obj = toTableObject(store.getObjectYMap(id)!);
       if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
-        expect(obj._cards).toEqual(['card-1', 'card-2', 'card-3']);
+        expect(obj._cards).toEqual(
+          toCardEntries(['card-1', 'card-2', 'card-3']),
+        );
       }
     });
 
@@ -1624,7 +1640,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['only-card'],
+        cards: toCardEntries(['only-card']),
         faceUp: true,
       });
 
@@ -1632,7 +1648,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
 
       const obj = toTableObject(store.getObjectYMap(id)!);
       if (obj && obj._kind === ObjectKind.Stack && '_cards' in obj) {
-        expect(obj._cards).toEqual(['only-card']); // Single card stays same
+        expect(obj._cards).toEqual(toCardEntries(['only-card'])); // Single card stays same
       }
     });
 
@@ -1640,7 +1656,7 @@ describe('YjsActions - flipCards (M3.5-T1)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: [],
+        cards: toCardEntries([]),
         faceUp: true,
       });
 
@@ -1667,7 +1683,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1', 'target-2'],
+        cards: toCardEntries(['target-1', 'target-2']),
         faceUp: true,
       });
 
@@ -1675,7 +1691,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source-1', 'source-2'],
+        cards: toCardEntries(['source-1', 'source-2']),
         faceUp: true,
       });
 
@@ -1691,12 +1707,9 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         targetObj._kind === ObjectKind.Stack &&
         '_cards' in targetObj
       ) {
-        expect(targetObj._cards).toEqual([
-          'source-1',
-          'source-2',
-          'target-1',
-          'target-2',
-        ]);
+        expect(targetObj._cards).toEqual(
+          toCardEntries(['source-1', 'source-2', 'target-1', 'target-2']),
+        );
       }
 
       // Verify source stack was deleted
@@ -1708,7 +1721,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
@@ -1716,21 +1729,21 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const source1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source1-1', 'source1-2'],
+        cards: toCardEntries(['source1-1', 'source1-2']),
         faceUp: true,
       });
 
       const source2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 300, y: 300, r: 0 },
-        cards: ['source2-1'],
+        cards: toCardEntries(['source2-1']),
         faceUp: true,
       });
 
       const source3 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 400, y: 400, r: 0 },
-        cards: ['source3-1', 'source3-2', 'source3-3'],
+        cards: toCardEntries(['source3-1', 'source3-2', 'source3-3']),
         faceUp: true,
       });
 
@@ -1745,15 +1758,17 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         targetObj._kind === ObjectKind.Stack &&
         '_cards' in targetObj
       ) {
-        expect(targetObj._cards).toEqual([
-          'source1-1',
-          'source1-2',
-          'source2-1',
-          'source3-1',
-          'source3-2',
-          'source3-3',
-          'target-1',
-        ]);
+        expect(targetObj._cards).toEqual(
+          toCardEntries([
+            'source1-1',
+            'source1-2',
+            'source2-1',
+            'source3-1',
+            'source3-2',
+            'source3-3',
+            'target-1',
+          ]),
+        );
       }
 
       // Verify all source stacks were deleted
@@ -1766,21 +1781,21 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const stack1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['stack1-1', 'stack1-2'],
+        cards: toCardEntries(['stack1-1', 'stack1-2']),
         faceUp: true,
       });
 
       const stack2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['stack2-1'],
+        cards: toCardEntries(['stack2-1']),
         faceUp: true,
       });
 
       const stack3 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 300, y: 300, r: 0 },
-        cards: ['stack3-1'],
+        cards: toCardEntries(['stack3-1']),
         faceUp: true,
       });
 
@@ -1796,12 +1811,9 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         stack1Obj._kind === ObjectKind.Stack &&
         '_cards' in stack1Obj
       ) {
-        expect(stack1Obj._cards).toEqual([
-          'stack2-1',
-          'stack3-1',
-          'stack1-1',
-          'stack1-2',
-        ]);
+        expect(stack1Obj._cards).toEqual(
+          toCardEntries(['stack2-1', 'stack3-1', 'stack1-1', 'stack1-2']),
+        );
       }
 
       // Verify stack2 and stack3 were deleted
@@ -1815,14 +1827,14 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: false, // Face down
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source-1'],
+        cards: toCardEntries(['source-1']),
         faceUp: true, // Face up (different from target)
       });
 
@@ -1842,14 +1854,14 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 90 }, // Exhausted
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 }, // Ready (different from target)
-        cards: ['source-1'],
+        cards: toCardEntries(['source-1']),
         faceUp: true,
       });
 
@@ -1863,14 +1875,14 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 123, y: 456, r: 45 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 789, y: 101, r: 0 },
-        cards: ['source-1'],
+        cards: toCardEntries(['source-1']),
         faceUp: true,
       });
 
@@ -1886,7 +1898,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
@@ -1905,7 +1917,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['source-1'],
+        cards: toCardEntries(['source-1']),
         faceUp: true,
       });
 
@@ -1923,7 +1935,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source-1'],
+        cards: toCardEntries(['source-1']),
         faceUp: true,
       });
 
@@ -1936,14 +1948,14 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
       const validSourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source-1'],
+        cards: toCardEntries(['source-1']),
         faceUp: true,
       });
 
@@ -1969,7 +1981,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
@@ -1996,7 +2008,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
@@ -2020,14 +2032,14 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
       const emptySourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: [], // Empty
+        cards: toCardEntries([]), // Empty
         faceUp: true,
       });
 
@@ -2042,7 +2054,7 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         targetObj._kind === ObjectKind.Stack &&
         '_cards' in targetObj
       ) {
-        expect(targetObj._cards).toEqual(['target-1']); // Unchanged
+        expect(targetObj._cards).toEqual(toCardEntries(['target-1'])); // Unchanged
       }
     });
 
@@ -2051,14 +2063,14 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: manyCards,
+        cards: toCardEntries(manyCards),
         faceUp: true,
       });
 
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source-1', 'source-2'],
+        cards: toCardEntries(['source-1', 'source-2']),
         faceUp: true,
       });
 
@@ -2073,9 +2085,11 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
         const cards = (targetObj as { _cards: string[] })._cards;
         expect(cards.length).toBe(102);
         // Source cards should be on top (at beginning of array)
-        expect(cards.slice(0, 2)).toEqual(['source-1', 'source-2']);
+        expect(cards.slice(0, 2)).toEqual(
+          toCardEntries(['source-1', 'source-2']),
+        );
         // Last 2 target cards should be at the end
-        expect(cards.slice(-2)).toEqual(['card-98', 'card-99']);
+        expect(cards.slice(-2)).toEqual(toCardEntries(['card-98', 'card-99']));
       }
     });
   });
@@ -2085,21 +2099,21 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       const targetId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['target-1'],
+        cards: toCardEntries(['target-1']),
         faceUp: true,
       });
 
       const source1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['source1-1'],
+        cards: toCardEntries(['source1-1']),
         faceUp: true,
       });
 
       const source2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 300, y: 300, r: 0 },
-        cards: ['source2-1'],
+        cards: toCardEntries(['source2-1']),
         faceUp: true,
       });
 
@@ -2133,7 +2147,7 @@ describe('YjsActions - unstackCard', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: true,
       });
 
@@ -2153,7 +2167,7 @@ describe('YjsActions - unstackCard', () => {
         newStack._kind === ObjectKind.Stack &&
         '_cards' in newStack
       ) {
-        expect(newStack._cards).toEqual(['card-1']);
+        expect(newStack._cards).toEqual(toCardEntries(['card-1']));
       }
 
       // Verify source stack has remaining cards
@@ -2164,7 +2178,7 @@ describe('YjsActions - unstackCard', () => {
         sourceStack._kind === ObjectKind.Stack &&
         '_cards' in sourceStack
       ) {
-        expect(sourceStack._cards).toEqual(['card-2', 'card-3']);
+        expect(sourceStack._cards).toEqual(toCardEntries(['card-2', 'card-3']));
       }
     });
 
@@ -2173,7 +2187,7 @@ describe('YjsActions - unstackCard', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['only-card'],
+        cards: toCardEntries(['only-card']),
         faceUp: true,
       });
 
@@ -2190,7 +2204,7 @@ describe('YjsActions - unstackCard', () => {
         newStack._kind === ObjectKind.Stack &&
         '_cards' in newStack
       ) {
-        expect(newStack._cards).toEqual(['only-card']);
+        expect(newStack._cards).toEqual(toCardEntries(['only-card']));
       }
 
       // Verify source stack was deleted
@@ -2203,7 +2217,7 @@ describe('YjsActions - unstackCard', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: false,
       });
 
@@ -2226,7 +2240,7 @@ describe('YjsActions - unstackCard', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 90 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: true,
       });
 
@@ -2269,7 +2283,7 @@ describe('YjsActions - unstackCard', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: true,
       });
 
@@ -2295,7 +2309,7 @@ describe('YjsActions - unstackCard', () => {
       const sourceId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 200, r: 0 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: true,
       });
 
@@ -2330,11 +2344,14 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1', 'card-2', 'card-3', 'card-4', 'card-5'],
+      cards: toCardEntries(['card-1', 'card-2', 'card-3', 'card-4', 'card-5']),
     });
 
     const originalCards = [
-      ...(store.getObjectYMap(stackId)!.get('_cards') as string[]),
+      ...store
+        .getObjectYMap(stackId)!
+        .get('_cards')!
+        .map((e) => e.code),
     ];
 
     // Shuffle multiple times to ensure randomness
@@ -2343,7 +2360,10 @@ describe('shuffleStack', () => {
       const success = shuffleStack(store, stackId);
       expect(success).toBe(true);
 
-      const cards = store.getObjectYMap(stackId)!.get('_cards') as string[];
+      const cards = store
+        .getObjectYMap(stackId)!
+        .get('_cards')!
+        .map((e) => e.code);
 
       // Verify same cards exist
       expect(cards.length).toBe(originalCards.length);
@@ -2363,15 +2383,21 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-a', 'card-b', 'card-c'],
+      cards: toCardEntries(['card-a', 'card-b', 'card-c']),
     });
 
     const originalCards = new Set(
-      store.getObjectYMap(stackId)!.get('_cards') as string[],
+      store
+        .getObjectYMap(stackId)!
+        .get('_cards')!
+        .map((e) => e.code),
     );
     shuffleStack(store, stackId);
     const shuffledCards = new Set(
-      store.getObjectYMap(stackId)!.get('_cards') as string[],
+      store
+        .getObjectYMap(stackId)!
+        .get('_cards')!
+        .map((e) => e.code),
     );
 
     expect(shuffledCards).toEqual(originalCards);
@@ -2386,7 +2412,7 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['single-card'],
+      cards: toCardEntries(['single-card']),
     });
 
     const success = shuffleStack(store, stackId);
@@ -2397,7 +2423,7 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: [],
+      cards: toCardEntries([]),
     });
 
     const success = shuffleStack(store, stackId);
@@ -2418,7 +2444,7 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1', 'card-2', 'card-3'],
+      cards: toCardEntries(['card-1', 'card-2', 'card-3']),
     });
 
     // Track Yjs updates
@@ -2436,7 +2462,7 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 100, y: 200, r: 90 }, // Exhausted (rotated)
-      cards: ['card-1', 'card-2', 'card-3'],
+      cards: toCardEntries(['card-1', 'card-2', 'card-3']),
       faceUp: false,
       locked: false,
       meta: { deckName: 'Player 1', customProp: 'value' },
@@ -2483,7 +2509,7 @@ describe('shuffleStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1', 'card-2', 'card-3', 'card-4', 'card-5'],
+      cards: toCardEntries(['card-1', 'card-2', 'card-3', 'card-4', 'card-5']),
     });
 
     // Rapidly shuffle 3 times
@@ -2497,7 +2523,10 @@ describe('shuffleStack', () => {
     expect(result3).toBe(true);
 
     // Verify: Cards are still valid (all present, no duplicates)
-    const cards = store.getObjectYMap(stackId)!.get('_cards') as string[];
+    const cards = store
+      .getObjectYMap(stackId)!
+      .get('_cards')!
+      .map((e) => e.code);
     expect(new Set(cards).size).toBe(5); // No duplicates
     expect(cards.length).toBe(5); // All cards present
     expect(cards).toContain('card-1');
@@ -2521,19 +2550,19 @@ describe('Concurrent Operations', () => {
       const stack1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['card-1'],
+        cards: toCardEntries(['card-1']),
         faceUp: true,
       });
       const stack2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 100, r: 0 },
-        cards: ['card-2'],
+        cards: toCardEntries(['card-2']),
         faceUp: true,
       });
       const stack3 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 300, y: 100, r: 0 },
-        cards: ['card-3'],
+        cards: toCardEntries(['card-3']),
         faceUp: true,
       });
 
@@ -2583,13 +2612,13 @@ describe('Concurrent Operations', () => {
       const stack1 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['card-1'],
+        cards: toCardEntries(['card-1']),
         faceUp: true,
       });
       const stack2 = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 100, r: 0 },
-        cards: ['card-2'],
+        cards: toCardEntries(['card-2']),
         faceUp: true,
       });
 
@@ -2635,7 +2664,7 @@ describe('Concurrent Operations', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['card-1', 'card-2', 'card-3'],
+        cards: toCardEntries(['card-1', 'card-2', 'card-3']),
         faceUp: true,
       });
 
@@ -2656,20 +2685,26 @@ describe('Concurrent Operations', () => {
       // Verify first new stack has card-1 (was top)
       const stack1Obj = toTableObject(store.getObjectYMap(newStack1!)!);
       if (stack1Obj && stack1Obj._kind === ObjectKind.Stack) {
-        expect((stack1Obj as StackObject)._cards).toEqual(['card-1']);
+        expect((stack1Obj as StackObject)._cards).toEqual(
+          toCardEntries(['card-1']),
+        );
       }
 
       // Verify second new stack has card-2 (became top after first unstack)
       const stack2Obj = toTableObject(store.getObjectYMap(newStack2!)!);
       if (stack2Obj && stack2Obj._kind === ObjectKind.Stack) {
-        expect((stack2Obj as StackObject)._cards).toEqual(['card-2']);
+        expect((stack2Obj as StackObject)._cards).toEqual(
+          toCardEntries(['card-2']),
+        );
       }
 
       // Verify source stack still exists with 1 card remaining
       const sourceObj = toTableObject(store.getObjectYMap(stackId)!);
       expect(sourceObj).toBeDefined();
       if (sourceObj && sourceObj._kind === ObjectKind.Stack) {
-        expect((sourceObj as StackObject)._cards).toEqual(['card-3']);
+        expect((sourceObj as StackObject)._cards).toEqual(
+          toCardEntries(['card-3']),
+        );
       }
     });
 
@@ -2678,7 +2713,7 @@ describe('Concurrent Operations', () => {
       const stackId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['card-1', 'card-2'],
+        cards: toCardEntries(['card-1', 'card-2']),
         faceUp: true,
       });
 
@@ -2731,13 +2766,13 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const childId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-card'],
+        cards: toCardEntries(['child-card']),
         faceUp: true,
       });
 
@@ -2758,13 +2793,13 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const childId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-card'],
+        cards: toCardEntries(['child-card']),
         faceUp: true,
       });
 
@@ -2786,19 +2821,19 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const child1Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-1'],
+        cards: toCardEntries(['child-1']),
         faceUp: true,
       });
       const child2Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['child-2'],
+        cards: toCardEntries(['child-2']),
         faceUp: true,
       });
 
@@ -2817,19 +2852,19 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const child1Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-1'],
+        cards: toCardEntries(['child-1']),
         faceUp: true,
       });
       const newChildId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['new-child'],
+        cards: toCardEntries(['new-child']),
         faceUp: true,
       });
 
@@ -2858,13 +2893,13 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const childId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child'],
+        cards: toCardEntries(['child']),
         faceUp: true,
       });
 
@@ -2890,13 +2925,13 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const childId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-card'],
+        cards: toCardEntries(['child-card']),
         faceUp: true,
       });
 
@@ -2912,13 +2947,13 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const childId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-card'],
+        cards: toCardEntries(['child-card']),
         faceUp: true,
       });
 
@@ -2937,19 +2972,19 @@ describe('YjsActions - attachCards', () => {
       const bystanderId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['bystander'],
+        cards: toCardEntries(['bystander']),
         faceUp: true,
       });
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const childId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-card'],
+        cards: toCardEntries(['child-card']),
         faceUp: true,
       });
 
@@ -2969,19 +3004,19 @@ describe('YjsActions - attachCards', () => {
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const child1Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-1'],
+        cards: toCardEntries(['child-1']),
         faceUp: true,
       });
       const child2Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['child-2'],
+        cards: toCardEntries(['child-2']),
         faceUp: true,
       });
 
@@ -3002,25 +3037,25 @@ describe('YjsActions - attachCards', () => {
       const bystanderId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 200, y: 200, r: 0 },
-        cards: ['bystander'],
+        cards: toCardEntries(['bystander']),
         faceUp: true,
       });
       const parentId = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 0, y: 0, r: 0 },
-        cards: ['parent-card'],
+        cards: toCardEntries(['parent-card']),
         faceUp: true,
       });
       const child1Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 50, y: 50, r: 0 },
-        cards: ['child-1'],
+        cards: toCardEntries(['child-1']),
         faceUp: true,
       });
       const child2Id = createObject(store, {
         kind: ObjectKind.Stack,
         pos: { x: 100, y: 100, r: 0 },
-        cards: ['child-2'],
+        cards: toCardEntries(['child-2']),
         faceUp: true,
       });
 
@@ -3053,7 +3088,7 @@ describe('YjsActions - resetTable', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: true,
     });
 
@@ -3243,7 +3278,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 100, y: 100, r: 0 },
-      cards: ['card-1', 'card-2'],
+      cards: toCardEntries(['card-1', 'card-2']),
       faceUp: true,
     });
 
@@ -3262,7 +3297,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-a', 'card-b', 'card-c', 'card-d', 'card-e'],
+      cards: toCardEntries(['card-a', 'card-b', 'card-c', 'card-d', 'card-e']),
       faceUp: true,
     });
 
@@ -3281,7 +3316,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 50, y: 50, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: true,
     });
 
@@ -3295,7 +3330,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 200, y: 300, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: true,
     });
 
@@ -3316,7 +3351,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: true,
     });
 
@@ -3336,7 +3371,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1', 'card-2'],
+      cards: toCardEntries(['card-1', 'card-2']),
       faceUp: true,
     });
 
@@ -3344,7 +3379,9 @@ describe('createDiscardZoneForStack', () => {
     expect(newZoneId).not.toBeNull();
 
     // Mutate the source stack after zone creation
-    store.getObjectYMap(stackId)!.set('_cards', ['card-1', 'card-2', 'card-3']);
+    store
+      .getObjectYMap(stackId)!
+      .set('_cards', toCardEntries(['card-1', 'card-2', 'card-3']));
 
     const entry = store.getDiscardZone(newZoneId!) as DiscardZoneEntry;
     expect(entry.memberCardIds).toHaveLength(2);
@@ -3355,7 +3392,7 @@ describe('createDiscardZoneForStack', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: [],
+      cards: toCardEntries([]),
       faceUp: true,
     });
 
@@ -3378,7 +3415,7 @@ describe('setCardFaceUp', () => {
     const id = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: false,
     });
 
@@ -3391,7 +3428,7 @@ describe('setCardFaceUp', () => {
     const id = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: true,
     });
 
@@ -3404,7 +3441,7 @@ describe('setCardFaceUp', () => {
     const id = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-1'],
+      cards: toCardEntries(['card-1']),
       faceUp: false,
     });
 
@@ -3437,7 +3474,7 @@ describe('discardCardToZone', () => {
     const stackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 100, y: 100, r: 0 },
-      cards,
+      cards: toCardEntries(cards),
       faceUp,
     });
     const zoneId = createDiscardZoneForStack(store, stackId)!;
@@ -3448,7 +3485,7 @@ describe('discardCardToZone', () => {
     const orphanStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['orphan-card'],
+      cards: toCardEntries(['orphan-card']),
       faceUp: false,
     });
     expect(discardCardToZone(store, orphanStackId)).toBe(false);
@@ -3477,7 +3514,7 @@ describe('discardCardToZone', () => {
     expect(pileIds.length).toBe(1);
 
     const pileYMap = store.getObjectYMap(pileIds[0])!;
-    const cards = pileYMap.get('_cards') as string[];
+    const cards = pileYMap.get('_cards')!.map((e) => e.code);
     expect(cards).toContain('card-1');
     expect(pileYMap.get('_faceUp')).toBe(true);
   });
@@ -3514,7 +3551,10 @@ describe('discardCardToZone', () => {
     );
     expect(pileIds.length).toBe(1);
 
-    const cards = store.getObjectYMap(pileIds[0])!.get('_cards') as string[];
+    const cards = store
+      .getObjectYMap(pileIds[0])!
+      .get('_cards')!
+      .map((e) => e.code);
     expect(cards).toContain('card-1');
     expect(cards).toContain('card-2');
     expect(cards.length).toBe(2);
@@ -3563,7 +3603,8 @@ describe('discardCardToZone', () => {
     expect(pileAfterRediscard.length).toBe(1);
     const cards = store
       .getObjectYMap(pileAfterRediscard[0])!
-      .get('_cards') as string[];
+      .get('_cards')!
+      .map((e) => e.code);
     expect(cards).toContain('card-1');
     // Card must be face-up after discard
     expect(store.getObjectYMap(pileAfterRediscard[0])!.get('_faceUp')).toBe(
@@ -3598,7 +3639,7 @@ describe('discardCardToZone', () => {
     const sourceId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 0, y: 0, r: 0 },
-      cards: ['card-member'],
+      cards: toCardEntries(['card-member']),
       faceUp: true,
     });
     const zoneId = createDiscardZoneForStack(store, sourceId)!;
@@ -3607,7 +3648,7 @@ describe('discardCardToZone', () => {
     const foreignStackId = createObject(store, {
       kind: ObjectKind.Stack,
       pos: { x: 500, y: 500, r: 0 },
-      cards: ['card-member', 'other-card'],
+      cards: toCardEntries(['card-member', 'other-card']),
       faceUp: false,
     });
     // Delete the original source stack (card-member is now in foreign)
@@ -3619,7 +3660,7 @@ describe('discardCardToZone', () => {
     // Foreign stack should be smaller (card-member extracted)
     const foreignYMap = store.getObjectYMap(foreignStackId);
     if (foreignYMap) {
-      const remainingCards = foreignYMap.get('_cards') as string[];
+      const remainingCards = foreignYMap.get('_cards')!.map((e) => e.code);
       expect(remainingCards).toEqual(['other-card']);
     }
 
@@ -3630,7 +3671,10 @@ describe('discardCardToZone', () => {
         yMap.get('_containerId') === zoneId,
     );
     expect(pileIds.length).toBe(1);
-    const cards = store.getObjectYMap(pileIds[0])!.get('_cards') as string[];
+    const cards = store
+      .getObjectYMap(pileIds[0])!
+      .get('_cards')!
+      .map((e) => e.code);
     expect(cards).toContain('card-member');
     expect(store.getObjectYMap(pileIds[0])!.get('_faceUp')).toBe(true);
   });

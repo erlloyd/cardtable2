@@ -78,7 +78,7 @@ function getCardImageUrl(
   }
 
   // Get the top card ID (first in array)
-  const topCardId = obj._cards[0];
+  const topCardId = obj._cards[0].code;
   const card = ctx.gameAssets.cards[topCardId];
 
   if (!card) {
@@ -203,7 +203,7 @@ function renderMainCard(
     // Check if card needs rotation based on image orientation
     let needsRotation = false;
     if (ctx.gameAssets && obj._cards && obj._cards.length > 0) {
-      const topCardId = obj._cards[0];
+      const topCardId = obj._cards[0].code;
       const card = ctx.gameAssets.cards[topCardId];
       if (card) {
         needsRotation = shouldRotateCard(
@@ -266,7 +266,7 @@ function renderMainCard(
       !ctx.minimal &&
       shouldShowFallback
     ) {
-      const topCardCode = obj._cards[0];
+      const topCardCode = obj._cards[0].code;
       const text = ctx.createKindLabel(topCardCode);
       text.anchor.set(0.5, 0.5);
       text.position.set(0, 0);
@@ -310,7 +310,7 @@ function renderMainCard(
               errorMessage,
               errorType,
               stackObjectId: ctx.objectId,
-              cardId: obj._cards?.[0],
+              cardId: obj._cards?.[0]?.code,
             },
           );
         });

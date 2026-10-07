@@ -1208,6 +1208,21 @@ function clearDragState(
         );
       }
 
+      // Hover is deliberately kept through the drag (M2-T5), but the main thread
+      // cleared its preview at drag start. Reset the renderer's hover state so
+      // the next pointermove over the card is a real id change and re-emits
+      // object-hovered. No message here: the main thread is already cleared.
+      const staleHoveredId = context.hover.getHoveredObjectId();
+      if (staleHoveredId) {
+        context.visual.updateVisualFeedback(
+          staleHoveredId,
+          false,
+          context.selection.isSelected(staleHoveredId),
+          context.sceneManager,
+        );
+        context.hover.clearHover(staleHoveredId);
+      }
+
       // Note: Unstack operation already handled earlier (sent unstack-card on slop exceeded)
       // So we don't need special handling here - just normal drag completion, stack merge, or attach
       if (dropZone && draggedIds.length > 0) {

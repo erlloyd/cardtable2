@@ -385,7 +385,8 @@ export class BoardMessageBus {
           ids: selectedIds,
         });
       }
-      // Preview will reappear automatically if still hovering (hover manager handles this)
+      // Preview reappears on the next pointermove: the renderer resets its hover
+      // state at drag end, so that move re-emits object-hovered.
       ctx.onBoardDragEnd?.();
     });
 

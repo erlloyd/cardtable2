@@ -221,3 +221,100 @@ test.describe('Card Preview Hover - Dismiss Path (ct-zqc)', () => {
     expect(errors).toEqual([]);
   });
 });
+
+test.describe('Card Preview Hover - After Drag (ct-c4b)', () => {
+  test('preview reappears on first pointermove over the card after a drag', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => {
+      errors.push(error.message);
+    });
+
+    const tableId = `c4b-${test.info().testId.replace(/[^a-z0-9]/gi, '-')}`;
+    skipNextAutoClear(page);
+    await page.goto(`/table/${tableId}?seed=stack-of-5`);
+
+    const canvas = page.getByTestId('board-canvas');
+    await expect(canvas).toBeVisible({ timeout: 10000 });
+    await expect(canvas).toHaveAttribute('data-canvas-initialized', 'true', {
+      timeout: 10000,
+    });
+    await page.waitForFunction(
+      () => {
+        const store = (globalThis as any).__TEST_STORE__;
+        return store !== undefined && store.getAllObjects().size === 1;
+      },
+      { timeout: 5000 },
+    );
+    await page.evaluate(() => {
+      const store = (globalThis as any).__TEST_STORE__;
+      const transparentPng =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
+      store.setGameAssets({
+        packs: [],
+        cardTypes: { default: { size: 'standard', back: transparentPng } },
+        cards: { 'seed-card-1': { type: 'default', face: transparentPng } },
+        cardSets: {},
+        tokens: {},
+        counters: {},
+        mats: {},
+        tokenTypes: {},
+        statusTypes: {},
+        modifierStats: {},
+        iconTypes: {},
+      });
+    });
+
+    const canvasBBox = await canvas.boundingBox();
+    if (!canvasBBox) throw new Error('Canvas bounding box not available');
+    const startX = canvasBBox.x + canvasBBox.width / 2;
+    const startY = canvasBBox.y + canvasBBox.height / 2;
+    const endX = startX + 150;
+    const endY = startY;
+
+    const fire = (
+      type: 'pointermove' | 'pointerdown' | 'pointerup',
+      x: number,
+      y: number,
+      buttons: number,
+    ) =>
+      canvas.dispatchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        pageX: x,
+        pageY: y,
+        button: 0,
+        buttons,
+      });
+
+    // Hover -> preview visible.
+    await fire('pointermove', startX, startY, 0);
+    const preview = page.getByTestId('card-preview-hover');
+    await expect(preview).toBeVisible({ timeout: 2000 });
+
+    // Drag the stack: preview hides at drag start.
+    await fire('pointerdown', startX, startY, 1);
+    await page.waitForTimeout(50);
+    await fire('pointermove', startX + 50, startY, 1);
+    await fire('pointermove', endX, endY, 1);
+    await page.waitForTimeout(50);
+    await fire('pointerup', endX, endY, 0);
+    await expect(preview).not.toBeVisible({ timeout: 2000 });
+
+    // A single pointermove inside the stack's new position, without leaving it,
+    // must bring the preview back.
+    await fire('pointermove', endX + 1, endY, 0);
+    await expect(preview).toBeVisible({ timeout: 2000 });
+
+    expect(errors).toEqual([]);
+  });
+});

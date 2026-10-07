@@ -268,12 +268,13 @@ describe('loadScenario', () => {
   it('should throw error for HTTP errors', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,
+      status: 404,
       statusText: 'Not Found',
     });
 
     await expect(
       loadScenario('https://example.com/missing.json'),
-    ).rejects.toThrow('Failed to load scenario');
+    ).rejects.toThrow('HTTP 404 Not Found (https://example.com/missing.json)');
   });
 
   it('should throw error for invalid schema', async () => {

@@ -182,9 +182,7 @@ export async function loadScenario(url: string): Promise<Scenario> {
       status: response.status,
       statusText: response.statusText,
     });
-    throw new Error(
-      `Failed to load scenario: HTTP ${response.status} ${response.statusText} (${url})`,
-    );
+    throw new Error(`HTTP ${response.status} ${response.statusText} (${url})`);
   }
 
   let data: unknown;

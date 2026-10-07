@@ -4,11 +4,11 @@
  * Unit tests prove the store functions. This spec proves the real action path
  * (Create Discard Zone via the command palette, keyboard A / S / X through the
  * ActionRegistry, hand panel drag, board merge drag) carries the homeZone tag
- * on every card entry and that the no-home alert is actually raised.
+ * on every card entry and that the no-home toast is actually raised.
  *
  * - Scenario A: two zones whose decks share a card code, round-trip through
  *   the hand and a merge, then discard routes each copy to its own zone.
- * - Scenario B: an untagged card raises the no-home alert and does not move.
+ * - Scenario B: an untagged card raises the no-home toast and does not move.
  * - Scenario C: an encounter card shuffled into a player deck keeps its tag.
  *
  * Seeding initial stacks goes through __TEST_STORE__; every action under test
@@ -347,7 +347,7 @@ test.describe('Discard home zone — per-card routing (ct-1mv.8)', () => {
     expect(await pilesIn(page, zoneQ)).toHaveLength(1);
   });
 
-  test('B. untagged card: visible alert names the missing zone and nothing moves', async ({
+  test('B. untagged card: toast names the missing zone and nothing moves', async ({
     page,
   }) => {
     const AT = { x: 0, y: -100 };
@@ -355,18 +355,17 @@ test.describe('Discard home zone — per-card routing (ct-1mv.8)', () => {
     await expect.poll(async () => (await snapshot(page)).length).toBe(1);
     await selectAt(page, AT, 'orphan-stack');
 
-    // keyboard.press blocks until the alert is handled, so record and accept
-    // the dialog in a listener rather than waiting for it with waitForEvent.
-    const dialogs: { type: string; message: string }[] = [];
+    let dialogSeen = false;
     page.on('dialog', (dialog) => {
-      dialogs.push({ type: dialog.type(), message: dialog.message() });
-      void dialog.accept();
+      dialogSeen = true;
+      void dialog.dismiss();
     });
     await page.keyboard.press('x');
 
-    expect(dialogs).toHaveLength(1);
-    expect(dialogs[0].type).toBe('alert');
-    expect(dialogs[0].message).toContain('1 card has no discard zone');
+    await expect(page.getByRole('status')).toContainText(
+      '1 card has no discard zone',
+    );
+    expect(dialogSeen).toBe(false);
 
     const stack = await getObject(page, 'orphan-stack');
     expect(stack.cards).toEqual([{ code: 'orphan' }]);

@@ -35,6 +35,9 @@ import {
 } from './attachmentActions';
 import { registerHandActions } from './handActions';
 import type { ActionContext } from './types';
+import { showToast } from '../toast/toastStore';
+
+vi.mock('../toast/toastStore', () => ({ showToast: vi.fn() }));
 
 function makeContext(overrides: Partial<ActionContext> = {}): ActionContext {
   return {
@@ -473,6 +476,7 @@ describe('discard-card action (ct-1mv.6)', () => {
   beforeEach(() => {
     ActionRegistry.getInstance().clear();
     registerDefaultActions();
+    vi.mocked(showToast).mockClear();
     store = new YjsStore('test-discard-action');
   });
 
@@ -487,21 +491,22 @@ describe('discard-card action (ct-1mv.6)', () => {
     expect(action?.isAvailable(ctxFor([id]))).toBe(true);
   });
 
-  it('alerts once with the count for untagged stacks and moves nothing', () => {
-    const alert = vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
+  it('toasts once with the count for untagged stacks and moves nothing', () => {
     const a = stackWith(toCardEntries(['x']));
     const b = stackWith(toCardEntries(['y']));
     const action = ActionRegistry.getInstance().getAction('discard-card');
 
     void action?.execute(ctxFor([a, b]));
 
-    expect(alert).toHaveBeenCalledTimes(1);
-    expect(alert.mock.calls[0][0]).toContain('2 cards have no discard zone');
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showToast).mock.calls[0][0]).toContain(
+      '2 cards have no discard zone',
+    );
+    expect(vi.mocked(showToast).mock.calls[0][1]).toBe('info');
     expect(store.getObjectYMap(a)!.get('_cards')).toEqual(toCardEntries(['x']));
   });
 
-  it('mixed selection routes tagged stacks and alerts once for the rest', () => {
-    const alert = vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
+  it('mixed selection routes tagged stacks and toasts once for the rest', () => {
     const tagged = stackWith(toCardEntries(['t']));
     const zoneId = createDiscardZoneForStack(store, tagged)!;
     const untagged = stackWith(toCardEntries(['u']));
@@ -509,13 +514,14 @@ describe('discard-card action (ct-1mv.6)', () => {
 
     void action?.execute(ctxFor([tagged, untagged]));
 
-    expect(alert).toHaveBeenCalledTimes(1);
-    expect(alert.mock.calls[0][0]).toContain('1 card has no discard zone');
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showToast).mock.calls[0][0]).toContain(
+      '1 card has no discard zone',
+    );
     expect(store.getObjectYMap(tagged)!.get('_containerId')).toBe(zoneId);
   });
 
-  it('does not alert when every stack routes', () => {
-    const alert = vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
+  it('does not toast when every stack routes', () => {
     const tagged = stackWith(toCardEntries(['t']));
     createDiscardZoneForStack(store, tagged);
 
@@ -523,6 +529,6 @@ describe('discard-card action (ct-1mv.6)', () => {
       .getAction('discard-card')
       ?.execute(ctxFor([tagged]));
 
-    expect(alert).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
   });
 });

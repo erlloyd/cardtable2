@@ -5,7 +5,7 @@
  * - First discard into empty zone creates pile face-up with _containerId === zoneId
  * - Second discard merges onto existing pile (pile grows, stays face-up)
  * - Member card sitting in a foreign stack routes to home zone (proves per-card routing)
- * - A card with no home zone raises a visible alert and moves nothing
+ * - A card with no home zone raises a visible toast and moves nothing
  *
  * Strategy:
  * - Seed stacks via __TEST_STORE__.setObject (deterministic ids)
@@ -156,7 +156,7 @@ test.describe('Discard Zone — store-level loop', () => {
     expect(result.found).toBe(true);
   });
 
-  test('discard on a card with no home zone shows an alert and moves nothing', async ({
+  test('discard on a card with no home zone shows a toast and moves nothing', async ({
     page,
   }) => {
     await page.evaluate(() => {
@@ -180,18 +180,17 @@ test.describe('Discard Zone — store-level loop', () => {
       await g.__TEST_BOARD__!.waitForSelectionSettled();
     });
 
-    // keyboard.press blocks until the alert is handled, so record and accept
-    // the dialog in a listener, then assert on what it saw.
-    const dialogs: { type: string; message: string }[] = [];
+    let dialogSeen = false;
     page.on('dialog', (dialog) => {
-      dialogs.push({ type: dialog.type(), message: dialog.message() });
-      void dialog.accept();
+      dialogSeen = true;
+      void dialog.dismiss();
     });
     await page.keyboard.press('x');
 
-    expect(dialogs).toHaveLength(1);
-    expect(dialogs[0].type).toBe('alert');
-    expect(dialogs[0].message).toContain('1 card has no discard zone');
+    await expect(page.getByRole('status')).toContainText(
+      '1 card has no discard zone',
+    );
+    expect(dialogSeen).toBe(false);
 
     const stack = await page.evaluate(() => {
       const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;

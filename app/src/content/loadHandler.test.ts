@@ -30,6 +30,7 @@ import {
 import type * as ContentIndex from './index';
 import * as YjsActions from '../store/YjsActions';
 import * as DeckImportEngine from './DeckImportEngine';
+import { showToast } from '../toast/toastStore';
 import { clearLoadableEntries, setLoadableEntries } from './loadablesRegistry';
 import { COUNTER_TYPE_GENERIC } from '../renderer/objects/counter/constants';
 import type { YjsStore } from '../store/YjsStore';
@@ -62,6 +63,8 @@ vi.mock('./index', async () => {
     ),
   };
 });
+
+vi.mock('../toast/toastStore', () => ({ showToast: vi.fn() }));
 
 vi.mock('./loadScenarioHelper', () => ({
   loadScenarioContent: vi.fn(),
@@ -116,7 +119,6 @@ const NEUTRAL_VIEWPORT: ViewportState = {
 const getViewportState = () => Promise.resolve(NEUTRAL_VIEWPORT);
 
 beforeEach(() => {
-  vi.spyOn(globalThis, 'alert').mockImplementation(() => {});
   vi.spyOn(YjsActions, 'createObject').mockReturnValue('mock-id');
 });
 
@@ -199,7 +201,7 @@ describe('handleLoadSelection — replace + scenario', () => {
 });
 
 describe('handleLoadSelection — replace + non-scenario', () => {
-  it('warns + alerts on unsupported replace types', async () => {
+  it('warns + toasts on unsupported replace types', async () => {
     const entry: LoadableEntry = {
       type: 'deck',
       label: 'Deck',
@@ -215,6 +217,10 @@ describe('handleLoadSelection — replace + non-scenario', () => {
     );
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('Replace mode is only supported'),
+    );
+    expect(showToast).toHaveBeenCalledWith(
+      expect.stringContaining('replace mode is not yet supported'),
+      'error',
     );
   });
 });
@@ -678,7 +684,7 @@ describe('handleLoadSelection — additive + provider', () => {
     expect(store.setObject).not.toHaveBeenCalled();
   });
 
-  it('alerts and bails when provider config is invalid', async () => {
+  it('toasts and bails when provider config is invalid', async () => {
     const store = makeStore({ pluginId: 'p', gameAssets: makeAssets() });
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     const badEntry: LoadableEntry = {
@@ -694,9 +700,13 @@ describe('handleLoadSelection — additive + provider', () => {
       expect.stringContaining('Provider source missing'),
       expect.anything(),
     );
+    expect(showToast).toHaveBeenCalledWith(
+      '"Deck" provider config is missing apiEndpoints or labels.',
+      'error',
+    );
   });
 
-  it('alerts when importFromApi returns an error', async () => {
+  it('toasts when importFromApi returns an error', async () => {
     const store = makeStore({ pluginId: 'p', gameAssets: makeAssets() });
     restoreProvider = setDeckInputProvider(() =>
       Promise.resolve({ deckId: '999', isPrivate: false }),
@@ -715,6 +725,10 @@ describe('handleLoadSelection — additive + provider', () => {
     expect(err).toHaveBeenCalledWith(
       expect.stringContaining('Provider import failed'),
       expect.anything(),
+    );
+    expect(showToast).toHaveBeenCalledWith(
+      'Failed to import deck: API returned 404',
+      'error',
     );
   });
 });

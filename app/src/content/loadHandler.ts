@@ -52,6 +52,7 @@ import {
   LOAD_ADDITIVE_FAILED,
 } from '../constants/errorIds';
 import { dbg } from '../dev/dbg';
+import { showToast } from '../toast/toastStore';
 
 /**
  * Item payload narrowing helpers.
@@ -188,9 +189,10 @@ export async function handleLoadSelection(
       console.warn(
         `[Load] Replace mode is only supported for type "scenario"; "${entry.type}" was ignored`,
       );
-      alert(
+      showToast(
         `Loading "${entry.label}" in replace mode is not yet supported. ` +
           `Only scenario replace loads are wired right now.`,
+        'error',
       );
       return;
     }
@@ -237,7 +239,10 @@ export async function handleLoadSelection(
       '[Load] No gameAssets in store; cannot instantiate additive loadable',
       { errorId: LOAD_ADDITIVE_FAILED, entryType: entry.type },
     );
-    alert('Cannot load additional content before plugin assets are ready.');
+    showToast(
+      'Cannot load additional content before plugin assets are ready.',
+      'error',
+    );
     return;
   }
 
@@ -269,7 +274,10 @@ export async function handleLoadSelection(
     const setEntries = gameAssets.cardSets[setName];
     if (!setEntries) {
       console.warn(`[Load] Card set "${setName}" not found in gameAssets`);
-      alert(`Card set "${setName}" is not present in this plugin.`);
+      showToast(
+        `Card set "${setName}" is not present in this plugin.`,
+        'error',
+      );
       return;
     }
     const cardCodes: string[] = [];
@@ -305,7 +313,7 @@ export async function handleLoadSelection(
  *   4. translate the engine's positions onto the live table at viewport
  *      center + jitter, generating fresh top sort keys
  *
- * Failure cases surface via `alert` with stable errorIds; we never throw.
+ * Failure cases surface via a toast with stable errorIds; we never throw.
  */
 async function runProviderLoadable(
   entry: LoadableEntry,
@@ -323,8 +331,9 @@ async function runProviderLoadable(
         module: source.module,
       },
     );
-    alert(
+    showToast(
       `"${entry.label}" provider config is missing apiEndpoints or labels.`,
+      'error',
     );
     return;
   }
@@ -335,7 +344,7 @@ async function runProviderLoadable(
       '[Load] No gameAssets in store; cannot run provider loadable',
       { errorId: LOAD_ADDITIVE_FAILED, entryType: entry.type },
     );
-    alert('Cannot import a deck before plugin assets are ready.');
+    showToast('Cannot import a deck before plugin assets are ready.', 'error');
     return;
   }
 
@@ -354,7 +363,7 @@ async function runProviderLoadable(
       entryType: entry.type,
       error: message,
     });
-    alert(`Failed to collect deck input: ${message}`);
+    showToast(`Failed to collect deck input: ${message}`, 'error');
     return;
   }
 
@@ -393,7 +402,7 @@ async function runProviderLoadable(
       deckId: input.deckId,
       error: result.error,
     });
-    alert(`Failed to import deck: ${result.error}`);
+    showToast(`Failed to import deck: ${result.error}`, 'error');
     return;
   }
 
@@ -567,7 +576,7 @@ export async function loadScenarioByFile(
       '[Load Scenario] No pluginId in metadata; cannot load scenario',
       { errorId: ACTION_LOAD_SCENARIO_FAILED, scenarioFile },
     );
-    alert('No plugin is bound to this table.');
+    showToast('No plugin is bound to this table.', 'error');
     return;
   }
   try {
@@ -620,7 +629,7 @@ export async function loadScenarioByFile(
       scenarioFile,
       error: message,
     });
-    alert(`Failed to load scenario: ${message}`);
+    showToast(`Failed to load scenario: ${message}`, 'error');
   }
 }
 

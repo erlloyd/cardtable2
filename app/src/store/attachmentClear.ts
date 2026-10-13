@@ -2,6 +2,9 @@ import type { AttachmentData } from '@cardtable2/shared';
 
 export type ClearableAttachmentKey = 'tokens' | 'status' | 'modifiers';
 
+export const CLEARABLE_ATTACHMENT_KEYS: ReadonlyArray<ClearableAttachmentKey> =
+  ['tokens', 'status', 'modifiers'];
+
 type Meta = Record<string, unknown>;
 
 export function clearAttachmentKeys(

@@ -17,6 +17,7 @@ import { ATTACHMENT_OBJECT_NOT_FOUND } from '../constants/errorIds';
 import { CARD_ACTIONS } from './types';
 import type { ActionContext } from './types';
 import {
+  CLEARABLE_ATTACHMENT_KEYS,
   clearAttachmentKeys,
   type ClearableAttachmentKey,
 } from '../store/attachmentClear';
@@ -95,16 +96,10 @@ export function registerAttachmentActions(
       registry,
       'clear-attachments',
       'Clear Tokens, Statuses & Modifiers',
-      CLEARABLE_KEYS,
+      CLEARABLE_ATTACHMENT_KEYS,
     );
   }
 }
-
-const CLEARABLE_KEYS: ClearableAttachmentKey[] = [
-  'tokens',
-  'status',
-  'modifiers',
-];
 
 function hasEntries(types: object | undefined): boolean {
   return types !== undefined && Object.keys(types).length > 0;

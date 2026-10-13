@@ -132,15 +132,21 @@ describe('registerDefaultActions cleanup (ct-ajw.42)', () => {
     expect(registry.size).toBe(0);
   });
 
-  it('registerHandActions cleanup removes add-to-hand without a duplicate warning', () => {
+  it('registerHandActions cleanup removes the draw actions without a duplicate warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const registry = ActionRegistry.getInstance();
+    const ids = [
+      'draw-to-hand',
+      'draw-to-table',
+      'draw-all-to-hand',
+      'draw-all-to-table',
+    ];
 
     registerHandActions(registry)();
-    expect(registry.getAction('add-to-hand')).toBeUndefined();
+    for (const id of ids) expect(registry.getAction(id)).toBeUndefined();
 
     registerHandActions(registry);
-    expect(registry.getAction('add-to-hand')).toBeDefined();
+    for (const id of ids) expect(registry.getAction(id)).toBeDefined();
     expect(warn).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,10 @@ const RESERVED_SHORTCUTS = new Set([
   'F12', // Dev tools
 ]);
 
+const PREFIX_TIMEOUT_MS = 2000;
+
+const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
+
 /**
  * Manages keyboard shortcuts for actions.
  * Handles shortcut registration, conflict detection, and cross-platform normalization.
@@ -27,6 +31,9 @@ const RESERVED_SHORTCUTS = new Set([
 export class KeyboardManager {
   private shortcuts: Map<string, string> = new Map(); // normalized shortcut → actionId
   private actionRegistry: ActionRegistry;
+  private prefix = '';
+  private prefixTimeout: ReturnType<typeof setTimeout> | null = null;
+  private onPrefixChange: ((prefix: string) => void) | null = null;
 
   constructor(actionRegistry: ActionRegistry) {
     this.actionRegistry = actionRegistry;
@@ -91,6 +98,26 @@ export class KeyboardManager {
       return false;
     }
 
+    const hasModifier =
+      event.ctrlKey || event.metaKey || event.altKey || event.shiftKey;
+    const digit = /^Digit(\d)$/.exec(event.code)?.[1];
+    if (digit && !hasModifier && (digit !== '0' || this.prefix !== '')) {
+      this.setPrefix(this.prefix + digit);
+      this.prefixTimeout = setTimeout(() => {
+        this.clearPrefix();
+      }, PREFIX_TIMEOUT_MS);
+      event.preventDefault();
+      return true;
+    }
+
+    // Pressing a modifier on the way to a shortcut must not wipe the number
+    if (MODIFIER_KEYS.has(event.key)) {
+      return false;
+    }
+
+    const numericPrefix = this.prefix === '' ? undefined : Number(this.prefix);
+    this.clearPrefix();
+
     const normalized = this.normalizeKeyEvent(event);
 
     // Check pre-registered shortcuts first
@@ -134,16 +161,44 @@ export class KeyboardManager {
     event.stopPropagation();
 
     // Execute the action
-    this.actionRegistry.execute(actionId, context).catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('[KeyboardManager] Action execution failed', {
-        errorId: KEYBOARD_ACTION_EXECUTE_FAILED,
-        actionId,
-        error: message,
+    const executeContext =
+      numericPrefix === undefined ? context : { ...context, numericPrefix };
+    this.actionRegistry
+      .execute(actionId, executeContext)
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[KeyboardManager] Action execution failed', {
+          errorId: KEYBOARD_ACTION_EXECUTE_FAILED,
+          actionId,
+          error: message,
+        });
       });
-    });
 
     return true;
+  }
+
+  /**
+   * Subscribe to changes of the pending number prefix (e.g. the 3 in "3D")
+   */
+  public setOnPrefixChange(callback: (prefix: string) => void): void {
+    this.onPrefixChange = callback;
+  }
+
+  /**
+   * Discard the pending number prefix and cancel its expiry timer
+   */
+  public clearPrefix(): void {
+    this.setPrefix('');
+  }
+
+  private setPrefix(prefix: string): void {
+    if (this.prefixTimeout !== null) {
+      clearTimeout(this.prefixTimeout);
+      this.prefixTimeout = null;
+    }
+    if (prefix === this.prefix) return;
+    this.prefix = prefix;
+    this.onPrefixChange?.(prefix);
   }
 
   /**

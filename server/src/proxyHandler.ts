@@ -1,7 +1,7 @@
 /**
- * Azure Blob Storage Proxy Handler
+ * Card Image Proxy Handler
  *
- * Proxies card image requests to Azure Blob Storage with aggressive caching.
+ * Proxies card image requests to the Cerebro R2 image bucket with aggressive caching.
  * Solves CORS issues and provides ETag-based cache validation.
  */
 
@@ -23,7 +23,7 @@ export interface ProxyHandlerOptions {
 }
 
 /**
- * Create an Express route handler for proxying card images from Azure Blob Storage
+ * Create an Express route handler for proxying card images from the Cerebro R2 image bucket
  *
  * @param options - Configuration options
  * @returns Express route handler for /api/card-image/*path
@@ -65,27 +65,27 @@ export function createProxyHandler(options: ProxyHandlerOptions = {}) {
       return;
     }
 
-    const azureUrl = `https://cerebrodatastorage.blob.core.windows.net/${imagePath}`;
+    const upstreamUrl = `https://pub-d27e6715f4ba4529bc9d8fd13938a5a1.r2.dev/${imagePath}`;
 
     try {
       if (enableLogging) {
         console.log(`[Proxy] Fetching image: ${imagePath}`);
       }
 
-      // Fetch from Azure
-      const response = await fetch(azureUrl);
+      // Fetch from upstream
+      const response = await fetch(upstreamUrl);
 
       if (!response.ok) {
-        // Log the actual Azure status for debugging
+        // Log the actual upstream status for debugging
         if (enableLogging) {
-          console.error(`[Proxy] Azure request failed for ${imagePath}`, {
-            azureStatus: response.status,
-            azureStatusText: response.statusText,
+          console.error(`[Proxy] Upstream request failed for ${imagePath}`, {
+            upstreamStatus: response.status,
+            upstreamStatusText: response.statusText,
             path: imagePath,
           });
         }
 
-        // Return appropriate status based on Azure response
+        // Return appropriate status based on upstream response
         if (response.status === 404) {
           res.status(404).send('Image not found');
           return;

@@ -1,6 +1,7 @@
 import type { YjsStore } from './YjsStore';
 import {
   ObjectKind,
+  type AttachmentData,
   type Position,
   type TableObject,
   type AttachmentLayout,
@@ -17,6 +18,15 @@ import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
+import {
+  hasAttachments,
+  mergeAttachments,
+  type AttachmentMergeChoice,
+} from './attachmentMerge';
+import {
+  clearAttachmentKeys,
+  CLEARABLE_ATTACHMENT_KEYS,
+} from './attachmentClear';
 import { CARD_WIDTH, CARD_HEIGHT } from '../renderer/constants';
 
 /**
@@ -572,6 +582,8 @@ export function exhaustCards(store: YjsStore, ids: string[]): string[] {
  * @param store - YjsStore instance
  * @param ids - Array of source stack IDs to merge into target
  * @param targetId - Optional target stack ID. If not provided, uses first id in ids array
+ * @param attachments - Which tokens/statuses/modifiers the merged stack keeps:
+ *   'merge' combines both sides, 'target' keeps the target's, 'source' keeps the sources'
  * @returns Array of successfully stacked source IDs
  *
  * @example
@@ -588,6 +600,7 @@ export function stackObjects(
   store: YjsStore,
   ids: string[],
   targetId?: string,
+  attachments: AttachmentMergeChoice = 'merge',
 ): string[] {
   // Determine target and source ids
   let target: string;
@@ -683,6 +696,39 @@ export function stackObjects(
 
     // Update target stack with merged cards
     targetYMap.set('_cards', newCards);
+
+    const statusTypes = store.getGameAssets()?.statusTypes;
+    const sourceTotal = sourceStacksData.reduce<AttachmentData>(
+      (total, sourceData) =>
+        mergeAttachments(
+          total,
+          store.getObjectYMap(sourceData.id)?.get('_meta')?.attachments ?? {},
+          statusTypes,
+        ),
+      {},
+    );
+
+    if (
+      attachments === 'source' ||
+      (attachments === 'merge' && hasAttachments(sourceTotal))
+    ) {
+      const targetMeta = targetYMap.get('_meta') ?? {};
+      const targetAttachments = targetMeta.attachments as
+        | AttachmentData
+        | undefined;
+      const merged =
+        attachments === 'source'
+          ? sourceTotal
+          : mergeAttachments(targetAttachments ?? {}, sourceTotal, statusTypes);
+
+      if (hasAttachments(merged)) {
+        targetYMap.set('_meta', { ...targetMeta, attachments: merged });
+      } else if (targetMeta.attachments !== undefined) {
+        const rest = { ...targetMeta };
+        delete rest.attachments;
+        targetYMap.set('_meta', rest);
+      }
+    }
 
     // Delete source stacks
     for (const sourceData of sourceStacksData) {
@@ -1294,14 +1340,21 @@ export function resolveHomeZone(
   entry: CardEntry,
 ): string | null {
   if (!entry.homeZone) return null;
-  const zoneYMap = store.getObjectYMap(entry.homeZone);
-  if (
+  return isDiscardZone(store, entry.homeZone) ? entry.homeZone : null;
+}
+
+function isDiscardZone(store: YjsStore, zoneId: string): boolean {
+  const zoneYMap = store.getObjectYMap(zoneId);
+  return (
     zoneYMap?.get('_kind') === ObjectKind.Zone &&
     zoneYMap.get('_meta')?.isDiscardZone === true
-  ) {
-    return entry.homeZone;
-  }
-  return null;
+  );
+}
+
+/** True when the stack sits in a discard zone (it is that zone's pile). */
+export function isDiscardPile(store: YjsStore, stackId: string): boolean {
+  const containerId = store.getObjectYMap(stackId)?.get('_containerId');
+  return !!containerId && isDiscardZone(store, containerId);
 }
 
 export type DiscardResult = 'routed' | 'no-home' | 'invalid';
@@ -1363,6 +1416,12 @@ export function discardCardToZone(
     const extractedYMap = store.getObjectYMap(extractedStackId)!;
     extractedYMap.set('_faceUp', true);
 
+    const meta = extractedYMap.get('_meta');
+    if (meta) {
+      const cleared = clearAttachmentKeys(meta, CLEARABLE_ATTACHMENT_KEYS);
+      if (cleared !== meta) extractedYMap.set('_meta', cleared);
+    }
+
     const existingPileId = findZonePile(store, zoneId);
 
     if (existingPileId && existingPileId !== extractedStackId) {
@@ -1372,7 +1431,7 @@ export function discardCardToZone(
         pileYMap.set('_faceUp', true);
       }
       // Merge extracted stack onto the pile
-      stackObjects(store, [extractedStackId], existingPileId);
+      stackObjects(store, [extractedStackId], existingPileId, 'target');
       // stackObjects deletes the source; the pile retains its _containerId
     } else {
       // No existing pile — move extracted stack into zone and mark it

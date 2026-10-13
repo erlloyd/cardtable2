@@ -16,6 +16,10 @@ import type { ActionRegistry } from './ActionRegistry';
 import { ATTACHMENT_OBJECT_NOT_FOUND } from '../constants/errorIds';
 import { CARD_ACTIONS } from './types';
 import type { ActionContext } from './types';
+import {
+  clearAttachmentKeys,
+  type ClearableAttachmentKey,
+} from '../store/attachmentClear';
 
 const CLEAR_ACTION_IDS = [
   'clear-tokens',
@@ -96,8 +100,11 @@ export function registerAttachmentActions(
   }
 }
 
-const CLEARABLE_KEYS = ['tokens', 'status', 'modifiers'] as const;
-type ClearableKey = (typeof CLEARABLE_KEYS)[number];
+const CLEARABLE_KEYS: ClearableAttachmentKey[] = [
+  'tokens',
+  'status',
+  'modifiers',
+];
 
 function hasEntries(types: object | undefined): boolean {
   return types !== undefined && Object.keys(types).length > 0;
@@ -111,7 +118,7 @@ function registerClearAction(
   registry: ActionRegistry,
   id: string,
   label: string,
-  keys: readonly ClearableKey[],
+  keys: ReadonlyArray<ClearableAttachmentKey>,
   shortcut?: string,
 ): void {
   const getAttachments = (
@@ -146,15 +153,13 @@ function registerClearAction(
             continue;
           }
 
-          const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
-          const attachments = (meta.attachments as AttachmentData) || {};
-          if (!hasSomethingToClear(attachments)) continue;
+          const meta: Record<string, unknown> | undefined = yMap.get('_meta');
+          if (!meta) continue;
 
-          const remaining = { ...attachments };
-          for (const key of keys) {
-            delete remaining[key];
+          const next = clearAttachmentKeys(meta, keys);
+          if (next !== meta) {
+            yMap.set('_meta', next);
           }
-          yMap.set('_meta', { ...meta, attachments: remaining });
         }
       });
     },

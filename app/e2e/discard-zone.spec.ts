@@ -486,4 +486,192 @@ test.describe('Discard Zone — store-level loop', () => {
     expect(afterRediscard.pos).not.toBeNull();
     expect((afterRediscard.pos as { x: number; y: number }).x).toBe(75);
   });
+
+  // ct-9yd.7: the Discard action strips tokens, statuses and modifiers
+  const ATTACHMENTS = {
+    attachments: {
+      tokens: { damage: 3 },
+      status: { stunned: 1 },
+      modifiers: { ATK: 1 },
+    },
+  };
+
+  async function seedDiscardScene(
+    page: Page,
+    stacks: Record<string, unknown>[],
+    zoneId: string,
+  ) {
+    await page.evaluate(
+      ({ stacks, zoneId }) => {
+        const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+        store.setObject(zoneId, {
+          _kind: 'zone',
+          _pos: { x: 420, y: 0, r: 0 },
+          _sortKey: '000000',
+          _locked: false,
+          _selectedBy: null,
+          _containerId: null,
+          _meta: { isDiscardZone: true, label: 'Discard' },
+        });
+        for (const s of stacks) {
+          store.setObject(String(s.id), s.obj);
+        }
+      },
+      { stacks, zoneId },
+    );
+  }
+
+  async function discardSelected(page: Page) {
+    await page.evaluate(async () => {
+      const g = globalThis as unknown as PageGlobals;
+      g.__ctTest!.click({ x: 0, y: 0 });
+      await g.__TEST_BOARD__!.waitForSelectionSettled();
+    });
+    await page.keyboard.press('x');
+    await page.evaluate(async () => {
+      await (
+        globalThis as unknown as PageGlobals
+      ).__TEST_BOARD__!.waitForRenderer();
+    });
+  }
+
+  function stackObj(
+    pos: { x: number; y: number },
+    cards: CardEntry[],
+    extra: Record<string, unknown>,
+  ) {
+    return {
+      _kind: 'stack',
+      _pos: { ...pos, r: 0 },
+      _sortKey: '000001',
+      _locked: false,
+      _selectedBy: null,
+      _containerId: null,
+      _meta: {},
+      _cards: cards,
+      _faceUp: false,
+      ...extra,
+    };
+  }
+
+  async function readStack(page: Page, id: string) {
+    return page.evaluate((id) => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      const obj = store.getAllObjects().get(id);
+      return obj
+        ? {
+            cards: (obj._cards ?? []).map((c) => c.code),
+            containerId: obj._containerId ?? null,
+            attachments: (obj._meta as Record<string, unknown>).attachments,
+          }
+        : null;
+    }, id);
+  }
+
+  test('discard of a single card with tokens into an empty zone arrives with none', async ({
+    page,
+  }) => {
+    await seedDiscardScene(
+      page,
+      [
+        {
+          id: 'att-src',
+          obj: stackObj(
+            { x: 0, y: 0 },
+            [{ code: 'att-a', homeZone: 'att-zone' }],
+            { _meta: ATTACHMENTS },
+          ),
+        },
+      ],
+      'att-zone',
+    );
+    expect((await readStack(page, 'att-src'))?.attachments).toBeDefined();
+
+    await discardSelected(page);
+
+    const piles = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      return Array.from(store.getAllObjects().values())
+        .filter((o) => o._kind === 'stack' && o._containerId === 'att-zone')
+        .map((o) => ({
+          cards: o._cards?.map((c) => c.code),
+          attachments: (o._meta as Record<string, unknown>).attachments,
+        }));
+    });
+    expect(piles).toEqual([{ cards: ['att-a'], attachments: undefined }]);
+  });
+
+  test('discard of a single card with tokens onto an existing pile leaves the pile clean', async ({
+    page,
+  }) => {
+    await seedDiscardScene(
+      page,
+      [
+        {
+          id: 'att-pile',
+          obj: stackObj(
+            { x: 420, y: 0 },
+            [{ code: 'att-p', homeZone: 'att-zone' }],
+            { _containerId: 'att-zone', _faceUp: true },
+          ),
+        },
+        {
+          id: 'att-src',
+          obj: stackObj(
+            { x: 0, y: 0 },
+            [{ code: 'att-a', homeZone: 'att-zone' }],
+            { _meta: ATTACHMENTS },
+          ),
+        },
+      ],
+      'att-zone',
+    );
+
+    await discardSelected(page);
+
+    expect(await readStack(page, 'att-src')).toBeNull();
+    const pile = await readStack(page, 'att-pile');
+    expect(pile?.cards).toEqual(['att-a', 'att-p']);
+    expect(pile?.containerId).toBe('att-zone');
+    expect(pile?.attachments).toBeUndefined();
+  });
+
+  test('discard of the top card of a multi-card stack: card arrives clean, tokens stay on the stack', async ({
+    page,
+  }) => {
+    await seedDiscardScene(
+      page,
+      [
+        {
+          id: 'att-src',
+          obj: stackObj(
+            { x: 0, y: 0 },
+            [
+              { code: 'att-top', homeZone: 'att-zone' },
+              { code: 'att-rest', homeZone: 'att-zone' },
+            ],
+            { _meta: ATTACHMENTS },
+          ),
+        },
+      ],
+      'att-zone',
+    );
+
+    await discardSelected(page);
+
+    const remaining = await readStack(page, 'att-src');
+    expect(remaining?.cards).toEqual(['att-rest']);
+    expect(remaining?.attachments).toEqual(ATTACHMENTS.attachments);
+
+    const discarded = await page.evaluate(() => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      return Array.from(store.getAllObjects().values())
+        .filter((o) => o._kind === 'stack' && o._containerId === 'att-zone')
+        .map((o) => ({
+          cards: o._cards?.map((c) => c.code),
+          attachments: (o._meta as Record<string, unknown>).attachments,
+        }));
+    });
+    expect(discarded).toEqual([{ cards: ['att-top'], attachments: undefined }]);
+  });
 });

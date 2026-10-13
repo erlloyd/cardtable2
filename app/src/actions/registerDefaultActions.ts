@@ -147,29 +147,6 @@ export function registerDefaultActions(): () => void {
   });
 
   register({
-    id: 'draw-card',
-    label: 'Draw Card',
-    shortLabel: 'Draw',
-    icon: '🃏',
-    shortcut: 'D',
-    category: CARD_ACTIONS,
-    description: 'Draw a card from the deck',
-    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
-    execute: () => console.log('Draw card'),
-  });
-
-  register({
-    id: 'deal-cards',
-    label: 'Deal Cards',
-    shortLabel: 'Deal',
-    icon: '📤',
-    category: CARD_ACTIONS,
-    description: 'Deal cards to all players',
-    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
-    execute: () => console.log('Deal cards'),
-  });
-
-  register({
     id: 'stack-cards',
     label: 'Stack Cards',
     shortLabel: 'Stack',

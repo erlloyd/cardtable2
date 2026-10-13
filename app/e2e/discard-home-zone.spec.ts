@@ -287,9 +287,9 @@ test.describe('Discard home zone — per-card routing (ct-1mv.8)', () => {
       { code: 'q1', homeZone: zoneQ },
     ]);
 
-    // P's top card goes to the hand via the 'a' shortcut.
+    // P's top card goes to the hand via the 'd' shortcut.
     await selectAt(page, P, 'deck-p');
-    await page.keyboard.press('a');
+    await page.keyboard.press('d');
     await expect(page.locator('.hand-panel__card')).toHaveCount(1);
     expect((await getObject(page, 'deck-p')).cards).toEqual([
       { code: 'p1', homeZone: zoneP },

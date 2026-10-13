@@ -288,7 +288,7 @@ describe('KeyboardManager', () => {
         keydown(true),
         mockContext,
       );
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
       expect(executeFn).not.toHaveBeenCalled();
     });
 

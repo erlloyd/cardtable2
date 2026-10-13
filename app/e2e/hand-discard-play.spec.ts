@@ -403,10 +403,14 @@ test.describe('Hand card discard and Play placement (ct-3pj.4)', () => {
     await settleHover();
     await page.keyboard.press('x');
     await expect.poll(() => getHandCodes(page, handId)).toHaveLength(2);
-    await settleHover();
+
+    // Without the pointer re-entering a card, the reflowed card is not
+    // hovered, so a second plain press discards nothing.
     await page.keyboard.press('x');
-    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(1);
-    expect((await getZonePile(page))[0].cards).toHaveLength(3);
+    await page.waitForTimeout(300);
+    await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(0);
+    expect(await getHandCodes(page, handId)).toHaveLength(2);
+    expect((await getZonePile(page))[0].cards).toHaveLength(2);
   });
 });
 

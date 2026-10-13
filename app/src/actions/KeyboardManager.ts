@@ -153,7 +153,7 @@ export class KeyboardManager {
 
     if (event.repeat && action.noRepeat) {
       event.preventDefault();
-      return false;
+      return true;
     }
 
     // Check if action is available in current context

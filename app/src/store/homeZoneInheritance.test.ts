@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ObjectKind, type CardEntry } from '@cardtable2/shared';
 import { YjsStore } from './YjsStore';
-import { createObject, stackObjects, discardCardToZone } from './YjsActions';
+import {
+  createObject,
+  stackObjects,
+  discardCardToZone,
+  fillHomeZone,
+  clearHomeZones,
+} from './YjsActions';
 
 const POS = { x: 0, y: 0, r: 0 };
 
@@ -154,5 +160,142 @@ describe('stackObjects home zone inheritance', () => {
     const untagged = makeStack([{ code: 'u1' }]);
     expect(discardCardToZone(store, tagged)).toBe('routed');
     expect(discardCardToZone(store, untagged)).toBe('no-home');
+  });
+});
+
+describe('fillHomeZone and clearHomeZones', () => {
+  let store: YjsStore;
+  let zoneA: string;
+  let zoneB: string;
+
+  beforeEach(() => {
+    store = new YjsStore('test-fill-clear-home-zone');
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    zoneA = makeZone();
+    zoneB = makeZone();
+  });
+
+  function makeZone(): string {
+    return createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: POS,
+      meta: { isDiscardZone: true, width: 200, height: 200 },
+    });
+  }
+
+  function makeStack(cards: CardEntry[]): string {
+    return createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: POS,
+      cards: cards.map((e) => ({ ...e })),
+      faceUp: false,
+    });
+  }
+
+  function cardsOf(id: string): CardEntry[] {
+    return store.getObjectYMap(id)!.get('_cards')!;
+  }
+
+  describe('fillHomeZone', () => {
+    it('fills untagged cards and keeps a card tagged for another valid zone', () => {
+      const stack = makeStack([
+        { code: 'a' },
+        { code: 'b', homeZone: zoneB },
+        { code: 'c' },
+      ]);
+      expect(fillHomeZone(store, [stack], zoneA)).toBe(2);
+      expect(cardsOf(stack)).toStrictEqual([
+        { code: 'a', homeZone: zoneA },
+        { code: 'b', homeZone: zoneB },
+        { code: 'c', homeZone: zoneA },
+      ]);
+    });
+
+    it('replaces a dead tag', () => {
+      const notAZone = makeStack([{ code: 'x' }]);
+      const stack = makeStack([{ code: 'a', homeZone: notAZone }]);
+      expect(fillHomeZone(store, [stack], zoneA)).toBe(1);
+      expect(cardsOf(stack)).toStrictEqual([{ code: 'a', homeZone: zoneA }]);
+    });
+
+    it('fills several stacks in one call and skips zone, token and missing ids', () => {
+      const s1 = makeStack([{ code: 'a' }]);
+      const s2 = makeStack([{ code: 'b' }]);
+      const token = createObject(store, { kind: ObjectKind.Token, pos: POS });
+      expect(
+        fillHomeZone(store, [s1, zoneB, token, 'missing', s2], zoneA),
+      ).toBe(2);
+      expect(cardsOf(s1)).toStrictEqual([{ code: 'a', homeZone: zoneA }]);
+      expect(cardsOf(s2)).toStrictEqual([{ code: 'b', homeZone: zoneA }]);
+    });
+
+    it('leaves already-homed stacks as the same entry objects', () => {
+      const stack = makeStack([{ code: 'a', homeZone: zoneB }]);
+      const before = cardsOf(stack);
+      expect(fillHomeZone(store, [stack], zoneA)).toBe(0);
+      expect(cardsOf(stack)).toBe(before);
+    });
+
+    it('writes nothing and returns 0 when the id is not a discard zone', () => {
+      const stack = makeStack([{ code: 'a' }]);
+      const other = makeStack([{ code: 'o' }]);
+      expect(fillHomeZone(store, [stack], other)).toBe(0);
+      expect(cardsOf(stack)).toStrictEqual([{ code: 'a' }]);
+    });
+
+    it('makes discardCardToZone route the card into the zone', () => {
+      const stack = makeStack([{ code: 'a' }]);
+      fillHomeZone(store, [stack], zoneA);
+      expect(discardCardToZone(store, stack)).toBe('routed');
+      expect(store.getObjectYMap(stack)!.get('_containerId')).toBe(zoneA);
+    });
+  });
+
+  describe('clearHomeZones', () => {
+    it('strips the key from every entry, keeping code and order', () => {
+      const stack = makeStack([
+        { code: 'a', homeZone: zoneA },
+        { code: 'b', homeZone: zoneB },
+        { code: 'c' },
+      ]);
+      expect(clearHomeZones(store, [stack])).toBe(2);
+      const cards = cardsOf(stack);
+      expect(cards).toStrictEqual([
+        { code: 'a' },
+        { code: 'b' },
+        { code: 'c' },
+      ]);
+      for (const entry of cards) expect(entry).not.toHaveProperty('homeZone');
+    });
+
+    it('ignores a zone in the ids and leaves its pile alone', () => {
+      const pile = makeStack([{ code: 'p', homeZone: zoneA }]);
+      store.getObjectYMap(pile)!.set('_containerId', zoneA);
+      const stack = makeStack([{ code: 'a', homeZone: zoneA }]);
+      const zoneBefore = { ...store.getObjectYMap(zoneA)!.toJSON() };
+      expect(clearHomeZones(store, [zoneA, stack])).toBe(1);
+      expect(store.getObjectYMap(zoneA)!.toJSON()).toEqual(zoneBefore);
+      expect(cardsOf(pile)).toStrictEqual([{ code: 'p', homeZone: zoneA }]);
+    });
+
+    it('clears a dead tag too', () => {
+      const stack = makeStack([{ code: 'a', homeZone: 'gone' }]);
+      expect(clearHomeZones(store, [stack])).toBe(1);
+      expect(cardsOf(stack)).toStrictEqual([{ code: 'a' }]);
+    });
+
+    it('makes discardCardToZone return no-home', () => {
+      const stack = makeStack([{ code: 'a', homeZone: zoneA }]);
+      clearHomeZones(store, [stack]);
+      expect(discardCardToZone(store, stack)).toBe('no-home');
+    });
+
+    it('clear then set re-homes a card from B to A', () => {
+      const stack = makeStack([{ code: 'a', homeZone: zoneB }]);
+      clearHomeZones(store, [stack]);
+      fillHomeZone(store, [stack], zoneA);
+      expect(cardsOf(stack)).toStrictEqual([{ code: 'a', homeZone: zoneA }]);
+    });
   });
 });

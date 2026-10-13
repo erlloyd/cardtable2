@@ -1503,6 +1503,73 @@ function mergeCardsWithHomeZone(
 }
 
 /**
+ * Tag every card without a valid home zone in the given stacks with `zoneId`.
+ * Cards that already have a valid home zone are never changed.
+ * @returns number of cards tagged; 0 (nothing written) when `zoneId` is not a
+ * discard zone
+ */
+export function fillHomeZone(
+  store: YjsStore,
+  stackIds: string[],
+  zoneId: string,
+): number {
+  const zoneYMap = store.getObjectYMap(zoneId);
+  if (
+    zoneYMap?.get('_kind') !== ObjectKind.Zone ||
+    zoneYMap.get('_meta')?.isDiscardZone !== true
+  ) {
+    return 0;
+  }
+
+  let tagged = 0;
+  store.getDoc().transact(() => {
+    for (const id of stackIds) {
+      const yMap = store.getObjectYMap(id);
+      if (yMap?.get('_kind') !== ObjectKind.Stack) continue;
+
+      const cards = yMap.get('_cards') ?? [];
+      const missing = cards.filter((e) => resolveHomeZone(store, e) === null);
+      if (missing.length === 0) continue;
+
+      yMap.set(
+        '_cards',
+        cards.map((e) =>
+          resolveHomeZone(store, e) === null ? { ...e, homeZone: zoneId } : e,
+        ),
+      );
+      tagged += missing.length;
+    }
+  });
+  return tagged;
+}
+
+/**
+ * Remove the home zone tag (valid or dead) from every card in the given
+ * stacks. Non-stack ids, zones and piles outside `stackIds` are not touched.
+ * @returns number of cards cleared
+ */
+export function clearHomeZones(store: YjsStore, stackIds: string[]): number {
+  let cleared = 0;
+  store.getDoc().transact(() => {
+    for (const id of stackIds) {
+      const yMap = store.getObjectYMap(id);
+      if (yMap?.get('_kind') !== ObjectKind.Stack) continue;
+
+      const cards = yMap.get('_cards') ?? [];
+      const tagged = cards.filter((e) => e.homeZone !== undefined);
+      if (tagged.length === 0) continue;
+
+      yMap.set(
+        '_cards',
+        cards.map((e) => (e.homeZone === undefined ? e : { code: e.code })),
+      );
+      cleared += tagged.length;
+    }
+  });
+  return cleared;
+}
+
+/**
  * Rename a zone by writing `_meta.label`, preserving the rest of `_meta`.
  * The label is trimmed; an empty result is a no-op.
  * @returns true when the label was written

@@ -47,7 +47,10 @@ interface PageTestStore {
 interface PageGlobals {
   __TEST_STORE__?: PageTestStore;
   __ctTest?: {
-    click: (pt: Point) => void;
+    click: (
+      pt: Point,
+      opts?: { modifiers?: { ctrlKey?: boolean; metaKey?: boolean } },
+    ) => void;
     drag: (
       from: Point,
       to: Point,
@@ -141,6 +144,85 @@ async function selectAt(page: Page, pt: Point, id: string): Promise<void> {
   await expect
     .poll(async () => (await getObject(page, id)).selectedBy ?? null)
     .not.toBeNull();
+}
+
+/** Ctrl-click `pt` to add `id` to the selection and wait until it is selected. */
+async function addToSelection(
+  page: Page,
+  pt: Point,
+  id: string,
+): Promise<void> {
+  await page.evaluate((p) => {
+    (globalThis as unknown as PageGlobals).__ctTest!.click(p, {
+      modifiers: { ctrlKey: true },
+    });
+  }, pt);
+  await expect
+    .poll(async () => (await getObject(page, id)).selectedBy ?? null)
+    .not.toBeNull();
+}
+
+const EMPTY_SPOT: Point = { x: 0, y: -350 };
+
+/**
+ * Select only the object at `pt`. Clicking a member of a multi-selection keeps
+ * the group, so deselect everything via an empty-canvas click first.
+ */
+async function selectOnly(page: Page, pt: Point, id: string): Promise<void> {
+  await page.evaluate((p) => {
+    (globalThis as unknown as PageGlobals).__ctTest!.click(p);
+  }, EMPTY_SPOT);
+  await expect
+    .poll(async () => (await snapshot(page)).filter((o) => o.selectedBy))
+    .toHaveLength(0);
+  await selectAt(page, pt, id);
+}
+
+async function openPaletteSearch(page: Page, search: string): Promise<void> {
+  await page.click('button[aria-label="Open command palette"]');
+  await expect(
+    page.locator('input[placeholder*="Search"]').first(),
+  ).toBeVisible({ timeout: 2000 });
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type(search);
+}
+
+async function runPaletteAction(
+  page: Page,
+  search: string,
+  label: RegExp,
+): Promise<void> {
+  await openPaletteSearch(page, search);
+  await page
+    .locator('.command-palette-label')
+    .filter({ hasText: label })
+    .click();
+  await expect(page.locator('.command-palette-panel')).toHaveCount(0);
+}
+
+/**
+ * Open the palette and assert the action matching `label` is listed but
+ * disabled (the palette greys out unavailable actions), then close it.
+ */
+async function expectPaletteLacks(
+  page: Page,
+  search: string,
+  label: RegExp,
+): Promise<void> {
+  await openPaletteSearch(page, search);
+  await expect(
+    page.locator('.command-palette-label').filter({ hasText: label }).first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator('.command-palette-option-content:not(.disabled)')
+      .locator('.command-palette-label')
+      .filter({ hasText: label }),
+  ).toHaveCount(0);
+  // The combobox consumes the first Escape to close its option list.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.command-palette-panel')).toHaveCount(0);
 }
 
 /** Select the stack and run Create Discard Zone from the command palette. */
@@ -542,5 +624,124 @@ test.describe('Discard home zone — per-card routing (ct-1mv.8)', () => {
       expect(left.cards).toHaveLength(4);
       expect(left.cards.every((e) => e.homeZone === zone)).toBe(true);
     });
+  });
+
+  test('S1. Set Discard Zone gives a lone card the home of an empty-pile zone', async ({
+    page,
+  }) => {
+    const DECK = { x: -300, y: -100 };
+    const LONE = { x: 300, y: 200 };
+    await seedStack(page, 'deck', DECK, [{ code: 'd1' }, { code: 'd2' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(1);
+    const zone = await createDiscardZone(page, DECK, 'deck');
+    const zonePos = (await getObject(page, zone)).pos;
+    await seedStack(page, 'lone', LONE, [{ code: 'lone' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(3);
+
+    await selectOnly(page, LONE, 'lone');
+    await addToSelection(page, zonePos, zone);
+    expect((await getObject(page, 'lone')).selectedBy).not.toBeNull();
+
+    await openPaletteSearch(page, 'set discard');
+    await expect(
+      page.locator('.command-palette-label').filter({
+        hasText: /Set Discard Zone/,
+      }),
+    ).toContainText('Set Discard Zone: Discard');
+    await page
+      .locator('.command-palette-label')
+      .filter({ hasText: /Set Discard Zone/ })
+      .click();
+    await expect(page.locator('.command-palette-panel')).toHaveCount(0);
+
+    await expect
+      .poll(async () => (await getObject(page, 'lone')).cards)
+      .toEqual([{ code: 'lone', homeZone: zone }]);
+    expect((await getObject(page, 'deck')).cards).toEqual([
+      { code: 'd1', homeZone: zone },
+      { code: 'd2', homeZone: zone },
+    ]);
+
+    await selectOnly(page, LONE, 'lone');
+    await page.keyboard.press('x');
+    await expect
+      .poll(async () => (await getObject(page, 'lone')).containerId)
+      .toBe(zone);
+    await expect(page.getByText(/no discard zone/i)).toHaveCount(0);
+  });
+
+  test('S2. Set Discard Zone keeps a card that already has a home', async ({
+    page,
+  }) => {
+    const A = { x: -300, y: -100 };
+    const B = { x: 300, y: -100 };
+    const MIX = { x: 0, y: 250 };
+    await seedStack(page, 'deck-a', A, [{ code: 'a1' }, { code: 'a2' }]);
+    await seedStack(page, 'deck-b', B, [{ code: 'b1' }, { code: 'b2' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(2);
+    const zoneA = await createDiscardZone(page, A, 'deck-a');
+    const zoneB = await createDiscardZone(page, B, 'deck-b');
+    const zoneAPos = (await getObject(page, zoneA)).pos;
+    await seedStack(page, 'mix', MIX, [
+      { code: 'm1', homeZone: zoneB },
+      { code: 'm2' },
+    ]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(5);
+
+    await selectOnly(page, MIX, 'mix');
+    await addToSelection(page, zoneAPos, zoneA);
+    await runPaletteAction(page, 'set discard', /Set Discard Zone/);
+
+    await expect
+      .poll(async () => (await getObject(page, 'mix')).cards)
+      .toEqual([
+        { code: 'm1', homeZone: zoneB },
+        { code: 'm2', homeZone: zoneA },
+      ]);
+
+    await selectOnly(page, MIX, 'mix');
+    await addToSelection(page, zoneAPos, zoneA);
+    await expectPaletteLacks(page, 'set discard', /Set Discard Zone/);
+  });
+
+  test('S3. Clear Discard Zone strips tags and pairs with Set Discard Zone', async ({
+    page,
+  }) => {
+    const DECK = { x: -300, y: -100 };
+    const FRESH = { x: 300, y: 200 };
+    await seedStack(page, 'deck', DECK, [{ code: 'd1' }, { code: 'd2' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(1);
+    const zone = await createDiscardZone(page, DECK, 'deck');
+    const zonePos = (await getObject(page, zone)).pos;
+
+    await runPaletteAction(page, 'clear discard', /Clear Discard Zone/);
+    await expect
+      .poll(async () => (await getObject(page, 'deck')).cards)
+      .toEqual([{ code: 'd1' }, { code: 'd2' }]);
+    expect((await getObject(page, zone)).kind).toBe('zone');
+
+    await page.keyboard.press('x');
+    await expect(page.getByRole('status')).toContainText(
+      '1 card has no discard zone',
+    );
+    const deck = await getObject(page, 'deck');
+    expect(deck.cards).toHaveLength(2);
+    expect(deck.containerId).toBeNull();
+    expect(deck.pos).toEqual({ ...DECK, r: 0 });
+
+    await seedStack(page, 'fresh', FRESH, [{ code: 'f1' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(3);
+    await selectOnly(page, FRESH, 'fresh');
+    await expectPaletteLacks(page, 'clear discard', /Clear Discard Zone/);
+
+    await selectOnly(page, DECK, 'deck');
+    await addToSelection(page, zonePos, zone);
+    await runPaletteAction(page, 'set discard', /Set Discard Zone/);
+    await expect
+      .poll(async () => (await getObject(page, 'deck')).cards)
+      .toEqual([
+        { code: 'd1', homeZone: zone },
+        { code: 'd2', homeZone: zone },
+      ]);
   });
 });

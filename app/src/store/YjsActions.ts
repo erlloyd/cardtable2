@@ -1326,6 +1326,7 @@ export type DiscardResult = 'routed' | 'no-home' | 'invalid';
 export function discardCardToZone(
   store: YjsStore,
   sourceStackId: string,
+  layout?: AttachmentLayout,
 ): DiscardResult {
   const sourceCards = store.getObjectYMap(sourceStackId)?.get('_cards');
   if (!sourceCards || sourceCards.length === 0) {
@@ -1345,7 +1346,12 @@ export function discardCardToZone(
   let extractedStackId: string | null = null;
 
   store.getDoc().transact(() => {
+    let releasedIds: string[] = [];
     if (sourceCards.length === 1) {
+      if (store.getObjectYMap(sourceStackId)?.get('_attachedToId')) {
+        detachCard(store, sourceStackId, layout);
+      }
+      releasedIds = detachAllCards(store, sourceStackId);
       // Already a single-card stack — use it directly
       extractedStackId = sourceStackId;
     } else {
@@ -1378,6 +1384,10 @@ export function discardCardToZone(
       // No existing pile — move extracted stack into zone and mark it
       moveObjects(store, [{ id: extractedStackId, pos: zonePos }]);
       extractedYMap.set('_containerId', zoneId);
+    }
+
+    for (const releasedId of releasedIds) {
+      discardCardToZone(store, releasedId, layout);
     }
   });
 

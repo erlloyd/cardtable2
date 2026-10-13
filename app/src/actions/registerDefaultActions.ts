@@ -373,7 +373,12 @@ export function registerDefaultActions(): () => void {
     execute: (ctx) => {
       let noHome = 0;
       for (const id of ctx.selection.ids) {
-        if (discardCardToZone(ctx.store, id) === 'no-home') noHome++;
+        const result = discardCardToZone(
+          ctx.store,
+          id,
+          resolveEffectiveAttachmentLayout(ctx.store),
+        );
+        if (result === 'no-home') noHome++;
       }
       if (noHome > 0) notifyNoDiscardZone(noHome);
     },

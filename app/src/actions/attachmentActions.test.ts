@@ -637,4 +637,224 @@ describe('attachmentActions', () => {
       expect(() => action.execute(context)).not.toThrow();
     });
   });
+
+  describe('clear actions', () => {
+    const CLEAR_IDS = [
+      'clear-tokens',
+      'clear-statuses',
+      'clear-modifiers',
+      'clear-attachments',
+    ];
+
+    const fullAttachments = (): AttachmentData => ({
+      tokens: { damage: 3 },
+      status: { stunned: 1 },
+      modifiers: { ATK: -1 },
+      icons: ['guard'],
+    });
+
+    function createMultiContext(metas: Record<string, unknown>) {
+      const yMaps = new Map<string, ReturnType<typeof createMockYMap>>();
+      for (const [id, meta] of Object.entries(metas)) {
+        yMaps.set(id, createMockYMap({ _meta: meta, other: 'kept' }));
+      }
+      const transactFn = vi.fn((fn: () => void) => fn());
+      const ids = Object.keys(metas);
+      const context: ActionContext = {
+        store: {
+          getAllObjects: vi.fn(() => new Map()),
+          getObject: vi.fn(),
+          getObjectYMap: vi.fn((id: string) => yMaps.get(id)),
+          getDoc: vi.fn(() => ({ transact: transactFn })),
+        } as unknown as YjsStore,
+        selection: {
+          ids,
+          yMaps: [],
+          count: ids.length,
+          hasStacks: true,
+          hasTokens: false,
+          hasCounters: false,
+          hasMixed: false,
+          allLocked: false,
+          allUnlocked: true,
+          canAct: true,
+        },
+        actorId: 'test-actor',
+      };
+      return { context, yMaps, transactFn };
+    }
+
+    const attachmentsOf = (
+      yMap: ReturnType<typeof createMockYMap>,
+    ): AttachmentData =>
+      (yMap.get('_meta') as { attachments: AttachmentData }).attachments;
+
+    it('registers all four actions with Shift+0 only on clear-attachments', () => {
+      registerAttachmentActions(registry, createGameAssets());
+
+      for (const id of CLEAR_IDS) {
+        expect(registry.getAction(id)).toBeDefined();
+      }
+      expect(registry.getAction('clear-tokens')!.shortcut).toBeUndefined();
+      expect(registry.getAction('clear-statuses')!.shortcut).toBeUndefined();
+      expect(registry.getAction('clear-modifiers')!.shortcut).toBeUndefined();
+      expect(registry.getAction('clear-attachments')!.shortcut).toBe('Shift+0');
+    });
+
+    it('registers only categories that have entries', () => {
+      registerAttachmentActions(
+        registry,
+        createGameAssets({ statusTypes: {}, modifierStats: {} }),
+      );
+
+      expect(registry.getAction('clear-tokens')).toBeDefined();
+      expect(registry.getAction('clear-attachments')).toBeDefined();
+      expect(registry.getAction('clear-statuses')).toBeUndefined();
+      expect(registry.getAction('clear-modifiers')).toBeUndefined();
+    });
+
+    it('removes all four when re-registered with null assets', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      registerAttachmentActions(registry, null);
+
+      for (const id of CLEAR_IDS) {
+        expect(registry.getAction(id)).toBeUndefined();
+      }
+    });
+
+    it('is available only when a selected stack has that category', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const none = createMultiContext({ a: {}, b: { attachments: {} } });
+      for (const id of CLEAR_IDS) {
+        expect(registry.getAction(id)!.isAvailable(none.context)).toBe(false);
+      }
+
+      const tokensOnly = createMultiContext({
+        a: {},
+        b: { attachments: { tokens: { damage: 2 } } },
+      });
+      expect(
+        registry.getAction('clear-tokens')!.isAvailable(tokensOnly.context),
+      ).toBe(true);
+      expect(
+        registry.getAction('clear-statuses')!.isAvailable(tokensOnly.context),
+      ).toBe(false);
+      expect(
+        registry.getAction('clear-modifiers')!.isAvailable(tokensOnly.context),
+      ).toBe(false);
+      expect(
+        registry
+          .getAction('clear-attachments')!
+          .isAvailable(tokensOnly.context),
+      ).toBe(true);
+
+      const statusOnly = createMultiContext({
+        a: { attachments: { status: { stunned: 1 } } },
+        b: {},
+      });
+      expect(
+        registry.getAction('clear-statuses')!.isAvailable(statusOnly.context),
+      ).toBe(true);
+      expect(
+        registry.getAction('clear-tokens')!.isAvailable(statusOnly.context),
+      ).toBe(false);
+    });
+
+    it('treats a negative modifier as clearable', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const { context } = createMultiContext({
+        a: { attachments: { modifiers: { ATK: -2 } } },
+      });
+
+      expect(registry.getAction('clear-modifiers')!.isAvailable(context)).toBe(
+        true,
+      );
+      expect(
+        registry.getAction('clear-attachments')!.isAvailable(context),
+      ).toBe(true);
+      expect(registry.getAction('clear-tokens')!.isAvailable(context)).toBe(
+        false,
+      );
+    });
+
+    it.each([
+      ['clear-tokens', 'tokens'],
+      ['clear-statuses', 'status'],
+      ['clear-modifiers', 'modifiers'],
+    ] as const)(
+      '%s drops only %s across three stacks in one transaction',
+      (id, dropped) => {
+        registerAttachmentActions(registry, createGameAssets());
+        const { context, yMaps, transactFn } = createMultiContext({
+          a: { attachments: fullAttachments(), label: 'A' },
+          b: { attachments: fullAttachments(), label: 'B' },
+          c: { attachments: fullAttachments(), label: 'C' },
+        });
+
+        void registry.getAction(id)!.execute(context);
+
+        expect(transactFn).toHaveBeenCalledTimes(1);
+        for (const yMap of yMaps.values()) {
+          const expected = fullAttachments();
+          delete expected[dropped];
+          expect(attachmentsOf(yMap)).toStrictEqual(expected);
+          expect(yMap.get('other')).toBe('kept');
+        }
+        expect((yMaps.get('b')!.get('_meta') as { label: string }).label).toBe(
+          'B',
+        );
+      },
+    );
+
+    it('clear-attachments drops all three but keeps icons and other _meta', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const { context, yMaps, transactFn } = createMultiContext({
+        a: { attachments: fullAttachments(), label: 'A' },
+        b: { attachments: fullAttachments(), label: 'B' },
+        c: { attachments: fullAttachments(), label: 'C' },
+      });
+
+      void registry.getAction('clear-attachments')!.execute(context);
+
+      expect(transactFn).toHaveBeenCalledTimes(1);
+      for (const [id, yMap] of yMaps) {
+        expect(yMap.get('_meta')).toStrictEqual({
+          attachments: { icons: ['guard'] },
+          label: id.toUpperCase(),
+        });
+      }
+    });
+
+    it('skips ids with no yMap and still clears the rest', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const { context, yMaps } = createMultiContext({
+        a: { attachments: fullAttachments() },
+        c: { attachments: fullAttachments() },
+      });
+      context.selection.ids = ['a', 'missing', 'c'];
+      context.selection.count = 3;
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() =>
+        registry.getAction('clear-tokens')!.execute(context),
+      ).not.toThrow();
+
+      expect(attachmentsOf(yMaps.get('a')!).tokens).toBeUndefined();
+      expect(attachmentsOf(yMaps.get('c')!).tokens).toBeUndefined();
+      errorSpy.mockRestore();
+    });
+
+    it('does not write to stacks with nothing to clear', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const { context, yMaps } = createMultiContext({
+        a: { attachments: { status: { stunned: 1 } } },
+        b: { attachments: { tokens: { damage: 1 } } },
+      });
+
+      void registry.getAction('clear-tokens')!.execute(context);
+
+      expect(yMaps.get('a')!.set).not.toHaveBeenCalled();
+      expect(yMaps.get('b')!.set).toHaveBeenCalledTimes(1);
+    });
+  });
 });

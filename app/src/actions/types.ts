@@ -48,6 +48,9 @@ export interface ActionContext {
   onOpenLoadPicker?: (presetType?: string) => void;
   /** Open the rename dialog for the given zone. */
   onOpenRenameDialog?: (zoneId: string) => void;
+  /** Index in the active hand of the card under the mouse, or null. A getter
+   * so hovering does not rebuild the context. */
+  getHoveredHandCardIndex?: () => number | null;
 }
 
 /**

@@ -1,6 +1,11 @@
 import type { YjsStore } from './YjsStore';
 import { ObjectKind, type CardEntry, type Position } from '@cardtable2/shared';
-import { createObject } from './YjsActions';
+import {
+  createObject,
+  discardCardToZone,
+  resolveHomeZone,
+  type DiscardResult,
+} from './YjsActions';
 
 /**
  * Hand Actions for moving cards between the board and player hands.
@@ -214,6 +219,39 @@ export function moveCardToBoard(
   }
 
   return newStackId;
+}
+
+/**
+ * Discard a hand card to its home discard zone.
+ *
+ * Composes moveCardToBoard and discardCardToZone in one transaction, so the
+ * transient board stack is never observable.
+ *
+ * @returns 'routed' on success, 'no-home' when the card has no valid home zone
+ *   (nothing changes), 'invalid' when the hand is missing or the index is out
+ *   of range (nothing changes)
+ */
+export function discardCardFromHand(
+  store: YjsStore,
+  handId: string,
+  cardIndex: number,
+): DiscardResult {
+  const entry = store.getHandCards(handId)[cardIndex];
+  if (!entry) return 'invalid';
+
+  const zoneId = resolveHomeZone(store, entry);
+  const zoneYMap = zoneId ? store.getObjectYMap(zoneId) : undefined;
+  if (!zoneYMap) return 'no-home';
+  const zonePos = zoneYMap.get('_pos') as Position;
+
+  let result: DiscardResult = 'invalid';
+
+  store.getDoc().transact(() => {
+    const newStackId = moveCardToBoard(store, handId, cardIndex, zonePos, true);
+    if (newStackId) result = discardCardToZone(store, newStackId);
+  });
+
+  return result;
 }
 
 /**

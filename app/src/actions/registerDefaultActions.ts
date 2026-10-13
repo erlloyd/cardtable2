@@ -20,6 +20,8 @@ import {
   createDiscardZoneForStack,
   discardCardToZone,
 } from '../store/YjsActions';
+import type { YjsStore } from '../store/YjsStore';
+import { discardCardFromHand } from '../store/YjsHandActions';
 import {
   areAllSelectedStacksExhausted,
   areAllSelectedStacksReady,
@@ -34,6 +36,17 @@ function notifyNoDiscardZone(count: number): void {
     `${subject} no discard zone. Use Create Discard Zone on its deck first.`,
     'info',
   );
+}
+
+/** Discard one hand card to its home zone, toasting when it has none. */
+export function discardHandCard(
+  store: YjsStore,
+  handId: string,
+  cardIndex: number,
+): void {
+  if (discardCardFromHand(store, handId, cardIndex) === 'no-home') {
+    notifyNoDiscardZone(1);
+  }
 }
 
 /**
@@ -367,10 +380,17 @@ export function registerDefaultActions(): () => void {
     category: CARD_ACTIONS,
     description: 'Route selected card(s) to their home discard zone',
     isAvailable: (ctx) =>
+      (ctx.activeHandId !== undefined &&
+        (ctx.getHoveredHandCardIndex?.() ?? null) !== null) ||
       ctx.selection.ids.some(
         (id) => (ctx.store.getObjectYMap(id)?.get('_cards')?.length ?? 0) > 0,
       ),
     execute: (ctx) => {
+      const hoveredIndex = ctx.getHoveredHandCardIndex?.() ?? null;
+      if (hoveredIndex !== null && ctx.activeHandId !== undefined) {
+        discardHandCard(ctx.store, ctx.activeHandId, hoveredIndex);
+        return;
+      }
       let noHome = 0;
       for (const id of ctx.selection.ids) {
         if (discardCardToZone(ctx.store, id) === 'no-home') noHome++;

@@ -23,6 +23,7 @@ import {
 } from '@cardtable2/shared';
 import { YjsStore } from '../store/YjsStore';
 import { createDiscardZoneForStack, createObject } from '../store/YjsActions';
+import { moveCardToHand } from '../store/YjsHandActions';
 import { ActionRegistry } from './ActionRegistry';
 import {
   registerDefaultActions,
@@ -519,6 +520,70 @@ describe('discard-card action (ct-1mv.6)', () => {
       '1 card has no discard zone',
     );
     expect(store.getObjectYMap(tagged)!.get('_containerId')).toBe(zoneId);
+  });
+
+  describe('hovered hand card', () => {
+    function handCtx(handId: string, index: number | null, ids: string[] = []) {
+      return {
+        ...ctxFor(ids),
+        activeHandId: handId,
+        getHoveredHandCardIndex: () => index,
+      };
+    }
+
+    function taggedHandCard(): { zoneId: string; handId: string } {
+      const source = stackWith(toCardEntries(['deck-card']));
+      const zoneId = createDiscardZoneForStack(store, source)!;
+      const handId = store.createHand('Hand');
+      moveCardToHand(store, source, 0, handId);
+      return { zoneId, handId };
+    }
+
+    const action = () => ActionRegistry.getInstance().getAction('discard-card');
+
+    it('is available with an empty selection and discards the hovered card', () => {
+      const { zoneId, handId } = taggedHandCard();
+      const ctx = handCtx(handId, 0);
+
+      expect(action()?.isAvailable(ctx)).toBe(true);
+      void action()?.execute(ctx);
+
+      expect(store.getHandCards(handId)).toEqual([]);
+      let inZone = 0;
+      store.forEachObject((ymap) => {
+        if (ymap.get('_containerId') === zoneId) inZone++;
+      });
+      expect(inZone).toBe(1);
+    });
+
+    it('discards only the hand card when a table stack is selected', () => {
+      const { handId } = taggedHandCard();
+      const selected = stackWith(toCardEntries(['a', 'b']));
+      createDiscardZoneForStack(store, selected);
+
+      void action()?.execute(handCtx(handId, 0, [selected]));
+
+      expect(store.getHandCards(handId)).toEqual([]);
+      expect(store.getObjectYMap(selected)!.get('_cards')).toHaveLength(2);
+    });
+
+    it('toasts once and keeps the card when it has no home zone', () => {
+      const handId = store.createHand('Hand');
+      store.addCardToHand(handId, { code: 'plain' });
+
+      void action()?.execute(handCtx(handId, 0));
+
+      expect(showToast).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(showToast).mock.calls[0][0]).toContain(
+        '1 card has no discard zone',
+      );
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['plain']));
+    });
+
+    it('is unavailable with a null hover and no selection', () => {
+      const handId = store.createHand('Hand');
+      expect(action()?.isAvailable(handCtx(handId, null))).toBe(false);
+    });
   });
 
   it('does not toast when every stack routes', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import { KeyboardManager } from '../actions/KeyboardManager';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
@@ -14,6 +14,7 @@ import type { ActionContext } from '../actions/types';
  * before React re-renders still sees the previous committed context; that gap
  * is the same one a ref mirror updated at commit would have.
  *
+ * @returns The pending number prefix (digits typed before a shortcut key), or ''
  * @param context Current action context (store, selection, actorId)
  * @param enabled Whether keyboard shortcuts should be active (default: true)
  */
@@ -21,8 +22,9 @@ export function useKeyboardShortcuts(
   context: ActionContext | null,
   enabled = true,
   onActionExecuted?: () => void,
-): void {
+): string {
   const hasContext = context !== null;
+  const [prefix, setPrefix] = useState('');
 
   const onKeyDown = useEffectEvent(
     (keyboardManager: KeyboardManager, event: KeyboardEvent) => {
@@ -50,6 +52,8 @@ export function useKeyboardShortcuts(
       }
     }
 
+    keyboardManager.setOnPrefixChange(setPrefix);
+
     const handleKeyDown = (event: KeyboardEvent) => {
       onKeyDown(keyboardManager, event);
     };
@@ -58,6 +62,9 @@ export function useKeyboardShortcuts(
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      keyboardManager.clearPrefix();
     };
   }, [enabled, hasContext]);
+
+  return prefix;
 }

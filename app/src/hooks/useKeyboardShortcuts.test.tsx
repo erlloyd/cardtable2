@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import type { ActionContext } from '../actions/types';
@@ -83,6 +83,53 @@ describe('useKeyboardShortcuts', () => {
 
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the pending number prefix and clears it after the action key', () => {
+    const { result } = renderHook(() => useKeyboardShortcuts(makeContext('a')));
+    expect(result.current).toBe('');
+
+    act(() => {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: '3',
+          code: 'Digit3',
+          bubbles: true,
+        }),
+      );
+    });
+    expect(result.current).toBe('3');
+
+    act(() => {
+      pressKey('q');
+    });
+    expect(result.current).toBe('');
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the prefix timer on unmount', () => {
+    vi.useFakeTimers();
+    try {
+      const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+      const { unmount } = renderHook(() =>
+        useKeyboardShortcuts(makeContext('a')),
+      );
+      act(() => {
+        document.body.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: '3',
+            code: 'Digit3',
+            bubbles: true,
+          }),
+        );
+      });
+      clearSpy.mockClear();
+      unmount();
+      expect(clearSpy).toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not register a listener without a context', () => {

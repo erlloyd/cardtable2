@@ -30,10 +30,19 @@ export function MergeAttachmentsModal({
         focusPrimary();
       }
     };
+    // The drop is held and the dragged card is still selected, so a table
+    // shortcut could destroy it. Capture runs before the table's window
+    // listener; Tab, Enter and Space stay with the dialog's own buttons.
+    const blockShortcuts = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' || e.key === 'Enter' || e.key === ' ') return;
+      e.stopImmediatePropagation();
+    };
     document.addEventListener('focusin', handleFocusIn);
+    window.addEventListener('keydown', blockShortcuts, true);
     const id = window.setTimeout(focusPrimary, 0);
     return () => {
       document.removeEventListener('focusin', handleFocusIn);
+      window.removeEventListener('keydown', blockShortcuts, true);
       window.clearTimeout(id);
     };
   }, [isOpen]);

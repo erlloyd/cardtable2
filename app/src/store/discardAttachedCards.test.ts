@@ -151,7 +151,7 @@ describe('discardCardToZone with attached cards', () => {
 
   it('applies the whole cascade in one transaction', () => {
     makePile(zoneE, 'eTop');
-    makePile(zoneP, 'pTop');
+    const pileP = makePile(zoneP, 'pTop');
     const host = makeCard('host', zoneE, { x: 100, y: 100, r: 0 });
     const attached = makeCard('att', zoneP, { x: 100, y: 130, r: 0 });
     attachCards(store, [attached], host);
@@ -165,6 +165,8 @@ describe('discardCardToZone with attached cards', () => {
     store.getDoc().off('update', onUpdate);
 
     expect(updates).toBe(1);
+    expect(exists(attached)).toBe(false);
+    expect(topCode(pileP)).toBe('att');
   });
 
   function totalCards(): number {

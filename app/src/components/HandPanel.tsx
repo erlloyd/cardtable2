@@ -821,7 +821,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                         )}
                         {!isDragging && (
                           <button
-                            className="hand-panel__discard-btn"
+                            className={`hand-panel__discard-btn${fanLayout.overlap > 0 ? ' hand-panel__discard-btn--compact' : ''}`}
                             aria-label="Discard"
                             title="Discard (X)"
                             onPointerDown={(e) => e.stopPropagation()}

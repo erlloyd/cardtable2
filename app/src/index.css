@@ -982,8 +982,9 @@ h1 {
 
 .hand-panel__discard-btn {
   position: absolute;
-  top: 40px;
-  left: 2px;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
   width: 20px;
   height: 20px;
   padding: 0;
@@ -1003,6 +1004,12 @@ h1 {
 
 .hand-panel__card:hover .hand-panel__discard-btn {
   opacity: 1;
+}
+
+.hand-panel__discard-btn--compact {
+  top: 40px;
+  left: 2px;
+  transform: none;
 }
 
 .hand-panel__discard-btn:hover {

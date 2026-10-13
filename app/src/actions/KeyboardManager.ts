@@ -124,6 +124,11 @@ export class KeyboardManager {
       return false;
     }
 
+    if (event.repeat && action.noRepeat) {
+      event.preventDefault();
+      return false;
+    }
+
     // Check if action is available in current context
     if (!action.isAvailable(context)) {
       return false;

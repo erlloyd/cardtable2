@@ -62,6 +62,7 @@ export interface Action {
   shortLabel?: string | ((context: ActionContext) => string); // 'Flip' (optional shorter label for action handle), can be dynamic
   icon: string; // '🔄' or icon name
   shortcut?: string; // 'F', 'Cmd+R', 'Shift+D'
+  noRepeat?: boolean; // Ignore auto-repeat keydowns of the shortcut (a held key fires once)
   category: string; // CARD_ACTIONS, SELECTION_ACTIONS, etc.
   description?: string; // For tooltips/help
   isAvailable: (context: ActionContext) => boolean;

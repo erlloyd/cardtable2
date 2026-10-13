@@ -377,6 +377,7 @@ export function registerDefaultActions(): () => void {
     shortLabel: 'Discard',
     icon: '♻️',
     shortcut: 'X',
+    noRepeat: true,
     category: CARD_ACTIONS,
     description: 'Route selected card(s) to their home discard zone',
     isAvailable: (ctx) =>

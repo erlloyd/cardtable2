@@ -309,6 +309,105 @@ test.describe('Hand card discard and Play placement (ct-3pj.4)', () => {
     const keys = new Set(probes.map((p) => `${p.world.x},${p.world.y}`));
     expect(keys.size).toBe(3);
   });
+
+  test('6. spread hand: x is centred on the card, below Play', async ({
+    page,
+  }) => {
+    await seedHand(page, [{ code: 'c1' }, { code: 'c2' }, { code: 'c3' }]);
+
+    await hoverHandCard(page, 1);
+    // The hovered card animates, so read all three rects in one frame.
+    const { cardBox, playBox, discardBox } = await page.evaluate(() => {
+      const card = document.querySelectorAll('.hand-panel__card')[1];
+      const rect = (selector: string) =>
+        card.querySelector(selector)!.getBoundingClientRect();
+      return {
+        cardBox: card.getBoundingClientRect(),
+        playBox: rect('.hand-panel__play-btn'),
+        discardBox: rect('.hand-panel__discard-btn'),
+      };
+    });
+
+    const cardCentre = cardBox.x + cardBox.width / 2;
+    const discardCentre = discardBox.x + discardBox.width / 2;
+    expect(Math.abs(discardCentre - cardCentre)).toBeLessThanOrEqual(1);
+    expect(discardBox.y).toBeGreaterThanOrEqual(playBox.y + playBox.height);
+    expect(discardBox.y - (playBox.y + playBox.height)).toBeLessThanOrEqual(12);
+  });
+
+  test('7. holding X discards one card; separate presses discard one each', async ({
+    page,
+  }) => {
+    await seedZone(page);
+    const handId = await seedHand(page, [
+      { code: 'c1', homeZone: ZONE_ID },
+      { code: 'c2', homeZone: ZONE_ID },
+      { code: 'c3', homeZone: ZONE_ID },
+      { code: 'c4', homeZone: ZONE_ID },
+    ]);
+
+    const firstBox = await page
+      .locator('.hand-panel__card')
+      .nth(0)
+      .boundingBox();
+    if (!firstBox) throw new Error('No bounding box for hand card 0');
+    // The hand re-centres after each discard, so 120px in stays over some
+    // card for every hand size down to one.
+    const pointer = {
+      x: firstBox.x + 120,
+      y: firstBox.y + 62,
+    };
+    await page.mouse.move(pointer.x, pointer.y);
+    await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(1);
+
+    // After the hand reflows under a still pointer, headless Chromium never
+    // re-enters the card, so a step out of the card row and back stands in for
+    // the browser re-hovering the card that slid under the pointer.
+    const settleHover = async (): Promise<void> => {
+      await page.mouse.move(pointer.x, firstBox.y - 15);
+      await page.mouse.move(pointer.x, pointer.y);
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
+    };
+
+    // A key held in Playwright blocks the re-hover above, so the first keydown
+    // is a real press and the auto-repeats a held key would send are
+    // dispatched with repeat: true.
+    const dispatchRepeat = (): Promise<void> =>
+      page.evaluate(() => {
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'x',
+            code: 'KeyX',
+            repeat: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+
+    await page.keyboard.press('x');
+    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(3);
+    for (let i = 0; i < 5; i++) {
+      await settleHover();
+      await dispatchRepeat();
+    }
+    await page.waitForTimeout(200);
+    expect(await getHandCodes(page, handId)).toHaveLength(3);
+    expect(await getZonePile(page)).toHaveLength(1);
+
+    await settleHover();
+    await page.keyboard.press('x');
+    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(2);
+    await settleHover();
+    await page.keyboard.press('x');
+    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(1);
+    expect((await getZonePile(page))[0].cards).toHaveLength(3);
+  });
 });
 
 test.describe('Hand card controls on touch (ct-3pj.4)', () => {

@@ -371,16 +371,17 @@ export function registerDefaultActions(): () => void {
         (id) => (ctx.store.getObjectYMap(id)?.get('_cards')?.length ?? 0) > 0,
       ),
     execute: (ctx) => {
-      let noHome = 0;
+      const noHomeIds = new Set<string>();
       for (const id of ctx.selection.ids) {
-        const result = discardCardToZone(
+        const { result, strandedIds } = discardCardToZone(
           ctx.store,
           id,
           resolveEffectiveAttachmentLayout(ctx.store),
         );
-        if (result === 'no-home') noHome++;
+        if (result === 'no-home') noHomeIds.add(id);
+        for (const strandedId of strandedIds) noHomeIds.add(strandedId);
       }
-      if (noHome > 0) notifyNoDiscardZone(noHome);
+      if (noHomeIds.size > 0) notifyNoDiscardZone(noHomeIds.size);
     },
   });
 

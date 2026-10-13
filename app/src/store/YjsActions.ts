@@ -1306,6 +1306,11 @@ export function resolveHomeZone(
 
 export type DiscardResult = 'routed' | 'no-home' | 'invalid';
 
+export interface DiscardOutcome {
+  result: DiscardResult;
+  strandedIds: string[];
+}
+
 /**
  * Route the top card of a stack to its home discard zone.
  *
@@ -1320,30 +1325,33 @@ export type DiscardResult = 'routed' | 'no-home' | 'invalid';
  * @param store - YjsStore instance
  * @param sourceStackId - Stack ID whose top card is discarded (never looked up
  *   by card id: card ids can repeat across and within stacks)
- * @returns 'routed' on success, 'no-home' when the top card has no valid home
- *   zone (nothing moves), 'invalid' when the stack is missing or empty
+ * @returns result: 'routed' on success, 'no-home' when the top card has no
+ *   valid home zone (nothing moves), 'invalid' when the stack is missing or
+ *   empty. strandedIds: object ids of attached cards, at any depth of the
+ *   cascade, that were unlinked and left on the table for lack of a home zone.
  */
 export function discardCardToZone(
   store: YjsStore,
   sourceStackId: string,
   layout?: AttachmentLayout,
-): DiscardResult {
+): DiscardOutcome {
   const sourceCards = store.getObjectYMap(sourceStackId)?.get('_cards');
   if (!sourceCards || sourceCards.length === 0) {
     console.warn(
       `[discardCardToZone] Stack ${sourceStackId} not found or empty`,
     );
-    return 'invalid';
+    return { result: 'invalid', strandedIds: [] };
   }
 
   const zoneId = resolveHomeZone(store, sourceCards[0]);
   const zoneYMap = zoneId ? store.getObjectYMap(zoneId) : undefined;
   if (!zoneId || !zoneYMap) {
-    return 'no-home';
+    return { result: 'no-home', strandedIds: [] };
   }
   const zonePos = zoneYMap.get('_pos') as { x: number; y: number; r: number };
 
   let extractedStackId: string | null = null;
+  const strandedIds: string[] = [];
 
   store.getDoc().transact(() => {
     let releasedIds: string[] = [];
@@ -1387,11 +1395,16 @@ export function discardCardToZone(
     }
 
     for (const releasedId of releasedIds) {
-      discardCardToZone(store, releasedId, layout);
+      const released = discardCardToZone(store, releasedId, layout);
+      if (released.result === 'no-home') strandedIds.push(releasedId);
+      strandedIds.push(...released.strandedIds);
     }
   });
 
-  return extractedStackId !== null ? 'routed' : 'invalid';
+  return {
+    result: extractedStackId !== null ? 'routed' : 'invalid',
+    strandedIds,
+  };
 }
 
 // Discard zone dimensions: slightly larger than a single card.

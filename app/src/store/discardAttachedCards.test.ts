@@ -88,7 +88,7 @@ describe('discardCardToZone with attached cards', () => {
     const attached = makeCard('att', zoneP, { x: 100, y: 130, r: 0 });
     attachCards(store, [attached], host);
 
-    expect(discardCardToZone(store, host)).toBe('routed');
+    expect(discardCardToZone(store, host).result).toBe('routed');
 
     expect(exists(host)).toBe(false);
     expect(exists(attached)).toBe(false);
@@ -102,7 +102,7 @@ describe('discardCardToZone with attached cards', () => {
     const attached = makeCard('att', zoneP, { x: 100, y: 130, r: 0 });
     attachCards(store, [attached], host);
 
-    expect(discardCardToZone(store, host)).toBe('routed');
+    expect(discardCardToZone(store, host).result).toBe('routed');
 
     const hostMap = store.getObjectYMap(host)!;
     expect(pos(host)).toEqual(zonePos(zoneE));
@@ -121,7 +121,7 @@ describe('discardCardToZone with attached cards', () => {
     const b = makeCard('b', zoneP);
     attachCards(store, [a, b], host);
 
-    expect(discardCardToZone(store, a)).toBe('routed');
+    expect(discardCardToZone(store, a).result).toBe('routed');
 
     expect(store.getObjectYMap(host)!.get('_attachedCardIds')).toEqual([b]);
     expect(pos(b)).toEqual(
@@ -138,7 +138,7 @@ describe('discardCardToZone with attached cards', () => {
     attachCards(store, [attached], host);
     const before = pos(attached);
 
-    expect(discardCardToZone(store, host)).toBe('routed');
+    expect(discardCardToZone(store, host).result).toBe('routed');
 
     expect(exists(host)).toBe(true);
     expect(exists(attached)).toBe(true);
@@ -192,8 +192,8 @@ describe('discardCardToZone with attached cards', () => {
       attachCards(store, [attached], host);
       const before = totalCards();
 
-      expect(discardCardToZone(store, host)).toBe('routed');
-      expect(discardCardToZone(store, attached)).toBe('invalid');
+      expect(discardCardToZone(store, host).result).toBe('routed');
+      expect(discardCardToZone(store, attached).result).toBe('invalid');
 
       expect(totalCards()).toBe(before);
       expect(
@@ -217,12 +217,12 @@ describe('discardCardToZone with attached cards', () => {
       attachCards(store, [attached], host);
       const before = totalCards();
 
-      expect(discardCardToZone(store, host)).toBe('routed');
+      expect(discardCardToZone(store, host).result).toBe('routed');
       const posAfterFirst = pos(attached);
       const cardsAfterFirst = store.getObjectYMap(attached)!.get('_cards');
       expect(containerOf(attached)).toBe(zoneP);
 
-      expect(discardCardToZone(store, attached)).toBe('routed');
+      expect(discardCardToZone(store, attached).result).toBe('routed');
 
       expect(pos(attached)).toEqual(posAfterFirst);
       expect(containerOf(attached)).toBe(zoneP);
@@ -239,10 +239,10 @@ describe('discardCardToZone with attached cards', () => {
       attachCards(store, [attached], host);
       const before = totalCards();
 
-      expect(discardCardToZone(store, host)).toBe('routed');
+      expect(discardCardToZone(store, host).result).toBe('routed');
       const posAfterFirst = pos(attached);
 
-      expect(discardCardToZone(store, attached)).toBe('no-home');
+      expect(discardCardToZone(store, attached).result).toBe('no-home');
 
       expect(pos(attached)).toEqual(posAfterFirst);
       expect(totalCards()).toBe(before);
@@ -257,8 +257,8 @@ describe('discardCardToZone with attached cards', () => {
       attachCards(store, [attached], host);
       const before = totalCards();
 
-      expect(discardCardToZone(store, attached)).toBe('routed');
-      expect(discardCardToZone(store, host)).toBe('routed');
+      expect(discardCardToZone(store, attached).result).toBe('routed');
+      expect(discardCardToZone(store, host).result).toBe('routed');
 
       expect(totalCards()).toBe(before);
       expect(
@@ -274,6 +274,38 @@ describe('discardCardToZone with attached cards', () => {
           .map((c) => c.code),
       ).toEqual(['att', 'pTop']);
       expect(linkedObjects()).toEqual([]);
+    });
+  });
+
+  describe('strandedIds', () => {
+    it('lists a no-home attached card', () => {
+      const host = makeCard('host', zoneE, { x: 100, y: 100, r: 0 });
+      const attached = makeCard('att', undefined);
+      attachCards(store, [attached], host);
+
+      expect(discardCardToZone(store, host)).toEqual({
+        result: 'routed',
+        strandedIds: [attached],
+      });
+    });
+
+    it('is empty when every attached card has a home', () => {
+      const host = makeCard('host', zoneE, { x: 100, y: 100, r: 0 });
+      const attached = makeCard('att', zoneP, { x: 100, y: 130, r: 0 });
+      attachCards(store, [attached], host);
+
+      expect(discardCardToZone(store, host).strandedIds).toEqual([]);
+    });
+
+    it('is empty when the host itself has no home', () => {
+      const host = makeCard('host', undefined);
+      const attached = makeCard('att', undefined);
+      attachCards(store, [attached], host);
+
+      expect(discardCardToZone(store, host)).toEqual({
+        result: 'no-home',
+        strandedIds: [],
+      });
     });
   });
 
@@ -314,7 +346,7 @@ describe('discardCardToZone with attached cards', () => {
         updates++;
       };
       store.getDoc().on('update', onUpdate);
-      expect(discardCardToZone(store, h)).toBe('routed');
+      expect(discardCardToZone(store, h).result).toBe('routed');
       store.getDoc().off('update', onUpdate);
 
       expect(updates).toBe(1);
@@ -331,7 +363,7 @@ describe('discardCardToZone with attached cards', () => {
       buildChain(zoneP);
       const before = totalCards();
 
-      expect(discardCardToZone(store, a)).toBe('routed');
+      expect(discardCardToZone(store, a).result).toBe('routed');
 
       expect(exists(a) || exists(b)).toBe(false);
       expect(exists(h)).toBe(true);
@@ -343,12 +375,18 @@ describe('discardCardToZone with attached cards', () => {
       expect(linkedObjects()).toEqual([]);
     });
 
+    it('discarding the head reports only the no-home leaf as stranded', () => {
+      buildChain(undefined);
+
+      expect(discardCardToZone(store, h).strandedIds).toEqual([b]);
+    });
+
     it('discarding the head with a no-home tail leaves B in place, unlinked', () => {
       buildChain(undefined);
       const bPos = pos(b);
       const before = totalCards();
 
-      expect(discardCardToZone(store, h)).toBe('routed');
+      expect(discardCardToZone(store, h).result).toBe('routed');
 
       expect(exists(h) || exists(a)).toBe(false);
       expect(codes(pileE)).toEqual(['h', 'eTop']);

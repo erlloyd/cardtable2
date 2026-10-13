@@ -57,7 +57,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const older = makeStack(['A', 'B']);
     const selected = makeStack(['A', 'C']);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
 
     expect(cardsOf(older)).toEqual(['A', 'B']);
     expect(cardsOf(selected)).toEqual(['C']);
@@ -68,7 +68,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const pile = makeStack(['A', 'B'], zoneId);
     const selected = makeStack(['A', 'C']);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
 
     expect(cardsOf(selected)).toEqual(['C']);
     expect(cardsOf(pile)).toEqual(['A', 'A', 'B']);
@@ -78,11 +78,11 @@ describe('discardCardToZone with duplicate card ids', () => {
   it('discards one copy at a time from a stack with duplicate ids', () => {
     const selected = makeStack(['A', 'A', 'B']);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
     expect(cardsOf(selected)).toEqual(['A', 'B']);
     expect(totalCards()).toBe(3);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
     expect(cardsOf(selected)).toEqual(['B']);
     expect(totalCards()).toBe(3);
   });

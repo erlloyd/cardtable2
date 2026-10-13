@@ -3470,7 +3470,7 @@ describe('discardCardToZone', () => {
       cards: toCardEntries(['orphan-card', 'other']),
       faceUp: false,
     });
-    expect(discardCardToZone(store, orphanStackId)).toBe('no-home');
+    expect(discardCardToZone(store, orphanStackId).result).toBe('no-home');
     expect(store.getObjectYMap(orphanStackId)!.get('_cards')).toEqual(
       toCardEntries(['orphan-card', 'other']),
     );
@@ -3480,7 +3480,7 @@ describe('discardCardToZone', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1', 'card-2']);
     store.deleteObject(zoneId);
 
-    expect(discardCardToZone(store, stackId)).toBe('no-home');
+    expect(discardCardToZone(store, stackId).result).toBe('no-home');
     expect(
       store
         .getObjectYMap(stackId)!
@@ -3500,17 +3500,17 @@ describe('discardCardToZone', () => {
       cards: [{ code: 'card-1', homeZone: plainZone }],
       faceUp: false,
     });
-    expect(discardCardToZone(store, stackId)).toBe('no-home');
+    expect(discardCardToZone(store, stackId).result).toBe('no-home');
   });
 
   it('returns invalid for a stack id that does not exist', () => {
     setupSourceAndZone(['card-1']);
-    expect(discardCardToZone(store, 'no-such-stack')).toBe('invalid');
+    expect(discardCardToZone(store, 'no-such-stack').result).toBe('invalid');
   });
 
   it('the discarded card keeps its homeZone tag in the pile', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
-    expect(discardCardToZone(store, stackId)).toBe('routed');
+    expect(discardCardToZone(store, stackId).result).toBe('routed');
 
     const pileId = store.filterObjects(
       (yMap) => yMap.get('_containerId') === zoneId,
@@ -3548,8 +3548,8 @@ describe('discardCardToZone', () => {
 
     const firstHome = mixedCards[0].homeZone;
     const secondHome = mixedCards[1].homeZone;
-    expect(discardCardToZone(store, splitA)).toBe('routed');
-    expect(discardCardToZone(store, splitA)).toBe('routed');
+    expect(discardCardToZone(store, splitA).result).toBe('routed');
+    expect(discardCardToZone(store, splitA).result).toBe('routed');
 
     const pileCodes = (zoneId: string) =>
       store
@@ -3606,7 +3606,7 @@ describe('discardCardToZone', () => {
     const discarded: Record<string, string> = {};
     for (let i = 0; i < 4; i++) {
       const top = store.getObjectYMap(deckB)!.get('_cards')![0];
-      expect(discardCardToZone(store, deckB)).toBe('routed');
+      expect(discardCardToZone(store, deckB).result).toBe('routed');
       discarded[top.code] = top.homeZone!;
     }
 
@@ -3630,7 +3630,7 @@ describe('discardCardToZone', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
 
     const result = discardCardToZone(store, stackId);
-    expect(result).toBe('routed');
+    expect(result.result).toBe('routed');
 
     // Original stack should be gone (or at least card-1 is in the zone)
     void stackId;
@@ -3696,7 +3696,7 @@ describe('discardCardToZone', () => {
     const { stackId, zoneId } = setupSourceAndZone(['card-1']);
 
     // First discard: card-1 moves to zone, gets _containerId=zoneId
-    expect(discardCardToZone(store, stackId)).toBe('routed');
+    expect(discardCardToZone(store, stackId).result).toBe('routed');
 
     // Pile exists in zone
     const pileAfterDiscard = store.filterObjects(
@@ -3723,7 +3723,7 @@ describe('discardCardToZone', () => {
     expect(pileAfterDragOut.length).toBe(0);
 
     // Second discard: must re-route to zone, NOT just flip the card in place
-    expect(discardCardToZone(store, pileId)).toBe('routed');
+    expect(discardCardToZone(store, pileId).result).toBe('routed');
 
     const pileAfterRediscard = store.filterObjects(
       (yMap) =>
@@ -3788,7 +3788,7 @@ describe('discardCardToZone', () => {
     store.deleteObject(sourceId);
 
     const result = discardCardToZone(store, foreignStackId);
-    expect(result).toBe('routed');
+    expect(result.result).toBe('routed');
 
     // Foreign stack should be smaller (card-member extracted)
     const foreignYMap = store.getObjectYMap(foreignStackId);

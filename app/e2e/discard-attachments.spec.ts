@@ -366,6 +366,42 @@ test.describe('Discard cascades to attached cards (ct-m0a.2)', () => {
       .not.toBeNull();
   });
 
+  test('stranded attached card is named in the toast', async ({ page }) => {
+    await seedZone(page, 'zone-enc', { x: -300, y: 200 }, 'Encounter Discard');
+    await seedStack(page, {
+      id: 'pile-enc',
+      pos: { x: -300, y: 200 },
+      cards: [{ code: 'enc-old', homeZone: 'zone-enc' }],
+      sortKey: '000001|000001',
+      containerId: 'zone-enc',
+      faceUp: true,
+    });
+    await seedStack(page, {
+      id: 'host',
+      pos: { x: 0, y: -100 },
+      cards: [{ code: 'sandman', homeZone: 'zone-enc' }],
+      sortKey: '000005|999999',
+      attachedCardIds: ['att'],
+    });
+    await seedStack(page, {
+      id: 'att',
+      pos: { x: 0, y: -78 },
+      cards: [{ code: 'tracer' }],
+      sortKey: '000005|000001',
+      attachedToId: 'host',
+    });
+    await expect.poll(async () => (await snapshot(page)).length).toBe(4);
+
+    await selectAt(page, { x: 0, y: -130 }, 'host');
+    await page.keyboard.press('x');
+
+    await expect(page.getByRole('status')).toContainText(
+      '1 card has no discard zone',
+    );
+    expect(await findObject(page, 'host')).toBeUndefined();
+    expect(await findObject(page, 'att')).toBeDefined();
+  });
+
   test('X on one attached card: it discards, its sibling closes the gap, host stays', async ({
     page,
   }) => {

@@ -12,6 +12,11 @@ import { createPortal } from 'react-dom';
 import type { YjsStore } from '../store/YjsStore';
 import type { Card, CardEntry, GameAssets } from '@cardtable2/shared';
 import { moveCardToBoard, reorderCardInHand } from '../store/YjsHandActions';
+import { discardHandCard } from '../actions/registerDefaultActions';
+import {
+  getViewportBottomPlacement,
+  toCanvasPxPlacement,
+} from '../utils/viewportPlacement';
 import { stackObjects } from '../store/YjsActions';
 import { computeFanLayout, CARD_WIDTH } from '../utils/fanLayout';
 import { CardPreview } from './CardPreview';
@@ -52,6 +57,7 @@ export interface HandPanelProps {
   boardRef?: React.RefObject<BoardHandle | null>;
   phantomDragFeedback?: PhantomDragFeedback | null;
   onPhantomDragActiveChange?: (active: boolean) => void;
+  onHoveredCardChange?: (cardIndex: number | null) => void;
 }
 
 const NO_CARDS: CardEntry[] = [];
@@ -95,6 +101,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       boardRef,
       phantomDragFeedback,
       onPhantomDragActiveChange,
+      onHoveredCardChange,
     },
     ref,
   ) {
@@ -141,6 +148,15 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const cards = useSyncExternalStore(subscribeToHands, () =>
       activeHandId ? store.getHandCards(activeHandId) : NO_CARDS,
     );
+
+    // A removed card never fires pointerleave, so a hover left on a card that
+    // the X key discarded would stay stuck until the pointer re-enters a card.
+    const [hoverCardCount, setHoverCardCount] = useState(cards.length);
+    if (hoverCardCount !== cards.length) {
+      setHoverCardCount(cards.length);
+      setHoveredIndex(null);
+      setHoverAnchor(null);
+    }
 
     // Measure container width with ResizeObserver
     useEffect(() => {
@@ -200,18 +216,45 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       }
     };
 
-    const handlePlayCard = (cardIndex: number) => {
+    const handlePlayCard = async (cardIndex: number) => {
       if (!activeHandId) return;
+      const playedCode = store.getHandCards(activeHandId)[cardIndex]?.code;
       setHoveredIndex(null);
       setHoverAnchor(null);
+      let pos = { x: 0, y: 0 };
+      if (boardRef?.current) {
+        const viewport = await boardRef.current.getViewportState();
+        pos = toCanvasPxPlacement(
+          getViewportBottomPlacement(viewport),
+          viewport.devicePixelRatio,
+        );
+      }
+      const current = store.getHandCards(activeHandId)[cardIndex];
+      if (!current || current.code !== playedCode) return;
       moveCardToBoard(
         store,
         activeHandId,
         cardIndex,
-        { x: 0, y: 0, r: 0 },
+        { x: pos.x, y: pos.y, r: 0 },
         true,
       );
     };
+
+    const handleDiscardCard = (cardIndex: number) => {
+      if (!activeHandId) return;
+      setHoveredIndex(null);
+      setHoverAnchor(null);
+      discardHandCard(store, activeHandId, cardIndex);
+    };
+
+    const onHoveredCardChangeEvent = useEffectEvent(
+      (cardIndex: number | null) => onHoveredCardChange?.(cardIndex),
+    );
+    const reportedHoverIndex = isDragging ? null : hoveredIndex;
+    useEffect(() => {
+      onHoveredCardChangeEvent(reportedHoverIndex);
+    }, [reportedHoverIndex]);
+    useEffect(() => () => onHoveredCardChangeEvent(null), []);
 
     const getCardImageUrl = useCallback(
       (cardId: string): string | null => {
@@ -769,11 +812,25 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                             className={`hand-panel__play-btn${fanLayout.overlap > 0 ? ' hand-panel__play-btn--compact' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handlePlayCard(index);
+                              void handlePlayCard(index);
                             }}
                             title="Play card to board"
                           >
                             Play
+                          </button>
+                        )}
+                        {!isDragging && (
+                          <button
+                            className="hand-panel__discard-btn"
+                            aria-label="Discard"
+                            title="Discard (X)"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDiscardCard(index);
+                            }}
+                          >
+                            ×
                           </button>
                         )}
                       </div>

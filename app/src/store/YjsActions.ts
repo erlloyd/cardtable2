@@ -1,6 +1,7 @@
 import type { YjsStore } from './YjsStore';
 import {
   ObjectKind,
+  type AttachmentData,
   type Position,
   type TableObject,
   type AttachmentLayout,
@@ -17,6 +18,15 @@ import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
+import {
+  hasAttachments,
+  mergeAttachments,
+  type AttachmentMergeChoice,
+} from './attachmentMerge';
+import {
+  clearAttachmentKeys,
+  CLEARABLE_ATTACHMENT_KEYS,
+} from './attachmentClear';
 import { CARD_WIDTH, CARD_HEIGHT } from '../renderer/constants';
 
 /**
@@ -572,6 +582,8 @@ export function exhaustCards(store: YjsStore, ids: string[]): string[] {
  * @param store - YjsStore instance
  * @param ids - Array of source stack IDs to merge into target
  * @param targetId - Optional target stack ID. If not provided, uses first id in ids array
+ * @param attachments - Which tokens/statuses/modifiers the merged stack keeps:
+ *   'merge' combines both sides, 'target' keeps the target's, 'source' keeps the sources'
  * @returns Array of successfully stacked source IDs
  *
  * @example
@@ -588,6 +600,7 @@ export function stackObjects(
   store: YjsStore,
   ids: string[],
   targetId?: string,
+  attachments: AttachmentMergeChoice = 'merge',
 ): string[] {
   // Determine target and source ids
   let target: string;
@@ -674,15 +687,48 @@ export function stackObjects(
   store.getDoc().transact(() => {
     // Build new card array: source cards on top, target cards at bottom
     // (index 0 is top of stack, so source goes first)
-    const newCards = [];
+    const incomingCards: CardEntry[] = [];
     for (const sourceData of sourceStacksData) {
-      newCards.push(...sourceData.cards);
+      incomingCards.push(...sourceData.cards);
       stackedIds.push(sourceData.id);
     }
-    newCards.push(...targetCards);
+    const newCards = mergeCardsWithHomeZone(store, targetCards, incomingCards);
 
     // Update target stack with merged cards
     targetYMap.set('_cards', newCards);
+
+    const statusTypes = store.getGameAssets()?.statusTypes;
+    const sourceTotal = sourceStacksData.reduce<AttachmentData>(
+      (total, sourceData) =>
+        mergeAttachments(
+          total,
+          store.getObjectYMap(sourceData.id)?.get('_meta')?.attachments ?? {},
+          statusTypes,
+        ),
+      {},
+    );
+
+    if (
+      attachments === 'source' ||
+      (attachments === 'merge' && hasAttachments(sourceTotal))
+    ) {
+      const targetMeta = targetYMap.get('_meta') ?? {};
+      const targetAttachments = targetMeta.attachments as
+        | AttachmentData
+        | undefined;
+      const merged =
+        attachments === 'source'
+          ? sourceTotal
+          : mergeAttachments(targetAttachments ?? {}, sourceTotal, statusTypes);
+
+      if (hasAttachments(merged)) {
+        targetYMap.set('_meta', { ...targetMeta, attachments: merged });
+      } else if (targetMeta.attachments !== undefined) {
+        const rest = { ...targetMeta };
+        delete rest.attachments;
+        targetYMap.set('_meta', rest);
+      }
+    }
 
     // Delete source stacks
     for (const sourceData of sourceStacksData) {
@@ -1294,14 +1340,21 @@ export function resolveHomeZone(
   entry: CardEntry,
 ): string | null {
   if (!entry.homeZone) return null;
-  const zoneYMap = store.getObjectYMap(entry.homeZone);
-  if (
+  return isDiscardZone(store, entry.homeZone) ? entry.homeZone : null;
+}
+
+function isDiscardZone(store: YjsStore, zoneId: string): boolean {
+  const zoneYMap = store.getObjectYMap(zoneId);
+  return (
     zoneYMap?.get('_kind') === ObjectKind.Zone &&
     zoneYMap.get('_meta')?.isDiscardZone === true
-  ) {
-    return entry.homeZone;
-  }
-  return null;
+  );
+}
+
+/** True when the stack sits in a discard zone (it is that zone's pile). */
+export function isDiscardPile(store: YjsStore, stackId: string): boolean {
+  const containerId = store.getObjectYMap(stackId)?.get('_containerId');
+  return !!containerId && isDiscardZone(store, containerId);
 }
 
 export type DiscardResult = 'routed' | 'no-home' | 'invalid';
@@ -1363,6 +1416,12 @@ export function discardCardToZone(
     const extractedYMap = store.getObjectYMap(extractedStackId)!;
     extractedYMap.set('_faceUp', true);
 
+    const meta = extractedYMap.get('_meta');
+    if (meta) {
+      const cleared = clearAttachmentKeys(meta, CLEARABLE_ATTACHMENT_KEYS);
+      if (cleared !== meta) extractedYMap.set('_meta', cleared);
+    }
+
     const existingPileId = findZonePile(store, zoneId);
 
     if (existingPileId && existingPileId !== extractedStackId) {
@@ -1372,7 +1431,7 @@ export function discardCardToZone(
         pileYMap.set('_faceUp', true);
       }
       // Merge extracted stack onto the pile
-      stackObjects(store, [extractedStackId], existingPileId);
+      stackObjects(store, [extractedStackId], existingPileId, 'target');
       // stackObjects deletes the source; the pile retains its _containerId
     } else {
       // No existing pile — move extracted stack into zone and mark it
@@ -1452,6 +1511,127 @@ export function createDiscardZoneForStack(
   });
 
   return newZoneId;
+}
+
+/**
+ * The most common valid home zone among the entries, or null when none has
+ * one. A tie goes to the zone whose card sits nearest the top (lowest index).
+ */
+function mostCommonHomeZone(
+  store: YjsStore,
+  entries: CardEntry[],
+): string | null {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    const zoneId = resolveHomeZone(store, entry);
+    if (zoneId) counts.set(zoneId, (counts.get(zoneId) ?? 0) + 1);
+  }
+
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [zoneId, count] of counts) {
+    if (count > bestCount) {
+      best = zoneId;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Merged card order for stackObjects (incoming on top, then target) where
+ * every card without a valid home zone takes the target's most common zone,
+ * falling back to the incoming cards' most common zone. Cards that already
+ * have a valid home zone, and all cards when neither side has one, are
+ * returned unchanged.
+ */
+function mergeCardsWithHomeZone(
+  store: YjsStore,
+  targetCards: CardEntry[],
+  incomingCards: CardEntry[],
+): CardEntry[] {
+  const merged = [...incomingCards, ...targetCards];
+  const zoneId =
+    mostCommonHomeZone(store, targetCards) ??
+    mostCommonHomeZone(store, incomingCards);
+  if (!zoneId) return merged;
+
+  return merged.map((entry) =>
+    resolveHomeZone(store, entry) ? entry : { ...entry, homeZone: zoneId },
+  );
+}
+
+/**
+ * Tag every card without a valid home zone in the given stacks with `zoneId`.
+ * Cards that already have a valid home zone are never changed.
+ * @returns number of cards tagged; 0 (nothing written) when `zoneId` is not a
+ * discard zone
+ */
+export function fillHomeZone(
+  store: YjsStore,
+  stackIds: string[],
+  zoneId: string,
+): number {
+  const zoneYMap = store.getObjectYMap(zoneId);
+  if (
+    zoneYMap?.get('_kind') !== ObjectKind.Zone ||
+    zoneYMap.get('_meta')?.isDiscardZone !== true
+  ) {
+    return 0;
+  }
+
+  let tagged = 0;
+  store.getDoc().transact(() => {
+    for (const id of stackIds) {
+      const yMap = store.getObjectYMap(id);
+      if (yMap?.get('_kind') !== ObjectKind.Stack) continue;
+
+      const cards = yMap.get('_cards') ?? [];
+      const missing = cards.filter((e) => resolveHomeZone(store, e) === null);
+      if (missing.length === 0) continue;
+
+      yMap.set(
+        '_cards',
+        cards.map((e) =>
+          resolveHomeZone(store, e) === null ? { ...e, homeZone: zoneId } : e,
+        ),
+      );
+      tagged += missing.length;
+    }
+  });
+  return tagged;
+}
+
+/**
+ * Remove the home zone tag (valid or dead) from every card in the given
+ * stacks. Non-stack ids, zones and piles outside `stackIds` are not touched.
+ * @returns number of cards cleared
+ */
+export function clearHomeZones(store: YjsStore, stackIds: string[]): number {
+  let cleared = 0;
+  store.getDoc().transact(() => {
+    for (const id of stackIds) {
+      const yMap = store.getObjectYMap(id);
+      if (yMap?.get('_kind') !== ObjectKind.Stack) continue;
+
+      const cards = yMap.get('_cards') ?? [];
+      const tagged = cards.filter((e) => e.homeZone !== undefined);
+      if (tagged.length === 0) continue;
+
+      yMap.set(
+        '_cards',
+        cards.map((e) =>
+          e.homeZone === undefined
+            ? e
+            : (Object.fromEntries(
+                Object.entries(e).filter(([key]) => key !== 'homeZone'),
+              ) as CardEntry),
+        ),
+      );
+      cleared += tagged.length;
+    }
+  });
+  return cleared;
 }
 
 /**

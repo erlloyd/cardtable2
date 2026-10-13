@@ -42,6 +42,7 @@ export interface ActionContext {
   gridSnapEnabled?: boolean; // Whether grid snapping is enabled
   onGridSnapEnabledChange?: (enabled: boolean) => void; // Toggle grid snap callback
   activeHandId?: string; // Currently active player hand
+  numericPrefix?: number; // number typed before the shortcut key, e.g. 3 in "3D"
   /** Open the generic Load... picker modal (ct-8gf.5).
    * `presetType`, when supplied, skips the type-list step and renders the
    * item list for that loadable type directly. */

@@ -831,10 +831,22 @@ function Table() {
   const handleKeyboardAction = useCallback(() => {
     boardRef.current?.clearPreview();
   }, []);
-  useKeyboardShortcuts(actionContext, true, handleKeyboardAction);
+  const numericPrefix = useKeyboardShortcuts(
+    actionContext,
+    true,
+    handleKeyboardAction,
+  );
 
   return (
     <div className="table">
+      {numericPrefix !== '' && (
+        <div
+          className="numeric-prefix-indicator"
+          data-testid="numeric-prefix-indicator"
+        >
+          {numericPrefix}
+        </div>
+      )}
       <Suspense fallback={<div className="board-fullscreen" />}>
         {!isStoreReady ? (
           <div className="board-fullscreen" />

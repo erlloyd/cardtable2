@@ -327,6 +327,60 @@ test.describe('Stack merge keeps attachments', () => {
     });
   });
 
+  test('table shortcuts do not fire while the dialog is open; Enter still chooses', async ({
+    page,
+  }) => {
+    // A discard zone plus a home-zone tag make X (Discard) destructive
+    await page.evaluate((sourceId) => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.setObject('e2e-zone', {
+        _kind: 'zone',
+        _pos: { x: 420, y: 100, r: 0 },
+        _sortKey: '900001',
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: { isDiscardZone: true, label: 'Discard' },
+      });
+      const yMap = store.getObjectYMap(sourceId)!;
+      const cards = yMap.get('_cards') as { code: string }[];
+      yMap.set(
+        '_cards',
+        cards.map((c) => ({ ...c, homeZone: 'e2e-zone' })),
+      );
+    }, ids.source);
+    await waitForRenderer(page);
+    await seedTokens(page, ids.source, { damage: 3 });
+    await seedTokens(page, ids.target, { damage: 1, threat: 2 });
+
+    await shiftDrag(page, ids.source, ids.target);
+    const panel = page.getByTestId(PANEL);
+    await expect(panel).toBeVisible();
+
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('x');
+    await waitForRenderer(page);
+
+    await expect(panel).toBeVisible();
+    const source = await snapshot(page, ids.source);
+    expect(source.exists).toBe(true);
+    expect(source.tokens).toEqual({ damage: 3 });
+    const target = await snapshot(page, ids.target);
+    expect(target.exists).toBe(true);
+    expect(target.tokens).toEqual({ damage: 1, threat: 2 });
+    expect(target.cardCount).toBe(ids.targetCards);
+
+    // Focus is on Combine both, so Enter chooses it
+    await page.keyboard.press('Enter');
+    await waitForRenderer(page);
+
+    await expect(panel).toHaveCount(0);
+    expect((await snapshot(page, ids.source)).exists).toBe(false);
+    const merged = await snapshot(page, ids.target);
+    expect(merged.tokens).toEqual({ damage: 4, threat: 2 });
+    expect(merged.cardCount).toBe(ids.sourceCards + ids.targetCards);
+  });
+
   test('drop onto a discard pile: no dialog and the pile gains no attachments', async ({
     page,
   }) => {

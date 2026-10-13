@@ -34,6 +34,7 @@ import { usePointerEvents } from '../hooks/usePointerEvents';
 import { useCanvasLifecycle } from '../hooks/useCanvasLifecycle';
 import { useTestAPI } from '../hooks/useTestAPI';
 import { useDebugHandlers } from '../hooks/useDebugHandlers';
+import { useMergeAttachmentsDialog } from '../hooks/useMergeAttachmentsDialog';
 
 // Message Bus
 import { BoardMessageBus } from './Board/BoardMessageBus';
@@ -435,6 +436,8 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
+  const { requestMergeChoice, mergeDialog } = useMergeAttachmentsDialog(store);
+
   // Message bus
   const messageBus = useMemo(() => new BoardMessageBus(), []);
 
@@ -455,6 +458,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         setHoveredObject,
         showCardPreviewModal,
         addMessage,
+        requestMergeChoice,
         flushCallbacks: flushCallbacksRef,
         selectionSettledCallbacks: selectionSettledCallbacksRef,
         animationStateCallbacks: animationStateCallbacksRef,
@@ -484,6 +488,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     setHoveredObject,
     showCardPreviewModal,
     addMessage,
+    requestMergeChoice,
     onBoardDragStart,
     onBoardDragEnd,
     onPhantomDragFeedback,
@@ -776,6 +781,8 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
           }}
         />
       )}
+
+      {mergeDialog}
     </div>
   );
 });

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { YjsStore, toTableObject } from './YjsStore';
-import { createObject } from './YjsActions';
+import { createDiscardZoneForStack, createObject } from './YjsActions';
 import {
+  discardCardFromHand,
   moveCardToHand,
   moveCardToBoard,
   reorderCardInHand,
@@ -209,6 +210,101 @@ describe('YjsHandActions', () => {
         true,
       );
       expect(result).toBeNull();
+    });
+  });
+
+  describe('discardCardFromHand', () => {
+    function objectIds(): string[] {
+      const ids: string[] = [];
+      store.forEachObject((_, id) => ids.push(id));
+      return ids;
+    }
+
+    function taggedHandCard(): { zoneId: string; handId: string } {
+      const source = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 10, y: 20, r: 0 },
+        cards: toCardEntries(['deck-card']),
+        faceUp: false,
+      });
+      const zoneId = createDiscardZoneForStack(store, source)!;
+      const handId = store.createHand('Test Hand');
+      moveCardToHand(store, source, 0, handId);
+      return { zoneId, handId };
+    }
+
+    it('adds to an existing pile face-up and leaves no extra stack', () => {
+      const { zoneId, handId } = taggedHandCard();
+      const pile = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: toCardEntries(['old']),
+        faceUp: false,
+      });
+      store.getObjectYMap(pile)!.set('_containerId', zoneId);
+      store.addCardToHand(handId, { code: 'other' });
+      const before = objectIds().length;
+
+      expect(discardCardFromHand(store, handId, 0)).toBe('routed');
+
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['other']));
+      const cards = store.getObjectYMap(pile)!.get('_cards')!;
+      expect(cards[0].code).toBe('deck-card');
+      expect(store.getObjectYMap(pile)!.get('_faceUp')).toBe(true);
+      expect(objectIds().length).toBe(before);
+    });
+
+    it('creates one face-up stack at the zone when there is no pile', () => {
+      const { zoneId, handId } = taggedHandCard();
+      const before = objectIds().length;
+
+      expect(discardCardFromHand(store, handId, 0)).toBe('routed');
+
+      expect(store.getHandCards(handId)).toEqual([]);
+      const added = objectIds().filter(
+        (id) => store.getObjectYMap(id)!.get('_containerId') === zoneId,
+      );
+      expect(added).toHaveLength(1);
+      expect(objectIds().length).toBe(before + 1);
+      const ymap = store.getObjectYMap(added[0])!;
+      expect(ymap.get('_faceUp')).toBe(true);
+      expect(ymap.get('_pos')).toEqual(
+        store.getObjectYMap(zoneId)!.get('_pos'),
+      );
+    });
+
+    it('returns no-home and changes nothing without a homeZone', () => {
+      const handId = store.createHand('Test Hand');
+      store.addCardToHand(handId, { code: 'plain' });
+      const before = objectIds().length;
+
+      expect(discardCardFromHand(store, handId, 0)).toBe('no-home');
+
+      expect(store.getHandCards(handId)).toEqual(toCardEntries(['plain']));
+      expect(objectIds().length).toBe(before);
+    });
+
+    it('returns no-home when the home zone was deleted', () => {
+      const { zoneId, handId } = taggedHandCard();
+      store.deleteObject(zoneId);
+      const before = objectIds().length;
+
+      expect(discardCardFromHand(store, handId, 0)).toBe('no-home');
+
+      expect(store.getHandCards(handId)).toHaveLength(1);
+      expect(objectIds().length).toBe(before);
+    });
+
+    it('returns invalid for a bad index or a missing hand', () => {
+      const { handId } = taggedHandCard();
+      const before = objectIds().length;
+
+      expect(discardCardFromHand(store, handId, 5)).toBe('invalid');
+      expect(discardCardFromHand(store, handId, -1)).toBe('invalid');
+      expect(discardCardFromHand(store, 'nope', 0)).toBe('invalid');
+
+      expect(store.getHandCards(handId)).toHaveLength(1);
+      expect(objectIds().length).toBe(before);
     });
   });
 

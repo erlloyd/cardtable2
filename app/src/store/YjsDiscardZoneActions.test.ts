@@ -75,6 +75,21 @@ describe('discardCardToZone with duplicate card ids', () => {
     expect(totalCards()).toBe(4);
   });
 
+  it('leaves the pile with no attachments when the discarded card had tokens', () => {
+    const pile = makeStack(['A'], zoneId);
+    const selected = makeStack(['B']);
+    store
+      .getObjectYMap(selected)!
+      .set('_meta', { attachments: { tokens: { damage: 2 } } });
+
+    expect(discardCardToZone(store, selected)).toBe('routed');
+
+    expect(cardsOf(pile)).toEqual(['B', 'A']);
+    expect(
+      store.getObjectYMap(pile)!.get('_meta')?.attachments,
+    ).toBeUndefined();
+  });
+
   it('discards one copy at a time from a stack with duplicate ids', () => {
     const selected = makeStack(['A', 'A', 'B']);
 

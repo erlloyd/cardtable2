@@ -19,6 +19,9 @@ import {
   adjustCounter,
   createDiscardZoneForStack,
   discardCardToZone,
+  fillHomeZone,
+  clearHomeZones,
+  resolveHomeZone,
 } from '../store/YjsActions';
 import {
   areAllSelectedStacksExhausted,
@@ -26,6 +29,16 @@ import {
 } from '../store/YjsSelectors';
 import { resolveEffectiveAttachmentLayout } from '../store/attachmentLayout';
 import { showToast } from '../toast/toastStore';
+
+function selectedDiscardZoneIds(ctx: ActionContext): string[] {
+  return ctx.selection.ids.filter((_, i) => {
+    const yMap = ctx.selection.yMaps[i];
+    return (
+      yMap.get('_kind') === ObjectKind.Zone &&
+      yMap.get('_meta')?.isDiscardZone === true
+    );
+  });
+}
 
 /** The single user-visible surface for "discard found no home zone". */
 function notifyNoDiscardZone(count: number): void {
@@ -308,6 +321,65 @@ export function registerDefaultActions(): () => void {
       !ctx.selection.hasMixed,
     execute: (ctx) => {
       createDiscardZoneForStack(ctx.store, ctx.selection.ids[0]);
+    },
+  });
+
+  // Discard zone: tag untagged cards of the selected stacks with the selected zone
+  register({
+    id: 'set-discard-zone',
+    label: (ctx) => {
+      const zones = selectedDiscardZoneIds(ctx);
+      const zoneLabel =
+        zones.length === 1
+          ? (ctx.store.getObjectYMap(zones[0])?.get('_meta')?.label as
+              | string
+              | undefined)
+          : undefined;
+      return zoneLabel ? `Set Discard Zone: ${zoneLabel}` : 'Set Discard Zone';
+    },
+    shortLabel: 'Set Discard',
+    icon: '🗃️',
+    category: CARD_ACTIONS,
+    description:
+      'Make the selected discard zone the home of selected cards that have none',
+    isAvailable: (ctx) => {
+      const zones = selectedDiscardZoneIds(ctx);
+      if (zones.length !== 1) return false;
+      return ctx.selection.ids.some(
+        (id) =>
+          id !== zones[0] &&
+          (ctx.store.getObjectYMap(id)?.get('_cards') ?? []).some(
+            (e) => resolveHomeZone(ctx.store, e) === null,
+          ),
+      );
+    },
+    execute: (ctx) => {
+      const zones = selectedDiscardZoneIds(ctx);
+      if (zones.length !== 1) return;
+      fillHomeZone(
+        ctx.store,
+        ctx.selection.ids.filter((id) => id !== zones[0]),
+        zones[0],
+      );
+    },
+  });
+
+  // Discard zone: strip the home zone from every card of the selected stacks
+  register({
+    id: 'clear-discard-zone',
+    label: 'Clear Discard Zone',
+    shortLabel: 'Clear Discard',
+    icon: '🧹',
+    category: CARD_ACTIONS,
+    description: 'Remove the discard zone from the selected cards',
+    isAvailable: (ctx) =>
+      ctx.selection.ids.some((id) =>
+        (ctx.store.getObjectYMap(id)?.get('_cards') ?? []).some(
+          (e) => e.homeZone !== undefined,
+        ),
+      ),
+    execute: (ctx) => {
+      clearHomeZones(ctx.store, ctx.selection.ids);
     },
   });
 

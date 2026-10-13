@@ -57,7 +57,7 @@ app.get('/health', (_req, res) => {
 });
 
 // Card image proxy with aggressive caching to minimize Railway bandwidth
-// Images are proxied from Azure Blob Storage which doesn't provide CORS headers
+// Images are proxied from the Cerebro R2 image bucket which doesn't provide CORS headers
 // ETags + immutable caching means clients only download each image once
 // Express 5 wildcard syntax: /*path (wildcard must have a name in path-to-regexp v8)
 app.get<{ path: string[] | string }>(

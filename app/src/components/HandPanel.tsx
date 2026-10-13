@@ -65,6 +65,7 @@ const NO_CARDS: CardEntry[] = [];
 const DRAG_SLOP = 5;
 // Cards are positioned at top: 0.75rem inside the container (12px at 16px base)
 const CARD_ROW_TOP_OFFSET = 12;
+const CARD_SELECTOR = '.hand-panel__card';
 
 /**
  * Compute how far a card at `index` should shift during a drag-reorder.
@@ -137,6 +138,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     } | null>(null);
     const ghostElRef = useRef<HTMLDivElement>(null);
     const ghostPositionRef = useRef({ x: 0, y: 0 });
+    const lastMousePointRef = useRef<{ x: number; y: number } | null>(null);
 
     // Read cards straight from the store during render so the commit that
     // changes activeHandId already shows that hand's cards (no stale or empty
@@ -149,14 +151,34 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       activeHandId ? store.getHandCards(activeHandId) : NO_CARDS,
     );
 
-    // A removed card never fires pointerleave, so a hover left on a card that
-    // the X key discarded would stay stuck until the pointer re-enters a card.
-    const [hoverCardCount, setHoverCardCount] = useState(cards.length);
-    if (hoverCardCount !== cards.length) {
-      setHoverCardCount(cards.length);
-      setHoveredIndex(null);
-      setHoverAnchor(null);
-    }
+    // A removed card never fires pointerleave, and the card that reflows under
+    // a still pointer never fires pointerenter, so after the cards change the
+    // hover is re-derived from where the mouse last was.
+    useLayoutEffect(() => {
+      const pointer = lastMousePointRef.current;
+      const hit = pointer
+        ? document
+            .elementFromPoint(pointer.x, pointer.y)
+            ?.closest(CARD_SELECTOR)
+        : null;
+      const index = hit
+        ? Array.from(
+            cardsContainerRef.current?.querySelectorAll(CARD_SELECTOR) ?? [],
+          ).indexOf(hit)
+        : -1;
+      if (pointer && index >= 0) {
+        setHoveredIndex(index);
+        setHoverAnchor({
+          x: pointer.x,
+          panelTop:
+            panelRootRef.current?.getBoundingClientRect().top ??
+            window.innerHeight,
+        });
+      } else {
+        setHoveredIndex(null);
+        setHoverAnchor(null);
+      }
+    }, [cards.length]);
 
     // Measure container width with ResizeObserver
     useEffect(() => {
@@ -376,6 +398,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
     const handleCardPointerEnter = useCallback(
       (index: number, e: React.PointerEvent<HTMLDivElement>) => {
         if (e.pointerType !== 'mouse') return;
+        lastMousePointRef.current = { x: e.clientX, y: e.clientY };
         if (isDragging) return;
         setHoveredIndex(index);
         setHoverAnchor({
@@ -388,7 +411,16 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
       [isDragging],
     );
 
+    const handleCardPointerMove = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.pointerType !== 'mouse') return;
+        lastMousePointRef.current = { x: e.clientX, y: e.clientY };
+      },
+      [],
+    );
+
     const handleCardPointerLeave = useCallback(() => {
+      lastMousePointRef.current = null;
       if (isDragging) return;
       setHoveredIndex(null);
       setHoverAnchor(null);
@@ -775,6 +807,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                             : undefined,
                         }}
                         onPointerEnter={(e) => handleCardPointerEnter(index, e)}
+                        onPointerMove={handleCardPointerMove}
                         onPointerLeave={handleCardPointerLeave}
                         onPointerDown={(e) =>
                           handleCardPointerDown(index, cardId, e)

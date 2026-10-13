@@ -404,13 +404,84 @@ test.describe('Hand card discard and Play placement (ct-3pj.4)', () => {
     await page.keyboard.press('x');
     await expect.poll(() => getHandCodes(page, handId)).toHaveLength(2);
 
-    // Without the pointer re-entering a card, the reflowed card is not
-    // hovered, so a second plain press discards nothing.
+    // The card that reflowed under the still pointer is hovered, so a plain
+    // press discards again: one card per press, never more.
+    await page.keyboard.press('x');
+    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(1);
+    await page.waitForTimeout(300);
+    expect(await getHandCodes(page, handId)).toHaveLength(1);
+    expect((await getZonePile(page))[0].cards).toHaveLength(3);
+  });
+
+  test('8. X X X with a still pointer discards three hand cards', async ({
+    page,
+  }) => {
+    await seedZone(page);
+    const handId = await seedHand(
+      page,
+      ['c1', 'c2', 'c3', 'c4', 'c5'].map((code) => ({
+        code,
+        homeZone: ZONE_ID,
+      })),
+    );
+
+    // The hand re-centres after every discard; a point just right of the
+    // container centre is over some card for every hand size down to one.
+    const containerBox = await page.locator('.hand-panel__cards').boundingBox();
+    const cardBox = await page
+      .locator('.hand-panel__card')
+      .nth(0)
+      .boundingBox();
+    if (!containerBox || !cardBox) throw new Error('No hand boxes');
+    await page.mouse.move(
+      containerBox.x + containerBox.width / 2 + 10,
+      cardBox.y + cardBox.height / 2,
+    );
+    await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(1);
+
+    for (const remaining of [4, 3, 2]) {
+      await page.keyboard.press('x');
+      await expect
+        .poll(() => getHandCodes(page, handId))
+        .toHaveLength(remaining);
+      // The pointer never moved: the card now under it carries the hover.
+      await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(1);
+    }
+    const pile = await getZonePile(page);
+    expect(pile).toHaveLength(1);
+    expect(pile[0].cards).toHaveLength(3);
+  });
+
+  test('9. X discards nothing once the pointer is over no card', async ({
+    page,
+  }) => {
+    await seedZone(page);
+    const handId = await seedHand(
+      page,
+      ['c1', 'c2', 'c3'].map((code) => ({ code, homeZone: ZONE_ID })),
+    );
+
+    const lastBox = await page
+      .locator('.hand-panel__card')
+      .nth(2)
+      .boundingBox();
+    if (!lastBox) throw new Error('No bounding box for hand card 2');
+    // Over the last card's right edge: after one discard the hand shrinks
+    // and re-centres, leaving this point over empty panel.
+    await page.mouse.move(
+      lastBox.x + lastBox.width - 4,
+      lastBox.y + lastBox.height / 2,
+    );
+    await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(1);
+
+    await page.keyboard.press('x');
+    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(2);
+    await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(0);
+
     await page.keyboard.press('x');
     await page.waitForTimeout(300);
-    await expect(page.locator('.hand-panel__card--hovered')).toHaveCount(0);
     expect(await getHandCodes(page, handId)).toHaveLength(2);
-    expect((await getZonePile(page))[0].cards).toHaveLength(2);
+    expect((await getZonePile(page))[0].cards).toHaveLength(1);
   });
 });
 

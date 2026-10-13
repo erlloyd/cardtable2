@@ -20,9 +20,12 @@ import {
   createDiscardZoneForStack,
   setCardFaceUp,
   discardCardToZone,
+  isDiscardPile,
 } from './YjsActions';
+import type { GameAssets } from '../content';
 import {
   ObjectKind,
+  type AttachmentData,
   toCardEntries,
   type StackObject,
   type TableObject,
@@ -2130,6 +2133,184 @@ describe('YjsActions - stackObjects (M3.5-T3)', () => {
       // Should be called once with all changes (atomic transaction)
       expect(callback).toHaveBeenCalledTimes(1);
     });
+  });
+
+  describe('Attachments (tokens, statuses, modifiers)', () => {
+    function makeStack(
+      code: string,
+      attachments?: AttachmentData,
+      extraMeta: Record<string, unknown> = {},
+    ): string {
+      return createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: toCardEntries([code]),
+        faceUp: true,
+        meta: attachments ? { ...extraMeta, attachments } : extraMeta,
+      });
+    }
+
+    function attachmentsOf(id: string): AttachmentData | undefined {
+      return store.getObjectYMap(id)!.get('_meta')?.attachments as
+        | AttachmentData
+        | undefined;
+    }
+
+    it('carries the source tokens to a target with none', () => {
+      const target = makeStack('t');
+      const source = makeStack('s', { tokens: { damage: 2 } });
+
+      stackObjects(store, [source], target);
+
+      expect(attachmentsOf(target)).toEqual({ tokens: { damage: 2 } });
+    });
+
+    it('leaves the target tokens alone when the source has none', () => {
+      const target = makeStack('t', { tokens: { damage: 2 } });
+      const source = makeStack('s');
+
+      stackObjects(store, [source], target);
+
+      expect(attachmentsOf(target)).toEqual({ tokens: { damage: 2 } });
+    });
+
+    it('sums both sides by default', () => {
+      const target = makeStack('t', { tokens: { damage: 2 } });
+      const source = makeStack('s', { tokens: { damage: 3, threat: 1 } });
+
+      stackObjects(store, [source], target);
+
+      expect(attachmentsOf(target)).toEqual({
+        tokens: { damage: 5, threat: 1 },
+      });
+    });
+
+    it("keeps only the target's with 'target'", () => {
+      const target = makeStack('t', { tokens: { damage: 2 } });
+      const source = makeStack('s', { tokens: { threat: 1 } });
+
+      stackObjects(store, [source], target, 'target');
+
+      expect(attachmentsOf(target)).toEqual({ tokens: { damage: 2 } });
+    });
+
+    it("keeps only the source's with 'source'", () => {
+      const target = makeStack('t', { tokens: { damage: 2 } });
+      const source = makeStack('s', { tokens: { threat: 1 } });
+
+      stackObjects(store, [source], target, 'source');
+
+      expect(attachmentsOf(target)).toEqual({ tokens: { threat: 1 } });
+    });
+
+    it("sums the two sources with 'source'", () => {
+      const target = makeStack('t', { tokens: { damage: 9 } });
+      const source1 = makeStack('s1', { tokens: { threat: 1 } });
+      const source2 = makeStack('s2', { tokens: { threat: 2, damage: 1 } });
+
+      stackObjects(store, [source1, source2], target, 'source');
+
+      expect(attachmentsOf(target)).toEqual({
+        tokens: { threat: 3, damage: 1 },
+      });
+    });
+
+    it("removes the attachments key when 'source' leaves nothing", () => {
+      const target = makeStack('t', { tokens: { damage: 2 } });
+      const source = makeStack('s');
+
+      stackObjects(store, [source], target, 'source');
+
+      expect(
+        Object.keys(store.getObjectYMap(target)!.get('_meta')!),
+      ).not.toContain('attachments');
+    });
+
+    it('sums countable statuses using the store status types', () => {
+      store.setGameAssets({
+        statusTypes: {
+          poison: { name: 'Poison', image: 'p.png', countable: true },
+          stunned: { name: 'Stunned', image: 's.png' },
+        },
+      } as unknown as GameAssets);
+      const target = makeStack('t', { status: { poison: 1, stunned: 1 } });
+      const source = makeStack('s', { status: { poison: 2, stunned: 1 } });
+
+      stackObjects(store, [source], target);
+
+      expect(attachmentsOf(target)).toEqual({
+        status: { poison: 3, stunned: 1 },
+      });
+    });
+
+    it('preserves other target _meta keys', () => {
+      const target = makeStack(
+        't',
+        { tokens: { damage: 1 } },
+        { note: 'keep' },
+      );
+      const source = makeStack('s', { tokens: { damage: 1 } });
+
+      stackObjects(store, [source], target);
+
+      const meta = store.getObjectYMap(target)!.get('_meta');
+      expect(meta?.note).toBe('keep');
+      expect(meta?.attachments).toEqual({ tokens: { damage: 2 } });
+    });
+
+    it('applies the merge in one transaction', async () => {
+      const target = makeStack('t', { tokens: { damage: 1 } });
+      const source = makeStack('s', { tokens: { damage: 1 } });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      const callback = vi.fn();
+      store.onObjectsChange(callback);
+      stackObjects(store, [source], target);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('YjsActions - isDiscardPile', () => {
+  let store: YjsStore;
+
+  beforeEach(() => {
+    store = new YjsStore('test-is-discard-pile');
+  });
+
+  function makeStack(containerId: string | null): string {
+    const id = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['a']),
+      faceUp: true,
+    });
+    store.getObjectYMap(id)!.set('_containerId', containerId);
+    return id;
+  }
+
+  it('is true for a stack in a discard zone', () => {
+    const seed = makeStack(null);
+    const zoneId = createDiscardZoneForStack(store, seed)!;
+    expect(isDiscardPile(store, makeStack(zoneId))).toBe(true);
+  });
+
+  it('is false with no container', () => {
+    expect(isDiscardPile(store, makeStack(null))).toBe(false);
+  });
+
+  it('is false in a non-discard zone', () => {
+    const zoneId = createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: 0, y: 0, r: 0 },
+    });
+    expect(isDiscardPile(store, makeStack(zoneId))).toBe(false);
+  });
+
+  it('is false when the container no longer exists', () => {
+    expect(isDiscardPile(store, makeStack('gone'))).toBe(false);
   });
 });
 

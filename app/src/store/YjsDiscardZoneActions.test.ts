@@ -102,3 +102,110 @@ describe('discardCardToZone with duplicate card ids', () => {
     expect(totalCards()).toBe(3);
   });
 });
+
+describe('discardCardToZone strips attachments', () => {
+  let store: YjsStore;
+  let zoneId: string;
+
+  const seeded = {
+    tokens: { damage: 3 },
+    status: { stunned: 1 },
+    modifiers: { ATK: 1 },
+  };
+
+  function makeStack(cards: string[], homeZone?: string): string {
+    return createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: cards.map((code) => ({ code, homeZone })),
+      faceUp: false,
+    });
+  }
+
+  function seedMeta(id: string): void {
+    store.getObjectYMap(id)!.set('_meta', { attachments: seeded, custom: 'x' });
+  }
+
+  function metaOf(id: string): Record<string, unknown> | undefined {
+    return store.getObjectYMap(id)!.get('_meta');
+  }
+
+  beforeEach(() => {
+    store = new YjsStore('test-discard-strip');
+    const temp = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['A', 'B', 'C']),
+      faceUp: false,
+    });
+    zoneId = createDiscardZoneForStack(store, temp)!;
+    store.deleteObject(temp);
+  });
+
+  it('path 1: single card into an empty zone arrives clean and keeps other meta', () => {
+    const source = makeStack(['A'], zoneId);
+    seedMeta(source);
+
+    expect(discardCardToZone(store, source)).toBe('routed');
+
+    const yMap = store.getObjectYMap(source)!;
+    expect(yMap.get('_containerId')).toBe(zoneId);
+    expect(metaOf(source)?.attachments).toBeUndefined();
+    expect(metaOf(source)?.custom).toBe('x');
+  });
+
+  it('path 2: single card onto an existing clean pile leaves the pile clean', () => {
+    const pile = makeStack(['B'], zoneId);
+    store.getObjectYMap(pile)!.set('_containerId', zoneId);
+    const source = makeStack(['A'], zoneId);
+    seedMeta(source);
+
+    expect(discardCardToZone(store, source)).toBe('routed');
+
+    expect(store.getObjectYMap(source)).toBeUndefined();
+    expect(
+      store
+        .getObjectYMap(pile)!
+        .get('_cards')!
+        .map((e) => e.code),
+    ).toEqual(['A', 'B']);
+    expect(metaOf(pile)?.attachments).toBeUndefined();
+  });
+
+  it('path 3: top of a multi-card stack arrives clean, remainder keeps attachments', () => {
+    const source = makeStack(['A', 'B'], zoneId);
+    seedMeta(source);
+
+    expect(discardCardToZone(store, source)).toBe('routed');
+
+    let pileId: string | null = null;
+    store.forEachObject((yMap, id) => {
+      if (yMap.get('_containerId') === zoneId) pileId = id;
+    });
+    expect(pileId).not.toBeNull();
+    expect(metaOf(pileId!)?.attachments).toBeUndefined();
+    expect(metaOf(source)?.attachments).toEqual(seeded);
+  });
+
+  it('runs as a single Yjs transaction', () => {
+    const source = makeStack(['A'], zoneId);
+    seedMeta(source);
+    let updates = 0;
+    store.getDoc().on('update', () => {
+      updates += 1;
+    });
+
+    discardCardToZone(store, source);
+
+    expect(updates).toBe(1);
+  });
+
+  it('leaves attachments untouched when the card has no home zone', () => {
+    const source = makeStack(['A']);
+    seedMeta(source);
+
+    expect(discardCardToZone(store, source)).toBe('no-home');
+
+    expect(metaOf(source)?.attachments).toEqual(seeded);
+  });
+});

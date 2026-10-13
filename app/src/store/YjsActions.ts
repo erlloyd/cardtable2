@@ -23,6 +23,10 @@ import {
   mergeAttachments,
   type AttachmentMergeChoice,
 } from './attachmentMerge';
+import {
+  clearAttachmentKeys,
+  CLEARABLE_ATTACHMENT_KEYS,
+} from './attachmentClear';
 import { CARD_WIDTH, CARD_HEIGHT } from '../renderer/constants';
 
 /**
@@ -1411,6 +1415,12 @@ export function discardCardToZone(
     // Ensure the extracted stack is face-up
     const extractedYMap = store.getObjectYMap(extractedStackId)!;
     extractedYMap.set('_faceUp', true);
+
+    const meta = extractedYMap.get('_meta');
+    if (meta) {
+      const cleared = clearAttachmentKeys(meta, CLEARABLE_ATTACHMENT_KEYS);
+      if (cleared !== meta) extractedYMap.set('_meta', cleared);
+    }
 
     const existingPileId = findZonePile(store, zoneId);
 

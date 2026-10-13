@@ -149,6 +149,47 @@ describe('discardCardToZone with attached cards', () => {
     expect(store.getObjectYMap(host)!.get('_attachedCardIds')).toBeUndefined();
   });
 
+  it('discards only the top card of a multi-card host and keeps its attached card linked', () => {
+    const pileE = makePile(zoneE, 'eTop');
+    const hostPos = { x: 100, y: 100, r: 0 };
+    const attachedPos = { x: 100, y: 130, r: 0 };
+    const host = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: hostPos,
+      cards: [
+        { code: 'top', homeZone: zoneE },
+        { code: 'under', homeZone: zoneE },
+      ],
+      faceUp: false,
+    });
+    const attached = makeCard('att', zoneP, attachedPos);
+    attachCards(store, [attached], host);
+    const attachedPosBefore = pos(attached);
+
+    const outcome = discardCardToZone(store, host);
+
+    expect(outcome.result).toBe('routed');
+    expect(outcome.strandedIds).toEqual([]);
+    expect(
+      store
+        .getObjectYMap(pileE)!
+        .get('_cards')!
+        .map((c) => c.code),
+    ).toEqual(['top', 'eTop']);
+    expect(exists(host)).toBe(true);
+    expect(
+      store
+        .getObjectYMap(host)!
+        .get('_cards')!
+        .map((c) => c.code),
+    ).toEqual(['under']);
+    expect(store.getObjectYMap(host)!.get('_attachedCardIds')).toEqual([
+      attached,
+    ]);
+    expect(store.getObjectYMap(attached)!.get('_attachedToId')).toBe(host);
+    expect(pos(attached)).toEqual(attachedPosBefore);
+  });
+
   it('applies the whole cascade in one transaction', () => {
     makePile(zoneE, 'eTop');
     const pileP = makePile(zoneP, 'pTop');

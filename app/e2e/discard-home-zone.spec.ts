@@ -218,8 +218,8 @@ async function pilesIn(page: Page, zoneId: string): Promise<Snapshot[]> {
  * Press 'x' once on the selected stack and wait for the discard to land.
  *
  * `remainingAfter` is the number of cards that stay in the loose stack. With 0
- * remaining, discardCardToZone (YjsActions.ts:1349-1352, 1371-1374) does not
- * move a card: the single-card stack itself is moved into the zone and gets
+ * remaining, discardCardToZone does not unstack a
+ * card for a single-card source: the stack itself is moved into the zone and gets
  * `_containerId` (it becomes the pile), or is merged into an existing pile and
  * deleted. Both are accepted explicitly here.
  */

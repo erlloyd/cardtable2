@@ -743,7 +743,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
                 <div className="hand-panel__empty">
                   {handIds.length === 0
                     ? 'Create a hand to get started.'
-                    : 'No cards in hand. Select a card on the board and use "Add to Hand" (A).'}
+                    : 'No cards in hand. Select a card on the board and use "Draw to Hand" (D).'}
                 </div>
               ) : containerWidth === 0 ? null : (
                 (() => {

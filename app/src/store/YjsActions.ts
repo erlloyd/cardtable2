@@ -674,12 +674,12 @@ export function stackObjects(
   store.getDoc().transact(() => {
     // Build new card array: source cards on top, target cards at bottom
     // (index 0 is top of stack, so source goes first)
-    const newCards = [];
+    const incomingCards: CardEntry[] = [];
     for (const sourceData of sourceStacksData) {
-      newCards.push(...sourceData.cards);
+      incomingCards.push(...sourceData.cards);
       stackedIds.push(sourceData.id);
     }
-    newCards.push(...targetCards);
+    const newCards = mergeCardsWithHomeZone(store, targetCards, incomingCards);
 
     // Update target stack with merged cards
     targetYMap.set('_cards', newCards);
@@ -1475,6 +1475,127 @@ export function createDiscardZoneForStack(
   });
 
   return newZoneId;
+}
+
+/**
+ * The most common valid home zone among the entries, or null when none has
+ * one. A tie goes to the zone whose card sits nearest the top (lowest index).
+ */
+function mostCommonHomeZone(
+  store: YjsStore,
+  entries: CardEntry[],
+): string | null {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    const zoneId = resolveHomeZone(store, entry);
+    if (zoneId) counts.set(zoneId, (counts.get(zoneId) ?? 0) + 1);
+  }
+
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [zoneId, count] of counts) {
+    if (count > bestCount) {
+      best = zoneId;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Merged card order for stackObjects (incoming on top, then target) where
+ * every card without a valid home zone takes the target's most common zone,
+ * falling back to the incoming cards' most common zone. Cards that already
+ * have a valid home zone, and all cards when neither side has one, are
+ * returned unchanged.
+ */
+function mergeCardsWithHomeZone(
+  store: YjsStore,
+  targetCards: CardEntry[],
+  incomingCards: CardEntry[],
+): CardEntry[] {
+  const merged = [...incomingCards, ...targetCards];
+  const zoneId =
+    mostCommonHomeZone(store, targetCards) ??
+    mostCommonHomeZone(store, incomingCards);
+  if (!zoneId) return merged;
+
+  return merged.map((entry) =>
+    resolveHomeZone(store, entry) ? entry : { ...entry, homeZone: zoneId },
+  );
+}
+
+/**
+ * Tag every card without a valid home zone in the given stacks with `zoneId`.
+ * Cards that already have a valid home zone are never changed.
+ * @returns number of cards tagged; 0 (nothing written) when `zoneId` is not a
+ * discard zone
+ */
+export function fillHomeZone(
+  store: YjsStore,
+  stackIds: string[],
+  zoneId: string,
+): number {
+  const zoneYMap = store.getObjectYMap(zoneId);
+  if (
+    zoneYMap?.get('_kind') !== ObjectKind.Zone ||
+    zoneYMap.get('_meta')?.isDiscardZone !== true
+  ) {
+    return 0;
+  }
+
+  let tagged = 0;
+  store.getDoc().transact(() => {
+    for (const id of stackIds) {
+      const yMap = store.getObjectYMap(id);
+      if (yMap?.get('_kind') !== ObjectKind.Stack) continue;
+
+      const cards = yMap.get('_cards') ?? [];
+      const missing = cards.filter((e) => resolveHomeZone(store, e) === null);
+      if (missing.length === 0) continue;
+
+      yMap.set(
+        '_cards',
+        cards.map((e) =>
+          resolveHomeZone(store, e) === null ? { ...e, homeZone: zoneId } : e,
+        ),
+      );
+      tagged += missing.length;
+    }
+  });
+  return tagged;
+}
+
+/**
+ * Remove the home zone tag (valid or dead) from every card in the given
+ * stacks. Non-stack ids, zones and piles outside `stackIds` are not touched.
+ * @returns number of cards cleared
+ */
+export function clearHomeZones(store: YjsStore, stackIds: string[]): number {
+  let cleared = 0;
+  store.getDoc().transact(() => {
+    for (const id of stackIds) {
+      const yMap = store.getObjectYMap(id);
+      if (yMap?.get('_kind') !== ObjectKind.Stack) continue;
+
+      const cards = yMap.get('_cards') ?? [];
+      const tagged = cards.filter((e) => e.homeZone !== undefined);
+      if (tagged.length === 0) continue;
+
+      yMap.set(
+        '_cards',
+        cards.map((e) =>
+          e.homeZone === undefined
+            ? e
+            : (Object.fromEntries(
+                Object.entries(e).filter(([key]) => key !== 'homeZone'),
+              ) as CardEntry),
+        ),
+      );
+      cleared += tagged.length;
+    }
+  });
+  return cleared;
 }
 
 /**

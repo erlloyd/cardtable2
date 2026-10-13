@@ -26,6 +26,7 @@ import {
   attachCards,
   createDiscardZoneForStack,
   createObject,
+  discardCardToZone,
 } from '../store/YjsActions';
 import { ActionRegistry } from './ActionRegistry';
 import {
@@ -603,5 +604,139 @@ describe('discard-card action (ct-1mv.6)', () => {
       ?.execute(ctxFor([tagged]));
 
     expect(showToast).not.toHaveBeenCalled();
+  });
+});
+
+describe('set-discard-zone and clear-discard-zone actions (ct-sz2.2)', () => {
+  let store: YjsStore;
+
+  function stackWith(cards: CardEntry[]): string {
+    return createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards,
+      faceUp: false,
+    });
+  }
+
+  function zone(label = 'Discard'): string {
+    return createObject(store, {
+      kind: ObjectKind.Zone,
+      pos: { x: 0, y: 0, r: 0 },
+      meta: { label, isDiscardZone: true, width: 100, height: 100 },
+    });
+  }
+
+  function ctxFor(ids: string[]): ActionContext {
+    return makeContext({
+      store,
+      selection: {
+        ids,
+        yMaps: ids.map((id) => store.getObjectYMap(id)!),
+        count: ids.length,
+        hasStacks: true,
+        hasTokens: false,
+        hasCounters: false,
+        hasMixed: ids.length > 1,
+        allLocked: false,
+        allUnlocked: true,
+        canAct: true,
+      },
+    });
+  }
+
+  function action(id: string) {
+    return ActionRegistry.getInstance().getAction(id)!;
+  }
+
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+    registerDefaultActions();
+    store = new YjsStore('test-set-clear-discard-zone');
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+    vi.restoreAllMocks();
+  });
+
+  describe('set-discard-zone', () => {
+    it('is available with one zone and a stack holding an untagged card', () => {
+      const z = zone();
+      const s = stackWith(toCardEntries(['a']));
+      expect(action('set-discard-zone').isAvailable(ctxFor([s, z]))).toBe(true);
+    });
+
+    it('is unavailable with zero zones selected', () => {
+      const s = stackWith(toCardEntries(['a']));
+      expect(action('set-discard-zone').isAvailable(ctxFor([s]))).toBe(false);
+    });
+
+    it('is unavailable with two zones selected', () => {
+      const s = stackWith(toCardEntries(['a']));
+      expect(
+        action('set-discard-zone').isAvailable(ctxFor([s, zone(), zone()])),
+      ).toBe(false);
+    });
+
+    it('is unavailable with one zone and no stack', () => {
+      expect(action('set-discard-zone').isAvailable(ctxFor([zone()]))).toBe(
+        false,
+      );
+    });
+
+    it('is unavailable when every card already has a valid home', () => {
+      const z = zone();
+      const other = zone();
+      const s = stackWith([{ code: 'a', homeZone: other }]);
+      expect(action('set-discard-zone').isAvailable(ctxFor([s, z]))).toBe(
+        false,
+      );
+    });
+
+    it('names the selected zone in its label', () => {
+      const z = zone('Encounter Discard');
+      const s = stackWith(toCardEntries(['a']));
+      const label = action('set-discard-zone').label as (
+        ctx: ActionContext,
+      ) => string;
+      expect(label(ctxFor([s, z]))).toBe('Set Discard Zone: Encounter Discard');
+    });
+
+    it('execute tags untagged cards so discard routes to the zone', () => {
+      const z = zone();
+      const s = stackWith(toCardEntries(['a']));
+      void action('set-discard-zone').execute(ctxFor([s, z]));
+      expect(store.getObjectYMap(s)!.get('_cards')).toEqual([
+        { code: 'a', homeZone: z },
+      ]);
+      expect(discardCardToZone(store, s).result).toBe('routed');
+      expect(store.getObjectYMap(s)!.get('_containerId')).toBe(z);
+    });
+  });
+
+  describe('clear-discard-zone', () => {
+    it('is unavailable for an untagged stack and an empty selection', () => {
+      const s = stackWith(toCardEntries(['a']));
+      expect(action('clear-discard-zone').isAvailable(ctxFor([s]))).toBe(false);
+      expect(action('clear-discard-zone').isAvailable(ctxFor([]))).toBe(false);
+    });
+
+    it('is available when any selected stack has a tag, even a dead one', () => {
+      const dead = stackWith([{ code: 'a', homeZone: 'gone' }]);
+      const plain = stackWith(toCardEntries(['b']));
+      expect(
+        action('clear-discard-zone').isAvailable(ctxFor([plain, dead])),
+      ).toBe(true);
+    });
+
+    it('execute strips tags, ignores a selected zone, and leaves discard with no home', () => {
+      const z = zone();
+      const s = stackWith([{ code: 'a', homeZone: z }]);
+      void action('clear-discard-zone').execute(ctxFor([s, z]));
+      expect(store.getObjectYMap(s)!.get('_cards')).toEqual([{ code: 'a' }]);
+      expect(store.getObjectYMap(z)!.get('_kind')).toBe(ObjectKind.Zone);
+      expect(discardCardToZone(store, s).result).toBe('no-home');
+    });
   });
 });

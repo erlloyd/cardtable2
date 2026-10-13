@@ -414,27 +414,27 @@ describe('Room Isolation', () => {
 
 describe('Image Proxy Endpoint', () => {
   let originalFetch: typeof global.fetch;
-  let mockAzureFetch: ReturnType<typeof vi.fn>;
+  let mockUpstreamFetch: ReturnType<typeof vi.fn>;
 
   beforeAll(() => {
-    // Save original fetch and set up mock for Azure calls
+    // Save original fetch and set up mock for upstream image calls
     originalFetch = global.fetch;
 
     // Create mock that returns Promise<Response> to match fetch signature
     const mockFetchImpl = (url: string): Promise<Response> => {
-      if (url.includes('cerebrodatastorage.blob.core.windows.net')) {
+      if (url.includes('pub-d27e6715f4ba4529bc9d8fd13938a5a1.r2.dev')) {
         return Promise.resolve({
           ok: false,
           status: 404,
           statusText: 'Not Found',
         } as Response);
       }
-      // For non-Azure URLs (like test server health checks), use original fetch
+      // For non-upstream URLs (like test server health checks), use original fetch
       return originalFetch(url);
     };
 
-    mockAzureFetch = vi.fn(mockFetchImpl);
-    global.fetch = mockAzureFetch as typeof global.fetch;
+    mockUpstreamFetch = vi.fn(mockFetchImpl);
+    global.fetch = mockUpstreamFetch as typeof global.fetch;
 
     // Add proxy route to test server (no ETag, no logging for clean test output)
     app.get<{ path: string | string[] }>(
@@ -453,7 +453,18 @@ describe('Image Proxy Endpoint', () => {
 
   beforeEach(() => {
     // Reset mock between tests
-    mockAzureFetch.mockClear();
+    mockUpstreamFetch.mockClear();
+  });
+
+  describe('Upstream URL', () => {
+    it('should fetch from the Cerebro R2 host with the requested path', async () => {
+      await fetch(
+        `${serverUrl}/api/card-image/cerebro-cards/official/01094.jpg`,
+      );
+      expect(mockUpstreamFetch).toHaveBeenCalledWith(
+        'https://pub-d27e6715f4ba4529bc9d8fd13938a5a1.r2.dev/cerebro-cards/official/01094.jpg',
+      );
+    });
   });
 
   describe('Path Validation', () => {
@@ -479,7 +490,7 @@ describe('Image Proxy Endpoint', () => {
       const response = await fetch(
         `${serverUrl}/api/card-image/pack-1/cards/card_01.jpg`,
       );
-      // Should not be 400 (bad request), should be 404 (not found) or 503 (Azure error)
+      // Should not be 400 (bad request), should be 404 (not found) or 503 (upstream error)
       expect(response.status).not.toBe(400);
     });
 
@@ -520,7 +531,7 @@ describe('Image Proxy Endpoint', () => {
       const response = await fetch(
         `${serverUrl}/api/card-image/nonexistent/image.jpg`,
       );
-      // Should be 404 or 503 depending on whether Azure or network error
+      // Should be 404 or 503 depending on whether upstream or network error
       expect([404, 500, 503]).toContain(response.status);
     });
 

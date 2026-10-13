@@ -689,16 +689,16 @@ describe('attachmentActions', () => {
     ): AttachmentData =>
       (yMap.get('_meta') as { attachments: AttachmentData }).attachments;
 
-    it('registers all four actions with Shift+0 only on clear-tokens', () => {
+    it('registers all four actions with Shift+0 only on clear-attachments', () => {
       registerAttachmentActions(registry, createGameAssets());
 
       for (const id of CLEAR_IDS) {
         expect(registry.getAction(id)).toBeDefined();
       }
-      expect(registry.getAction('clear-tokens')!.shortcut).toBe('Shift+0');
+      expect(registry.getAction('clear-tokens')!.shortcut).toBeUndefined();
       expect(registry.getAction('clear-statuses')!.shortcut).toBeUndefined();
       expect(registry.getAction('clear-modifiers')!.shortcut).toBeUndefined();
-      expect(registry.getAction('clear-attachments')!.shortcut).toBeUndefined();
+      expect(registry.getAction('clear-attachments')!.shortcut).toBe('Shift+0');
     });
 
     it('registers only categories that have entries', () => {

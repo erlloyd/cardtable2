@@ -73,13 +73,9 @@ export function registerAttachmentActions(
   const hasModifiers = hasEntries(gameAssets.modifierStats);
 
   if (hasTokens) {
-    registerClearAction(
-      registry,
-      'clear-tokens',
-      'Clear All Tokens',
-      ['tokens'],
-      'Shift+0',
-    );
+    registerClearAction(registry, 'clear-tokens', 'Clear All Tokens', [
+      'tokens',
+    ]);
   }
   if (hasStatuses) {
     registerClearAction(registry, 'clear-statuses', 'Clear All Statuses', [
@@ -97,6 +93,7 @@ export function registerAttachmentActions(
       'clear-attachments',
       'Clear Tokens, Statuses & Modifiers',
       CLEARABLE_ATTACHMENT_KEYS,
+      'Shift+0',
     );
   }
 }

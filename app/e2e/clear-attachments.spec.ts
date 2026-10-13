@@ -2,8 +2,8 @@
  * Clear actions for tokens, statuses and modifiers (ct-erq.1).
  *
  * Four actions registered by the testgame plugin, all working on any
- * selection size: clear-tokens (Shift+0), clear-statuses, clear-modifiers,
- * clear-attachments. This is the only witness of plugin registration + canvas
+ * selection size: clear-tokens, clear-statuses, clear-modifiers, and
+ * clear-attachments (Shift+0). This is the only witness of plugin registration + canvas
  * multi-select + keyboard + command palette + context menu + store together.
  */
 
@@ -224,7 +224,7 @@ async function openContextMenuAt(
 }
 
 test.describe('Clear tokens, statuses and modifiers', () => {
-  test('a. Shift+0 clears tokens on both selected stacks and leaves status and modifiers', async ({
+  test('a. Shift+0 clears tokens, statuses and modifiers on both selected stacks and keeps icons and other _meta', async ({
     page,
   }, testInfo) => {
     await seedAndSelectAandB(
@@ -236,6 +236,27 @@ test.describe('Clear tokens, statuses and modifiers', () => {
     });
 
     await page.keyboard.press('Shift+Digit0');
+
+    await expect
+      .poll(async () => (await readAttachments(page, STACK_A))?.tokens)
+      .toBeUndefined();
+    expect(await readAttachments(page, STACK_A)).toEqual({ icons: ['guard'] });
+    expect((await readMeta(page, STACK_A))?.note).toBe('keep-me');
+    const b = await readAttachments(page, STACK_B);
+    expect(b?.tokens).toBeUndefined();
+    expect(b?.status).toBeUndefined();
+    expect(b?.modifiers).toBeUndefined();
+  });
+
+  test('k. Clear All Tokens from the palette removes only tokens', async ({
+    page,
+  }, testInfo) => {
+    await seedAndSelectAandB(
+      page,
+      `clear-k-${testInfo.testId.replace(/[^a-z0-9]/gi, '-')}`,
+    );
+
+    await runFromPalette(page, 'Clear All Tokens');
 
     await expect
       .poll(async () => (await readAttachments(page, STACK_A))?.tokens)
@@ -325,7 +346,7 @@ test.describe('Clear tokens, statuses and modifiers', () => {
     expect(b?.modifiers).toBeUndefined();
   });
 
-  test('e. the palette lists all four clear actions, enabled, with Shift+0 on Clear All Tokens', async ({
+  test('e. the palette lists all four clear actions, enabled, with Shift+0 on Clear Tokens, Statuses & Modifiers only', async ({
     page,
   }, testInfo) => {
     await seedAndSelectAandB(
@@ -340,15 +361,19 @@ test.describe('Clear tokens, statuses and modifiers', () => {
       await expect(option).not.toHaveClass(/disabled/);
     }
     await expect(
-      paletteOption(page, 'Clear All Tokens').locator(
+      paletteOption(page, 'Clear Tokens, Statuses & Modifiers').locator(
         '.command-palette-shortcut',
       ),
     ).toHaveText(/0/);
-    await expect(
-      paletteOption(page, 'Clear All Statuses').locator(
-        '.command-palette-shortcut',
-      ),
-    ).toHaveCount(0);
+    for (const label of [
+      'Clear All Tokens',
+      'Clear All Statuses',
+      'Clear All Modifiers',
+    ]) {
+      await expect(
+        paletteOption(page, label).locator('.command-palette-shortcut'),
+      ).toHaveCount(0);
+    }
   });
 
   test('f. a single selection clears only that stack', async ({
@@ -367,9 +392,8 @@ test.describe('Clear tokens, statuses and modifiers', () => {
     await expect
       .poll(async () => (await readAttachments(page, STACK_A))?.tokens)
       .toBeUndefined();
-    expect((await readAttachments(page, STACK_B))?.tokens).toEqual({
-      damage: 3,
-    });
+    expect(await readAttachments(page, STACK_A)).toEqual({ icons: ['guard'] });
+    expect(await readAttachments(page, STACK_B)).toEqual(SEED_B.attachments);
   });
 
   test('g. with nothing clearable selected, Shift+0 is a no-op and the clear actions are disabled in the palette and absent from the context menu', async ({
@@ -414,7 +438,7 @@ test.describe('Clear tokens, statuses and modifiers', () => {
     }
   });
 
-  test('h. a mixed selection where only one stack has tokens clears just that stack without error', async ({
+  test('h. a mixed selection where only one stack has attachments clears just that stack without error', async ({
     page,
   }, testInfo) => {
     await bindTestgameTable(
@@ -431,6 +455,7 @@ test.describe('Clear tokens, statuses and modifiers', () => {
     await expect
       .poll(async () => (await readAttachments(page, STACK_A))?.tokens)
       .toBeUndefined();
+    expect(await readAttachments(page, STACK_A)).toEqual({ icons: ['guard'] });
     expect(await readMeta(page, STACK_BARE)).toEqual(bareMeta);
   });
 

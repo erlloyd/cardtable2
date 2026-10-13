@@ -1561,7 +1561,13 @@ export function clearHomeZones(store: YjsStore, stackIds: string[]): number {
 
       yMap.set(
         '_cards',
-        cards.map((e) => (e.homeZone === undefined ? e : { code: e.code })),
+        cards.map((e) =>
+          e.homeZone === undefined
+            ? e
+            : (Object.fromEntries(
+                Object.entries(e).filter(([key]) => key !== 'homeZone'),
+              ) as CardEntry),
+        ),
       );
       cleared += tagged.length;
     }

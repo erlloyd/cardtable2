@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { CARD_HEIGHT } from '../renderer/constants';
 import {
   getViewportCenter,
   getViewportCenterPlacement,
+  getViewportBottomPlacement,
+  toCanvasPxPlacement,
   createSeededRng,
   DEFAULT_JITTER_RADIUS,
   type ViewportState,
@@ -194,5 +197,77 @@ describe('createSeededRng', () => {
     for (let i = 0; i < 20; i++) {
       expect(rngA()).toBe(rngB());
     }
+  });
+});
+
+describe('getViewportBottomPlacement', () => {
+  const IDENTITY: ViewportState = {
+    cameraX: 0,
+    cameraY: 0,
+    cameraScale: 1,
+    viewportWidth: 800,
+    viewportHeight: 600,
+    devicePixelRatio: 1,
+  };
+  const HALF_CARD = CARD_HEIGHT / 2;
+
+  it('anchors horizontally centred, one half-card plus margin above the bottom (dpr 1)', () => {
+    const p = getViewportBottomPlacement(IDENTITY, { jitterRadius: 0 });
+    expect(p).toEqual({ x: 400, y: 600 - (HALF_CARD + 8) });
+  });
+
+  it('halves the card inset at dpr 2', () => {
+    const p = getViewportBottomPlacement(
+      { ...IDENTITY, devicePixelRatio: 2 },
+      { jitterRadius: 0 },
+    );
+    expect(p).toEqual({ x: 400, y: 600 - (HALF_CARD / 2 + 8) });
+  });
+
+  it('keeps every jittered point and its card half-height inside the viewport', () => {
+    const rng = createSeededRng(7);
+    const anchor = {
+      x: 400,
+      y: 600 - (HALF_CARD + DEFAULT_JITTER_RADIUS + 8),
+    };
+    for (let i = 0; i < 200; i++) {
+      const p = getViewportBottomPlacement(IDENTITY, { rng });
+      expect(Math.hypot(p.x - anchor.x, p.y - anchor.y)).toBeLessThanOrEqual(
+        DEFAULT_JITTER_RADIUS + 1e-9,
+      );
+      expect(p.y + HALF_CARD).toBeLessThanOrEqual(IDENTITY.viewportHeight);
+    }
+  });
+
+  it('gives different points on consecutive samples from one rng', () => {
+    const rng = createSeededRng(3);
+    const a = getViewportBottomPlacement(IDENTITY, { rng });
+    const b = getViewportBottomPlacement(IDENTITY, { rng });
+    expect(a).not.toEqual(b);
+  });
+
+  it('converts the anchor back to the expected screen point under pan and zoom', () => {
+    const state: ViewportState = {
+      ...IDENTITY,
+      cameraX: 120,
+      cameraY: -40,
+      cameraScale: 2,
+    };
+    const p = getViewportBottomPlacement(state, { jitterRadius: 0 });
+    const expectedScreenY = 600 - (HALF_CARD + 0) * 2 - 8;
+    expect(120 + p.x * 2).toBeCloseTo(400);
+    expect(-40 + p.y * 2).toBeCloseTo(expectedScreenY);
+  });
+
+  it('falls back to the viewport centre on a very short viewport', () => {
+    const state: ViewportState = { ...IDENTITY, viewportHeight: 60 };
+    const p = getViewportBottomPlacement(state, { jitterRadius: 0 });
+    expect(p).toEqual(getViewportCenter(state));
+  });
+});
+
+describe('toCanvasPxPlacement', () => {
+  it('multiplies both axes by the device pixel ratio', () => {
+    expect(toCanvasPxPlacement({ x: 10, y: -4 }, 2)).toEqual({ x: 20, y: -8 });
   });
 });

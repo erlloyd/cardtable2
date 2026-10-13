@@ -44,12 +44,18 @@ interface PageGlobals {
   __TEST_STORE__?: PageTestStore;
   __ctTest?: {
     click: (pt: Point) => void;
+    drag: (
+      from: Point,
+      to: Point,
+      opts?: { steps?: number; stepDelayMs?: number },
+    ) => Promise<void>;
   };
 }
 
 interface Snapshot {
   id: string;
   kind: string;
+  pos: { x: number; y: number; r: number };
   cards: CardEntry[];
   containerId: string | null | undefined;
   selectedBy: string | null | undefined;
@@ -133,6 +139,7 @@ function snapshot(page: Page): Promise<Snapshot[]> {
     return Array.from(store.getAllObjects().entries()).map(([id, obj]) => ({
       id,
       kind: obj._kind,
+      pos: obj._pos,
       cards: obj._cards ?? [],
       containerId: obj._containerId,
       selectedBy: obj._selectedBy,
@@ -248,5 +255,170 @@ test.describe('Discard cascades to attached cards (ct-m0a.2)', () => {
       page.getByRole('status').filter({ hasText: 'no discard zone' }),
     ).toHaveCount(0);
     expect(dialogSeen).toBe(false);
+  });
+
+  test("empty zones: host and attached card each become their own zone's pile", async ({
+    page,
+  }) => {
+    await seedZone(page, 'zone-enc', { x: -300, y: 200 }, 'Encounter Discard');
+    await seedZone(page, 'zone-ply', { x: 300, y: 200 }, 'Player Discard');
+    await seedStack(page, {
+      id: 'host',
+      pos: { x: 0, y: -100 },
+      cards: [{ code: 'sandman', homeZone: 'zone-enc' }],
+      sortKey: '000005|999999',
+      attachedCardIds: ['att'],
+    });
+    await seedStack(page, {
+      id: 'att',
+      pos: { x: 0, y: -78 },
+      cards: [{ code: 'tracer', homeZone: 'zone-ply' }],
+      sortKey: '000005|000001',
+      attachedToId: 'host',
+    });
+    await expect.poll(async () => (await snapshot(page)).length).toBe(4);
+
+    await selectAt(page, { x: 0, y: -130 }, 'host');
+    await page.keyboard.press('x');
+
+    await expect
+      .poll(async () => (await getObject(page, 'att')).containerId)
+      .toBe('zone-ply');
+
+    const host = await getObject(page, 'host');
+    expect(host.containerId).toBe('zone-enc');
+    expect(host.pos).toEqual({ x: -300, y: 200, r: 0 });
+    expect(host.cards).toEqual([{ code: 'sandman', homeZone: 'zone-enc' }]);
+    expect(host.attachedCardIds ?? []).toEqual([]);
+    const att = await getObject(page, 'att');
+    expect(att.pos).toEqual({ x: 300, y: 200, r: 0 });
+    expect(att.cards).toEqual([{ code: 'tracer', homeZone: 'zone-ply' }]);
+    expect(att.attachedToId).toBeUndefined();
+
+    // The old attached card must no longer follow its former host.
+    await page.evaluate(async () => {
+      await (globalThis as unknown as PageGlobals).__ctTest!.drag(
+        { x: -300, y: 200 },
+        { x: -200, y: 200 },
+        { steps: 10, stepDelayMs: 30 },
+      );
+    });
+    await expect
+      .poll(async () => (await getObject(page, 'host')).pos.x)
+      .not.toBe(-300);
+    expect((await getObject(page, 'att')).pos).toEqual({
+      x: 300,
+      y: 200,
+      r: 0,
+    });
+  });
+
+  test('attached card with no home zone stays put, unlinked, when its host is discarded', async ({
+    page,
+  }) => {
+    await seedZone(page, 'zone-enc', { x: -300, y: 200 }, 'Encounter Discard');
+    await seedStack(page, {
+      id: 'pile-enc',
+      pos: { x: -300, y: 200 },
+      cards: [{ code: 'enc-old', homeZone: 'zone-enc' }],
+      sortKey: '000001|000001',
+      containerId: 'zone-enc',
+      faceUp: true,
+    });
+    await seedStack(page, {
+      id: 'host',
+      pos: { x: 0, y: -100 },
+      cards: [{ code: 'sandman', homeZone: 'zone-enc' }],
+      sortKey: '000005|999999',
+      attachedCardIds: ['att'],
+    });
+    await seedStack(page, {
+      id: 'att',
+      pos: { x: 0, y: -78 },
+      cards: [{ code: 'tracer' }],
+      sortKey: '000005|000001',
+      attachedToId: 'host',
+    });
+    await expect.poll(async () => (await snapshot(page)).length).toBe(4);
+
+    await selectAt(page, { x: 0, y: -130 }, 'host');
+    await page.keyboard.press('x');
+
+    await expect
+      .poll(async () => (await findObject(page, 'host')) === undefined)
+      .toBe(true);
+    expect((await getObject(page, 'pile-enc')).cards).toEqual([
+      { code: 'sandman', homeZone: 'zone-enc' },
+      { code: 'enc-old', homeZone: 'zone-enc' },
+    ]);
+    const att = await getObject(page, 'att');
+    expect(att.pos).toEqual({ x: 0, y: -78, r: 0 });
+    expect(att.containerId).toBeNull();
+    expect(att.attachedToId).toBeUndefined();
+    expect(att.cards).toEqual([{ code: 'tracer' }]);
+
+    // It is an ordinary loose card now: a click selects it.
+    await page.evaluate(() => {
+      (globalThis as unknown as PageGlobals).__ctTest!.click({ x: 0, y: -78 });
+    });
+    await expect
+      .poll(async () => (await getObject(page, 'att')).selectedBy ?? null)
+      .not.toBeNull();
+  });
+
+  test('X on one attached card: it discards, its sibling closes the gap, host stays', async ({
+    page,
+  }) => {
+    await seedZone(page, 'zone-ply', { x: 300, y: 200 }, 'Player Discard');
+    await seedStack(page, {
+      id: 'pile-ply',
+      pos: { x: 300, y: 200 },
+      cards: [{ code: 'ply-old', homeZone: 'zone-ply' }],
+      sortKey: '000002|000001',
+      containerId: 'zone-ply',
+      faceUp: true,
+    });
+    await seedStack(page, {
+      id: 'host',
+      pos: { x: 0, y: -100 },
+      cards: [{ code: 'sandman' }],
+      sortKey: '000005|999999',
+      attachedCardIds: ['att-a', 'att-b'],
+    });
+    await seedStack(page, {
+      id: 'att-a',
+      pos: { x: 0, y: -78 },
+      cards: [{ code: 'tracer', homeZone: 'zone-ply' }],
+      sortKey: '000005|000002',
+      attachedToId: 'host',
+    });
+    await seedStack(page, {
+      id: 'att-b',
+      pos: { x: 0, y: -56 },
+      cards: [{ code: 'other', homeZone: 'zone-ply' }],
+      sortKey: '000005|000001',
+      attachedToId: 'host',
+    });
+    await expect.poll(async () => (await snapshot(page)).length).toBe(5);
+
+    // att-a is above att-b and below the host's bottom edge (y=-56): the strip
+    // between y=-56 and y=-34 belongs to att-a only.
+    await selectAt(page, { x: 0, y: -45 }, 'att-a');
+    await page.keyboard.press('x');
+
+    await expect
+      .poll(async () => (await findObject(page, 'att-a')) === undefined)
+      .toBe(true);
+    expect((await getObject(page, 'pile-ply')).cards).toEqual([
+      { code: 'tracer', homeZone: 'zone-ply' },
+      { code: 'ply-old', homeZone: 'zone-ply' },
+    ]);
+    const host = await getObject(page, 'host');
+    expect(host.pos).toEqual({ x: 0, y: -100, r: 0 });
+    expect(host.attachedCardIds).toEqual(['att-b']);
+    await expect
+      .poll(async () => (await getObject(page, 'att-b')).pos)
+      .toEqual({ x: 0, y: -78, r: 0 });
+    expect((await getObject(page, 'att-b')).attachedToId).toBe('host');
   });
 });

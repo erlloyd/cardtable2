@@ -1,5 +1,9 @@
 import { MessageHandlerRegistry } from '../../messaging/MessageHandlerRegistry';
-import type { RendererToMainMessage, TableObject } from '@cardtable2/shared';
+import type {
+  AttachmentData,
+  RendererToMainMessage,
+  TableObject,
+} from '@cardtable2/shared';
 import type { ViewportState } from '../../utils/viewportPlacement';
 import { isValidPosition } from '@cardtable2/shared';
 import type { IRendererAdapter } from '../../renderer/IRendererAdapter';
@@ -14,7 +18,9 @@ import {
   attachCards,
   detachCard,
   adjustCounter,
+  isDiscardPile,
 } from '../../store/YjsActions';
+import { hasAttachments } from '../../store/attachmentMerge';
 import { getSelectedObjectIds } from '../../store/YjsSelectors';
 import { resolveEffectiveAttachmentLayout } from '../../store/attachmentLayout';
 import { dbg } from '../../dev/dbg';
@@ -49,6 +55,7 @@ export interface BoardHandlerContext {
   ) => void;
   showCardPreviewModal: (objectId: string) => void;
   addMessage: (msg: string) => void;
+  requestMergeChoice: (ids: string[], targetId: string) => void;
 
   // Refs
   flushCallbacks: React.RefObject<Array<() => void>>;
@@ -132,6 +139,24 @@ export class BoardMessageBus {
         `[BoardMessageBus] Stacking ${msg.ids.length} object(s) onto ${msg.targetId}`,
       );
       try {
+        // Dropping onto a discard pile never carries attachments to the pile
+        if (isDiscardPile(ctx.store, msg.targetId)) {
+          stackObjects(ctx.store, msg.ids, msg.targetId, 'target');
+          return;
+        }
+
+        const attachmentsOf = (id: string) =>
+          ctx.store.getObjectYMap(id)?.get('_meta')?.attachments as
+            | AttachmentData
+            | undefined;
+        if (
+          hasAttachments(attachmentsOf(msg.targetId)) &&
+          msg.ids.some((id) => hasAttachments(attachmentsOf(id)))
+        ) {
+          ctx.requestMergeChoice(msg.ids, msg.targetId);
+          return;
+        }
+
         // Perform the stack operation (deletes source stacks)
         // Don't manually unselect - the renderer will clean up when objects are removed
         const deletedIds = stackObjects(ctx.store, msg.ids, msg.targetId);

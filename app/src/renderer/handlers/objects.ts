@@ -274,6 +274,7 @@ function updateObjectVisual(
   // Store updates arrive with stale sortKeys that would overwrite DragManager's values.
   if (isDragging && prevObj) {
     obj._sortKey = prevObj._sortKey;
+    obj._pos = { ...obj._pos, x: prevObj._pos.x, y: prevObj._pos.y };
   }
 
   // Update scene manager (skip spatial index for dragged objects — their bbox is

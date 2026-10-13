@@ -317,4 +317,95 @@ test.describe('Card Preview Hover - After Drag (ct-c4b)', () => {
 
     expect(errors).toEqual([]);
   });
+
+  test('drop with no pointermove after the selection round trip keeps the dropped position', async ({
+    page,
+  }) => {
+    // __TEST_BOARD__ (needed to wait for the selection round trip) is only
+    // exposed on the dev table route.
+    const tableId = `c4b-drop-${test.info().testId.replace(/[^a-z0-9]/gi, '-')}`;
+    skipNextAutoClear(page);
+    await page.goto(`/dev/table/${tableId}`);
+
+    const canvas = page.getByTestId('board-canvas');
+    await expect(canvas).toBeVisible({ timeout: 10000 });
+    await expect(canvas).toHaveAttribute('data-canvas-initialized', 'true', {
+      timeout: 10000,
+    });
+    await page.waitForFunction(
+      () => (globalThis as any).__TEST_BOARD__ !== undefined,
+      { timeout: 5000 },
+    );
+    await page.evaluate(async () => {
+      const store = (globalThis as any).__TEST_STORE__;
+      const seedsModule = '/src/dev/seeds/index.ts';
+      const { applySeed } = await import(seedsModule);
+      applySeed(store, 'stack-of-5');
+    });
+    await page.waitForFunction(
+      () => (globalThis as any).__TEST_STORE__.getAllObjects().size === 1,
+      { timeout: 5000 },
+    );
+    await page.evaluate(() =>
+      (globalThis as any).__TEST_BOARD__.waitForRenderer(),
+    );
+
+    const canvasBBox = await canvas.boundingBox();
+    if (!canvasBBox) throw new Error('Canvas bounding box not available');
+    const startX = canvasBBox.x + canvasBBox.width / 2;
+    const startY = canvasBBox.y + canvasBBox.height / 2;
+    const endX = startX + 150;
+    const endY = startY;
+
+    const fire = (
+      type: 'pointermove' | 'pointerdown' | 'pointerup',
+      x: number,
+      y: number,
+      buttons: number,
+    ) =>
+      canvas.dispatchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        isPrimary: true,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        pageX: x,
+        pageY: y,
+        button: 0,
+        buttons,
+      });
+
+    const readPos = () =>
+      page.evaluate(() => {
+        const store = (globalThis as any).__TEST_STORE__;
+        const obj = [...store.getAllObjects().values()][0];
+        return { x: obj._pos.x, y: obj._pos.y };
+      });
+
+    const before = await readPos();
+
+    await fire('pointerdown', startX, startY, 1);
+    await fire('pointermove', endX, endY, 1);
+
+    // The drag-start selection has round-tripped main thread -> store -> renderer
+    // (carrying the pre-drag position) before the drop.
+    await page.evaluate(() =>
+      (globalThis as any).__TEST_BOARD__.waitForSelectionSettled(),
+    );
+
+    await fire('pointerup', endX, endY, 0);
+    await page.evaluate(() =>
+      (globalThis as any).__TEST_BOARD__.waitForRenderer(),
+    );
+
+    await expect.poll(readPos, { timeout: 2000 }).not.toEqual(before);
+    const after = await readPos();
+    expect(after.x).toBeGreaterThan(before.x);
+    expect(after.y).toBeCloseTo(before.y, 0);
+  });
 });

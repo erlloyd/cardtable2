@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { KeyboardManager } from './KeyboardManager';
 import { ActionRegistry } from './ActionRegistry';
 import { CARD_ACTIONS } from './types';
@@ -296,6 +296,189 @@ describe('KeyboardManager', () => {
       keyboardManager.clear();
 
       expect(keyboardManager.getAllShortcuts().size).toBe(0);
+    });
+  });
+
+  describe('numeric prefix', () => {
+    const executeD = vi.fn<(context: ActionContext) => void>();
+    const executeF = vi.fn<(context: ActionContext) => void>();
+    let fAvailable = true;
+    let onPrefix: ReturnType<typeof vi.fn<(prefix: string) => void>>;
+
+    function key(
+      k: string,
+      init: KeyboardEventInit = {},
+      target?: HTMLElement,
+    ): KeyboardEvent {
+      const code = /^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`;
+      const event = new KeyboardEvent('keydown', {
+        key: k,
+        code,
+        cancelable: true,
+        ...init,
+      });
+      if (target) {
+        Object.defineProperty(event, 'target', { value: target });
+      }
+      return event;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      executeD.mockReset();
+      executeF.mockReset();
+      fAvailable = true;
+      actionRegistry.register({
+        id: 'draw-test',
+        label: 'D',
+        icon: 'D',
+        shortcut: 'D',
+        category: 'test',
+        isAvailable: () => true,
+        execute: executeD,
+      });
+      actionRegistry.register({
+        id: 'flip-test',
+        label: 'F',
+        icon: 'F',
+        shortcut: 'F',
+        category: 'test',
+        isAvailable: () => fAvailable,
+        execute: executeF,
+      });
+      actionRegistry.register({
+        id: 'shift-one-test',
+        label: 'S1',
+        icon: '1',
+        shortcut: 'Shift+1',
+        category: 'test',
+        isAvailable: () => true,
+        execute: vi.fn(),
+      });
+      onPrefix = vi.fn<(prefix: string) => void>();
+      keyboardManager.setOnPrefixChange(onPrefix);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('passes the typed number to the executed action and clears the prefix', () => {
+      expect(keyboardManager.handleKeyEvent(key('3'), mockContext)).toBe(true);
+      expect(onPrefix).toHaveBeenLastCalledWith('3');
+
+      expect(keyboardManager.handleKeyEvent(key('d'), mockContext)).toBe(true);
+
+      expect(executeD).toHaveBeenCalledTimes(1);
+      expect(executeD.mock.calls[0][0]).toMatchObject({ numericPrefix: 3 });
+      expect(onPrefix).toHaveBeenLastCalledWith('');
+    });
+
+    it('accumulates multiple digits', () => {
+      keyboardManager.handleKeyEvent(key('1'), mockContext);
+      keyboardManager.handleKeyEvent(key('2'), mockContext);
+      keyboardManager.handleKeyEvent(key('d'), mockContext);
+
+      expect(executeD.mock.calls[0][0]).toMatchObject({ numericPrefix: 12 });
+    });
+
+    it('does not start a prefix with 0 but accepts it after another digit', () => {
+      expect(keyboardManager.handleKeyEvent(key('0'), mockContext)).toBe(false);
+      expect(onPrefix).not.toHaveBeenCalled();
+
+      keyboardManager.handleKeyEvent(key('1'), mockContext);
+      keyboardManager.handleKeyEvent(key('0'), mockContext);
+      keyboardManager.handleKeyEvent(key('d'), mockContext);
+
+      expect(executeD.mock.calls[0][0]).toMatchObject({ numericPrefix: 10 });
+    });
+
+    it('ignores digits with modifiers and still runs Shift+1', () => {
+      const shiftOne = vi.fn();
+      actionRegistry.unregister('shift-one-test');
+      actionRegistry.register({
+        id: 'shift-one-test',
+        label: 'S1',
+        icon: '1',
+        shortcut: 'Shift+1',
+        category: 'test',
+        isAvailable: () => true,
+        execute: shiftOne,
+      });
+
+      expect(
+        keyboardManager.handleKeyEvent(
+          key('1', { shiftKey: true }),
+          mockContext,
+        ),
+      ).toBe(true);
+      expect(shiftOne).toHaveBeenCalledTimes(1);
+
+      for (const init of [
+        { ctrlKey: true },
+        { metaKey: true },
+        { altKey: true },
+      ]) {
+        keyboardManager.handleKeyEvent(key('2', init), mockContext);
+      }
+      expect(onPrefix).not.toHaveBeenCalled();
+    });
+
+    it('ignores digits typed into an input', () => {
+      const input = document.createElement('input');
+
+      expect(
+        keyboardManager.handleKeyEvent(key('3', {}, input), mockContext),
+      ).toBe(false);
+      expect(onPrefix).not.toHaveBeenCalled();
+    });
+
+    it('keeps the prefix across a Shift-only keydown and passes it to a non-draw action', () => {
+      keyboardManager.handleKeyEvent(key('3'), mockContext);
+      expect(
+        keyboardManager.handleKeyEvent(
+          key('Shift', { shiftKey: true }),
+          mockContext,
+        ),
+      ).toBe(false);
+      expect(onPrefix).toHaveBeenLastCalledWith('3');
+
+      keyboardManager.handleKeyEvent(key('f'), mockContext);
+
+      expect(executeF).toHaveBeenCalledTimes(1);
+      expect(executeF.mock.calls[0][0]).toMatchObject({ numericPrefix: 3 });
+      expect(onPrefix).toHaveBeenLastCalledWith('');
+    });
+
+    it('clears the prefix on an unbound key', () => {
+      keyboardManager.handleKeyEvent(key('3'), mockContext);
+
+      expect(keyboardManager.handleKeyEvent(key('x'), mockContext)).toBe(false);
+      expect(onPrefix).toHaveBeenLastCalledWith('');
+    });
+
+    it('clears the prefix without executing when the action is unavailable', () => {
+      fAvailable = false;
+      keyboardManager.handleKeyEvent(key('3'), mockContext);
+
+      expect(keyboardManager.handleKeyEvent(key('f'), mockContext)).toBe(false);
+      expect(executeF).not.toHaveBeenCalled();
+      expect(onPrefix).toHaveBeenLastCalledWith('');
+    });
+
+    it('clears the prefix after 2 seconds', () => {
+      keyboardManager.handleKeyEvent(key('3'), mockContext);
+
+      vi.advanceTimersByTime(1999);
+      expect(onPrefix).toHaveBeenLastCalledWith('3');
+      vi.advanceTimersByTime(1);
+      expect(onPrefix).toHaveBeenLastCalledWith('');
+    });
+
+    it('leaves numericPrefix undefined when no number was typed', () => {
+      keyboardManager.handleKeyEvent(key('d'), mockContext);
+
+      expect(executeD.mock.calls[0][0].numericPrefix).toBeUndefined();
     });
   });
 

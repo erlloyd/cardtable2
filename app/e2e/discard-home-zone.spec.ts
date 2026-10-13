@@ -410,4 +410,137 @@ test.describe('Discard home zone — per-card routing (ct-1mv.8)', () => {
     expect(pilesP[0].cards).toContainEqual({ code: 'p1', homeZone: zoneP });
     expect(pilesP[0].cards).toContainEqual({ code: 'p2', homeZone: zoneP });
   });
+
+  test('E1. card merged into a deck after its zone was created discards to that zone', async ({
+    page,
+  }) => {
+    const DECK = { x: -300, y: -100 };
+    const SOLO = { x: 300, y: -100 };
+    await seedStack(page, 'deck', DECK, [
+      { code: 'd1' },
+      { code: 'd2' },
+      { code: 'd3' },
+    ]);
+    await seedStack(page, 'solo', SOLO, [{ code: 'late' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(2);
+
+    const zone = await createDiscardZone(page, DECK, 'deck');
+
+    await dragStackOnto(page, SOLO, DECK);
+    await expect
+      .poll(async () => (await snapshot(page)).find((o) => o.id === 'solo'))
+      .toBeUndefined();
+    expect(
+      (await getObject(page, 'deck')).cards.map((e) => e.homeZone),
+    ).toEqual([zone, zone, zone, zone]);
+
+    await selectAt(page, DECK, 'deck');
+    await discardAll(page, 'deck', 4);
+
+    const piles = await pilesIn(page, zone);
+    expect(piles).toHaveLength(1);
+    expect(piles[0].cards).toHaveLength(4);
+    await expect(page.getByText(/no discard zone/i)).toHaveCount(0);
+  });
+
+  test('E2. card with its own home zone keeps it when merged into another deck', async ({
+    page,
+  }) => {
+    const A = { x: -300, y: -100 };
+    const B = { x: 300, y: -100 };
+    await seedStack(page, 'deck-a', A, [{ code: 'a1' }, { code: 'a2' }]);
+    await seedStack(page, 'deck-b', B, [{ code: 'b1' }, { code: 'b2' }]);
+    await expect.poll(async () => (await snapshot(page)).length).toBe(2);
+
+    const zoneA = await createDiscardZone(page, A, 'deck-a');
+    const zoneB = await createDiscardZone(page, B, 'deck-b');
+
+    const handle = { x: B.x + HANDLE_OFFSET.x, y: B.y + HANDLE_OFFSET.y };
+    await dragStackOnto(page, handle, A);
+    await expect
+      .poll(async () => (await getObject(page, 'deck-a')).cards.length)
+      .toBe(3);
+    expect((await getObject(page, 'deck-a')).cards[0]).toEqual({
+      code: 'b1',
+      homeZone: zoneB,
+    });
+
+    await selectAt(page, A, 'deck-a');
+    await discardOnce(page, 'deck-a', 2);
+
+    expect(await pilesIn(page, zoneA)).toHaveLength(0);
+    const pilesB = await pilesIn(page, zoneB);
+    expect(pilesB).toHaveLength(1);
+    expect(pilesB[0].cards).toEqual([{ code: 'b1', homeZone: zoneB }]);
+  });
+
+  test.describe('E3. lone untagged card and a discard pile', () => {
+    const DECK = { x: -300, y: -100 };
+    const LONE = { x: 300, y: 200 };
+    const ELSEWHERE = { x: -300, y: 300 };
+    let zone: string;
+    let pile: Snapshot;
+
+    test.beforeEach(async ({ page }) => {
+      await seedStack(page, 'deck', DECK, [
+        { code: 'd1' },
+        { code: 'd2' },
+        { code: 'd3' },
+      ]);
+      await expect.poll(async () => (await snapshot(page)).length).toBe(1);
+      zone = await createDiscardZone(page, DECK, 'deck');
+      await selectAt(page, DECK, 'deck');
+      await discardAll(page, 'deck', 3);
+      await expect.poll(async () => (await pilesIn(page, zone)).length).toBe(1);
+      pile = (await pilesIn(page, zone))[0];
+      expect(pile.cards).toHaveLength(3);
+      await seedStack(page, 'lone', LONE, [{ code: 'lone' }]);
+      await expect
+        .poll(async () => (await snapshot(page)).some((o) => o.id === 'lone'))
+        .toBe(true);
+    });
+
+    test('E3a. pile dropped onto the card: one stack, all tagged, pile re-forms on X', async ({
+      page,
+    }) => {
+      await dragStackOnto(page, pile.pos, LONE);
+      await expect
+        .poll(async () =>
+          (await snapshot(page)).filter((o) => o.kind === 'stack'),
+        )
+        .toHaveLength(1);
+
+      const stacks = (await snapshot(page)).filter((o) => o.kind === 'stack');
+      expect(stacks[0].id).toBe('lone');
+      expect(stacks[0].cards).toHaveLength(4);
+      expect(stacks[0].containerId).toBeNull();
+      expect(stacks[0].cards.every((e) => e.homeZone === zone)).toBe(true);
+      expect(await pilesIn(page, zone)).toHaveLength(0);
+
+      await selectAt(page, stacks[0].pos, 'lone');
+      await page.keyboard.press('x');
+      await expect.poll(async () => (await pilesIn(page, zone)).length).toBe(1);
+    });
+
+    test('E3b. card dropped onto the pile: pile keeps its zone, tags survive leaving it', async ({
+      page,
+    }) => {
+      await dragStackOnto(page, LONE, pile.pos);
+      await expect
+        .poll(async () => (await getObject(page, pile.id)).cards.length)
+        .toBe(4);
+
+      const merged = await getObject(page, pile.id);
+      expect(merged.containerId).toBe(zone);
+      expect(merged.cards.every((e) => e.homeZone === zone)).toBe(true);
+
+      await dragStackOnto(page, merged.pos, ELSEWHERE);
+      await expect
+        .poll(async () => (await getObject(page, pile.id)).containerId ?? null)
+        .toBeNull();
+      const left = await getObject(page, pile.id);
+      expect(left.cards).toHaveLength(4);
+      expect(left.cards.every((e) => e.homeZone === zone)).toBe(true);
+    });
+  });
 });

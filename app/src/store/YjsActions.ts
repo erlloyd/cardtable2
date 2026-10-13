@@ -674,12 +674,12 @@ export function stackObjects(
   store.getDoc().transact(() => {
     // Build new card array: source cards on top, target cards at bottom
     // (index 0 is top of stack, so source goes first)
-    const newCards = [];
+    const incomingCards: CardEntry[] = [];
     for (const sourceData of sourceStacksData) {
-      newCards.push(...sourceData.cards);
+      incomingCards.push(...sourceData.cards);
       stackedIds.push(sourceData.id);
     }
-    newCards.push(...targetCards);
+    const newCards = mergeCardsWithHomeZone(store, targetCards, incomingCards);
 
     // Update target stack with merged cards
     targetYMap.set('_cards', newCards);
@@ -1452,6 +1452,54 @@ export function createDiscardZoneForStack(
   });
 
   return newZoneId;
+}
+
+/**
+ * The most common valid home zone among the entries, or null when none has
+ * one. A tie goes to the zone whose card sits nearest the top (lowest index).
+ */
+function mostCommonHomeZone(
+  store: YjsStore,
+  entries: CardEntry[],
+): string | null {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    const zoneId = resolveHomeZone(store, entry);
+    if (zoneId) counts.set(zoneId, (counts.get(zoneId) ?? 0) + 1);
+  }
+
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [zoneId, count] of counts) {
+    if (count > bestCount) {
+      best = zoneId;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Merged card order for stackObjects (incoming on top, then target) where
+ * every card without a valid home zone takes the target's most common zone,
+ * falling back to the incoming cards' most common zone. Cards that already
+ * have a valid home zone, and all cards when neither side has one, are
+ * returned unchanged.
+ */
+function mergeCardsWithHomeZone(
+  store: YjsStore,
+  targetCards: CardEntry[],
+  incomingCards: CardEntry[],
+): CardEntry[] {
+  const merged = [...incomingCards, ...targetCards];
+  const zoneId =
+    mostCommonHomeZone(store, targetCards) ??
+    mostCommonHomeZone(store, incomingCards);
+  if (!zoneId) return merged;
+
+  return merged.map((entry) =>
+    resolveHomeZone(store, entry) ? entry : { ...entry, homeZone: zoneId },
+  );
 }
 
 /**

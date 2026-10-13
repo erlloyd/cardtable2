@@ -177,6 +177,20 @@
       "image": "https://card-table.app/images/table/first_player_token_marvelchampions.png"
     }
   },
+  "statusTypes": {
+    "stunned": {
+      "name": "Stunned",
+      "image": "https://card-table.app/images/table/first_player_token_marvelchampions.png"
+    }
+  },
+  "modifierStats": {
+    "ATK": {
+      "code": "ATK",
+      "name": "Attack",
+      "positiveColor": 5025616,
+      "negativeColor": 16007990
+    }
+  },
   "tokens": {
     "first-player": {
       "image": "https://card-table.app/images/table/first_player_token_marvelchampions.png",

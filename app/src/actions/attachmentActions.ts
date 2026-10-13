@@ -15,6 +15,14 @@ import type {
 import type { ActionRegistry } from './ActionRegistry';
 import { ATTACHMENT_OBJECT_NOT_FOUND } from '../constants/errorIds';
 import { CARD_ACTIONS } from './types';
+import type { ActionContext } from './types';
+
+const CLEAR_ACTION_IDS = [
+  'clear-tokens',
+  'clear-statuses',
+  'clear-modifiers',
+  'clear-attachments',
+];
 
 /**
  * Generate and register all attachment actions based on loaded game assets
@@ -54,6 +62,103 @@ export function registerAttachmentActions(
       registerModifierActions(registry, statCode);
     }
   }
+
+  const hasTokens = hasEntries(gameAssets.tokenTypes);
+  const hasStatuses = hasEntries(gameAssets.statusTypes);
+  const hasModifiers = hasEntries(gameAssets.modifierStats);
+
+  if (hasTokens) {
+    registerClearAction(
+      registry,
+      'clear-tokens',
+      'Clear All Tokens',
+      ['tokens'],
+      'Shift+0',
+    );
+  }
+  if (hasStatuses) {
+    registerClearAction(registry, 'clear-statuses', 'Clear All Statuses', [
+      'status',
+    ]);
+  }
+  if (hasModifiers) {
+    registerClearAction(registry, 'clear-modifiers', 'Clear All Modifiers', [
+      'modifiers',
+    ]);
+  }
+  if (hasTokens || hasStatuses || hasModifiers) {
+    registerClearAction(
+      registry,
+      'clear-attachments',
+      'Clear Tokens, Statuses & Modifiers',
+      CLEARABLE_KEYS,
+    );
+  }
+}
+
+const CLEARABLE_KEYS = ['tokens', 'status', 'modifiers'] as const;
+type ClearableKey = (typeof CLEARABLE_KEYS)[number];
+
+function hasEntries(types: object | undefined): boolean {
+  return types !== undefined && Object.keys(types).length > 0;
+}
+
+function hasNonZero(counts: Record<string, number> | undefined): boolean {
+  return Object.values(counts ?? {}).some((count) => count !== 0);
+}
+
+function registerClearAction(
+  registry: ActionRegistry,
+  id: string,
+  label: string,
+  keys: readonly ClearableKey[],
+  shortcut?: string,
+): void {
+  const getAttachments = (
+    ctx: ActionContext,
+    stackId: string,
+  ): AttachmentData | undefined => {
+    const meta: Record<string, unknown> | undefined = ctx.store
+      .getObjectYMap(stackId)
+      ?.get('_meta');
+    return meta?.attachments as AttachmentData | undefined;
+  };
+
+  const hasSomethingToClear = (attachments: AttachmentData | undefined) =>
+    keys.some((key) => hasNonZero(attachments?.[key]));
+
+  registry.register({
+    id,
+    label,
+    icon: '🧹',
+    shortcut,
+    category: CARD_ACTIONS,
+    isAvailable: (ctx) =>
+      ctx.selection.ids.some((stackId) =>
+        hasSomethingToClear(getAttachments(ctx, stackId)),
+      ),
+    execute: (ctx) => {
+      ctx.store.getDoc().transact(() => {
+        for (const stackId of ctx.selection.ids) {
+          const yMap = ctx.store.getObjectYMap(stackId);
+          if (!yMap) {
+            logObjectNotFound(id, stackId);
+            continue;
+          }
+
+          const meta = (yMap.get('_meta') as Record<string, unknown>) || {};
+          const attachments = (meta.attachments as AttachmentData) || {};
+          if (!hasSomethingToClear(attachments)) continue;
+
+          const remaining = { ...attachments };
+          for (const key of keys) {
+            delete remaining[key];
+          }
+          yMap.set('_meta', { ...meta, attachments: remaining });
+        }
+      });
+    },
+  });
 }
 
 /**
@@ -71,7 +176,8 @@ export function clearAttachmentActions(registry: ActionRegistry): void {
       action.id.startsWith('remove-token-') ||
       action.id.startsWith('add-status-') ||
       action.id.startsWith('remove-status-') ||
-      action.id.startsWith('modify-')
+      action.id.startsWith('modify-') ||
+      CLEAR_ACTION_IDS.includes(action.id)
     ) {
       registry.unregister(action.id);
     }

@@ -2046,6 +2046,11 @@ h1 {
   cursor: not-allowed;
 }
 
+.merge-attachments-body {
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
+
 .merge-attachments-footer {
   flex-direction: column;
   gap: 0.5rem;

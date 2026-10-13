@@ -41,7 +41,13 @@ export function MergeAttachmentsModal({
   if (!isOpen) return null;
 
   const modal = (
-    <div className="deck-import-backdrop" role="presentation">
+    <div
+      className="deck-import-backdrop"
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) e.preventDefault();
+      }}
+    >
       <div
         ref={panelRef}
         className="deck-import-panel"
@@ -54,7 +60,7 @@ export function MergeAttachmentsModal({
           <div className="deck-import-title">Both have tokens</div>
         </div>
 
-        <div className="deck-import-body">
+        <div className="deck-import-body merge-attachments-body">
           The stack and the card you dropped both have tokens or statuses. What
           should the merged stack keep?
         </div>

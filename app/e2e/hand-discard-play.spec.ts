@@ -483,6 +483,68 @@ test.describe('Hand card discard and Play placement (ct-3pj.4)', () => {
     expect(await getHandCodes(page, handId)).toHaveLength(2);
     expect((await getZonePile(page))[0].cards).toHaveLength(1);
   });
+
+  test('10. hand change mid-drag never leaves X on the neighbour', async ({
+    page,
+  }) => {
+    await seedZone(page);
+    const handId = await seedHand(
+      page,
+      ['c1', 'c2', 'c3', 'c4', 'c5'].map((code) => ({
+        code,
+        homeZone: ZONE_ID,
+      })),
+    );
+
+    const box1 = await page.locator('.hand-panel__card').nth(1).boundingBox();
+    if (!box1) throw new Error('No bounding box for hand card 1');
+    const y = box1.y + box1.height / 2;
+    await page.mouse.move(box1.x + 6, y);
+    await page.mouse.down();
+    // Carry the card over a later slot, staying inside the hand row.
+    const box3 = await page.locator('.hand-panel__card').nth(3).boundingBox();
+    if (!box3) throw new Error('No bounding box for hand card 3');
+    const px = box3.x + 6;
+    await page.mouse.move(px, y, { steps: 8 });
+
+    // The hand changes while the card is held (remote edit or a draw).
+    await page.evaluate(
+      ({ id, zone }) => {
+        const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+        store.addCardToHand(id, { code: 'c6', homeZone: zone });
+      },
+      { id: handId, zone: ZONE_ID },
+    );
+    await expect.poll(() => getHandCodes(page, handId)).toHaveLength(6);
+
+    await page.mouse.up();
+    await expect(page.locator('.hand-panel__card')).toHaveCount(6);
+    const before = await getHandCodes(page, handId);
+
+    // Which card the pointer is over, read straight from the DOM.
+    const underPointer = await page.evaluate(
+      ({ px, py }) => {
+        const hit = document
+          .elementFromPoint(px, py)
+          ?.closest('.hand-panel__card');
+        if (!hit) return -1;
+        return Array.from(
+          document.querySelectorAll('.hand-panel__card'),
+        ).indexOf(hit);
+      },
+      { px, py: y },
+    );
+
+    await page.keyboard.press('x');
+    await page.waitForTimeout(300);
+    const after = await getHandCodes(page, handId);
+    const removed = before.filter((code) => !after.includes(code));
+    // Nothing discarded, or exactly the card under the pointer.
+    if (removed.length > 0) {
+      expect(underPointer).toBeGreaterThanOrEqual(0);
+      expect(removed).toEqual([before[underPointer]]);
+    }
+  });
 });
 
 test.describe('Hand card controls on touch (ct-3pj.4)', () => {

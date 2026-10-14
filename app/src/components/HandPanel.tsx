@@ -161,11 +161,14 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
             .elementFromPoint(pointer.x, pointer.y)
             ?.closest(CARD_SELECTOR)
         : null;
-      const index = hit
-        ? Array.from(
-            cardsContainerRef.current?.querySelectorAll(CARD_SELECTOR) ?? [],
-          ).indexOf(hit)
-        : -1;
+      // The dragged card is not rendered, so mid-drag DOM order is not data
+      // order: derive no hover until the drag ends.
+      const index =
+        hit && !isDragging
+          ? Array.from(
+              cardsContainerRef.current?.querySelectorAll(CARD_SELECTOR) ?? [],
+            ).indexOf(hit)
+          : -1;
       if (pointer && index >= 0) {
         setHoveredIndex(index);
         setHoverAnchor({
@@ -178,7 +181,7 @@ export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
         setHoveredIndex(null);
         setHoverAnchor(null);
       }
-    }, [cards.length]);
+    }, [cards.length, isDragging]);
 
     // Measure container width with ResizeObserver
     useEffect(() => {

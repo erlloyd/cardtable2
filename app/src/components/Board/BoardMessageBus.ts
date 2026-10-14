@@ -127,9 +127,15 @@ export class BoardMessageBus {
     // Object state
     this.registry.register('objects-moved', (msg, ctx) => {
       console.log(`[BoardMessageBus] ${msg.updates.length} object(s) moved`);
+      // A drag never changes rotation, but the message carries the renderer's
+      // copy of it, which can predate a rotation saved since (e.g. exhaust).
+      const updates = msg.updates.map(({ id, pos }) => {
+        const storedPos = ctx.store.getObjectYMap(id)?.get('_pos');
+        return { id, pos: storedPos ? { ...pos, r: storedPos.r } : pos };
+      });
       moveObjects(
         ctx.store,
-        msg.updates,
+        updates,
         resolveEffectiveAttachmentLayout(ctx.store),
       );
     });

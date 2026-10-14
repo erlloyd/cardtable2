@@ -49,6 +49,9 @@ export interface ActionContext {
   onOpenLoadPicker?: (presetType?: string) => void;
   /** Open the rename dialog for the given zone. */
   onOpenRenameDialog?: (zoneId: string) => void;
+  /** Index in the active hand of the card under the mouse, or null. A getter
+   * so hovering does not rebuild the context. */
+  getHoveredHandCardIndex?: () => number | null;
 }
 
 /**
@@ -60,6 +63,7 @@ export interface Action {
   shortLabel?: string | ((context: ActionContext) => string); // 'Flip' (optional shorter label for action handle), can be dynamic
   icon: string; // '🔄' or icon name
   shortcut?: string; // 'F', 'Cmd+R', 'Shift+D'
+  noRepeat?: boolean; // Ignore auto-repeat keydowns of the shortcut (a held key fires once)
   category: string; // CARD_ACTIONS, SELECTION_ACTIONS, etc.
   description?: string; // For tooltips/help
   isAvailable: (context: ActionContext) => boolean;

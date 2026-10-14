@@ -263,6 +263,56 @@ describe('KeyboardManager', () => {
     });
   });
 
+  describe('key repeat', () => {
+    const registerX = (noRepeat?: boolean) => {
+      const executeFn = vi.fn();
+      actionRegistry.register({
+        id: 'test-action',
+        label: 'Test Action',
+        icon: '🧪',
+        shortcut: 'X',
+        noRepeat,
+        category: CARD_ACTIONS,
+        isAvailable: () => true,
+        execute: executeFn,
+      });
+      keyboardManager.registerShortcut('X', 'test-action');
+      return executeFn;
+    };
+    const keydown = (repeat: boolean) =>
+      new KeyboardEvent('keydown', { key: 'x', repeat, cancelable: true });
+
+    it('ignores a repeat keydown for a noRepeat action', () => {
+      const executeFn = registerX(true);
+      const handled = keyboardManager.handleKeyEvent(
+        keydown(true),
+        mockContext,
+      );
+      expect(handled).toBe(true);
+      expect(executeFn).not.toHaveBeenCalled();
+    });
+
+    it('still executes a repeat keydown for a normal action', () => {
+      const executeFn = registerX();
+      const handled = keyboardManager.handleKeyEvent(
+        keydown(true),
+        mockContext,
+      );
+      expect(handled).toBe(true);
+      expect(executeFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('executes a non-repeat keydown for a noRepeat action', () => {
+      const executeFn = registerX(true);
+      const handled = keyboardManager.handleKeyEvent(
+        keydown(false),
+        mockContext,
+      );
+      expect(handled).toBe(true);
+      expect(executeFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('getShortcutDisplay', () => {
     it('should convert shortcut to display format', () => {
       const display = keyboardManager.getShortcutDisplay('Cmd+K');

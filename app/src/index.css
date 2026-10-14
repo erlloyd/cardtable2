@@ -980,9 +980,46 @@ h1 {
   background-color: rgba(79, 70, 229, 1);
 }
 
+.hand-panel__discard-btn {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(15, 15, 20, 0.85);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.hand-panel__card:hover .hand-panel__discard-btn {
+  opacity: 1;
+}
+
+.hand-panel__discard-btn--compact {
+  top: 40px;
+  left: 2px;
+  transform: none;
+}
+
+.hand-panel__discard-btn:hover {
+  background-color: rgba(220, 38, 38, 0.95);
+}
+
 /* On touch devices, always show the play button (no hover available) */
 @media (hover: none) {
-  .hand-panel__play-btn {
+  .hand-panel__play-btn,
+  .hand-panel__discard-btn {
     opacity: 1;
   }
 }

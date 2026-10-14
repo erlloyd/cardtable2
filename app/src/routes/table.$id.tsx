@@ -169,6 +169,17 @@ function Table() {
   // Drag coordination between board and hand panel
   const boardRef = useRef<BoardHandle>(null);
   const handPanelRef = useRef<HTMLDivElement>(null);
+  const [hoveredHandCard] = useState(() => {
+    let index: number | null = null;
+    return {
+      set: (cardIndex: number | null) => {
+        index = cardIndex;
+      },
+      get: () => index,
+    };
+  });
+  const handleHoveredHandCardChange = hoveredHandCard.set;
+  const getHoveredHandCardIndex = hoveredHandCard.get;
   const [isBoardDragging, setIsBoardDragging] = useState(false);
   const [isPhantomDragActive, setIsPhantomDragActive] = useState(false);
   const [phantomFeedback, setPhantomFeedback] = useState<{
@@ -790,6 +801,7 @@ function Table() {
       handPanel.activeHandId ?? undefined,
       handleOpenLoadPicker,
       openRenameDialog,
+      getHoveredHandCardIndex,
     );
 
     if (context) {
@@ -812,6 +824,7 @@ function Table() {
     handPanel.activeHandId,
     handleOpenLoadPicker,
     openRenameDialog,
+    getHoveredHandCardIndex,
   ]);
 
   // Enable keyboard shortcuts
@@ -938,6 +951,7 @@ function Table() {
           boardRef={boardRef}
           phantomDragFeedback={phantomFeedback}
           onPhantomDragActiveChange={setIsPhantomDragActive}
+          onHoveredCardChange={handleHoveredHandCardChange}
         />
       )}
 

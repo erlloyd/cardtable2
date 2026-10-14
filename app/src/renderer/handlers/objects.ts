@@ -270,10 +270,11 @@ function updateObjectVisual(
   // Check if this object is being dragged (primary or secondary in multi-drag)
   const isDragging = context.drag.getDraggedObjectIds().includes(id);
 
-  // During drag, preserve the in-memory sortKey (DragManager owns z-order during drag).
-  // Store updates arrive with stale sortKeys that would overwrite DragManager's values.
+  // During drag, preserve the in-memory sortKey and x/y (DragManager owns z-order and
+  // position during drag). Store updates arrive with stale values that would overwrite them.
   if (isDragging && prevObj) {
     obj._sortKey = prevObj._sortKey;
+    obj._pos = { ...obj._pos, x: prevObj._pos.x, y: prevObj._pos.y };
   }
 
   // Update scene manager (skip spatial index for dragged objects — their bbox is

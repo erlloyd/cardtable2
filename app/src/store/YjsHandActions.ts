@@ -248,7 +248,7 @@ export function discardCardFromHand(
 
   store.getDoc().transact(() => {
     const newStackId = moveCardToBoard(store, handId, cardIndex, zonePos, true);
-    if (newStackId) result = discardCardToZone(store, newStackId);
+    if (newStackId) result = discardCardToZone(store, newStackId).result;
   });
 
   return result;

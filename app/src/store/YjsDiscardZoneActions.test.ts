@@ -57,7 +57,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const older = makeStack(['A', 'B']);
     const selected = makeStack(['A', 'C']);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
 
     expect(cardsOf(older)).toEqual(['A', 'B']);
     expect(cardsOf(selected)).toEqual(['C']);
@@ -68,7 +68,7 @@ describe('discardCardToZone with duplicate card ids', () => {
     const pile = makeStack(['A', 'B'], zoneId);
     const selected = makeStack(['A', 'C']);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
 
     expect(cardsOf(selected)).toEqual(['C']);
     expect(cardsOf(pile)).toEqual(['A', 'A', 'B']);
@@ -82,7 +82,7 @@ describe('discardCardToZone with duplicate card ids', () => {
       .getObjectYMap(selected)!
       .set('_meta', { attachments: { tokens: { damage: 2 } } });
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
 
     expect(cardsOf(pile)).toEqual(['B', 'A']);
     expect(
@@ -93,11 +93,11 @@ describe('discardCardToZone with duplicate card ids', () => {
   it('discards one copy at a time from a stack with duplicate ids', () => {
     const selected = makeStack(['A', 'A', 'B']);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
     expect(cardsOf(selected)).toEqual(['A', 'B']);
     expect(totalCards()).toBe(3);
 
-    expect(discardCardToZone(store, selected)).toBe('routed');
+    expect(discardCardToZone(store, selected).result).toBe('routed');
     expect(cardsOf(selected)).toEqual(['B']);
     expect(totalCards()).toBe(3);
   });
@@ -146,7 +146,7 @@ describe('discardCardToZone strips attachments', () => {
     const source = makeStack(['A'], zoneId);
     seedMeta(source);
 
-    expect(discardCardToZone(store, source)).toBe('routed');
+    expect(discardCardToZone(store, source).result).toBe('routed');
 
     const yMap = store.getObjectYMap(source)!;
     expect(yMap.get('_containerId')).toBe(zoneId);
@@ -160,7 +160,7 @@ describe('discardCardToZone strips attachments', () => {
     const source = makeStack(['A'], zoneId);
     seedMeta(source);
 
-    expect(discardCardToZone(store, source)).toBe('routed');
+    expect(discardCardToZone(store, source).result).toBe('routed');
 
     expect(store.getObjectYMap(source)).toBeUndefined();
     expect(
@@ -176,7 +176,7 @@ describe('discardCardToZone strips attachments', () => {
     const source = makeStack(['A', 'B'], zoneId);
     seedMeta(source);
 
-    expect(discardCardToZone(store, source)).toBe('routed');
+    expect(discardCardToZone(store, source).result).toBe('routed');
 
     let pileId: string | null = null;
     store.forEachObject((yMap, id) => {
@@ -204,7 +204,7 @@ describe('discardCardToZone strips attachments', () => {
     const source = makeStack(['A']);
     seedMeta(source);
 
-    expect(discardCardToZone(store, source)).toBe('no-home');
+    expect(discardCardToZone(store, source).result).toBe('no-home');
 
     expect(metaOf(source)?.attachments).toEqual(seeded);
   });

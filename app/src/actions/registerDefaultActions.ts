@@ -441,11 +441,17 @@ export function registerDefaultActions(): () => void {
         discardHandCard(ctx.store, ctx.activeHandId, hoveredIndex);
         return;
       }
-      let noHome = 0;
+      const noHomeIds = new Set<string>();
       for (const id of ctx.selection.ids) {
-        if (discardCardToZone(ctx.store, id) === 'no-home') noHome++;
+        const { result, strandedIds } = discardCardToZone(
+          ctx.store,
+          id,
+          resolveEffectiveAttachmentLayout(ctx.store),
+        );
+        if (result === 'no-home') noHomeIds.add(id);
+        for (const strandedId of strandedIds) noHomeIds.add(strandedId);
       }
-      if (noHome > 0) notifyNoDiscardZone(noHome);
+      if (noHomeIds.size > 0) notifyNoDiscardZone(noHomeIds.size);
     },
   });
 

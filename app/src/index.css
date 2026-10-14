@@ -634,15 +634,6 @@ h1 {
   font-weight: 500;
 }
 
-/* More button */
-.more-button {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.more-button:hover {
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
 /* Card Preview Styles - Hover Mode */
 .card-preview-container {
   position: fixed;

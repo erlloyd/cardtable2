@@ -114,9 +114,8 @@ export function ActionHandle({
     ? ActionRegistry.getInstance().getAvailableActions(actionContext)
     : [];
 
-  // Split into main actions (top 2-3) and more menu
+  // Only the first 3 actions are shown inline
   const mainActions = availableActions.slice(0, 3);
-  const moreActions = availableActions.slice(3);
 
   const handleClick = () => {
     setIsExpanded(!isExpanded);
@@ -225,21 +224,6 @@ export function ActionHandle({
               </button>
             );
           })}
-          {moreActions.length > 0 && (
-            <button
-              type="button"
-              className="action-button more-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                // TODO(M3.5.1-T7): Implement dropdown menu for additional actions
-                console.log('More menu', moreActions);
-              }}
-              title="More actions"
-              data-testid="action-button-more"
-            >
-              <span className="action-button-icon">⋮</span>
-            </button>
-          )}
         </div>
       )}
     </div>

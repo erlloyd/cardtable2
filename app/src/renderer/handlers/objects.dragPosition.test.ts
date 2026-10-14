@@ -17,7 +17,11 @@ function makeStack(x: number, y: number, r: number): StackObject {
   };
 }
 
-function setup(prev: StackObject, draggedIds: string[]) {
+function setup(
+  prev: StackObject,
+  draggedIds: string[],
+  prevById: Record<string, StackObject> = {},
+) {
   const updateObject = vi.fn();
   const visual = { x: 0, y: 0, rotation: 0 };
   const context = {
@@ -26,7 +30,7 @@ function setup(prev: StackObject, draggedIds: string[]) {
       updateVisualForObjectChange: vi.fn(),
     },
     sceneManager: {
-      getObject: () => prev,
+      getObject: (id: string) => prevById[id] ?? prev,
       updateObject,
       getAllObjects: () => new Map(),
     },
@@ -66,6 +70,38 @@ describe('handleObjectsUpdated - position during drag', () => {
 
     const applied = updateObject.mock.calls[0][1] as StackObject;
     expect(applied._pos).toEqual({ x: 300, y: 400, r: 90 });
+  });
+
+  it('keeps each dragged object its own x/y in a multi-select batch and updates the rest', () => {
+    const prev1 = makeStack(300, 400, 0);
+    const prev2 = makeStack(500, 600, 0);
+    const prev3 = makeStack(700, 800, 0);
+    const { context, updateObject } = setup(prev1, ['s1', 's2'], {
+      s1: prev1,
+      s2: prev2,
+      s3: prev3,
+    });
+
+    handleObjectsUpdated(
+      {
+        type: 'objects-updated',
+        objects: [
+          { id: 's1', obj: makeStack(10, 20, 0) },
+          { id: 's2', obj: makeStack(30, 40, 90) },
+          { id: 's3', obj: makeStack(50, 60, 0) },
+        ],
+      },
+      context,
+    );
+
+    const applied = new Map(
+      updateObject.mock.calls.map(
+        (c) => [c[0] as string, (c[1] as StackObject)._pos] as const,
+      ),
+    );
+    expect(applied.get('s1')).toEqual({ x: 300, y: 400, r: 0 });
+    expect(applied.get('s2')).toEqual({ x: 500, y: 600, r: 90 });
+    expect(applied.get('s3')).toEqual({ x: 50, y: 60, r: 0 });
   });
 
   it('takes the incoming position for a non-dragged object', () => {

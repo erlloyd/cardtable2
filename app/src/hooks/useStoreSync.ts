@@ -65,6 +65,14 @@ export function useStoreSync(
         console.log(
           `[useStoreSync] Forwarding ${changes.updated.length} updated object(s)`,
         );
+        console.log(
+          `[DEBUG-PREVIEW] M storeSync objects-updated pos=${changes.updated
+            .map(({ yMap }) => {
+              const o = toTableObject(yMap);
+              return `${o._pos.x.toFixed(0)},${o._pos.y.toFixed(0)}`;
+            })
+            .join(';')}`,
+        );
         renderer.sendMessage({
           type: 'objects-updated',
           objects: changes.updated.map(({ id, yMap }) => ({

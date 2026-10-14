@@ -51,6 +51,8 @@ export class WorkerRendererAdapter implements IRendererAdapter {
     if (!this.worker) {
       throw new Error('WorkerRendererAdapter: sendMessage while disconnected');
     }
+    if (message.type !== 'init')
+      console.log(`[DEBUG-PREVIEW] M send->worker ${message.type}`);
     // For init messages with transferable canvas, use transfer list
     if (message.type === 'init' && 'canvas' in message) {
       this.worker.postMessage(message, [message.canvas]);

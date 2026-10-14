@@ -232,6 +232,9 @@ export function handlePointerMove(
   context: RendererContext,
 ): void {
   const event = message.event;
+  console.log(
+    `[DEBUG-PREVIEW] R pointer-move x=${event.clientX} buttons=${event.buttons} dragging=${context.drag.isDragging()} hoveredId=${context.hover.getHoveredObjectId()}`,
+  );
   const pointerInfo = context.gestures.getPointer(event.pointerId);
 
   // Only handle gestures if pointer is being tracked (after pointer-down)
@@ -591,6 +594,9 @@ export function handlePointerMove(
     // Perform hit-test
     const hitResult = context.sceneManager.hitTest(worldPos.x, worldPos.y);
     const newHoveredId = hitResult ? hitResult.id : null;
+    console.log(
+      `[DEBUG-PREVIEW] R hover-hit world=${worldPos.x.toFixed(0)},${worldPos.y.toFixed(0)} hit=${newHoveredId} prev=${context.hover.getHoveredObjectId()} objs=${[...context.sceneManager.getAllObjects().entries()].map(([k, o]) => `${k.slice(0, 4)}@${o._pos.x.toFixed(0)},${o._pos.y.toFixed(0)}`).join(';')}`,
+    );
 
     // Check if hovering over unstack handle
     let isOverUnstackHandle = false;
@@ -662,6 +668,7 @@ export function handlePointerMove(
         }
       }
 
+      console.log(`[DEBUG-PREVIEW] R post object-hovered id=${currentId}`);
       context.postResponse({
         type: 'object-hovered',
         objectId: currentId,
@@ -754,6 +761,9 @@ export function handlePointerUp(
   context: RendererContext,
 ): void {
   const event = message.event;
+  console.log(
+    `[DEBUG-PREVIEW] R pointer-up x=${event.clientX} dragging=${context.drag.isDragging()} hoveredId=${context.hover.getHoveredObjectId()}`,
+  );
 
   // Store gesture states before we potentially reset them
   const wasRectangleSelecting = context.rectangleSelect.isSelecting();
@@ -1196,6 +1206,9 @@ function clearDragState(
 
       // End drag and get position updates (M3-T2.5)
       const positionUpdates = context.drag.endObjectDrag(context.sceneManager);
+      console.log(
+        `[DEBUG-PREVIEW] R endObjectDrag updates=${positionUpdates.map((u) => `${u.id.slice(0, 4)}@${u.pos.x.toFixed(0)},${u.pos.y.toFixed(0)}`).join(';')}`,
+      );
 
       // Clear drag visual feedback for all dragged objects
       for (const objectId of draggedIds) {
@@ -1213,6 +1226,9 @@ function clearDragState(
       // the next pointermove over the card is a real id change and re-emits
       // object-hovered. No message here: the main thread is already cleared.
       const staleHoveredId = context.hover.getHoveredObjectId();
+      console.log(
+        `[DEBUG-PREVIEW] R drag-end reset hover stale=${staleHoveredId}`,
+      );
       if (staleHoveredId) {
         context.visual.updateVisualFeedback(
           staleHoveredId,

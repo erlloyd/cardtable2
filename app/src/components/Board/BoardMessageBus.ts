@@ -126,6 +126,7 @@ export class BoardMessageBus {
 
     // Object state
     this.registry.register('objects-moved', (msg, ctx) => {
+      console.log(`[DEBUG-PREVIEW] M recv objects-moved`);
       console.log(`[BoardMessageBus] ${msg.updates.length} object(s) moved`);
       moveObjects(
         ctx.store,
@@ -321,6 +322,7 @@ export class BoardMessageBus {
     });
 
     this.registry.register('objects-selected', (msg, ctx) => {
+      console.log(`[DEBUG-PREVIEW] M recv objects-selected`);
       console.log(`[BoardMessageBus] ${msg.ids.length} object(s) selected`);
 
       // Store screen coordinates
@@ -401,6 +403,7 @@ export class BoardMessageBus {
     });
 
     this.registry.register('object-drag-ended', (_msg, ctx) => {
+      console.log('[DEBUG-PREVIEW] M recv object-drag-ended');
       ctx.setIsCameraActive(false);
       const selectedIds = getSelectedObjectIds(ctx.store);
       if (selectedIds.length > 0) {
@@ -492,6 +495,7 @@ export class BoardMessageBus {
     });
 
     this.registry.register('object-hovered', (msg, ctx) => {
+      console.log(`[DEBUG-PREVIEW] M recv object-hovered id=${msg.objectId}`);
       dbg(
         'hover',
         'BoardMessageBus received object-hovered:',

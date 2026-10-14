@@ -269,6 +269,9 @@ function updateObjectVisual(
 
   // Check if this object is being dragged (primary or secondary in multi-drag)
   const isDragging = context.drag.getDraggedObjectIds().includes(id);
+  console.log(
+    `[DEBUG-PREVIEW] R objects-updated ${id.slice(0, 4)} incoming=${obj._pos.x.toFixed(0)},${obj._pos.y.toFixed(0)} prev=${prevObj?._pos.x.toFixed(0)},${prevObj?._pos.y.toFixed(0)} dragging=${isDragging}`,
+  );
 
   // During drag, preserve the in-memory sortKey and x/y (DragManager owns z-order and
   // position during drag). Store updates arrive with stale values that would overwrite them.

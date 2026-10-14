@@ -324,6 +324,9 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
         'cardScreenHeight=',
         cardScreenHeight,
       );
+      console.log(
+        `[DEBUG-PREVIEW] M Board.setHoveredObject id=${objectId} gameAssets=${!!gameAssets} phantom=${isPhantomDragActive}`,
+      );
       // If hover cleared, hide preview
       if (!objectId) {
         dbg('hover', 'Board.setHoveredObject -> CLEARING previewCard');

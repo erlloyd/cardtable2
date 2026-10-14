@@ -223,6 +223,23 @@ test.describe('Card Preview Hover - Dismiss Path (ct-zqc)', () => {
 });
 
 test.describe('Card Preview Hover - After Drag (ct-c4b)', () => {
+  const diagLines: string[] = [];
+  const stamp = (line: string) => Number(/ T=([0-9.]+)/.exec(line)?.[1] ?? 0);
+  test.afterEach(async ({ page: _page }, info) => {
+    if (info.status === 'passed' || diagLines.length === 0) return;
+    const sorted = [...diagLines].sort((a, b) => stamp(a) - stamp(b));
+    const base = stamp(sorted[0] ?? '');
+    const text = sorted
+      .map(
+        (l) =>
+          `${(stamp(l) - base).toFixed(1).padStart(8)} ${l.replace(/ T=[0-9.]+/, '')}`,
+      )
+      .join('\n');
+    console.log(
+      `DIAG-PREVIEW-TRACE (test=${info.title} retry=${info.retry}) BEGIN\n${text}\nDIAG-PREVIEW-TRACE END`,
+    );
+  });
+
   test('preview reappears on first pointermove over the card after a drag', async ({
     page,
   }) => {
@@ -231,6 +248,29 @@ test.describe('Card Preview Hover - After Drag (ct-c4b)', () => {
       errors.push(error.message);
     });
 
+    // DIAGNOSTIC ONLY (do not merge): capture [DEBUG-PREVIEW] lines from the
+    // page and the render worker, stamped with epoch ms, and dump them sorted
+    // when the test fails.
+    diagLines.length = 0;
+    page.on('console', (msg) => {
+      const text = msg.text();
+      if (text.includes('[DEBUG-PREVIEW]')) diagLines.push(text);
+    });
+    await page.addInitScript(() => {
+      const orig = console.log.bind(console);
+      console.log = (...a: unknown[]) => {
+        const first = String(a[0]);
+        if (first.startsWith('[DEBUG-PREVIEW]') && !first.includes(' T=')) {
+          orig(
+            `[DEBUG-PREVIEW] T=${(performance.timeOrigin + performance.now()).toFixed(1)} ${first.slice(16)}`,
+          );
+        } else {
+          orig(...a);
+        }
+      };
+    });
+    const mark = (label: string) =>
+      diagLines.push(`[DEBUG-PREVIEW] T=${Date.now()}.0 [TEST] ${label}`);
     const tableId = `c4b-${test.info().testId.replace(/[^a-z0-9]/gi, '-')}`;
     skipNextAutoClear(page);
     await page.goto(`/table/${tableId}?seed=stack-of-5`);
@@ -302,17 +342,23 @@ test.describe('Card Preview Hover - After Drag (ct-c4b)', () => {
     await expect(preview).toBeVisible({ timeout: 2000 });
 
     // Drag the stack: preview hides at drag start.
+    mark('firing pointerdown');
     await fire('pointerdown', startX, startY, 1);
     await page.waitForTimeout(50);
     await fire('pointermove', startX + 50, startY, 1);
     await fire('pointermove', endX, endY, 1);
     await page.waitForTimeout(50);
+    mark('firing pointerup');
     await fire('pointerup', endX, endY, 0);
+    mark('pointerup dispatched');
     await expect(preview).not.toBeVisible({ timeout: 2000 });
+    mark('preview hidden confirmed');
 
     // A single pointermove inside the stack's new position, without leaving it,
     // must bring the preview back.
+    mark('firing post-drag pointermove');
     await fire('pointermove', endX + 1, endY, 0);
+    mark('post-drag pointermove dispatched');
     await expect(preview).toBeVisible({ timeout: 2000 });
 
     expect(errors).toEqual([]);

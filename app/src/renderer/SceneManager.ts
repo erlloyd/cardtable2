@@ -33,6 +33,9 @@ export class SceneManager {
     options?: { skipSpatial?: boolean },
   ): void {
     this.objects.set(id, obj);
+    console.log(
+      `[DEBUG-PREVIEW] R Scene.addObject ${id.slice(0, 4)} pos=${obj._pos.x.toFixed(0)},${obj._pos.y.toFixed(0)} skipSpatial=${!!options?.skipSpatial}`,
+    );
 
     if (!options?.skipSpatial) {
       // Calculate bounding box and add to spatial index
@@ -48,6 +51,7 @@ export class SceneManager {
   removeObject(id: string): void {
     const obj = this.objects.get(id);
     if (!obj) return;
+    console.log(`[DEBUG-PREVIEW] R Scene.removeObject ${id.slice(0, 4)}`);
 
     // Remove from spatial index using cached bbox (critical for objects that moved!)
     const bbox = this.bboxCache.get(id);

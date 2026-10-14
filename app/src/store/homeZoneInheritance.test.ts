@@ -158,8 +158,8 @@ describe('stackObjects home zone inheritance', () => {
   it('discardCardToZone routes a tagged card and refuses an untagged one', () => {
     const tagged = makeStack([{ code: 't1', homeZone: zoneA }]);
     const untagged = makeStack([{ code: 'u1' }]);
-    expect(discardCardToZone(store, tagged)).toBe('routed');
-    expect(discardCardToZone(store, untagged)).toBe('no-home');
+    expect(discardCardToZone(store, tagged).result).toBe('routed');
+    expect(discardCardToZone(store, untagged).result).toBe('no-home');
   });
 });
 
@@ -247,7 +247,7 @@ describe('fillHomeZone and clearHomeZones', () => {
     it('makes discardCardToZone route the card into the zone', () => {
       const stack = makeStack([{ code: 'a' }]);
       fillHomeZone(store, [stack], zoneA);
-      expect(discardCardToZone(store, stack)).toBe('routed');
+      expect(discardCardToZone(store, stack).result).toBe('routed');
       expect(store.getObjectYMap(stack)!.get('_containerId')).toBe(zoneA);
     });
   });
@@ -288,7 +288,7 @@ describe('fillHomeZone and clearHomeZones', () => {
     it('makes discardCardToZone return no-home', () => {
       const stack = makeStack([{ code: 'a', homeZone: zoneA }]);
       clearHomeZones(store, [stack]);
-      expect(discardCardToZone(store, stack)).toBe('no-home');
+      expect(discardCardToZone(store, stack).result).toBe('no-home');
     });
 
     it('clear then set re-homes a card from B to A', () => {

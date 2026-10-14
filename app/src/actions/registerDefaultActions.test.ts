@@ -23,6 +23,7 @@ import {
 } from '@cardtable2/shared';
 import { YjsStore } from '../store/YjsStore';
 import {
+  attachCards,
   createDiscardZoneForStack,
   createObject,
   discardCardToZone,
@@ -531,6 +532,75 @@ describe('discard-card action (ct-1mv.6)', () => {
     expect(store.getObjectYMap(tagged)!.get('_containerId')).toBe(zoneId);
   });
 
+  describe('stranded attached cards', () => {
+    function hostWithNoHomeAttached(count: number): {
+      host: string;
+      attached: string[];
+    } {
+      const temp = stackWith(toCardEntries(['t']));
+      const zoneId = createDiscardZoneForStack(store, temp)!;
+      const host = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 100, y: 100, r: 0 },
+        cards: [{ code: 'host', homeZone: zoneId }],
+        faceUp: false,
+      });
+      const attached = Array.from({ length: count }, (_, i) =>
+        stackWith(toCardEntries([`att${i}`])),
+      );
+      attachCards(store, attached, host);
+      return { host, attached };
+    }
+
+    function toastMessage(): string {
+      expect(showToast).toHaveBeenCalledTimes(1);
+      return vi.mocked(showToast).mock.calls[0][0];
+    }
+
+    it('counts one no-home attached card', () => {
+      const { host } = hostWithNoHomeAttached(1);
+
+      void ActionRegistry.getInstance()
+        .getAction('discard-card')
+        ?.execute(ctxFor([host]));
+
+      expect(toastMessage()).toContain('1 card has no discard zone');
+    });
+
+    it('counts two no-home attached cards', () => {
+      const { host } = hostWithNoHomeAttached(2);
+
+      void ActionRegistry.getInstance()
+        .getAction('discard-card')
+        ?.execute(ctxFor([host]));
+
+      expect(toastMessage()).toContain('2 cards have no discard zone');
+    });
+
+    it('counts a stranded card once when it is also selected', () => {
+      const { host, attached } = hostWithNoHomeAttached(1);
+
+      void ActionRegistry.getInstance()
+        .getAction('discard-card')
+        ?.execute(ctxFor([host, attached[0]]));
+
+      expect(toastMessage()).toContain('1 card has no discard zone');
+    });
+
+    it('counts only the host when the host has no home', () => {
+      const host = stackWith(toCardEntries(['host']));
+      const attached = stackWith(toCardEntries(['att']));
+      attachCards(store, [attached], host);
+
+      void ActionRegistry.getInstance()
+        .getAction('discard-card')
+        ?.execute(ctxFor([host]));
+
+      expect(toastMessage()).toContain('1 card has no discard zone');
+      expect(store.getObjectYMap(attached)!.get('_attachedToId')).toBe(host);
+    });
+  });
+
   it('does not toast when every stack routes', () => {
     const tagged = stackWith(toCardEntries(['t']));
     createDiscardZoneForStack(store, tagged);
@@ -646,7 +716,7 @@ describe('set-discard-zone and clear-discard-zone actions (ct-sz2.2)', () => {
       expect(store.getObjectYMap(s)!.get('_cards')).toEqual([
         { code: 'a', homeZone: z },
       ]);
-      expect(discardCardToZone(store, s)).toBe('routed');
+      expect(discardCardToZone(store, s).result).toBe('routed');
       expect(store.getObjectYMap(s)!.get('_containerId')).toBe(z);
     });
   });
@@ -672,7 +742,7 @@ describe('set-discard-zone and clear-discard-zone actions (ct-sz2.2)', () => {
       void action('clear-discard-zone').execute(ctxFor([s, z]));
       expect(store.getObjectYMap(s)!.get('_cards')).toEqual([{ code: 'a' }]);
       expect(store.getObjectYMap(z)!.get('_kind')).toBe(ObjectKind.Zone);
-      expect(discardCardToZone(store, s)).toBe('no-home');
+      expect(discardCardToZone(store, s).result).toBe('no-home');
     });
   });
 });

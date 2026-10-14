@@ -113,3 +113,36 @@ describe('BoardMessageBus stack-objects', () => {
     });
   });
 });
+
+describe('BoardMessageBus objects-moved', () => {
+  const bus = new BoardMessageBus();
+
+  it('applies the dropped x/y and keeps the stored rotation', async () => {
+    const store = new YjsStore('test-bus-moved');
+    const ctx = {
+      store,
+      addMessage: vi.fn(),
+    } as unknown as BoardHandlerContext;
+    const id = createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['a']),
+      faceUp: true,
+    });
+    store.getObjectYMap(id)!.set('_pos', { x: 0, y: 0, r: 90 });
+
+    await bus.handleMessage(
+      {
+        type: 'objects-moved',
+        updates: [{ id, pos: { x: 150, y: 20, r: 0 } }],
+      },
+      ctx,
+    );
+
+    expect(store.getObjectYMap(id)!.get('_pos')).toEqual({
+      x: 150,
+      y: 20,
+      r: 90,
+    });
+  });
+});

@@ -16,7 +16,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://localhost:3000',
-    trace: 'retain-on-failure', // DIAG: trace every first try
+    trace: 'on-first-retry',
   },
   projects: [
     {

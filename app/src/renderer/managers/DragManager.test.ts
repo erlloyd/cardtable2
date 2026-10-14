@@ -166,6 +166,72 @@ describe('DragManager', () => {
     });
   });
 
+  // ── Drop holds: ignore the pre-drag position after a drop ──
+  describe('drop holds', () => {
+    function dropObjectAt(
+      id: string,
+      from: { x: number; y: number },
+      to: { x: number; y: number },
+    ): void {
+      const sm = makeSceneManager({ [id]: from });
+      drag.prepareObjectDrag(id, 0, 0);
+      drag.startObjectDrag(sm, makeSelectionManager());
+      const obj = sm.getObject(id);
+      if (obj) {
+        obj._pos.x = to.x;
+        obj._pos.y = to.y;
+      }
+      drag.endObjectDrag(sm);
+    }
+
+    it('treats the pre-drag position as a leftover until another position arrives', () => {
+      dropObjectAt('obj-1', { x: 0, y: 0 }, { x: 50, y: 0 });
+
+      expect(drag.isPreMoveLeftover('obj-1', 0, 0)).toBe(true);
+      expect(drag.isPreMoveLeftover('obj-1', 0, 0)).toBe(true);
+      expect(drag.isPreMoveLeftover('obj-1', 50, 0)).toBe(false);
+      expect(drag.isPreMoveLeftover('obj-1', 0, 0)).toBe(false);
+    });
+
+    it('records no hold for a drop that ends at its start position', () => {
+      dropObjectAt('obj-1', { x: 0, y: 0 }, { x: 0, y: 0 });
+
+      expect(drag.isPreMoveLeftover('obj-1', 0, 0)).toBe(false);
+      expect(drag.isPreMoveLeftover('obj-1', 50, 0)).toBe(false);
+    });
+
+    it('records no hold when grid snap returns the dropped card to its start position', () => {
+      // pointer.ts snaps _pos before endObjectDrag, so it sees the snapped final position
+      dropObjectAt('obj-1', { x: 100, y: 100 }, { x: 100, y: 100 });
+
+      expect(drag.isPreMoveLeftover('obj-1', 100, 100)).toBe(false);
+    });
+
+    it('holds the off-grid start when the snapped drop differs from it', () => {
+      dropObjectAt('obj-1', { x: 103, y: 97 }, { x: 200, y: 100 });
+
+      expect(drag.isPreMoveLeftover('obj-1', 103, 97)).toBe(true);
+      expect(drag.isPreMoveLeftover('obj-1', 200, 100)).toBe(false);
+      expect(drag.isPreMoveLeftover('obj-1', 103, 97)).toBe(false);
+    });
+
+    it('clears holds on resetAll', () => {
+      dropObjectAt('obj-1', { x: 0, y: 0 }, { x: 50, y: 0 });
+
+      drag.resetAll();
+
+      expect(drag.isPreMoveLeftover('obj-1', 0, 0)).toBe(false);
+    });
+
+    it('clears holds on clearDropHolds', () => {
+      dropObjectAt('obj-1', { x: 0, y: 0 }, { x: 50, y: 0 });
+
+      drag.clearDropHolds();
+
+      expect(drag.isPreMoveLeftover('obj-1', 0, 0)).toBe(false);
+    });
+  });
+
   // ── Unstack waiting lifecycle ──
   describe('unstack waiting lifecycle', () => {
     it('tracks waiting state for a source stack', () => {

@@ -35,6 +35,8 @@ export class DragManager {
   private isUnstackDrag = false; // Track if this is an unstack operation
   private waitingForUnstackSource: string | null = null; // Source stack ID when waiting for unstack response
   private unstackTimeoutId: NodeJS.Timeout | null = null; // Timeout for unstack operations
+  // Pre-drag x/y of objects dropped at a new position, until the store shows another position
+  private dropHolds = new Map<string, { x: number; y: number }>();
 
   /**
    * Check if currently dragging an object.
@@ -356,11 +358,17 @@ export class DragManager {
 
     // Update SceneManager spatial index for all dragged cards now that drag is complete
     // (deferred from pointer move for performance)
-    for (const objectId of this.dragState.draggedObjectsStartPositions.keys()) {
+    for (const [objectId, startPos] of this.dragState
+      .draggedObjectsStartPositions) {
       const obj = sceneManager.getObject(objectId);
       if (obj) {
         sceneManager.updateObject(objectId, obj);
         positionUpdates.push({ id: objectId, pos: obj._pos });
+        if (obj._pos.x !== startPos.x || obj._pos.y !== startPos.y) {
+          this.dropHolds.set(objectId, startPos);
+        } else {
+          this.dropHolds.delete(objectId);
+        }
       }
     }
 
@@ -373,11 +381,29 @@ export class DragManager {
   }
 
   /**
+   * True while a dropped object still receives the position it had before the
+   * drag (an update produced before the main thread applied the move). Any
+   * other position ends the hold.
+   */
+  isPreMoveLeftover(id: string, x: number, y: number): boolean {
+    const hold = this.dropHolds.get(id);
+    if (!hold) return false;
+    if (hold.x === x && hold.y === y) return true;
+    this.dropHolds.delete(id);
+    return false;
+  }
+
+  clearDropHolds(): void {
+    this.dropHolds.clear();
+  }
+
+  /**
    * Full reset of ALL DragManager state.
    * Called on scene clear, object removal, or gesture abort.
    */
   resetAll(): void {
     this.resetDragPrep();
+    this.clearDropHolds();
     this.clearUnstackWaiting();
   }
 

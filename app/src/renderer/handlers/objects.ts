@@ -272,7 +272,10 @@ function updateObjectVisual(
 
   // During drag, preserve the in-memory sortKey and x/y (DragManager owns z-order and
   // position during drag). Store updates arrive with stale values that would overwrite them.
-  if (isDragging && prevObj) {
+  // The same holds after a drop until the store stops showing the pre-drag position.
+  const keepDragState =
+    isDragging || context.drag.isPreMoveLeftover(id, obj._pos.x, obj._pos.y);
+  if (keepDragState && prevObj) {
     obj._sortKey = prevObj._sortKey;
     obj._pos = { ...obj._pos, x: prevObj._pos.x, y: prevObj._pos.y };
   }

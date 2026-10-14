@@ -21,6 +21,7 @@ function setup(
   prev: StackObject,
   draggedIds: string[],
   prevById: Record<string, StackObject> = {},
+  isPreMoveLeftover = false,
 ) {
   const updateObject = vi.fn();
   const visual = { x: 0, y: 0, rotation: 0 };
@@ -34,7 +35,10 @@ function setup(
       updateObject,
       getAllObjects: () => new Map(),
     },
-    drag: { getDraggedObjectIds: () => draggedIds },
+    drag: {
+      getDraggedObjectIds: () => draggedIds,
+      isPreMoveLeftover: () => isPreMoveLeftover,
+    },
     hover: { getHoveredObjectId: () => null },
     selection: { isSelected: () => false },
     animation: {
@@ -102,6 +106,43 @@ describe('handleObjectsUpdated - position during drag', () => {
     expect(applied.get('s1')).toEqual({ x: 300, y: 400, r: 0 });
     expect(applied.get('s2')).toEqual({ x: 500, y: 600, r: 90 });
     expect(applied.get('s3')).toEqual({ x: 50, y: 60, r: 0 });
+  });
+
+  it('after a drop, keeps the dropped x/y and sortKey against a pre-drag leftover but takes rotation', () => {
+    const prev = makeStack(300, 400, 0);
+    prev._sortKey = 'dropped';
+    const leftover = makeStack(10, 20, 90);
+    const { context, updateObject, visual } = setup(prev, [], {}, true);
+    visual.x = 300;
+    visual.y = 400;
+
+    handleObjectsUpdated(
+      { type: 'objects-updated', objects: [{ id: 's1', obj: leftover }] },
+      context,
+    );
+
+    const applied = updateObject.mock.calls[0][1] as StackObject;
+    expect(applied._pos).toEqual({ x: 300, y: 400, r: 90 });
+    expect(applied._sortKey).toBe('dropped');
+    expect(updateObject.mock.calls[0][2]).toEqual({ skipSpatial: false });
+    expect(visual.x).toBe(300);
+    expect(visual.y).toBe(400);
+  });
+
+  it('after a drop, takes the incoming position when it is not a pre-drag leftover', () => {
+    const prev = makeStack(300, 400, 0);
+    const next = makeStack(310, 420, 0);
+    const { context, updateObject, visual } = setup(prev, [], {}, false);
+
+    handleObjectsUpdated(
+      { type: 'objects-updated', objects: [{ id: 's1', obj: next }] },
+      context,
+    );
+
+    const applied = updateObject.mock.calls[0][1] as StackObject;
+    expect(applied._pos).toEqual({ x: 310, y: 420, r: 0 });
+    expect(visual.x).toBe(310);
+    expect(visual.y).toBe(420);
   });
 
   it('takes the incoming position for a non-dragged object', () => {

@@ -19,6 +19,8 @@
  * renderer (action handlers, store) don't need a PixiJS dependency.
  */
 
+import { CARD_HEIGHT } from '../renderer/constants';
+
 /**
  * Plain shape describing the camera + viewport. Caller is responsible for
  * sourcing these from the renderer's CameraManager / CoordinateConverter
@@ -105,10 +107,13 @@ export function getViewportCenterPlacement(
   state: ViewportState,
   options: PlacementOptions = {},
 ): Placement {
-  const center = getViewportCenter(state);
+  return applyJitter(getViewportCenter(state), options);
+}
+
+function applyJitter(anchor: Placement, options: PlacementOptions): Placement {
   const jitterRadius = options.jitterRadius ?? DEFAULT_JITTER_RADIUS;
   if (jitterRadius <= 0) {
-    return center;
+    return anchor;
   }
 
   const rng = options.rng ?? Math.random;
@@ -116,8 +121,64 @@ export function getViewportCenterPlacement(
   const r = jitterRadius * Math.sqrt(rng());
   const theta = 2 * Math.PI * rng();
   return {
-    x: center.x + r * Math.cos(theta),
-    y: center.y + r * Math.sin(theta),
+    x: anchor.x + r * Math.cos(theta),
+    y: anchor.y + r * Math.sin(theta),
+  };
+}
+
+const BOTTOM_EDGE_MARGIN_SCREEN_PX = 8;
+
+/**
+ * Compute a placement horizontally centred and as low in the viewport as
+ * the whole card plus its jitter disc can sit above the bottom edge. On a
+ * viewport too short for that, the anchor falls back to the vertical centre.
+ */
+export function getViewportBottomPlacement(
+  state: ViewportState,
+  options: PlacementOptions = {},
+): Placement {
+  const {
+    cameraX,
+    cameraY,
+    cameraScale,
+    viewportWidth,
+    viewportHeight,
+    devicePixelRatio,
+  } = state;
+  const radius = options.jitterRadius ?? DEFAULT_JITTER_RADIUS;
+  const halfCard = CARD_HEIGHT / 2 / devicePixelRatio;
+  const insetScreen =
+    (halfCard + radius) * cameraScale + BOTTOM_EDGE_MARGIN_SCREEN_PX;
+  const anchorScreenX = viewportWidth / 2;
+  const anchorScreenY = Math.max(
+    viewportHeight / 2,
+    viewportHeight - insetScreen,
+  );
+  return applyJitter(
+    {
+      x: (anchorScreenX - cameraX) / cameraScale,
+      y: (anchorScreenY - cameraY) / cameraScale,
+    },
+    options,
+  );
+}
+
+/**
+ * Translate a CSS-pixel world coordinate (as produced by
+ * {@link getViewportCenterPlacement}) into the renderer's native canvas-pixel
+ * world space. Required because the viewport-state response now carries CSS
+ * pixels (matching its type doc — see ct-rde) while every object position
+ * stored in the YJS doc is interpreted by the renderer in canvas-pixel world
+ * space (set up by `CameraManager.initialize` from `app.renderer.width/height`,
+ * both DPR-multiplied).
+ */
+export function toCanvasPxPlacement(
+  placement: Placement,
+  devicePixelRatio: number,
+): Placement {
+  return {
+    x: placement.x * devicePixelRatio,
+    y: placement.y * devicePixelRatio,
   };
 }
 

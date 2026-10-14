@@ -45,6 +45,7 @@ import { getCounterTypeDef } from './counterRegistry';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
 import {
   getViewportCenterPlacement,
+  toCanvasPxPlacement,
   type ViewportState,
 } from '../utils/viewportPlacement';
 import {
@@ -91,25 +92,6 @@ function pickCardSetName(data: unknown): string | null {
   if (typeof obj.setName === 'string') return obj.setName;
   if (typeof obj.cardSet === 'string') return obj.cardSet;
   return null;
-}
-
-/**
- * Translate a CSS-pixel world coordinate (as produced by
- * {@link getViewportCenterPlacement}) into the renderer's native canvas-pixel
- * world space. Required because the viewport-state response now carries CSS
- * pixels (matching its type doc — see ct-rde) while every object position
- * stored in the YJS doc is interpreted by the renderer in canvas-pixel world
- * space (set up by `CameraManager.initialize` from `app.renderer.width/height`,
- * both DPR-multiplied).
- */
-function toCanvasPxPlacement(
-  placement: { x: number; y: number },
-  devicePixelRatio: number,
-): { x: number; y: number } {
-  return {
-    x: placement.x * devicePixelRatio,
-    y: placement.y * devicePixelRatio,
-  };
 }
 
 /**

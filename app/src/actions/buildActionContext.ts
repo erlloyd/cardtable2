@@ -23,6 +23,7 @@ import type { TableObjectYMap } from '../store/types';
  * @param activeHandId - Optional currently active player hand ID
  * @param onOpenLoadPicker - Optional callback to open the generic Load picker
  * @param onOpenRenameDialog - Optional callback to open the zone rename dialog
+ * @param getHoveredHandCardIndex - Optional getter for the hovered active-hand card index
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -35,6 +36,7 @@ export function buildActionContext(
   activeHandId?: string,
   onOpenLoadPicker?: (presetType?: string) => void,
   onOpenRenameDialog?: (zoneId: string) => void,
+  getHoveredHandCardIndex?: () => number | null,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -80,5 +82,6 @@ export function buildActionContext(
     activeHandId,
     onOpenLoadPicker,
     onOpenRenameDialog,
+    getHoveredHandCardIndex,
   };
 }

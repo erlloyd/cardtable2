@@ -1226,6 +1226,8 @@ function clearDragState(
       // Note: Unstack operation already handled earlier (sent unstack-card on slop exceeded)
       // So we don't need special handling here - just normal drag completion, stack merge, or attach
       if (dropZone && draggedIds.length > 0) {
+        // The store may never move these objects, so the pre-drag position can be the right one
+        context.drag.clearDropHolds();
         if (dropZone.type === 'stack') {
           // Stack operation: merge multiple stacks
           console.log(

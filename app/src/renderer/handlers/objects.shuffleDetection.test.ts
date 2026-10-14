@@ -41,7 +41,10 @@ function setup(prev: StackObject) {
       updateObject: vi.fn(),
       getAllObjects: () => new Map(),
     },
-    drag: { getDraggedObjectIds: () => [] },
+    drag: {
+      getDraggedObjectIds: () => [],
+      isPreMoveLeftover: () => false,
+    },
     hover: { getHoveredObjectId: () => null },
     selection: { isSelected: () => false },
     animation: {

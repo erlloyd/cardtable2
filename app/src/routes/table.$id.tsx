@@ -699,6 +699,7 @@ function Table() {
   const { openPeek: handleOpenPeek, peekDialog } = usePeekDialog(
     store,
     gameAssets,
+    handPanel.activeHandId,
   );
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {

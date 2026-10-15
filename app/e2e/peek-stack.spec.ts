@@ -18,10 +18,13 @@ import { test, expect } from './_fixtures';
 
 const DECK_ID = 'e2e-peek-deck';
 const DECK_POS = { x: 0, y: -150 };
+const OTHER_ID = 'e2e-peek-deck-2';
+const OTHER_POS = { x: -300, y: 50 };
 
 interface StoreObject {
   _kind: string;
   _cards?: Array<{ code: string }>;
+  _faceUp?: boolean;
   _selectedBy: string | null;
 }
 
@@ -62,6 +65,8 @@ async function seedDeck(
   page: Page,
   codes: string[],
   faceUp = false,
+  id = DECK_ID,
+  pos = DECK_POS,
 ): Promise<void> {
   await page.evaluate(
     ({ id, pos, codes, faceUp }) => {
@@ -78,22 +83,42 @@ async function seedDeck(
         _faceUp: faceUp,
       });
     },
-    { id: DECK_ID, pos: DECK_POS, codes, faceUp },
+    { id, pos, codes, faceUp },
   );
 }
 
-function getDeckCodes(page: Page): Promise<string[]> {
+function getDeckCodes(page: Page, id = DECK_ID): Promise<string[]> {
   return page.evaluate((id) => {
     const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
     return (store.getAllObjects().get(id)?._cards ?? []).map((c) => c.code);
-  }, DECK_ID);
+  }, id);
 }
 
-function deckViewportPos(page: Page): Promise<{ x: number; y: number }> {
+function getFaceUp(page: Page, id = DECK_ID): Promise<boolean | undefined> {
+  return page.evaluate((id) => {
+    const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+    return store.getAllObjects().get(id)?._faceUp;
+  }, id);
+}
+
+function deckViewportPos(
+  page: Page,
+  world = DECK_POS,
+): Promise<{ x: number; y: number }> {
   return page.evaluate(
     (pos) =>
       (globalThis as unknown as PageGlobals).__ctTest!.worldToViewport(pos),
-    DECK_POS,
+    world,
+  );
+}
+
+function getSelected(page: Page): Promise<string | null> {
+  return page.evaluate(
+    (id) =>
+      (globalThis as unknown as PageGlobals)
+        .__TEST_STORE__!.getAllObjects()
+        .get(id)?._selectedBy ?? null,
+    DECK_ID,
   );
 }
 
@@ -164,16 +189,29 @@ async function dragPeekCard(
   await page.mouse.up();
 }
 
-async function rightClickDeck(page: Page): Promise<void> {
-  const pos = await deckViewportPos(page);
+async function rightClickDeck(page: Page, world = DECK_POS): Promise<void> {
+  const pos = await deckViewportPos(page, world);
   await page.mouse.click(pos.x, pos.y, { button: 'right' });
-  await expect(page.locator('.context-menu')).toBeVisible({ timeout: 5000 });
+  await expect(openMenu(page)).toBeVisible({ timeout: 5000 });
 }
 
+const openMenu = (page: Page) =>
+  page.locator('.context-menu[data-headlessui-state="open"]');
 const peekRow = (page: Page) =>
   page.getByTestId('context-menu-item-peek-stack');
 const submenuItem = (page: Page, variant: string) =>
   page.getByTestId(`context-submenu-item-peek-stack-${variant}`);
+
+/** ArrowDown through the open menu until the Peek row is highlighted. */
+async function highlightPeekRow(page: Page): Promise<void> {
+  for (let i = 0; i < 30; i++) {
+    if (await peekRow(page).evaluate((el) => el.classList.contains('focus'))) {
+      return;
+    }
+    await page.keyboard.press('ArrowDown');
+  }
+  throw new Error('Peek row never highlighted');
+}
 
 test.describe('Peek at the top of a stack', () => {
   test('dragging a card and clicking Done reorders the top of the deck', async ({
@@ -308,10 +346,7 @@ test.describe('Peek at the top of a stack', () => {
     await seedDeck(page, ['A', 'B', 'C', 'D', 'E', 'F']);
 
     await rightClickDeck(page);
-    // The menu does not take DOM focus on open (activeElement stays body, so
-    // ArrowDown from the open menu does nothing); focus the row directly.
-    await peekRow(page).focus();
-    await expect(peekRow(page)).toBeFocused();
+    await highlightPeekRow(page);
 
     await page.keyboard.press('ArrowRight');
     await expect(submenuItem(page, 'top-1')).toBeFocused();
@@ -320,7 +355,7 @@ test.describe('Peek at the top of a stack', () => {
 
     await page.keyboard.press('ArrowLeft');
     await expect(submenuItem(page, 'top-3')).toHaveCount(0);
-    await expect(peekRow(page)).toBeFocused();
+    await expect(peekRow(page)).toHaveClass(/focus/);
 
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowDown');
@@ -332,13 +367,104 @@ test.describe('Peek at the top of a stack', () => {
     await expect(page.getByTestId('peek-modal')).toHaveCount(0);
 
     await rightClickDeck(page);
-    await peekRow(page).focus();
+    await highlightPeekRow(page);
     await page.keyboard.press('ArrowRight');
     await expect(submenuItem(page, 'top-1')).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(submenuItem(page, 'top-1')).toHaveCount(0);
-    await expect(page.locator('.context-menu')).toBeVisible();
+    await expect(openMenu(page)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('.context-menu')).toHaveCount(0);
+  });
+});
+
+test.describe('Context menu regressions (programmatic open)', () => {
+  test('clicking outside closes the menu and does not run anything', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDeck(page, ['A', 'B', 'C']);
+    await rightClickDeck(page);
+    await page.mouse.click(1100, 300);
+    await expect(page.locator('.context-menu')).toHaveCount(0);
+    expect(await getDeckCodes(page)).toEqual(['A', 'B', 'C']);
+    expect(await getFaceUp(page)).toBe(false);
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+  });
+
+  test('shortcuts still work after the menu closes', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDeck(page, ['A', 'B', 'C', 'D']);
+    await rightClickDeck(page);
+    await expect.poll(() => getSelected(page)).not.toBeNull();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.context-menu')).toHaveCount(0);
+
+    await pressPeek(page, 2);
+    await expectPeekCodes(page, ['A', 'B']);
+    await page.getByTestId('peek-cancel').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+
+    await page.keyboard.press('f');
+    await expect.poll(() => getFaceUp(page)).toBe(true);
+  });
+
+  test('right-click on another object while open, and after close, reopens at the new spot', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDeck(page, ['A', 'B', 'C']);
+    await seedDeck(page, ['X', 'Y'], false, OTHER_ID, OTHER_POS);
+
+    await rightClickDeck(page);
+    const first = await openMenu(page).boundingBox();
+    await rightClickDeck(page, OTHER_POS);
+    await expect(openMenu(page)).toHaveCount(1);
+    const second = await openMenu(page).boundingBox();
+    expect(second?.x).not.toBe(first?.x);
+    await expect(peekRow(page)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.context-menu')).toHaveCount(0);
+    await rightClickDeck(page);
+    const third = await openMenu(page).boundingBox();
+    expect(third?.x).toBe(first?.x);
+    await expect(peekRow(page)).toBeVisible();
+  });
+
+  test('mouse click runs a normal row; clicking Peek opens the submenu without highlighting Top 1', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDeck(page, ['A', 'B', 'C', 'D', 'E']);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await expect(submenuItem(page, 'top-1')).toBeVisible();
+    await expect(submenuItem(page, 'top-1')).not.toBeFocused();
+
+    await page
+      .locator('.context-menu-item')
+      .filter({ hasText: 'Flip Selected Objects' })
+      .click();
+    await expect(page.locator('.context-menu')).toHaveCount(0);
+    await expect.poll(() => getFaceUp(page)).toBe(true);
+  });
+
+  test('reopening the menu after choosing a variant shows no stale submenu', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDeck(page, ['A', 'B', 'C', 'D', 'E']);
+    await rightClickDeck(page);
+    await peekRow(page).hover();
+    await submenuItem(page, 'top-3').click();
+    await page.getByTestId('peek-cancel').click();
+
+    await rightClickDeck(page);
+    await expect(openMenu(page)).toBeVisible();
+    await expect(submenuItem(page, 'top-3')).toHaveCount(0);
   });
 });

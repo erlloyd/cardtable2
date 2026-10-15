@@ -552,24 +552,18 @@ function handCodes(page: Page): Promise<string[]> {
 const peekCard = (page: Page, code: string) =>
   page.locator(`[data-testid="peek-card"][data-code="${code}"]`);
 
-/** Set a peeked card's destination via its peek-dest control (select or buttons). */
+/** The slot wrapping a peeked card and its destination select. */
+const peekSlot = (page: Page, code: string) =>
+  page.getByTestId('peek-slot').filter({ has: peekCard(page, code) });
+
 async function setDest(page: Page, code: string, dest: Dest): Promise<void> {
-  const control = peekCard(page, code).getByTestId('peek-dest');
-  const isSelect = await control.evaluate((el) => el.tagName === 'SELECT');
-  if (isSelect) {
-    await control.selectOption(dest);
-  } else {
-    await control
-      .getByRole('button', { name: new RegExp(`^${dest}$`, 'i') })
-      .click();
-  }
+  await peekSlot(page, code).getByTestId('peek-dest').selectOption(dest);
 }
 
 function discardOption(page: Page, code: string): Locator {
-  return peekCard(page, code)
+  return peekSlot(page, code)
     .getByTestId('peek-dest')
-    .locator('option[value="discard"], button')
-    .filter({ hasText: /discard/i });
+    .locator('option[value="discard"]');
 }
 
 test.describe('Peek per-card destinations (Ring 1)', () => {

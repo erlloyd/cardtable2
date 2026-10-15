@@ -667,6 +667,33 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     expect(await getDeckCodes(page)).toEqual(codes);
   });
 
+  test('Shuffle bottom is disabled with no Bottom card; ticked, it shuffles only the bottom group', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await setupDeck(page, ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
+
+    await pressPeek(page, 5);
+    await expectPeekCodes(page, ['A', 'B', 'C', 'D', 'E']);
+    const shuffleBottom = page.getByTestId('peek-shuffle-bottom');
+    await expect(shuffleBottom).toBeDisabled();
+    await expect(page.getByTestId('peek-shuffle-top')).toBeEnabled();
+
+    await setDest(page, 'A', 'bottom');
+    await setDest(page, 'B', 'bottom');
+    await expect(shuffleBottom).toBeEnabled();
+    await expect(shuffleBottom).not.toBeChecked();
+    await shuffleBottom.check();
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+
+    await expect
+      .poll(() => getDeckCodes(page).then((c) => c.slice(0, 6)))
+      .toEqual(['C', 'D', 'E', 'F', 'G', 'H']);
+    const deck = await getDeckCodes(page);
+    expect(deck.slice(6).sort()).toEqual(['A', 'B']);
+  });
+
   test('Esc in the Other… number dialog opens no peek window', async ({
     page,
   }, testInfo) => {

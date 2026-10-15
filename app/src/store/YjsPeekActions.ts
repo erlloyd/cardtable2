@@ -1,6 +1,6 @@
 import { ObjectKind, type CardEntry } from '@cardtable2/shared';
 import type { YjsStore } from './YjsStore';
-import { discardCardToZone } from './YjsActions';
+import { discardCardToZone, fisherYatesShuffle } from './YjsActions';
 import { drawCardsToHand, drawCardsToTable } from './YjsDrawActions';
 
 export type PeekDestination = 'top' | 'bottom' | 'hand' | 'table' | 'discard';
@@ -11,6 +11,11 @@ export interface PeekPlacement {
 }
 
 export type PeekCommitResult = 'applied' | 'stale' | 'invalid';
+
+export interface PeekShuffle {
+  shuffleTop: boolean;
+  shuffleBottom: boolean;
+}
 
 function sameEntry(a: CardEntry, b: CardEntry): boolean {
   return a.code === b.code && a.homeZone === b.homeZone;
@@ -52,6 +57,8 @@ function isPermutation(
  * - The stack is rebuilt as hand, table, discard, top, rest, bottom so each
  *   draw/discard step takes the current top of the stack. A step that empties
  *   the stack deletes it, so later steps only run while it still exists.
+ * - `opts.shuffleTop` / `opts.shuffleBottom` randomize only that group; the
+ *   other groups keep window order.
  * - Discarding stops at the first card with no home zone; the remaining
  *   discard cards stay on top of the stack.
  */
@@ -60,7 +67,7 @@ export function commitPeek(
   stackId: string,
   peeked: CardEntry[],
   placements: PeekPlacement[],
-  opts: { handId?: string },
+  opts: { handId?: string } & Partial<PeekShuffle>,
 ): PeekCommitResult {
   const yMap = store.getObjectYMap(stackId);
   if (!yMap || yMap.get('_kind') !== ObjectKind.Stack) return 'invalid';
@@ -72,6 +79,12 @@ export function commitPeek(
   const hand = group('hand');
   const table = group('table');
   const discard = group('discard');
+  const topGroup = opts.shuffleTop
+    ? fisherYatesShuffle(group('top'))
+    : group('top');
+  const bottomGroup = opts.shuffleBottom
+    ? fisherYatesShuffle(group('bottom'))
+    : group('bottom');
   const handId = opts.handId;
   if (hand.length > 0 && (!handId || !store.hands.get(handId))) {
     return 'invalid';
@@ -86,9 +99,9 @@ export function commitPeek(
       ...hand,
       ...table,
       ...discard,
-      ...group('top'),
+      ...topGroup,
       ...live.slice(peeked.length),
-      ...group('bottom'),
+      ...bottomGroup,
     ]);
 
     if (hand.length > 0 && handId) {

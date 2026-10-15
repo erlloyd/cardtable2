@@ -47,6 +47,7 @@ describe('PeekModal', () => {
     fireEvent.click(screen.getByTestId('peek-done'));
     expect(onDone).toHaveBeenCalledWith(
       cards.map((entry) => ({ entry, dest: 'top' })),
+      { shuffleTop: false, shuffleBottom: false },
     );
   });
 
@@ -67,11 +68,14 @@ describe('PeekModal', () => {
     pointer('pointerup', 230);
     expect(codes()).toEqual(['b', 'a', 'c']);
     fireEvent.click(screen.getByTestId('peek-done'));
-    expect(onDone).toHaveBeenCalledWith([
-      { entry: cards[1], dest: 'top' },
-      { entry: cards[0], dest: 'top' },
-      { entry: cards[2], dest: 'top' },
-    ]);
+    expect(onDone).toHaveBeenCalledWith(
+      [
+        { entry: cards[1], dest: 'top' },
+        { entry: cards[0], dest: 'top' },
+        { entry: cards[2], dest: 'top' },
+      ],
+      { shuffleTop: false, shuffleBottom: false },
+    );
   });
 
   it('every card has a destination control defaulting to top', () => {
@@ -94,11 +98,56 @@ describe('PeekModal', () => {
     const selects = screen.getAllByTestId('peek-dest') as HTMLSelectElement[];
     expect(selects.map((s) => s.value)).toEqual(['top', 'bottom', 'top']);
     fireEvent.click(screen.getByTestId('peek-done'));
-    expect(onDone).toHaveBeenCalledWith([
-      { entry: cards[1], dest: 'top' },
-      { entry: cards[0], dest: 'bottom' },
-      { entry: cards[2], dest: 'top' },
-    ]);
+    expect(onDone).toHaveBeenCalledWith(
+      [
+        { entry: cards[1], dest: 'top' },
+        { entry: cards[0], dest: 'bottom' },
+        { entry: cards[2], dest: 'top' },
+      ],
+      { shuffleTop: false, shuffleBottom: false },
+    );
+  });
+
+  describe('shuffle checkboxes', () => {
+    const box = (id: string) => screen.getByTestId<HTMLInputElement>(id);
+    const setDestAt = (index: number, value: string) =>
+      fireEvent.change(screen.getAllByTestId('peek-dest')[index], {
+        target: { value },
+      });
+
+    it('are off by default and disabled when no card has that destination', () => {
+      setup();
+      expect(box('peek-shuffle-top').checked).toBe(false);
+      expect(box('peek-shuffle-top').disabled).toBe(false);
+      expect(box('peek-shuffle-bottom').checked).toBe(false);
+      expect(box('peek-shuffle-bottom').disabled).toBe(true);
+    });
+
+    it('enable with a matching destination and travel into onDone', () => {
+      const { onDone } = setup();
+      setDestAt(1, 'bottom');
+      expect(box('peek-shuffle-bottom').disabled).toBe(false);
+      fireEvent.click(box('peek-shuffle-bottom'));
+      fireEvent.click(screen.getByTestId('peek-done'));
+      expect(onDone.mock.calls[0][1]).toEqual({
+        shuffleTop: false,
+        shuffleBottom: true,
+      });
+    });
+
+    it('a ticked box is dropped when its group becomes empty', () => {
+      const { onDone } = setup();
+      setDestAt(1, 'bottom');
+      fireEvent.click(box('peek-shuffle-bottom'));
+      setDestAt(1, 'top');
+      expect(box('peek-shuffle-bottom').disabled).toBe(true);
+      expect(box('peek-shuffle-bottom').checked).toBe(false);
+      fireEvent.click(screen.getByTestId('peek-done'));
+      expect(onDone.mock.calls[0][1]).toEqual({
+        shuffleTop: false,
+        shuffleBottom: false,
+      });
+    });
   });
 
   describe('N input', () => {

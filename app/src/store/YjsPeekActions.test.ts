@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { YjsStore } from './YjsStore';
 import { createDiscardZoneForStack, createObject } from './YjsActions';
 import { commitPeek, type PeekPlacement } from './YjsPeekActions';
@@ -324,6 +324,66 @@ describe('YjsPeekActions.commitPeek', () => {
         commitPeek(store, id, [a], place([a, 'hand']), { handId: 'nope' }),
       ).toBe('invalid');
       expect(stackCards(id)).toEqual([a, b]);
+    });
+  });
+
+  describe('shuffle', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    const sorted = (cards: CardEntry[] | undefined) =>
+      (cards ?? []).map((c) => c.code).sort();
+
+    function setup() {
+      const [a, b, c, d, e, f] = toCardEntries(['A', 'B', 'C', 'D', 'E', 'F']);
+      const id = makeStack([a, b, c, d, e, f]);
+      const placements: PeekPlacement[] = [
+        { entry: a, dest: 'bottom' },
+        { entry: b, dest: 'top' },
+        { entry: c, dest: 'bottom' },
+        { entry: d, dest: 'top' },
+        { entry: e, dest: 'top' },
+      ];
+      return { id, peeked: [a, b, c, d, e], placements, rest: f };
+    }
+
+    it('shuffleBottom randomizes only the bottom group', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+      const { id, peeked, placements, rest } = setup();
+      const [a, b, c, d, e] = peeked;
+
+      const result = commitPeek(store, id, peeked, placements, {
+        shuffleBottom: true,
+      });
+
+      expect(result).toBe('applied');
+      expect(stackCards(id)).toEqual([b, d, e, rest, c, a]);
+    });
+
+    it('shuffleTop randomizes only the top group', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+      const { id, peeked, placements, rest } = setup();
+      const [a, b, c, d, e] = peeked;
+
+      commitPeek(store, id, peeked, placements, { shuffleTop: true });
+
+      expect(stackCards(id)).toEqual([d, e, b, rest, a, c]);
+    });
+
+    it('without flags keeps window order, and a shuffle is a permutation', () => {
+      const { id, peeked, placements, rest } = setup();
+      const [a, b, c, d, e] = peeked;
+
+      commitPeek(store, id, peeked, placements, {});
+      expect(stackCards(id)).toEqual([b, d, e, rest, a, c]);
+
+      const again = setup();
+      commitPeek(store, again.id, again.peeked, again.placements, {
+        shuffleTop: true,
+        shuffleBottom: true,
+      });
+      expect(sorted(stackCards(again.id))).toEqual(
+        sorted([a, b, c, d, e, rest]),
+      );
     });
   });
 });

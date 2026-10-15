@@ -833,6 +833,16 @@ export function unstackCard(
   return newStackId;
 }
 
+/** Returns a Fisher-Yates shuffled copy of `items`. */
+export function fisherYatesShuffle<T>(items: readonly T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 /**
  * Shuffle stack - randomize card order using Fisher-Yates algorithm
  *
@@ -874,15 +884,7 @@ export function shuffleStack(store: YjsStore, stackId: string): boolean {
 
   // Use single transaction for atomicity
   store.getDoc().transact(() => {
-    // Fisher-Yates shuffle (in-place)
-    const shuffled = [...cards]; // Copy to avoid mutating
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    // Update cards array
-    yMap.set('_cards', shuffled);
+    yMap.set('_cards', fisherYatesShuffle(cards));
   });
 
   console.log(

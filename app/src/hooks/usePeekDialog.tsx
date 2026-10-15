@@ -1,7 +1,11 @@
 import { useCallback, useState, type ReactElement } from 'react';
 import type { CardEntry, GameAssets } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
-import { commitPeek, type PeekPlacement } from '../store/YjsPeekActions';
+import {
+  commitPeek,
+  type PeekPlacement,
+  type PeekShuffle,
+} from '../store/YjsPeekActions';
 import { resolveHomeZone } from '../store/YjsActions';
 import { PeekModal } from '../components/PeekModal';
 import { PeekCountDialog } from '../components/PeekCountDialog';
@@ -131,7 +135,7 @@ export function usePeekDialog(
   }, []);
 
   const done = useCallback(
-    (placements: PeekPlacement[]) => {
+    (placements: PeekPlacement[], shuffle: PeekShuffle) => {
       if (store && state.stackId) {
         const handId = placements.some((p) => p.dest === 'hand')
           ? resolveHandId(store, activeHandId)
@@ -141,7 +145,7 @@ export function usePeekDialog(
           state.stackId,
           state.snapshot,
           placements,
-          { handId },
+          { handId, ...shuffle },
         );
         if (result === 'stale') {
           showToast(

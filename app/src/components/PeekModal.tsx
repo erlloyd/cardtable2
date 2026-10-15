@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CardEntry } from '@cardtable2/shared';
-import type { PeekDestination, PeekPlacement } from '../store/YjsPeekActions';
+import type {
+  PeekDestination,
+  PeekPlacement,
+  PeekShuffle,
+} from '../store/YjsPeekActions';
 import { getPreviewDimensions } from '../constants/previewSizes';
 import { computeShiftOffset } from './handShift';
 
@@ -23,8 +27,9 @@ export interface PeekModalProps {
   getFaceUrl: (code: string) => string | null;
   /** True when the entry has a discard zone to go to. */
   canDiscard: (entry: CardEntry) => boolean;
-  /** Called with every card and its chosen dest, in display order. */
-  onDone: (placements: PeekPlacement[]) => void;
+  /** Called with every card and its chosen dest, in display order, plus which
+   * destination groups to shuffle. */
+  onDone: (placements: PeekPlacement[], shuffle: PeekShuffle) => void;
   /** Called on Cancel, Esc, backdrop click, or the close button. */
   onClose: () => void;
 }
@@ -75,6 +80,8 @@ export function PeekModal({
   const [session, setSession] = useState<DragSession | null>(null);
   const [view, setView] = useState<DragView | null>(null);
   const [countDraft, setCountDraft] = useState(String(cards.length));
+  const [shuffleTop, setShuffleTop] = useState(false);
+  const [shuffleBottom, setShuffleBottom] = useState(false);
   const rowRef = useRef<HTMLDivElement | null>(null);
 
   const { width, height } = getPreviewDimensions('small');
@@ -146,8 +153,14 @@ export function PeekModal({
 
   if (!isOpen) return null;
 
+  const hasTop = order.some((p) => p.dest === 'top');
+  const hasBottom = order.some((p) => p.dest === 'bottom');
+
   const handleDone = () => {
-    onDone(order);
+    onDone(order, {
+      shuffleTop: shuffleTop && hasTop,
+      shuffleBottom: shuffleBottom && hasBottom,
+    });
   };
 
   const commitCount = () => {
@@ -287,6 +300,28 @@ export function PeekModal({
         </div>
 
         <div className="deck-import-footer peek-modal-footer">
+          <div className="peek-modal-shuffles">
+            <label>
+              <input
+                type="checkbox"
+                checked={shuffleTop && hasTop}
+                disabled={!hasTop}
+                onChange={(e) => setShuffleTop(e.currentTarget.checked)}
+                data-testid="peek-shuffle-top"
+              />
+              Shuffle top
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={shuffleBottom && hasBottom}
+                disabled={!hasBottom}
+                onChange={(e) => setShuffleBottom(e.currentTarget.checked)}
+                data-testid="peek-shuffle-bottom"
+              />
+              Shuffle bottom
+            </label>
+          </div>
           <button
             type="button"
             className="peek-modal-cancel"

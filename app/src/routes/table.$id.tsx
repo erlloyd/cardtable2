@@ -18,6 +18,7 @@ import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useRenameZoneDialog } from '../hooks/useRenameZoneDialog';
+import { usePeekDialog } from '../hooks/usePeekDialog';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { resetTable } from '../store/YjsActions';
@@ -695,9 +696,10 @@ function Table() {
 
   const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
 
-  const handleOpenPeek = useCallback((stackId: string, count: number) => {
-    dbg('peek', 'open peek', stackId, count);
-  }, []);
+  const { openPeek: handleOpenPeek, peekDialog } = usePeekDialog(
+    store,
+    gameAssets,
+  );
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
@@ -1006,6 +1008,7 @@ function Table() {
       />
 
       {renameDialog}
+      {peekDialog}
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal

@@ -152,13 +152,33 @@ describe('PeekModal', () => {
       expect(input().value).toBe('6');
     });
 
-    it('commits on blur and resets destinations when N changes', () => {
+    it('blur reverts the input without calling onChangeCount', () => {
+      const onChangeCount = vi.fn();
+      render(
+        <PeekModal
+          isOpen
+          cards={cards}
+          totalCount={6}
+          onChangeCount={onChangeCount}
+          getFaceUrl={() => null}
+          canDiscard={() => true}
+          onDone={() => {}}
+          onClose={() => {}}
+        />,
+      );
+      fireEvent.change(input(), { target: { value: '5' } });
+      fireEvent.blur(input());
+      expect(onChangeCount).not.toHaveBeenCalled();
+      expect(input().value).toBe('3');
+      expect(codes()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('Enter resets destinations when N changes', () => {
       render(<Host />);
       fireEvent.change(screen.getAllByTestId('peek-dest')[0], {
         target: { value: 'hand' },
       });
-      fireEvent.change(input(), { target: { value: '4' } });
-      fireEvent.blur(input());
+      enter('4');
       expect(codes()).toEqual(['a', 'b', 'c', 'd']);
       const dests = screen.getAllByTestId('peek-dest') as HTMLSelectElement[];
       expect(dests.map((s) => s.value)).toEqual(['top', 'top', 'top', 'top']);

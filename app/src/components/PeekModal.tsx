@@ -204,7 +204,7 @@ export function PeekModal({
               value={countDraft}
               data-testid="peek-n-input"
               onChange={(e) => setCountDraft(e.currentTarget.value)}
-              onBlur={commitCount}
+              onBlur={() => setCountDraft(String(order.length))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') commitCount();
               }}

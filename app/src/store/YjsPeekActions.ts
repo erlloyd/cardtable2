@@ -1,5 +1,7 @@
 import { ObjectKind, type CardEntry } from '@cardtable2/shared';
 import type { YjsStore } from './YjsStore';
+import { discardCardToZone } from './YjsActions';
+import { drawCardsToHand, drawCardsToTable } from './YjsDrawActions';
 
 export type PeekDestination = 'top' | 'bottom' | 'hand' | 'table' | 'discard';
 
@@ -45,20 +47,35 @@ function isPermutation(
  * - `placements` is the final display order: a permutation of `peeked` with a
  *   destination per card.
  * - Returns 'stale' when the live top N no longer equals `peeked`, and
- *   'invalid' when the stack, placements or destinations cannot be applied.
+ *   'invalid' when the stack, placements or destinations cannot be applied
+ *   (including 'hand' placements without an existing `opts.handId`).
+ * - The stack is rebuilt as hand, table, discard, top, rest, bottom so each
+ *   draw/discard step takes the current top of the stack. A step that empties
+ *   the stack deletes it, so later steps only run while it still exists.
+ * - Discarding stops at the first card with no home zone; the remaining
+ *   discard cards stay on top of the stack.
  */
 export function commitPeek(
   store: YjsStore,
   stackId: string,
   peeked: CardEntry[],
   placements: PeekPlacement[],
-  _opts: { handId?: string },
+  opts: { handId?: string },
 ): PeekCommitResult {
   const yMap = store.getObjectYMap(stackId);
   if (!yMap || yMap.get('_kind') !== ObjectKind.Stack) return 'invalid';
   if (peeked.length === 0) return 'invalid';
   if (!isPermutation(peeked, placements)) return 'invalid';
-  if (placements.some((p) => p.dest !== 'top')) return 'invalid';
+
+  const group = (dest: PeekDestination): CardEntry[] =>
+    placements.filter((p) => p.dest === dest).map((p) => p.entry);
+  const hand = group('hand');
+  const table = group('table');
+  const discard = group('discard');
+  const handId = opts.handId;
+  if (hand.length > 0 && (!handId || !store.hands.get(handId))) {
+    return 'invalid';
+  }
 
   const live = yMap.get('_cards') ?? [];
   if (live.length < peeked.length) return 'stale';
@@ -66,9 +83,25 @@ export function commitPeek(
 
   store.getDoc().transact(() => {
     yMap.set('_cards', [
-      ...placements.map((p) => p.entry),
+      ...hand,
+      ...table,
+      ...discard,
+      ...group('top'),
       ...live.slice(peeked.length),
+      ...group('bottom'),
     ]);
+
+    if (hand.length > 0 && handId) {
+      drawCardsToHand(store, stackId, hand.length, handId);
+    }
+    if (table.length > 0 && store.getObjectYMap(stackId)) {
+      for (const id of drawCardsToTable(store, stackId, table.length)) {
+        store.getObjectYMap(id)?.set('_faceUp', true);
+      }
+    }
+    for (let i = 0; i < discard.length && store.getObjectYMap(stackId); i++) {
+      if (discardCardToZone(store, stackId).result === 'no-home') break;
+    }
   });
   return 'applied';
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CardEntry } from '@cardtable2/shared';
-import type { PeekPlacement } from '../store/YjsPeekActions';
+import type { PeekDestination, PeekPlacement } from '../store/YjsPeekActions';
 import { getPreviewDimensions } from '../constants/previewSizes';
 import { computeShiftOffset } from './handShift';
 
@@ -13,11 +13,21 @@ export interface PeekModalProps {
   /** Top-N snapshot, top card first. */
   cards: CardEntry[];
   getFaceUrl: (code: string) => string | null;
-  /** Called with every card as dest 'top', in display order. */
+  /** True when the entry has a discard zone to go to. */
+  canDiscard: (entry: CardEntry) => boolean;
+  /** Called with every card and its chosen dest, in display order. */
   onDone: (placements: PeekPlacement[]) => void;
   /** Called on Cancel, Esc, backdrop click, or the close button. */
   onClose: () => void;
 }
+
+const DESTINATIONS: { value: PeekDestination; label: string }[] = [
+  { value: 'top', label: 'Top' },
+  { value: 'bottom', label: 'Bottom' },
+  { value: 'hand', label: 'Hand' },
+  { value: 'table', label: 'Table' },
+  { value: 'discard', label: 'Discard' },
+];
 
 interface DragSession {
   from: number;
@@ -44,10 +54,13 @@ export function PeekModal({
   isOpen,
   cards,
   getFaceUrl,
+  canDiscard,
   onDone,
   onClose,
 }: PeekModalProps) {
-  const [order, setOrder] = useState<CardEntry[]>(cards);
+  const [order, setOrder] = useState<PeekPlacement[]>(() =>
+    cards.map((entry) => ({ entry, dest: 'top' as const })),
+  );
   const [session, setSession] = useState<DragSession | null>(null);
   const [view, setView] = useState<DragView | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -122,7 +135,15 @@ export function PeekModal({
   if (!isOpen) return null;
 
   const handleDone = () => {
-    onDone(order.map((entry) => ({ entry, dest: 'top' as const })));
+    onDone(order);
+  };
+
+  const setDest = (index: number, dest: PeekDestination) => {
+    setOrder((prev) =>
+      prev.map((placement, i) =>
+        i === index ? { ...placement, dest } : placement,
+      ),
+    );
   };
 
   const modal = (
@@ -155,8 +176,9 @@ export function PeekModal({
         </div>
 
         <div className="peek-modal-row" ref={rowRef}>
-          {order.map((entry, index) => {
+          {order.map(({ entry, dest }, index) => {
             const url = getFaceUrl(entry.code);
+            const discardable = canDiscard(entry);
             const dragging = view?.from === index;
             const shift = !view
               ? 0
@@ -166,30 +188,58 @@ export function PeekModal({
             return (
               <div
                 key={`${entry.code}-${index}`}
-                className={`peek-modal-card${dragging ? ' peek-modal-card-dragging' : ''}`}
+                className={`peek-modal-slot${dragging ? ' peek-modal-slot-dragging' : ''}`}
                 style={{
                   width,
-                  height,
                   transform: shift ? `translateX(${shift}px)` : undefined,
                 }}
-                data-testid="peek-card"
-                data-code={entry.code}
-                onPointerDown={(e) => {
-                  if (e.button !== 0 || session) return;
-                  e.preventDefault();
-                  setSession({
-                    from: index,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                  });
-                }}
+                data-testid="peek-slot"
               >
-                {index === 0 && <span className="peek-modal-top">Top</span>}
-                {url ? (
-                  <img src={url} alt={entry.code} draggable={false} />
-                ) : (
-                  <span className="peek-modal-code">{entry.code}</span>
-                )}
+                <div
+                  className={`peek-modal-card${dragging ? ' peek-modal-card-dragging' : ''}`}
+                  style={{ width, height }}
+                  data-testid="peek-card"
+                  data-code={entry.code}
+                  onPointerDown={(e) => {
+                    if (e.button !== 0 || session) return;
+                    e.preventDefault();
+                    setSession({
+                      from: index,
+                      startX: e.clientX,
+                      startY: e.clientY,
+                    });
+                  }}
+                >
+                  {index === 0 && <span className="peek-modal-top">Top</span>}
+                  {url ? (
+                    <img src={url} alt={entry.code} draggable={false} />
+                  ) : (
+                    <span className="peek-modal-code">{entry.code}</span>
+                  )}
+                </div>
+                <select
+                  className="peek-modal-dest"
+                  data-testid="peek-dest"
+                  aria-label={`Destination for ${entry.code}`}
+                  value={dest}
+                  onChange={(e) =>
+                    setDest(index, e.currentTarget.value as PeekDestination)
+                  }
+                >
+                  {DESTINATIONS.map(({ value, label }) => {
+                    const blocked = value === 'discard' && !discardable;
+                    return (
+                      <option
+                        key={value}
+                        value={value}
+                        disabled={blocked}
+                        title={blocked ? 'No discard zone' : undefined}
+                      >
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
             );
           })}

@@ -150,12 +150,14 @@ export function SetTokensModal({
                 className="deck-import-input"
                 value={values[t.code] ?? ''}
                 onChange={(e) => {
-                  const { value, validity } = e.target;
+                  const { value } = e.target;
                   setValues((prev) => ({ ...prev, [t.code]: value }));
-                  setBadInputs((prev) => ({
-                    ...prev,
-                    [t.code]: validity.badInput,
-                  }));
+                }}
+                // React dedupes onChange when value is unchanged; typing "e"
+                // into a blank field leaves value '' but flips badInput.
+                onInput={(e) => {
+                  const { badInput } = e.currentTarget.validity;
+                  setBadInputs((prev) => ({ ...prev, [t.code]: badInput }));
                 }}
                 onKeyDown={handleKeyDown}
                 data-testid={`set-tokens-input-${t.code}`}

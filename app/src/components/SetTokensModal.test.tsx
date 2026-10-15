@@ -78,7 +78,7 @@ describe('SetTokensModal', () => {
       configurable: true,
       value: { badInput: true },
     });
-    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.input(input);
     expect(screen.getByTestId('set-tokens-submit')).toBeDisabled();
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSubmit).not.toHaveBeenCalled();
@@ -87,6 +87,7 @@ describe('SetTokensModal', () => {
       configurable: true,
       value: { badInput: false },
     });
+    fireEvent.input(input);
     fireEvent.change(input, { target: { value: '4' } });
     expect(screen.getByTestId('set-tokens-submit')).toBeEnabled();
   });

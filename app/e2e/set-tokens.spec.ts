@@ -299,4 +299,39 @@ test.describe('Set Tokens', () => {
       damage: 4,
     });
   });
+
+  for (const junk of ['e', '-']) {
+    test(`e. a browser-invalid draft "${junk}" disables Set and Enter does nothing`, async ({
+      page,
+    }, testInfo) => {
+      await bindTestgameTable(
+        page,
+        tableId(`set-tokens-e${junk === 'e' ? 'e' : 'm'}`, testInfo.testId),
+      );
+      await seedStack(
+        page,
+        STACK_S,
+        POS_S,
+        { attachments: { tokens: { damage: 5 } } },
+        '000001',
+      );
+      await selectStacks(page, [POS_S]);
+
+      await runFromPalette(page, LABEL);
+      const input = page.getByTestId('set-tokens-input-damage');
+      await expect(input).toBeFocused();
+      await expect(input).toHaveValue('5');
+
+      await input.fill('');
+      await input.pressSequentially(junk);
+
+      await expect(page.getByTestId('set-tokens-submit')).toBeDisabled();
+      await page.keyboard.press('Enter');
+
+      await expect(page.getByTestId('set-tokens-panel')).toBeVisible();
+      expect((await readAttachments(page, STACK_S))?.tokens).toEqual({
+        damage: 5,
+      });
+    });
+  }
 });

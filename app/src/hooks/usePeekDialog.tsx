@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactElement } from 'react';
 import type { CardEntry, GameAssets } from '@cardtable2/shared';
 import type { YjsStore } from '../store/YjsStore';
 import { commitPeek, type PeekPlacement } from '../store/YjsPeekActions';
+import { resolveHomeZone } from '../store/YjsActions';
 import { PeekModal } from '../components/PeekModal';
 import { showToast } from '../toast/toastStore';
 import { dbg } from '../dev/dbg';
@@ -13,6 +14,13 @@ interface PeekState {
   key: number;
 }
 
+/** Same resolution as the hand actions: active hand, else first, else create. */
+function resolveHandId(store: YjsStore, activeHandId: string | null): string {
+  if (activeHandId) return activeHandId;
+  const existingIds = store.getHandIds();
+  return existingIds.length > 0 ? existingIds[0] : store.createHand('Hand 1');
+}
+
 /**
  * Hosts the peek dialog for a table route. `openPeek` is the `onOpenPeek`
  * ActionContext callback; render `peekDialog` once in the route.
@@ -20,6 +28,7 @@ interface PeekState {
 export function usePeekDialog(
   store: YjsStore | null,
   gameAssets: GameAssets | null,
+  activeHandId: string | null,
 ): {
   openPeek: (stackId: string, count: number) => void;
   peekDialog: ReactElement;
@@ -50,12 +59,15 @@ export function usePeekDialog(
   const done = useCallback(
     (placements: PeekPlacement[]) => {
       if (store && state.stackId) {
+        const handId = placements.some((p) => p.dest === 'hand')
+          ? resolveHandId(store, activeHandId)
+          : undefined;
         const result = commitPeek(
           store,
           state.stackId,
           state.snapshot,
           placements,
-          {},
+          { handId },
         );
         if (result === 'stale') {
           showToast(
@@ -67,7 +79,12 @@ export function usePeekDialog(
       }
       close();
     },
-    [store, state.stackId, state.snapshot, close],
+    [store, activeHandId, state.stackId, state.snapshot, close],
+  );
+
+  const canDiscard = useCallback(
+    (entry: CardEntry) => !!store && resolveHomeZone(store, entry) !== null,
+    [store],
   );
 
   const getFaceUrl = useCallback(
@@ -81,6 +98,7 @@ export function usePeekDialog(
       isOpen={state.stackId !== null}
       cards={state.snapshot}
       getFaceUrl={getFaceUrl}
+      canDiscard={canDiscard}
       onDone={done}
       onClose={close}
     />

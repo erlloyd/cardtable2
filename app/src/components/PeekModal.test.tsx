@@ -176,6 +176,24 @@ describe('PeekModal', () => {
     });
   });
 
+  it('hides the N box when fixedCount is set and keeps it otherwise', () => {
+    const props = {
+      isOpen: true,
+      cards,
+      totalCount: 6,
+      onChangeCount: () => {},
+      getFaceUrl: () => null,
+      canDiscard: () => true,
+      onDone: () => {},
+      onClose: () => {},
+    };
+    const { rerender } = render(<PeekModal {...props} />);
+    expect(screen.queryByTestId('peek-n-input')).toBeTruthy();
+    rerender(<PeekModal {...props} fixedCount />);
+    expect(screen.queryByTestId('peek-n-input')).toBeNull();
+    expect(codes()).toEqual(['a', 'b', 'c']);
+  });
+
   it('disables Discard only for entries without a home zone', () => {
     setup((entry) => entry.code === 'b');
     const discardDisabled = screen

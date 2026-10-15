@@ -622,7 +622,7 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     }
   });
 
-  test('Other… asks for N, then peeks; the in-window box clamps to the stack size', async ({
+  test('Other… asks for N, then peeks with no in-window N box', async ({
     page,
   }, testInfo) => {
     await openTable(page, testInfo.testId);
@@ -639,9 +639,26 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('peek-count-dialog')).toHaveCount(0);
     await expectPeekCodes(page, codes.slice(0, 5));
+    await expect(page.getByTestId('peek-n-input')).toHaveCount(0);
 
-    const input = page.getByTestId('peek-n-input');
-    await input.fill('20');
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+    expect(await getDeckCodes(page)).toEqual(codes);
+  });
+
+  test('a window opened with Top N keeps the N box, which clamps to the stack size', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    const codes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    await seedDeck(page, codes);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await submenuItem(page, 'top-3').click();
+    await expectPeekCodes(page, codes.slice(0, 3));
+
+    await page.getByTestId('peek-n-input').fill('20');
     await page.keyboard.press('Enter');
     await expectPeekCodes(page, codes);
 

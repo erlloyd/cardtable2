@@ -14,6 +14,9 @@ export interface PeekModalProps {
   cards: CardEntry[];
   /** Stack size, the upper bound for the N input. */
   totalCount: number;
+  /** Hides the in-window N box; set when N was already chosen in the Other…
+   * dialog. */
+  fixedCount?: boolean;
   /** Asks the host to re-snapshot the top `count` cards, which remounts this
    * modal and so resets order and destinations. */
   onChangeCount: (count: number) => void;
@@ -59,6 +62,7 @@ export function PeekModal({
   isOpen,
   cards,
   totalCount,
+  fixedCount = false,
   onChangeCount,
   getFaceUrl,
   canDiscard,
@@ -184,22 +188,24 @@ export function PeekModal({
           <div className="deck-import-title">
             Peek at top {order.length} {order.length === 1 ? 'card' : 'cards'}
           </div>
-          <label className="peek-modal-count">
-            Cards
-            <input
-              type="number"
-              min={1}
-              max={totalCount}
-              value={countDraft}
-              data-testid="peek-n-input"
-              onChange={(e) => setCountDraft(e.currentTarget.value)}
-              onBlur={() => setCountDraft(String(order.length))}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitCount();
-              }}
-            />
-            of {totalCount}
-          </label>
+          {!fixedCount && (
+            <label className="peek-modal-count">
+              Cards
+              <input
+                type="number"
+                min={1}
+                max={totalCount}
+                value={countDraft}
+                data-testid="peek-n-input"
+                onChange={(e) => setCountDraft(e.currentTarget.value)}
+                onBlur={() => setCountDraft(String(order.length))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitCount();
+                }}
+              />
+              of {totalCount}
+            </label>
+          )}
           <button
             type="button"
             className="deck-import-close"

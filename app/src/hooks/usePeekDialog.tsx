@@ -13,6 +13,8 @@ interface PeekState {
   snapshot: CardEntry[];
   /** Stack size at open, the upper bound for N. */
   total: number;
+  /** True when N came from the Other… dialog, so the modal has no N box. */
+  fixedCount: boolean;
   /** Bumped per open or re-snapshot so the modal remounts with a fresh order. */
   key: number;
 }
@@ -52,6 +54,7 @@ export function usePeekDialog(
     stackId: null,
     snapshot: [],
     total: 0,
+    fixedCount: false,
     key: 0,
   });
   const [prompt, setPrompt] = useState<CountPromptState>({
@@ -60,26 +63,36 @@ export function usePeekDialog(
     key: 0,
   });
 
-  const openPeek = useCallback(
-    (stackId: string, count: number, options?: { askCount?: boolean }) => {
+  const showPeek = useCallback(
+    (stackId: string, count: number, fixedCount: boolean) => {
       const cards = store?.getObjectYMap(stackId)?.get('_cards');
       if (!cards || cards.length === 0) return;
-      if (options?.askCount) {
-        setPrompt((prev) => ({
-          stackId,
-          total: cards.length,
-          key: prev.key + 1,
-        }));
-        return;
-      }
       setState((prev) => ({
         stackId,
         snapshot: cards.slice(0, Math.min(count, cards.length)),
         total: cards.length,
+        fixedCount,
         key: prev.key + 1,
       }));
     },
     [store],
+  );
+
+  const openPeek = useCallback(
+    (stackId: string, count: number, options?: { askCount?: boolean }) => {
+      if (!options?.askCount) {
+        showPeek(stackId, count, false);
+        return;
+      }
+      const cards = store?.getObjectYMap(stackId)?.get('_cards');
+      if (!cards || cards.length === 0) return;
+      setPrompt((prev) => ({
+        stackId,
+        total: cards.length,
+        key: prev.key + 1,
+      }));
+    },
+    [store, showPeek],
   );
 
   const cancelPrompt = useCallback(() => {
@@ -88,10 +101,10 @@ export function usePeekDialog(
 
   const submitPrompt = useCallback(
     (count: number) => {
-      if (prompt.stackId) openPeek(prompt.stackId, count);
+      if (prompt.stackId) showPeek(prompt.stackId, count, true);
       cancelPrompt();
     },
-    [prompt.stackId, openPeek, cancelPrompt],
+    [prompt.stackId, showPeek, cancelPrompt],
   );
 
   // Re-reads the live stack, so order and destinations reset to Top.
@@ -167,6 +180,7 @@ export function usePeekDialog(
         isOpen={state.stackId !== null}
         cards={state.snapshot}
         totalCount={state.total}
+        fixedCount={state.fixedCount}
         onChangeCount={changeCount}
         getFaceUrl={getFaceUrl}
         canDiscard={canDiscard}

@@ -402,9 +402,13 @@ export function handlePointerMove(
 
           // Move dragged visuals to top of container, sorted by sortKey
           // so attachment z-order is preserved (children behind, parent on top)
+          // Zones go first so they draw under the objects they carry.
           const sortedDragIds = [...draggedIds].sort((a, b) => {
             const objA = context.sceneManager.getObject(a);
             const objB = context.sceneManager.getObject(b);
+            const zoneA = objA?._kind === ObjectKind.Zone;
+            const zoneB = objB?._kind === ObjectKind.Zone;
+            if (zoneA !== zoneB) return zoneA ? -1 : 1;
             const keyA = objA?._sortKey ?? '';
             const keyB = objB?._sortKey ?? '';
             return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;

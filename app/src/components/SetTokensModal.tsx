@@ -41,6 +41,9 @@ export function SetTokensModal({
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(tokenTypes.map((t) => [t.code, String(t.count)])),
   );
+  // An unparseable draft ("-", "e", ".") reads back as '' from a number input,
+  // indistinguishable from a blank field except via validity.badInput.
+  const [badInputs, setBadInputs] = useState<Record<string, boolean>>({});
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -78,7 +81,7 @@ export function SetTokensModal({
   if (!isOpen) return null;
 
   const counts: Record<string, number> = {};
-  let canSubmit = true;
+  let canSubmit = !Object.values(badInputs).some(Boolean);
   for (const { code } of tokenTypes) {
     const parsed = parseCount(values[code] ?? '');
     if (parsed === null) {
@@ -146,9 +149,14 @@ export function SetTokensModal({
                 inputMode="numeric"
                 className="deck-import-input"
                 value={values[t.code] ?? ''}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [t.code]: e.target.value }))
-                }
+                onChange={(e) => {
+                  const { value, validity } = e.target;
+                  setValues((prev) => ({ ...prev, [t.code]: value }));
+                  setBadInputs((prev) => ({
+                    ...prev,
+                    [t.code]: validity.badInput,
+                  }));
+                }}
                 onKeyDown={handleKeyDown}
                 data-testid={`set-tokens-input-${t.code}`}
               />

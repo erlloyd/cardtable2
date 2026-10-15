@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
 import { SetTokensModal } from './SetTokensModal';
@@ -68,6 +68,28 @@ describe('SetTokensModal', () => {
       expect(onSubmit).not.toHaveBeenCalled();
     },
   );
+
+  it('a browser-unparseable draft (badInput) disables submit and Enter does nothing', () => {
+    const { onSubmit } = setup();
+    const input = screen.getByTestId('set-tokens-input-damage');
+    // jsdom never reports badInput; browsers do for drafts like "-" or "e",
+    // while value reads back as ''.
+    Object.defineProperty(input, 'validity', {
+      configurable: true,
+      value: { badInput: true },
+    });
+    fireEvent.change(input, { target: { value: '' } });
+    expect(screen.getByTestId('set-tokens-submit')).toBeDisabled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    Object.defineProperty(input, 'validity', {
+      configurable: true,
+      value: { badInput: false },
+    });
+    fireEvent.change(input, { target: { value: '4' } });
+    expect(screen.getByTestId('set-tokens-submit')).toBeEnabled();
+  });
 
   it('Esc calls onClose', async () => {
     const { onClose } = setup();

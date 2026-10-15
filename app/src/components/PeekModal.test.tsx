@@ -105,7 +105,7 @@ describe('PeekModal', () => {
     const deck = ['a', 'b', 'c', 'd', 'e', 'f'].map((code) => ({ code }));
 
     // Mirrors usePeekDialog: a count change re-snapshots and remounts.
-    function Host({ focusCount }: { focusCount?: boolean }) {
+    function Host() {
       const [snap, setSnap] = useState({ n: 3, key: 0 });
       return (
         <PeekModal
@@ -113,7 +113,6 @@ describe('PeekModal', () => {
           isOpen
           cards={deck.slice(0, snap.n)}
           totalCount={deck.length}
-          focusCount={focusCount}
           onChangeCount={(n) => setSnap((s) => ({ n, key: s.key + 1 }))}
           getFaceUrl={() => null}
           canDiscard={() => true}
@@ -128,14 +127,6 @@ describe('PeekModal', () => {
       fireEvent.change(input(), { target: { value } });
       fireEvent.keyDown(input(), { key: 'Enter' });
     };
-
-    it('focuses the input with focusCount, not otherwise', () => {
-      const { unmount } = render(<Host focusCount />);
-      expect(document.activeElement).toBe(input());
-      unmount();
-      render(<Host />);
-      expect(document.activeElement).not.toBe(input());
-    });
 
     it('shows N of total and re-snapshots on Enter', () => {
       render(<Host />);

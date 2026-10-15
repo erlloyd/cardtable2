@@ -2196,6 +2196,16 @@ h1 {
   font-size: 0.875rem;
 }
 
+.peek-count-panel {
+  width: auto;
+  min-width: 18rem;
+  max-width: 95vw;
+}
+
+.peek-count-field {
+  margin: 0.75rem 0 1rem;
+}
+
 .peek-modal-footer {
   gap: 0.5rem;
 }

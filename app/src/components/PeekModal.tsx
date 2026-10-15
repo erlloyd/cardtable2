@@ -14,8 +14,6 @@ export interface PeekModalProps {
   cards: CardEntry[];
   /** Stack size, the upper bound for the N input. */
   totalCount: number;
-  /** Focus and select the N input on open. */
-  focusCount?: boolean;
   /** Asks the host to re-snapshot the top `count` cards, which remounts this
    * modal and so resets order and destinations. */
   onChangeCount: (count: number) => void;
@@ -61,7 +59,6 @@ export function PeekModal({
   isOpen,
   cards,
   totalCount,
-  focusCount = false,
   onChangeCount,
   getFaceUrl,
   canDiscard,
@@ -75,16 +72,9 @@ export function PeekModal({
   const [view, setView] = useState<DragView | null>(null);
   const [countDraft, setCountDraft] = useState(String(cards.length));
   const rowRef = useRef<HTMLDivElement | null>(null);
-  const countRef = useRef<HTMLInputElement | null>(null);
 
   const { width, height } = getPreviewDimensions('small');
   const slotWidth = width + CARD_GAP;
-
-  useEffect(() => {
-    if (!isOpen || !focusCount) return;
-    countRef.current?.focus();
-    countRef.current?.select();
-  }, [isOpen, focusCount]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -197,7 +187,6 @@ export function PeekModal({
           <label className="peek-modal-count">
             Cards
             <input
-              ref={countRef}
               type="number"
               min={1}
               max={totalCount}

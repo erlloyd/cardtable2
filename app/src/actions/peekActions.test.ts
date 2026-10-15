@@ -9,7 +9,7 @@ import { createObject } from '../store/YjsActions';
 type OpenPeek = (
   id: string,
   n: number,
-  options?: { focusCount?: boolean },
+  options?: { askCount?: boolean },
 ) => void;
 
 describe('peekActions', () => {
@@ -97,10 +97,10 @@ describe('peekActions', () => {
     expect(onOpenPeek).toHaveBeenCalledWith(stack, 10);
   });
 
-  it('Custom… opens with 3 and asks to focus the N input', async () => {
+  it('Other… asks for the number before opening', async () => {
     const stack = makeStack(['a', 'b', 'c', 'd']);
-    await registry.executeVariant('peek-stack', 'custom', ctxFor([stack]));
-    expect(onOpenPeek).toHaveBeenCalledWith(stack, 3, { focusCount: true });
+    await registry.executeVariant('peek-stack', 'other', ctxFor([stack]));
+    expect(onOpenPeek).toHaveBeenCalledWith(stack, 3, { askCount: true });
   });
 
   it('cleanup unregisters the action', () => {

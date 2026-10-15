@@ -4,6 +4,7 @@ import type { YjsStore } from '../store/YjsStore';
 import { commitPeek, type PeekPlacement } from '../store/YjsPeekActions';
 import { resolveHomeZone } from '../store/YjsActions';
 import { PeekModal } from '../components/PeekModal';
+import { PeekCountDialog } from '../components/PeekCountDialog';
 import { showToast } from '../toast/toastStore';
 import { dbg } from '../dev/dbg';
 
@@ -12,8 +13,15 @@ interface PeekState {
   snapshot: CardEntry[];
   /** Stack size at open, the upper bound for N. */
   total: number;
-  focusCount: boolean;
   /** Bumped per open or re-snapshot so the modal remounts with a fresh order. */
+  key: number;
+}
+
+interface CountPromptState {
+  stackId: string | null;
+  /** Stack size at open, the upper bound for the number. */
+  total: number;
+  /** Bumped per open so the dialog remounts pre-filled. */
   key: number;
 }
 
@@ -36,7 +44,7 @@ export function usePeekDialog(
   openPeek: (
     stackId: string,
     count: number,
-    options?: { focusCount?: boolean },
+    options?: { askCount?: boolean },
   ) => void;
   peekDialog: ReactElement;
 } {
@@ -44,23 +52,46 @@ export function usePeekDialog(
     stackId: null,
     snapshot: [],
     total: 0,
-    focusCount: false,
+    key: 0,
+  });
+  const [prompt, setPrompt] = useState<CountPromptState>({
+    stackId: null,
+    total: 0,
     key: 0,
   });
 
   const openPeek = useCallback(
-    (stackId: string, count: number, options?: { focusCount?: boolean }) => {
+    (stackId: string, count: number, options?: { askCount?: boolean }) => {
       const cards = store?.getObjectYMap(stackId)?.get('_cards');
       if (!cards || cards.length === 0) return;
+      if (options?.askCount) {
+        setPrompt((prev) => ({
+          stackId,
+          total: cards.length,
+          key: prev.key + 1,
+        }));
+        return;
+      }
       setState((prev) => ({
         stackId,
         snapshot: cards.slice(0, Math.min(count, cards.length)),
         total: cards.length,
-        focusCount: options?.focusCount ?? false,
         key: prev.key + 1,
       }));
     },
     [store],
+  );
+
+  const cancelPrompt = useCallback(() => {
+    setPrompt((prev) => ({ ...prev, stackId: null }));
+  }, []);
+
+  const submitPrompt = useCallback(
+    (count: number) => {
+      if (prompt.stackId) openPeek(prompt.stackId, count);
+      cancelPrompt();
+    },
+    [prompt.stackId, openPeek, cancelPrompt],
   );
 
   // Re-reads the live stack, so order and destinations reset to Top.
@@ -123,18 +154,26 @@ export function usePeekDialog(
   );
 
   const peekDialog = (
-    <PeekModal
-      key={`peek-${state.key}`}
-      isOpen={state.stackId !== null}
-      cards={state.snapshot}
-      totalCount={state.total}
-      focusCount={state.focusCount}
-      onChangeCount={changeCount}
-      getFaceUrl={getFaceUrl}
-      canDiscard={canDiscard}
-      onDone={done}
-      onClose={close}
-    />
+    <>
+      <PeekCountDialog
+        key={`peek-count-${prompt.key}`}
+        isOpen={prompt.stackId !== null}
+        totalCount={prompt.total}
+        onSubmit={submitPrompt}
+        onCancel={cancelPrompt}
+      />
+      <PeekModal
+        key={`peek-${state.key}`}
+        isOpen={state.stackId !== null}
+        cards={state.snapshot}
+        totalCount={state.total}
+        onChangeCount={changeCount}
+        getFaceUrl={getFaceUrl}
+        canDiscard={canDiscard}
+        onDone={done}
+        onClose={close}
+      />
+    </>
   );
 
   return { openPeek, peekDialog };

@@ -50,11 +50,11 @@ export interface ActionContext {
   /** Open the rename dialog for the given zone. */
   onOpenRenameDialog?: (zoneId: string) => void;
   /** Open the peek modal for the top `count` cards of the given stack.
-   * `focusCount` focuses the modal's N input on open. */
+   * `askCount` first asks for the number in a small dialog, then opens. */
   onOpenPeek?: (
     stackId: string,
     count: number,
-    options?: { focusCount?: boolean },
+    options?: { askCount?: boolean },
   ) => void;
   /** Index in the active hand of the card under the mouse, or null. A getter
    * so hovering does not rebuild the context. */

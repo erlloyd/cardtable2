@@ -622,7 +622,7 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     }
   });
 
-  test('Custom N through the submenu, clamped to the stack size', async ({
+  test('Other… asks for N, then peeks; the in-window box clamps to the stack size', async ({
     page,
   }, testInfo) => {
     await openTable(page, testInfo.testId);
@@ -631,14 +631,16 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
 
     await rightClickDeck(page);
     await peekRow(page).click();
-    await submenuItem(page, 'custom').click();
+    await submenuItem(page, 'other').click();
+
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+    await expect(page.getByTestId('peek-count-input')).toBeFocused();
+    await page.keyboard.type('5');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('peek-count-dialog')).toHaveCount(0);
+    await expectPeekCodes(page, codes.slice(0, 5));
 
     const input = page.getByTestId('peek-n-input');
-    await expect(input).toBeFocused();
-    await page.keyboard.type('7');
-    await page.keyboard.press('Enter');
-    await expectPeekCodes(page, codes.slice(0, 7));
-
     await input.fill('20');
     await page.keyboard.press('Enter');
     await expectPeekCodes(page, codes);
@@ -646,6 +648,22 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     await page.getByTestId('peek-done').click();
     await expect(page.getByTestId('peek-modal')).toHaveCount(0);
     expect(await getDeckCodes(page)).toEqual(codes);
+  });
+
+  test('Esc in the Other… number dialog opens no peek window', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDeck(page, ['A', 'B', 'C', 'D']);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await submenuItem(page, 'other').click();
+    await expect(page.getByTestId('peek-count-dialog')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('peek-count-dialog')).toHaveCount(0);
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
   });
 
   test('sending the whole stack to hand deletes the deck and keeps order', async ({
@@ -674,7 +692,7 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
 
     await rightClickDeck(page);
     await peekRow(page).click();
-    await submenuItem(page, 'custom').click();
+    await submenuItem(page, 'top-3').click();
     await expectPeekCodes(page, ['A', 'B', 'C']);
     await dragPeekCard(page, 2, 0);
     await expectPeekCodes(page, ['C', 'A', 'B']);

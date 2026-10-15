@@ -51,11 +51,11 @@ export function registerPeekActions(registry: ActionRegistry): () => void {
         },
       })),
       {
-        id: 'custom',
-        label: 'Custom…',
+        id: 'other',
+        label: 'Other…',
         execute: (ctx: ActionContext) => {
           ctx.onOpenPeek?.(ctx.selection.ids[0], DEFAULT_PEEK_COUNT, {
-            focusCount: true,
+            askCount: true,
           });
         },
       },

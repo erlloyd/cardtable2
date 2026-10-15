@@ -41,7 +41,7 @@ export function buildActionContext(
   onOpenPeek?: (
     stackId: string,
     count: number,
-    options?: { focusCount?: boolean },
+    options?: { askCount?: boolean },
   ) => void,
 ): ActionContext | null {
   if (!store) return null;

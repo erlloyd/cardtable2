@@ -33,6 +33,7 @@ function makeSceneManager(
       kind?: ObjectKind;
       sortKey?: string;
       selectedBy?: string;
+      locked?: boolean;
       attachedToId?: string;
       attachedCardIds?: string[];
       meta?: Record<string, unknown>;
@@ -48,7 +49,7 @@ function makeSceneManager(
         _pos: { x: o.x, y: o.y, r: o.r ?? 0 },
         _containerId: 'c1',
         _sortKey: o.sortKey ?? '0',
-        _locked: false,
+        _locked: o.locked ?? false,
         _selectedBy: o.selectedBy ?? null,
         _meta: o.meta ?? {},
         ...(o.attachedToId ? { _attachedToId: o.attachedToId } : {}),
@@ -337,6 +338,53 @@ describe('DragManager', () => {
 
       expect(dragged).toContain('obj-1');
       expect(dragged).toContain('obj-2');
+    });
+  });
+
+  // ── Locked objects are never dragged ──
+  describe('startObjectDrag locked objects', () => {
+    const Z = ObjectKind.Zone;
+    const zone = {
+      x: 0,
+      y: 0,
+      kind: Z,
+      meta: { width: 200, height: 100 },
+    };
+
+    it('does not carry a locked object inside a dragged zone', () => {
+      const sm = makeSceneManager({
+        zone,
+        locked: { x: 0, y: 0, locked: true },
+        free: { x: 10, y: 0 },
+      });
+      drag.prepareObjectDrag('zone', 0, 0);
+      const dragged = drag.startObjectDrag(sm, makeSelectionManager());
+      expect(dragged).toContain('free');
+      expect(dragged).not.toContain('locked');
+    });
+
+    it('keeps a locked attached child of a dragged parent', () => {
+      const sm = makeSceneManager({
+        parent: { x: 0, y: 0, attachedCardIds: ['child'] },
+        child: { x: 0, y: 0, attachedToId: 'parent', locked: true },
+      });
+      drag.prepareObjectDrag('parent', 0, 0);
+      const dragged = drag.startObjectDrag(sm, makeSelectionManager());
+      expect(dragged).toEqual(expect.arrayContaining(['parent', 'child']));
+    });
+
+    it('a locked zone in a multi-selection stays put and carries nothing', () => {
+      const sm = makeSceneManager({
+        zone: { ...zone, locked: true },
+        card: { x: 500, y: 500 },
+        inside: { x: 0, y: 0 },
+      });
+      drag.prepareObjectDrag('card', 0, 0);
+      const dragged = drag.startObjectDrag(
+        sm,
+        makeSelectionManager(['zone', 'card']),
+      );
+      expect(dragged).toEqual(['card']);
     });
   });
 

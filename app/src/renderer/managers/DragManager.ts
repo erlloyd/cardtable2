@@ -231,9 +231,11 @@ export class DragManager {
 
     // Dragging a zone carries what rests in it (and zones nested in it).
     // Attached children are skipped here: they arrive via the expansion below.
-    const zoneWorklist = [...objectsToDrag].filter(
-      (id) => sceneManager.getObject(id)?._kind === ObjectKind.Zone,
-    );
+    // A locked zone carries nothing.
+    const zoneWorklist = [...objectsToDrag].filter((id) => {
+      const obj = sceneManager.getObject(id);
+      return obj?._kind === ObjectKind.Zone && !obj._locked;
+    });
     const actorId = selectionManager.getActorId();
     for (let i = 0; i < zoneWorklist.length; i++) {
       const zone = sceneManager.getObject(zoneWorklist[i]);
@@ -260,7 +262,7 @@ export class DragManager {
           ) {
             continue;
           }
-          zoneWorklist.push(id);
+          if (!candidate._locked) zoneWorklist.push(id);
         } else if (
           candidate._pos.x < box.left ||
           candidate._pos.x > box.right ||
@@ -271,6 +273,22 @@ export class DragManager {
         }
         objectsToDrag.add(id);
       }
+    }
+
+    // Locked objects stay put. An attached child rides with its unlocked
+    // parent (moveObjects repositions it anyway), so it keeps its place.
+    const lockedToDrop = [...objectsToDrag].filter((id) => {
+      const obj = sceneManager.getObject(id);
+      if (!obj?._locked) return false;
+      const parentId =
+        obj._kind === ObjectKind.Stack
+          ? (obj as StackObject)._attachedToId
+          : undefined;
+      if (!parentId || !objectsToDrag.has(parentId)) return true;
+      return !!sceneManager.getObject(parentId)?._locked;
+    });
+    for (const id of lockedToDrop) {
+      objectsToDrag.delete(id);
     }
 
     // Include attached cards as secondaries when dragging a parent

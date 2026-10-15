@@ -5,7 +5,9 @@ import type {
 } from '@cardtable2/shared';
 import { HoverManager } from '../managers/HoverManager';
 import type { RendererContext } from '../RendererContext';
-import { handlePointerLeave } from './pointer';
+import { handlePointerLeave, handlePointerMove } from './pointer';
+import { DragManager } from '../managers/DragManager';
+import { ObjectKind } from '@cardtable2/shared';
 
 /**
  * Build a minimal RendererContext mock sufficient for handlePointerLeave.
@@ -102,5 +104,117 @@ describe('handlePointerLeave - ct-zqc fix', () => {
     handlePointerLeave(leaveMessage, context);
 
     expect(postResponse).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('handlePointerMove - locked objects', () => {
+  const moveMessage = {
+    type: 'pointer-move',
+    event: {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 100,
+      clientY: 100,
+      isPrimary: true,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+    },
+  } as Extract<MainToRendererMessage, { type: 'pointer-move' }>;
+
+  function buildMoveContext(
+    interactionMode: 'select' | 'pan',
+    unstack: boolean,
+  ) {
+    const drag = new DragManager();
+    if (unstack) {
+      drag.prepareUnstackDrag('s1', 0, 0);
+    } else {
+      drag.prepareObjectDrag('s1', 0, 0);
+    }
+    const postResponse = vi.fn<(msg: RendererToMainMessage) => void>();
+    const startPan = vi.fn();
+    const startRectangleSelect = vi.fn();
+    const context = {
+      interactionMode,
+      drag,
+      postResponse,
+      gestures: {
+        getPointer: () => ({ lastX: 0, lastY: 0 }),
+        updatePointer: vi.fn(),
+        getPointerCount: () => 1,
+        exceedsDragSlop: () => true,
+        getPointerDownEvent: () => null,
+        getAllPointers: () => new Map(),
+      },
+      camera: {
+        isPinchingActive: () => false,
+        isPanningActive: () => false,
+        startPan,
+      },
+      rectangleSelect: {
+        isSelecting: () => false,
+        startRectangleSelect,
+      },
+      selection: {
+        getSelectedIds: () => [],
+        isSelected: () => false,
+        getActorId: () => 'me',
+      },
+      hover: new HoverManager(),
+      coordConverter: { screenToWorld: () => ({ x: 0, y: 0 }) },
+      worldContainer: {},
+      sceneManager: {
+        getObject: () => ({
+          _id: 's1',
+          _kind: ObjectKind.Stack,
+          _pos: { x: 0, y: 0, r: 0 },
+          _locked: true,
+        }),
+      },
+      app: { stage: {}, renderer: { render: vi.fn() } },
+    } as unknown as RendererContext;
+    return { context, drag, postResponse, startPan, startRectangleSelect };
+  }
+
+  it('pans instead of dragging a locked stack in pan mode', () => {
+    const { context, drag, postResponse, startPan, startRectangleSelect } =
+      buildMoveContext('pan', false);
+
+    handlePointerMove(moveMessage, context);
+
+    expect(drag.isDragging()).toBe(false);
+    expect(startPan).toHaveBeenCalled();
+    expect(startRectangleSelect).not.toHaveBeenCalled();
+    expect(postResponse).not.toHaveBeenCalledWith({
+      type: 'object-drag-started',
+    });
+  });
+
+  it('rectangle-selects instead of dragging a locked stack in select mode', () => {
+    const { context, drag, startPan, startRectangleSelect } = buildMoveContext(
+      'select',
+      false,
+    );
+
+    handlePointerMove(moveMessage, context);
+
+    expect(drag.isDragging()).toBe(false);
+    expect(startRectangleSelect).toHaveBeenCalled();
+    expect(startPan).not.toHaveBeenCalled();
+  });
+
+  it('still unstacks from a locked stack via the unstack handle', () => {
+    const { context, postResponse, startPan, startRectangleSelect } =
+      buildMoveContext('select', true);
+
+    handlePointerMove(moveMessage, context);
+
+    expect(postResponse).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'unstack-card', stackId: 's1' }),
+    );
+    expect(startPan).not.toHaveBeenCalled();
+    expect(startRectangleSelect).not.toHaveBeenCalled();
   });
 });

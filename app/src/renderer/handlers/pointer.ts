@@ -294,8 +294,14 @@ export function handlePointerMove(
       ) {
         // Determine what to start based on what was prepared in handlePointerDown
         const draggedId = context.drag.getDraggedObjectId();
+        // A locked object can't be dragged (the unstack handle still works),
+        // so the gesture falls through to rectangle select / pan.
+        const isLockedDrag =
+          !!draggedId &&
+          !context.drag.isUnstackDragActive() &&
+          context.sceneManager.getObject(draggedId)?._locked === true;
 
-        if (draggedId) {
+        if (draggedId && !isLockedDrag) {
           // Check if this is an unstack drag - if so, create real stack immediately
           if (context.drag.isUnstackDragActive()) {
             // Calculate world position for new stack

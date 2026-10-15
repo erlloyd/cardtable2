@@ -22,6 +22,8 @@ import {
   type ClearableAttachmentKey,
 } from '../store/attachmentClear';
 
+const SET_TOKENS_ACTION_ID = 'set-tokens';
+
 const CLEAR_ACTION_IDS = [
   'clear-tokens',
   'clear-statuses',
@@ -73,6 +75,18 @@ export function registerAttachmentActions(
   const hasModifiers = hasEntries(gameAssets.modifierStats);
 
   if (hasTokens) {
+    registry.register({
+      id: SET_TOKENS_ACTION_ID,
+      label: 'Set Tokens…',
+      shortLabel: 'Set Tokens',
+      icon: '🔢',
+      category: CARD_ACTIONS,
+      isAvailable: (ctx) =>
+        ctx.selection.count === 1 &&
+        ctx.selection.hasStacks &&
+        ctx.onOpenSetTokensDialog !== undefined,
+      execute: (ctx) => ctx.onOpenSetTokensDialog?.(ctx.selection.ids[0]),
+    });
     registerClearAction(registry, 'clear-tokens', 'Clear All Tokens', [
       'tokens',
     ]);
@@ -174,6 +188,7 @@ export function clearAttachmentActions(registry: ActionRegistry): void {
       action.id.startsWith('add-status-') ||
       action.id.startsWith('remove-status-') ||
       action.id.startsWith('modify-') ||
+      action.id === SET_TOKENS_ACTION_ID ||
       CLEAR_ACTION_IDS.includes(action.id)
     ) {
       registry.unregister(action.id);

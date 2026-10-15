@@ -1689,6 +1689,66 @@ export function setZoneLabel(
 }
 
 /**
+ * Set a stack's token counts directly. A count of 0 removes that token code;
+ * codes absent from `counts` are left unchanged. Empty `tokens` / `attachments`
+ * containers are dropped (matching clearAttachmentKeys), and every other
+ * `_meta` / `attachments` key is preserved. Callers pass non-negative integers.
+ * @returns true when the target is a stack (the write is skipped if nothing changed)
+ */
+export function setStackTokenCounts(
+  store: YjsStore,
+  stackId: string,
+  counts: Record<string, number>,
+): boolean {
+  const yMap = store.getObjectYMap(stackId);
+  if (!yMap) {
+    console.warn(`[setStackTokenCounts] Object ${stackId} not found`);
+    return false;
+  }
+
+  if (yMap.get('_kind') !== ObjectKind.Stack) {
+    console.warn(`[setStackTokenCounts] Object ${stackId} is not a stack`);
+    return false;
+  }
+
+  const meta = yMap.get('_meta') ?? {};
+  const attachments: AttachmentData = {
+    ...(meta.attachments as AttachmentData | undefined),
+  };
+  const before: Record<string, number> = attachments.tokens ?? {};
+  const tokens: Record<string, number> = { ...before };
+  for (const [code, count] of Object.entries(counts)) {
+    if (count > 0) {
+      tokens[code] = count;
+    } else {
+      delete tokens[code];
+    }
+  }
+
+  const unchanged =
+    Object.keys(tokens).length === Object.keys(before).length &&
+    Object.entries(tokens).every(([code, count]) => before[code] === count);
+  if (unchanged) return true;
+
+  const nextMeta = { ...meta };
+  if (Object.keys(tokens).length > 0) {
+    attachments.tokens = tokens;
+  } else {
+    delete attachments.tokens;
+  }
+  if (Object.keys(attachments).length > 0) {
+    nextMeta.attachments = attachments;
+  } else {
+    delete nextMeta.attachments;
+  }
+
+  store.getDoc().transact(() => {
+    yMap.set('_meta', nextMeta);
+  });
+  return true;
+}
+
+/**
  * Reset the table to a test scene with various object types.
  * Useful for development and testing.
  *

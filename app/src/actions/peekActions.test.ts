@@ -6,11 +6,17 @@ import type { ActionContext, SelectionInfo } from './types';
 import { YjsStore } from '../store/YjsStore';
 import { createObject } from '../store/YjsActions';
 
+type OpenPeek = (
+  id: string,
+  n: number,
+  options?: { focusCount?: boolean },
+) => void;
+
 describe('peekActions', () => {
   let store: YjsStore;
   let registry: ActionRegistry;
   let cleanup: () => void;
-  let onOpenPeek: ReturnType<typeof vi.fn<(id: string, n: number) => void>>;
+  let onOpenPeek: ReturnType<typeof vi.fn<OpenPeek>>;
 
   function makeStack(codes: string[]): string {
     return createObject(store, {
@@ -54,7 +60,7 @@ describe('peekActions', () => {
     store = new YjsStore('test-peek-actions');
     registry = ActionRegistry.getInstance();
     registry.clear();
-    onOpenPeek = vi.fn<(id: string, n: number) => void>();
+    onOpenPeek = vi.fn<OpenPeek>();
     cleanup = registerPeekActions(registry);
   });
 
@@ -89,6 +95,12 @@ describe('peekActions', () => {
     const stack = makeStack(['a', 'b']);
     await registry.executeVariant('peek-stack', 'top-10', ctxFor([stack]));
     expect(onOpenPeek).toHaveBeenCalledWith(stack, 10);
+  });
+
+  it('Custom… opens with 3 and asks to focus the N input', async () => {
+    const stack = makeStack(['a', 'b', 'c', 'd']);
+    await registry.executeVariant('peek-stack', 'custom', ctxFor([stack]));
+    expect(onOpenPeek).toHaveBeenCalledWith(stack, 3, { focusCount: true });
   });
 
   it('cleanup unregisters the action', () => {

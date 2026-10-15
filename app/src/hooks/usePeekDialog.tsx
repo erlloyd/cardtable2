@@ -10,7 +10,10 @@ import { dbg } from '../dev/dbg';
 interface PeekState {
   stackId: string | null;
   snapshot: CardEntry[];
-  /** Bumped per open so the modal remounts with a fresh order. */
+  /** Stack size at open, the upper bound for N. */
+  total: number;
+  focusCount: boolean;
+  /** Bumped per open or re-snapshot so the modal remounts with a fresh order. */
   key: number;
 }
 
@@ -30,24 +33,51 @@ export function usePeekDialog(
   gameAssets: GameAssets | null,
   activeHandId: string | null,
 ): {
-  openPeek: (stackId: string, count: number) => void;
+  openPeek: (
+    stackId: string,
+    count: number,
+    options?: { focusCount?: boolean },
+  ) => void;
   peekDialog: ReactElement;
 } {
   const [state, setState] = useState<PeekState>({
     stackId: null,
     snapshot: [],
+    total: 0,
+    focusCount: false,
     key: 0,
   });
 
   const openPeek = useCallback(
-    (stackId: string, count: number) => {
+    (stackId: string, count: number, options?: { focusCount?: boolean }) => {
       const cards = store?.getObjectYMap(stackId)?.get('_cards');
       if (!cards || cards.length === 0) return;
       setState((prev) => ({
         stackId,
         snapshot: cards.slice(0, Math.min(count, cards.length)),
+        total: cards.length,
+        focusCount: options?.focusCount ?? false,
         key: prev.key + 1,
       }));
+    },
+    [store],
+  );
+
+  // Re-reads the live stack, so order and destinations reset to Top.
+  const changeCount = useCallback(
+    (count: number) => {
+      setState((prev) => {
+        const cards = prev.stackId
+          ? store?.getObjectYMap(prev.stackId)?.get('_cards')
+          : undefined;
+        if (!cards || cards.length === 0) return prev;
+        return {
+          ...prev,
+          snapshot: cards.slice(0, Math.min(count, cards.length)),
+          total: cards.length,
+          key: prev.key + 1,
+        };
+      });
     },
     [store],
   );
@@ -97,6 +127,9 @@ export function usePeekDialog(
       key={`peek-${state.key}`}
       isOpen={state.stackId !== null}
       cards={state.snapshot}
+      totalCount={state.total}
+      focusCount={state.focusCount}
+      onChangeCount={changeCount}
       getFaceUrl={getFaceUrl}
       canDiscard={canDiscard}
       onDone={done}

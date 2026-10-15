@@ -31,9 +31,12 @@ export function shouldSnapToGrid(obj: TableObject): boolean {
   return (obj._meta?.snapToGrid as boolean) ?? true;
 }
 
-/** Display label for a discard zone: `_meta.label` (user-renamable), falling back to 'Discard'. */
+/** Display label for a zone: `_meta.label` (user-renamable), falling back to 'Discard' for discard zones and 'Zone' otherwise. */
 export function getZoneLabel(obj: TableObject): string {
-  return (obj._meta?.label as string | undefined) || 'Discard';
+  return (
+    (obj._meta?.label as string | undefined) ||
+    (isDiscardZone(obj) ? 'Discard' : 'Zone')
+  );
 }
 
 /** True when the zone was created as a discard zone (flag stamped by createDiscardZoneForStack). */

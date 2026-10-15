@@ -5,6 +5,7 @@ import {
   createObject,
   moveObjects,
   selectObjects,
+  setObjectsLocked,
   unselectObjects,
   clearAllSelections,
   exhaustCards,
@@ -914,7 +915,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       expect(obj?._selectedBy).toBe(actorId);
     });
 
-    it('fails to select locked objects', () => {
+    it('selects locked objects (lock only blocks dragging)', () => {
       const id = createObject(store, {
         kind: ObjectKind.Token,
         pos: { x: 0, y: 0, r: 0 },
@@ -923,11 +924,12 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
 
       const result = selectObjects(store, [id], actorId);
 
-      expect(result.selected).toEqual([]);
-      expect(result.failed).toEqual([id]);
+      expect(result.selected).toEqual([id]);
+      expect(result.failed).toEqual([]);
 
       const obj = toTableObject(store.getObjectYMap(id)!);
-      expect(obj?._selectedBy).toBeNull();
+      expect(obj?._selectedBy).toBe(actorId);
+      expect(obj?._locked).toBe(true);
     });
 
     it('handles partial selection (mix of valid and invalid)', () => {
@@ -938,8 +940,8 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
       const id2 = createObject(store, {
         kind: ObjectKind.Token,
         pos: { x: 10, y: 10, r: 0 },
-        locked: true,
       });
+      selectObjects(store, [id2], 'other-actor');
 
       const result = selectObjects(store, [id1, id2], actorId);
 
@@ -953,7 +955,7 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
         | TableObject
         | undefined;
       expect(obj1?._selectedBy).toBe(actorId);
-      expect(obj2?._selectedBy).toBeNull();
+      expect(obj2?._selectedBy).toBe('other-actor');
     });
 
     it('warns when trying to select non-existent object', () => {
@@ -1169,6 +1171,52 @@ describe('YjsActions - Selection Ownership (M3-T3)', () => {
         clearAllSelections(store, { excludeDragging: true });
       }).toThrow('excludeDragging option is not implemented yet');
     });
+  });
+});
+
+describe('YjsActions - setObjectsLocked', () => {
+  let store: YjsStore;
+
+  beforeEach(() => {
+    store = new YjsStore('test-table');
+  });
+
+  const makeToken = (x: number): string =>
+    createObject(store, {
+      kind: ObjectKind.Token,
+      pos: { x, y: 0, r: 0 },
+    });
+
+  it('locks all ids in one transaction and unlocks them', () => {
+    const ids = [makeToken(0), makeToken(10)];
+    const afterTransaction = vi.fn();
+    store.getDoc().on('afterTransaction', afterTransaction);
+
+    setObjectsLocked(store, ids, true);
+
+    expect(afterTransaction).toHaveBeenCalledTimes(1);
+    ids.forEach((id) => {
+      expect(toTableObject(store.getObjectYMap(id)!)?._locked).toBe(true);
+    });
+
+    setObjectsLocked(store, ids, false);
+
+    ids.forEach((id) => {
+      expect(toTableObject(store.getObjectYMap(id)!)?._locked).toBe(false);
+    });
+  });
+
+  it('skips unknown ids without throwing', () => {
+    const id = makeToken(0);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(() => setObjectsLocked(store, ['missing', id], true)).not.toThrow();
+
+    expect(warn).toHaveBeenCalledWith(
+      '[setObjectsLocked] Object missing not found',
+    );
+    expect(toTableObject(store.getObjectYMap(id)!)?._locked).toBe(true);
+    warn.mockRestore();
   });
 });
 

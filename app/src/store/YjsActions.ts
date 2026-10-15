@@ -268,12 +268,38 @@ export function moveObjects(
 }
 
 /**
+ * Set or clear the lock on objects. A locked object cannot be dragged but can
+ * still be selected, flipped, rotated, deleted and discarded.
+ *
+ * @param store - YjsStore instance
+ * @param ids - Array of object IDs to lock or unlock
+ * @param locked - true to lock, false to unlock
+ */
+export function setObjectsLocked(
+  store: YjsStore,
+  ids: string[],
+  locked: boolean,
+): void {
+  store.getDoc().transact(() => {
+    ids.forEach((id) => {
+      const yMap = store.getObjectYMap(id);
+      if (!yMap) {
+        console.warn(`[setObjectsLocked] Object ${id} not found`);
+        return;
+      }
+      yMap.set('_locked', locked);
+    });
+  });
+}
+
+/**
  * Select objects with exclusive ownership tracking (M3-T3, M3.6-T5)
  *
  * Refactored to work with Y.Maps directly - zero allocations.
  *
  * Attempts to claim selection ownership for the given objects. Selection fails
- * gracefully for objects already owned by another actor.
+ * gracefully for objects already owned by another actor. Locked objects can
+ * still be selected; the lock only blocks dragging.
  *
  * @param store - YjsStore instance
  * @param ids - Array of object IDs to select
@@ -304,7 +330,6 @@ export function selectObjects(
 
       // Read properties directly from Y.Map
       const selectedBy = yMap.get('_selectedBy');
-      const locked = yMap.get('_locked');
 
       // Check if already selected by another actor
       if (selectedBy !== null && selectedBy !== actorId) {
@@ -317,13 +342,6 @@ export function selectObjects(
 
       // Skip if already selected by this actor (idempotent)
       if (selectedBy === actorId) {
-        return;
-      }
-
-      // Check if object is locked
-      if (locked) {
-        console.warn(`[selectObjects] Object ${id} is locked`);
-        failed.push(id);
         return;
       }
 

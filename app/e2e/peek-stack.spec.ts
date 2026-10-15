@@ -23,13 +23,19 @@ const OTHER_POS = { x: -300, y: 50 };
 
 interface StoreObject {
   _kind: string;
-  _cards?: Array<{ code: string }>;
   _faceUp?: boolean;
+  _pos: { x: number; y: number; r: number };
+  _containerId?: string | null;
+  _cards?: Array<{ code: string; homeZone?: string }>;
   _selectedBy: string | null;
 }
 
 interface PageTestStore {
   setObject: (id: string, obj: unknown) => void;
+  createHand: (name: string) => string;
+  addCardToHand: (handId: string, card: { code: string }) => void;
+  getHandIds: () => string[];
+  getHandCards: (handId: string) => Array<{ code: string }>;
   getAllObjects: () => Map<string, StoreObject>;
 }
 
@@ -458,5 +464,207 @@ test.describe('Context menu regressions (programmatic open)', () => {
     await rightClickDeck(page);
     await expect(openMenu(page)).toBeVisible();
     await expect(submenuItem(page, 'top-3')).toHaveCount(0);
+  });
+});
+
+// Ring 1 (ct-eok.6.4): per-card destinations, Custom N, whole-stack peek.
+// Drafted against ct-eok.6.1/6.2/6.3; selectors for peek-dest are confirmed
+// once those land.
+
+const ZONE_ID = 'e2e-peek-zone';
+const ZONE_POS = { x: 420, y: 0 };
+type Dest = 'top' | 'bottom' | 'hand' | 'table' | 'discard';
+
+interface Entry {
+  code: string;
+  homeZone?: string;
+}
+
+async function seedDiscardZone(page: Page): Promise<void> {
+  await page.evaluate(
+    ({ id, pos }) => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.setObject(id, {
+        _kind: 'zone',
+        _pos: { x: pos.x, y: pos.y, r: 0 },
+        _sortKey: id,
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: { isDiscardZone: true, label: 'Discard' },
+      });
+    },
+    { id: ZONE_ID, pos: ZONE_POS },
+  );
+}
+
+async function seedEntries(page: Page, entries: Entry[]): Promise<void> {
+  await page.evaluate(
+    ({ id, pos, entries }) => {
+      const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+      store.setObject(id, {
+        _kind: 'stack',
+        _pos: { x: pos.x, y: pos.y, r: 0 },
+        _sortKey: id,
+        _locked: false,
+        _selectedBy: null,
+        _containerId: null,
+        _meta: {},
+        _cards: entries,
+        _faceUp: false,
+      });
+    },
+    { id: DECK_ID, pos: DECK_POS, entries },
+  );
+}
+
+interface Snap {
+  id: string;
+  kind: string;
+  pos: { x: number; y: number };
+  cards: string[];
+  faceUp: boolean | undefined;
+  containerId: string | null | undefined;
+}
+
+function snapshotAll(page: Page): Promise<Snap[]> {
+  return page.evaluate(() => {
+    const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+    return Array.from(store.getAllObjects().entries()).map(([id, o]) => ({
+      id,
+      kind: o._kind,
+      pos: { x: o._pos.x, y: o._pos.y },
+      cards: (o._cards ?? []).map((c) => c.code),
+      faceUp: o._faceUp,
+      containerId: o._containerId,
+    }));
+  });
+}
+
+function handCodes(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const store = (globalThis as unknown as PageGlobals).__TEST_STORE__!;
+    const [first] = store.getHandIds();
+    return first ? store.getHandCards(first).map((c) => c.code) : [];
+  });
+}
+
+const peekCard = (page: Page, code: string) =>
+  page.locator(`[data-testid="peek-card"][data-code="${code}"]`);
+
+/** Set a peeked card's destination via its peek-dest control (select or buttons). */
+async function setDest(page: Page, code: string, dest: Dest): Promise<void> {
+  const control = peekCard(page, code).getByTestId('peek-dest');
+  const isSelect = await control.evaluate((el) => el.tagName === 'SELECT');
+  if (isSelect) {
+    await control.selectOption(dest);
+  } else {
+    await control
+      .getByRole('button', { name: new RegExp(`^${dest}$`, 'i') })
+      .click();
+  }
+}
+
+function discardOption(page: Page, code: string): Locator {
+  return peekCard(page, code)
+    .getByTestId('peek-dest')
+    .locator('option[value="discard"], button')
+    .filter({ hasText: /discard/i });
+}
+
+test.describe('Peek per-card destinations (Ring 1)', () => {
+  test('mixed destinations land in deck, hand, table and discard pile', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await seedDiscardZone(page);
+    await seedEntries(
+      page,
+      ['A', 'B', 'C', 'D', 'E', 'F'].map((code) => ({
+        code,
+        homeZone: ZONE_ID,
+      })),
+    );
+    await selectDeck(page);
+
+    await pressPeek(page, 5);
+    await expectPeekCodes(page, ['A', 'B', 'C', 'D', 'E']);
+    await setDest(page, 'A', 'bottom');
+    await setDest(page, 'B', 'hand');
+    await setDest(page, 'C', 'table');
+    await setDest(page, 'D', 'discard');
+    await setDest(page, 'E', 'top');
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+
+    await expect.poll(() => getDeckCodes(page)).toEqual(['E', 'F', 'A']);
+    await expect.poll(() => handCodes(page).then((c) => c.at(-1))).toBe('B');
+
+    const all = await snapshotAll(page);
+    const tableStack = all.find(
+      (o) => o.kind === 'stack' && o.id !== DECK_ID && o.cards.join() === 'C',
+    );
+    expect(tableStack?.faceUp).toBe(true);
+    expect(tableStack!.pos.y).toBeGreaterThan(DECK_POS.y);
+    const pile = all.find(
+      (o) => o.kind === 'stack' && o.containerId === ZONE_ID,
+    );
+    expect(pile?.cards[0]).toBe('D');
+  });
+
+  test('Discard is disabled for cards without a home zone', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await setupDeck(page, ['A', 'B', 'C', 'D', 'E']);
+
+    await pressPeek(page, 3);
+    await expectPeekCodes(page, ['A', 'B', 'C']);
+    for (const code of ['A', 'B', 'C']) {
+      await expect(discardOption(page, code)).toBeDisabled();
+    }
+  });
+
+  test('Custom N through the submenu, clamped to the stack size', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    const codes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    await seedDeck(page, codes);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await submenuItem(page, 'custom').click();
+
+    const input = page.getByTestId('peek-n-input');
+    await expect(input).toBeFocused();
+    await page.keyboard.type('7');
+    await page.keyboard.press('Enter');
+    await expectPeekCodes(page, codes.slice(0, 7));
+
+    await input.fill('20');
+    await page.keyboard.press('Enter');
+    await expectPeekCodes(page, codes);
+
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+    expect(await getDeckCodes(page)).toEqual(codes);
+  });
+
+  test('sending the whole stack to hand deletes the deck and keeps order', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await setupDeck(page, ['A', 'B', 'C']);
+
+    await pressPeek(page, 3);
+    await expectPeekCodes(page, ['A', 'B', 'C']);
+    for (const code of ['A', 'B', 'C']) await setDest(page, code, 'hand');
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+
+    await expect.poll(() => handCodes(page)).toEqual(['A', 'B', 'C']);
+    const all = await snapshotAll(page);
+    expect(all.find((o) => o.id === DECK_ID)).toBeUndefined();
   });
 });

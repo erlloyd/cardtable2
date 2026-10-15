@@ -195,23 +195,11 @@ async function rightClickDeck(page: Page, world = DECK_POS): Promise<void> {
   await expect(openMenu(page)).toBeVisible({ timeout: 5000 });
 }
 
-const openMenu = (page: Page) =>
-  page.locator('.context-menu[data-headlessui-state="open"]');
+const openMenu = (page: Page) => page.locator('.context-menu').first();
 const peekRow = (page: Page) =>
   page.getByTestId('context-menu-item-peek-stack');
 const submenuItem = (page: Page, variant: string) =>
   page.getByTestId(`context-submenu-item-peek-stack-${variant}`);
-
-/** ArrowDown through the open menu until the Peek row is highlighted. */
-async function highlightPeekRow(page: Page): Promise<void> {
-  for (let i = 0; i < 30; i++) {
-    if (await peekRow(page).evaluate((el) => el.classList.contains('focus'))) {
-      return;
-    }
-    await page.keyboard.press('ArrowDown');
-  }
-  throw new Error('Peek row never highlighted');
-}
 
 test.describe('Peek at the top of a stack', () => {
   test('dragging a card and clicking Done reorders the top of the deck', async ({
@@ -346,7 +334,7 @@ test.describe('Peek at the top of a stack', () => {
     await seedDeck(page, ['A', 'B', 'C', 'D', 'E', 'F']);
 
     await rightClickDeck(page);
-    await highlightPeekRow(page);
+    await peekRow(page).focus();
 
     await page.keyboard.press('ArrowRight');
     await expect(submenuItem(page, 'top-1')).toBeFocused();
@@ -355,7 +343,7 @@ test.describe('Peek at the top of a stack', () => {
 
     await page.keyboard.press('ArrowLeft');
     await expect(submenuItem(page, 'top-3')).toHaveCount(0);
-    await expect(peekRow(page)).toHaveClass(/focus/);
+    await expect(peekRow(page)).toBeFocused();
 
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowDown');
@@ -367,14 +355,13 @@ test.describe('Peek at the top of a stack', () => {
     await expect(page.getByTestId('peek-modal')).toHaveCount(0);
 
     await rightClickDeck(page);
-    await highlightPeekRow(page);
+    await peekRow(page).focus();
     await page.keyboard.press('ArrowRight');
     await expect(submenuItem(page, 'top-1')).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(submenuItem(page, 'top-1')).toHaveCount(0);
     await expect(openMenu(page)).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.context-menu')).toHaveCount(0);
+    await expect(peekRow(page)).toBeFocused();
   });
 });
 

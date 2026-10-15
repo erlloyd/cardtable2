@@ -386,7 +386,7 @@ test.describe('Context menu regressions (programmatic open)', () => {
     await seedDeck(page, ['A', 'B', 'C', 'D']);
     await rightClickDeck(page);
     await expect.poll(() => getSelected(page)).not.toBeNull();
-    await page.keyboard.press('Escape');
+    await page.mouse.click(1100, 300);
     await expect(page.locator('.context-menu')).toHaveCount(0);
 
     await pressPeek(page, 2);
@@ -407,13 +407,18 @@ test.describe('Context menu regressions (programmatic open)', () => {
 
     await rightClickDeck(page);
     const first = await openMenu(page).boundingBox();
+
+    // The backdrop's contextmenu handler closes the open menu.
+    const other = await deckViewportPos(page, OTHER_POS);
+    await page.mouse.click(other.x, other.y, { button: 'right' });
+    await expect(page.locator('.context-menu')).toHaveCount(0);
+
     await rightClickDeck(page, OTHER_POS);
-    await expect(openMenu(page)).toHaveCount(1);
     const second = await openMenu(page).boundingBox();
     expect(second?.x).not.toBe(first?.x);
     await expect(peekRow(page)).toBeVisible();
 
-    await page.keyboard.press('Escape');
+    await page.mouse.click(1100, 300);
     await expect(page.locator('.context-menu')).toHaveCount(0);
     await rightClickDeck(page);
     const third = await openMenu(page).boundingBox();

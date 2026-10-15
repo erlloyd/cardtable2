@@ -1145,6 +1145,50 @@ describe('ContextMenu', () => {
       );
     });
 
+    it('takes DOM focus on open so ArrowDown walks to the parent row, then ArrowRight focuses the first submenu item', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      expect(screen.getByRole('menu', { hidden: true })).toHaveFocus();
+      const parent = screen.getByTestId('context-menu-item-peek-like');
+      for (let i = 0; i < 5 && !parent.classList.contains('focus'); i++) {
+        await user.keyboard('{ArrowDown}');
+      }
+      expect(parent).toHaveClass('focus');
+      await user.keyboard('{ArrowRight}');
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toHaveFocus();
+    });
+
+    it('focuses the first submenu item only once the panel is visible', async () => {
+      const user = userEvent.setup();
+      const visibilityAtFocus: string[] = [];
+      const originalFocus = HTMLElement.prototype.focus;
+      const focusSpy = vi
+        .spyOn(HTMLElement.prototype, 'focus')
+        .mockImplementation(function (this: HTMLElement, ...args) {
+          if (this.dataset.testid === 'context-submenu-item-peek-like-one') {
+            visibilityAtFocus.push(
+              getComputedStyle(this.closest('[role="menu"]') as Element)
+                .visibility,
+            );
+          }
+          originalFocus.apply(this, args);
+        });
+      renderMenu();
+      screen.getByTestId('context-menu-item-peek-like').focus();
+      await user.keyboard('{ArrowRight}');
+      focusSpy.mockRestore();
+      expect(visibilityAtFocus).toEqual(['visible']);
+    });
+
+    it('Escape on the top-level menu closes it', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      await user.keyboard('{Escape}');
+      expect(mockOnClose).toHaveBeenCalledTimes(1);
+    });
+
     it('clicking a variant calls executeVariant with the ids and closes', async () => {
       const user = userEvent.setup();
       renderMenu();

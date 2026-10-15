@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { KeyboardManager } from '../actions/KeyboardManager';
@@ -148,12 +148,22 @@ export function ContextMenu({
     setSubmenuPosition({ x, y });
   }, [openSubmenuId, adjustedPosition]);
 
+  // The panel is visibility:hidden until submenuPosition is set, and browsers
+  // refuse focus() on hidden elements, so wait for the positioned render.
   useEffect(() => {
-    if (openSubmenuId && focusSubmenuOnOpen.current) {
+    if (openSubmenuId && submenuPosition && focusSubmenuOnOpen.current) {
       focusSubmenuOnOpen.current = false;
       submenuItemRefs.current[0]?.focus();
     }
-  }, [openSubmenuId]);
+  }, [openSubmenuId, submenuPosition]);
+
+  // MenuItems is `static`, so Headless UI stays in its Closed state and never
+  // focuses it. Opening via the button puts it in Open state, which focuses the
+  // items element and enables ArrowUp/ArrowDown navigation.
+  const menuButtonRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (isOpen) menuButtonRef.current?.click();
+  }, [isOpen]);
 
   const executeAndClose = (run: (ctx: ActionContext) => Promise<void>) => {
     if (!context) return;
@@ -213,6 +223,28 @@ export function ContextMenu({
     }
   };
 
+  // Headless UI keeps DOM focus on the items element and marks the highlighted
+  // row via aria-activedescendant, so row keydown handlers never see its keys.
+  const handleMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== 'ArrowRight') return;
+    const activeId = e.currentTarget.getAttribute('aria-activedescendant');
+    const activeEl = activeId ? document.getElementById(activeId) : null;
+    for (const [actionId, row] of parentRowRefs.current) {
+      if (row === activeEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        openSubmenu(actionId, true);
+        return;
+      }
+    }
+  };
+
   const getShortcutDisplay = (shortcut: string | undefined): string => {
     if (!shortcut) return '';
     return keyboardManager.getShortcutDisplay(shortcut);
@@ -239,6 +271,7 @@ export function ContextMenu({
       <Menu>
         <MenuButton as={Fragment}>
           <div
+            ref={menuButtonRef}
             style={{
               position: 'fixed',
               left: adjustedPosition.x,
@@ -252,6 +285,7 @@ export function ContextMenu({
         <MenuItems
           ref={menuRef}
           static
+          onKeyDown={handleMenuKeyDown}
           className="context-menu"
           style={{
             position: 'fixed',
@@ -292,7 +326,10 @@ export function ContextMenu({
                                       parentRowRefs.current.delete(action.id);
                                     }
                                   },
-                                  onClick: () => openSubmenu(action.id, false),
+                                  // Headless UI's Enter on the highlighted row
+                                  // synthesizes a click (detail 0).
+                                  onClick: (e: MouseEvent<HTMLButtonElement>) =>
+                                    openSubmenu(action.id, e.detail === 0),
                                   onKeyDown: (
                                     e: KeyboardEvent<HTMLButtonElement>,
                                   ) => handleParentKeyDown(e, action),

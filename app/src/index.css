@@ -2098,9 +2098,29 @@ h1 {
 .peek-modal-row {
   display: flex;
   gap: 8px;
-  overflow-x: auto;
+  overflow-x: scroll;
   padding: 0.5rem 0;
   user-select: none;
+}
+
+.peek-modal-row::-webkit-scrollbar {
+  height: 0.75rem;
+}
+
+.peek-modal-row::-webkit-scrollbar-track {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 0.375rem;
+}
+
+.peek-modal-row::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.35);
+  border-radius: 0.375rem;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .peek-modal-row {
+    scrollbar-color: rgba(255, 255, 255, 0.35) rgba(255, 255, 255, 0.08);
+  }
 }
 
 .peek-modal-slot {

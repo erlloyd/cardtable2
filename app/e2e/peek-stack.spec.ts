@@ -694,6 +694,60 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     expect(deck.slice(6).sort()).toEqual(['A', 'B']);
   });
 
+  test('holding a dragged card at the row edge auto-scrolls it, and the drop lands under the pointer', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    const codes = Array.from({ length: 24 }, (_, i) => `K${i + 1}`);
+    await seedDeck(page, codes);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await submenuItem(page, 'other').click();
+    await page.keyboard.type('20');
+    await page.keyboard.press('Enter');
+    await expectPeekCodes(page, codes.slice(0, 20));
+
+    const row = page.locator('.peek-modal-row');
+    await row.evaluate((el) => {
+      el.scrollLeft = el.scrollWidth;
+    });
+    await expect
+      .poll(() => row.evaluate((el) => el.scrollLeft))
+      .toBeGreaterThan(0);
+
+    const rowBox = await row.boundingBox();
+    if (!rowBox) throw new Error('peek row has no bounding box');
+    const last = await centerOf(peekCard(page, 'K20'));
+    await page.mouse.move(last.x, last.y);
+    await page.mouse.down();
+    const edgeX = rowBox.x + 20;
+    const steps = 8;
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(last.x + ((edgeX - last.x) * i) / steps, last.y);
+    }
+    await expect
+      .poll(() => row.evaluate((el) => el.scrollLeft), { timeout: 10000 })
+      .toBe(0);
+    await page.mouse.up();
+
+    await expect.poll(() => peekCodes(page).then((c) => c[0])).toBe('K20');
+  });
+
+  test('the peek row always shows a horizontal scrollbar', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await setupDeck(page, ['A', 'B', 'C']);
+
+    await pressPeek(page, 3);
+    await expectPeekCodes(page, ['A', 'B', 'C']);
+    const overflowX = await page
+      .locator('.peek-modal-row')
+      .evaluate((el) => getComputedStyle(el).overflowX);
+    expect(overflowX).toBe('scroll');
+  });
+
   test('Esc in the Other… number dialog opens no peek window', async ({
     page,
   }, testInfo) => {

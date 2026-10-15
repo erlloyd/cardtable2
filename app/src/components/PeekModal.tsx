@@ -11,6 +11,8 @@ import { computeShiftOffset } from './handShift';
 
 const DRAG_SLOP = 5;
 const CARD_GAP = 8;
+const EDGE_SCROLL_ZONE = 60;
+const EDGE_SCROLL_STEP = 15;
 
 export interface PeekModalProps {
   isOpen: boolean;
@@ -100,6 +102,7 @@ export function PeekModal({
     if (!session) return;
     let started = false;
     let to = session.from;
+    let lastX = session.startX;
     const clampSlot = (clientX: number) => {
       const row = rowRef.current;
       if (!row) return session.from;
@@ -107,7 +110,31 @@ export function PeekModal({
       return Math.max(0, Math.min(order.length - 1, slot));
     };
 
+    let frame = 0;
+    const autoScroll = () => {
+      frame = requestAnimationFrame(autoScroll);
+      const row = rowRef.current;
+      if (!started || !row) return;
+      const rect = row.getBoundingClientRect();
+      const step =
+        lastX < rect.left + EDGE_SCROLL_ZONE
+          ? -EDGE_SCROLL_STEP
+          : lastX > rect.right - EDGE_SCROLL_ZONE
+            ? EDGE_SCROLL_STEP
+            : 0;
+      if (step === 0) return;
+      const before = row.scrollLeft;
+      row.scrollLeft = before + step;
+      if (row.scrollLeft === before) return;
+      const next = clampSlot(lastX);
+      if (next === to) return;
+      to = next;
+      setView({ from: session.from, to });
+    };
+    frame = requestAnimationFrame(autoScroll);
+
     const handleMove = (ev: PointerEvent) => {
+      lastX = ev.clientX;
       if (!started) {
         const dx = ev.clientX - session.startX;
         const dy = ev.clientY - session.startY;
@@ -144,6 +171,7 @@ export function PeekModal({
     window.addEventListener('pointercancel', cancel);
     window.addEventListener('blur', cancel);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener('pointermove', handleMove);
       window.removeEventListener('pointerup', handleUp);
       window.removeEventListener('pointercancel', cancel);

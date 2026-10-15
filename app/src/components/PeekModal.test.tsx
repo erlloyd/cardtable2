@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { CardEntry } from '@cardtable2/shared';
 import { PeekModal } from './PeekModal';
@@ -106,6 +106,73 @@ describe('PeekModal', () => {
       ],
       { shuffleTop: false, shuffleBottom: false },
     );
+  });
+
+  describe('edge auto-scroll', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    function flushFrame(queue: Map<number, FrameRequestCallback>) {
+      act(() => {
+        const callbacks = [...queue.values()];
+        queue.clear();
+        callbacks.forEach((cb) => cb(0));
+      });
+    }
+
+    function rowWith(scrollLeft: number) {
+      const row = document.querySelector<HTMLDivElement>('.peek-modal-row')!;
+      let scroll = scrollLeft;
+      Object.defineProperty(row, 'scrollLeft', {
+        get: () => scroll,
+        set: (v: number) => {
+          scroll = Math.max(0, Math.min(1000, v));
+        },
+      });
+      row.getBoundingClientRect = () =>
+        ({ left: 0, right: 600, top: 0, bottom: 100 }) as DOMRect;
+      return row;
+    }
+
+    it('scrolls each frame near an edge, retargets the slot, and stops on drop', () => {
+      const queue = new Map<number, FrameRequestCallback>();
+      let nextId = 0;
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        queue.set(++nextId, cb);
+        return nextId;
+      });
+      vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+        queue.delete(id);
+      });
+      const { onDone } = setup();
+      const row = rowWith(20);
+      const last = screen.getAllByTestId('peek-card')[2];
+
+      fireEvent.pointerDown(last, { button: 0, clientX: 300, clientY: 0 });
+      pointer('pointermove', 200);
+      flushFrame(queue);
+      expect(row.scrollLeft).toBe(20);
+
+      pointer('pointermove', 20);
+      flushFrame(queue);
+      expect(row.scrollLeft).toBe(5);
+      flushFrame(queue);
+      expect(row.scrollLeft).toBe(0);
+      expect(codes()).toEqual(['a', 'b', 'c']);
+
+      pointer('pointerup', 20);
+      expect(queue.size).toBe(0);
+      expect(codes()).toEqual(['c', 'a', 'b']);
+
+      fireEvent.click(screen.getByTestId('peek-done'));
+      expect(onDone).toHaveBeenCalledWith(
+        [
+          { entry: cards[2], dest: 'top' },
+          { entry: cards[0], dest: 'top' },
+          { entry: cards[1], dest: 'top' },
+        ],
+        { shuffleTop: false, shuffleBottom: false },
+      );
+    });
   });
 
   describe('shuffle checkboxes', () => {

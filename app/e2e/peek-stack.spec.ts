@@ -646,9 +646,7 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     expect(await getDeckCodes(page)).toEqual(codes);
   });
 
-  test('a window opened with Top N keeps the N box, which clamps to the stack size', async ({
-    page,
-  }, testInfo) => {
+  test('a Top 3 window has no N box', async ({ page }, testInfo) => {
     await openTable(page, testInfo.testId);
     const codes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
     await seedDeck(page, codes);
@@ -657,10 +655,7 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     await peekRow(page).click();
     await submenuItem(page, 'top-3').click();
     await expectPeekCodes(page, codes.slice(0, 3));
-
-    await page.getByTestId('peek-n-input').fill('20');
-    await page.keyboard.press('Enter');
-    await expectPeekCodes(page, codes);
+    await expect(page.getByTestId('peek-n-input')).toHaveCount(0);
 
     await page.getByTestId('peek-done').click();
     await expect(page.getByTestId('peek-modal')).toHaveCount(0);
@@ -748,6 +743,26 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     expect(overflowX).toBe('scroll');
   });
 
+  test('Other… with 20 on an 8-card deck peeks all 8', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    const codes = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    await seedDeck(page, codes);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await submenuItem(page, 'other').click();
+    await expect(page.getByTestId('peek-count-input')).toBeFocused();
+    await page.keyboard.type('20');
+    await page.keyboard.press('Enter');
+    await expectPeekCodes(page, codes);
+
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+    expect(await getDeckCodes(page)).toEqual(codes);
+  });
+
   test('Esc in the Other… number dialog opens no peek window', async ({
     page,
   }, testInfo) => {
@@ -779,27 +794,5 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     await expect.poll(() => handCodes(page)).toEqual(['A', 'B', 'C']);
     const all = await snapshotAll(page);
     expect(all.find((o) => o.id === DECK_ID)).toBeUndefined();
-  });
-
-  test('Done applies the current peek even with an uncommitted N edit', async ({
-    page,
-  }, testInfo) => {
-    await openTable(page, testInfo.testId);
-    const codes = ['A', 'B', 'C', 'D', 'E', 'F'];
-    await seedDeck(page, codes);
-
-    await rightClickDeck(page);
-    await peekRow(page).click();
-    await submenuItem(page, 'top-3').click();
-    await expectPeekCodes(page, ['A', 'B', 'C']);
-    await dragPeekCard(page, 2, 0);
-    await expectPeekCodes(page, ['C', 'A', 'B']);
-
-    await page.getByTestId('peek-n-input').fill('5');
-    await page.getByTestId('peek-done').click();
-    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
-    await expect
-      .poll(() => getDeckCodes(page))
-      .toEqual(['C', 'A', 'B', 'D', 'E', 'F']);
   });
 });

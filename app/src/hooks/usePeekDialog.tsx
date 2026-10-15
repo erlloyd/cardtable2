@@ -15,11 +15,7 @@ import { dbg } from '../dev/dbg';
 interface PeekState {
   stackId: string | null;
   snapshot: CardEntry[];
-  /** Stack size at open, the upper bound for N. */
-  total: number;
-  /** True when N came from the Other… dialog, so the modal has no N box. */
-  fixedCount: boolean;
-  /** Bumped per open or re-snapshot so the modal remounts with a fresh order. */
+  /** Bumped per open so the modal remounts with a fresh order. */
   key: number;
 }
 
@@ -57,8 +53,6 @@ export function usePeekDialog(
   const [state, setState] = useState<PeekState>({
     stackId: null,
     snapshot: [],
-    total: 0,
-    fixedCount: false,
     key: 0,
   });
   const [prompt, setPrompt] = useState<CountPromptState>({
@@ -68,14 +62,12 @@ export function usePeekDialog(
   });
 
   const showPeek = useCallback(
-    (stackId: string, count: number, fixedCount: boolean) => {
+    (stackId: string, count: number) => {
       const cards = store?.getObjectYMap(stackId)?.get('_cards');
       if (!cards || cards.length === 0) return;
       setState((prev) => ({
         stackId,
         snapshot: cards.slice(0, Math.min(count, cards.length)),
-        total: cards.length,
-        fixedCount,
         key: prev.key + 1,
       }));
     },
@@ -85,7 +77,7 @@ export function usePeekDialog(
   const openPeek = useCallback(
     (stackId: string, count: number, options?: { askCount?: boolean }) => {
       if (!options?.askCount) {
-        showPeek(stackId, count, false);
+        showPeek(stackId, count);
         return;
       }
       const cards = store?.getObjectYMap(stackId)?.get('_cards');
@@ -105,29 +97,10 @@ export function usePeekDialog(
 
   const submitPrompt = useCallback(
     (count: number) => {
-      if (prompt.stackId) showPeek(prompt.stackId, count, true);
+      if (prompt.stackId) showPeek(prompt.stackId, count);
       cancelPrompt();
     },
     [prompt.stackId, showPeek, cancelPrompt],
-  );
-
-  // Re-reads the live stack, so order and destinations reset to Top.
-  const changeCount = useCallback(
-    (count: number) => {
-      setState((prev) => {
-        const cards = prev.stackId
-          ? store?.getObjectYMap(prev.stackId)?.get('_cards')
-          : undefined;
-        if (!cards || cards.length === 0) return prev;
-        return {
-          ...prev,
-          snapshot: cards.slice(0, Math.min(count, cards.length)),
-          total: cards.length,
-          key: prev.key + 1,
-        };
-      });
-    },
-    [store],
   );
 
   const close = useCallback(() => {
@@ -183,9 +156,6 @@ export function usePeekDialog(
         key={`peek-${state.key}`}
         isOpen={state.stackId !== null}
         cards={state.snapshot}
-        totalCount={state.total}
-        fixedCount={state.fixedCount}
-        onChangeCount={changeCount}
         getFaceUrl={getFaceUrl}
         canDiscard={canDiscard}
         onDone={done}

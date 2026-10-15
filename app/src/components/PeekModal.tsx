@@ -18,14 +18,6 @@ export interface PeekModalProps {
   isOpen: boolean;
   /** Top-N snapshot, top card first. */
   cards: CardEntry[];
-  /** Stack size, the upper bound for the N input. */
-  totalCount: number;
-  /** Hides the in-window N box; set when N was already chosen in the Other…
-   * dialog. */
-  fixedCount?: boolean;
-  /** Asks the host to re-snapshot the top `count` cards, which remounts this
-   * modal and so resets order and destinations. */
-  onChangeCount: (count: number) => void;
   getFaceUrl: (code: string) => string | null;
   /** True when the entry has a discard zone to go to. */
   canDiscard: (entry: CardEntry) => boolean;
@@ -68,9 +60,6 @@ function slotAt(clientX: number, row: HTMLDivElement, slotWidth: number) {
 export function PeekModal({
   isOpen,
   cards,
-  totalCount,
-  fixedCount = false,
-  onChangeCount,
   getFaceUrl,
   canDiscard,
   onDone,
@@ -81,7 +70,6 @@ export function PeekModal({
   );
   const [session, setSession] = useState<DragSession | null>(null);
   const [view, setView] = useState<DragView | null>(null);
-  const [countDraft, setCountDraft] = useState(String(cards.length));
   const [shuffleTop, setShuffleTop] = useState(false);
   const [shuffleBottom, setShuffleBottom] = useState(false);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -191,17 +179,6 @@ export function PeekModal({
     });
   };
 
-  const commitCount = () => {
-    const parsed = Math.trunc(Number(countDraft));
-    if (!Number.isFinite(parsed) || countDraft.trim() === '') {
-      setCountDraft(String(order.length));
-      return;
-    }
-    const next = Math.max(1, Math.min(totalCount, parsed));
-    setCountDraft(String(next));
-    if (next !== order.length) onChangeCount(next);
-  };
-
   const setDest = (index: number, dest: PeekDestination) => {
     setOrder((prev) =>
       prev.map((placement, i) =>
@@ -229,24 +206,6 @@ export function PeekModal({
           <div className="deck-import-title">
             Peek at top {order.length} {order.length === 1 ? 'card' : 'cards'}
           </div>
-          {!fixedCount && (
-            <label className="peek-modal-count">
-              Cards
-              <input
-                type="number"
-                min={1}
-                max={totalCount}
-                value={countDraft}
-                data-testid="peek-n-input"
-                onChange={(e) => setCountDraft(e.currentTarget.value)}
-                onBlur={() => setCountDraft(String(order.length))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitCount();
-                }}
-              />
-              of {totalCount}
-            </label>
-          )}
           <button
             type="button"
             className="deck-import-close"

@@ -5,7 +5,7 @@
  * `hasCounters` flag that future counter-specific actions will gate on.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import { ObjectKind, type TableObject } from '@cardtable2/shared';
 import { buildActionContext } from './buildActionContext';
@@ -45,6 +45,25 @@ function makeStore(): YjsStore {
 describe('buildActionContext', () => {
   it('returns null when store is null', () => {
     expect(buildActionContext(null, [])).toBeNull();
+  });
+
+  it('passes onOpenPeek through to the context', () => {
+    const onOpenPeek = vi.fn();
+    const ctx = buildActionContext(
+      makeStore(),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onOpenPeek,
+    );
+    ctx?.onOpenPeek?.('s1', 3);
+    expect(onOpenPeek).toHaveBeenCalledWith('s1', 3);
   });
 
   describe('SelectionInfo.hasCounters', () => {

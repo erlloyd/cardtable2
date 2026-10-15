@@ -49,9 +49,20 @@ export interface ActionContext {
   onOpenLoadPicker?: (presetType?: string) => void;
   /** Open the rename dialog for the given zone. */
   onOpenRenameDialog?: (zoneId: string) => void;
+  /** Open the peek modal for the top `count` cards of the given stack. */
+  onOpenPeek?: (stackId: string, count: number) => void;
   /** Index in the active hand of the card under the mouse, or null. A getter
    * so hovering does not rebuild the context. */
   getHoveredHandCardIndex?: () => number | null;
+}
+
+/**
+ * A named alternative way to run an action, shown as a submenu entry.
+ */
+export interface ActionVariant {
+  id: string;
+  label: string | ((context: ActionContext) => string);
+  execute: (context: ActionContext) => void | Promise<void>;
 }
 
 /**
@@ -68,4 +79,11 @@ export interface Action {
   description?: string; // For tooltips/help
   isAvailable: (context: ActionContext) => boolean;
   execute: (context: ActionContext) => void | Promise<void>;
+  /**
+   * An action with variants shows as a submenu parent in the context menu.
+   * Variants share the parent's isAvailable. The parent's own execute still
+   * runs from its shortcut, the action handle and the command palette.
+   * Variants appear only in the context menu.
+   */
+  variants?: ActionVariant[];
 }

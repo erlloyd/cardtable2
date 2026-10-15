@@ -33,6 +33,7 @@ import {
   registerAttachmentActions,
 } from '../actions/attachmentActions';
 import { registerHandActions } from '../actions/handActions';
+import { registerPeekActions } from '../actions/peekActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
@@ -268,9 +269,11 @@ function Table() {
   useEffect(() => {
     const unregisterDefaults = registerDefaultActions();
     const unregisterHand = registerHandActions(ActionRegistry.getInstance());
+    const unregisterPeek = registerPeekActions(ActionRegistry.getInstance());
     return () => {
       unregisterDefaults();
       unregisterHand();
+      unregisterPeek();
     };
   }, []);
 
@@ -692,6 +695,10 @@ function Table() {
 
   const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
 
+  const handleOpenPeek = useCallback((stackId: string, count: number) => {
+    dbg('peek', 'open peek', stackId, count);
+  }, []);
+
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
@@ -802,6 +809,7 @@ function Table() {
       handleOpenLoadPicker,
       openRenameDialog,
       getHoveredHandCardIndex,
+      handleOpenPeek,
     );
 
     if (context) {
@@ -825,6 +833,7 @@ function Table() {
     handleOpenLoadPicker,
     openRenameDialog,
     getHoveredHandCardIndex,
+    handleOpenPeek,
   ]);
 
   // Enable keyboard shortcuts

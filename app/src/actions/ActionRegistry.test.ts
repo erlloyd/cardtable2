@@ -277,6 +277,51 @@ describe('ActionRegistry', () => {
     });
   });
 
+  describe('executeVariant', () => {
+    function registerWithVariant(available = true) {
+      const variantFn = vi.fn();
+      const parentFn = vi.fn();
+      registry.register({
+        id: 'parent',
+        label: 'Parent',
+        icon: '▶️',
+        category: CARD_ACTIONS,
+        isAvailable: () => available,
+        execute: parentFn,
+        variants: [{ id: 'v1', label: 'V1', execute: variantFn }],
+      });
+      return { variantFn, parentFn };
+    }
+
+    it('runs only the variant when available', async () => {
+      const { variantFn, parentFn } = registerWithVariant();
+      await registry.executeVariant('parent', 'v1', mockContext);
+      expect(variantFn).toHaveBeenCalledWith(mockContext);
+      expect(parentFn).not.toHaveBeenCalled();
+    });
+
+    it('throws on unknown action', async () => {
+      await expect(
+        registry.executeVariant('nope', 'v1', mockContext),
+      ).rejects.toThrow('not found');
+    });
+
+    it('throws on unknown variant', async () => {
+      registerWithVariant();
+      await expect(
+        registry.executeVariant('parent', 'missing', mockContext),
+      ).rejects.toThrow('not found');
+    });
+
+    it('throws when the parent is not available', async () => {
+      const { variantFn } = registerWithVariant(false);
+      await expect(
+        registry.executeVariant('parent', 'v1', mockContext),
+      ).rejects.toThrow('not available');
+      expect(variantFn).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getAllActions', () => {
     it('should return all registered actions', () => {
       const action1: Action = {

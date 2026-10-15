@@ -494,6 +494,13 @@ h1 {
   flex-shrink: 0;
 }
 
+.context-menu-submenu-arrow {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
 .context-menu-divider {
   height: 1px;
   background-color: #e5e7eb;

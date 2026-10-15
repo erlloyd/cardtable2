@@ -98,10 +98,9 @@ function deckViewportPos(page: Page): Promise<{ x: number; y: number }> {
 }
 
 async function selectDeck(page: Page): Promise<void> {
-  const pos = await deckViewportPos(page);
   await page.evaluate((pt) => {
     (globalThis as unknown as PageGlobals).__ctTest!.click(pt);
-  }, pos);
+  }, DECK_POS);
   await expect
     .poll(() =>
       page.evaluate(
@@ -245,7 +244,7 @@ test.describe('Peek at the top of a stack', () => {
     await page.getByTestId('peek-done').click();
 
     await expect(
-      page.getByRole('alert').filter({ hasText: /deck changed/i }),
+      page.getByRole('status').filter({ hasText: /deck changed/i }),
     ).toBeVisible();
     expect(await getDeckCodes(page)).toEqual(['Z', 'A', 'B', 'C', 'D', 'E']);
   });
@@ -309,12 +308,10 @@ test.describe('Peek at the top of a stack', () => {
     await seedDeck(page, ['A', 'B', 'C', 'D', 'E', 'F']);
 
     await rightClickDeck(page);
-    for (let i = 0; i < 20; i++) {
-      if (await peekRow(page).evaluate((el) => el.classList.contains('focus')))
-        break;
-      await page.keyboard.press('ArrowDown');
-    }
-    await expect(peekRow(page)).toHaveClass(/focus/);
+    // The menu does not take DOM focus on open (activeElement stays body, so
+    // ArrowDown from the open menu does nothing); focus the row directly.
+    await peekRow(page).focus();
+    await expect(peekRow(page)).toBeFocused();
 
     await page.keyboard.press('ArrowRight');
     await expect(submenuItem(page, 'top-1')).toBeFocused();

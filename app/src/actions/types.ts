@@ -49,8 +49,13 @@ export interface ActionContext {
   onOpenLoadPicker?: (presetType?: string) => void;
   /** Open the rename dialog for the given zone. */
   onOpenRenameDialog?: (zoneId: string) => void;
-  /** Open the peek modal for the top `count` cards of the given stack. */
-  onOpenPeek?: (stackId: string, count: number) => void;
+  /** Open the peek modal for the top `count` cards of the given stack.
+   * `focusCount` focuses the modal's N input on open. */
+  onOpenPeek?: (
+    stackId: string,
+    count: number,
+    options?: { focusCount?: boolean },
+  ) => void;
   /** Index in the active hand of the card under the mouse, or null. A getter
    * so hovering does not rebuild the context. */
   getHoveredHandCardIndex?: () => number | null;

@@ -38,7 +38,11 @@ export function buildActionContext(
   onOpenLoadPicker?: (presetType?: string) => void,
   onOpenRenameDialog?: (zoneId: string) => void,
   getHoveredHandCardIndex?: () => number | null,
-  onOpenPeek?: (stackId: string, count: number) => void,
+  onOpenPeek?: (
+    stackId: string,
+    count: number,
+    options?: { focusCount?: boolean },
+  ) => void,
 ): ActionContext | null {
   if (!store) return null;
 

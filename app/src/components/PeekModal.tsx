@@ -12,6 +12,13 @@ export interface PeekModalProps {
   isOpen: boolean;
   /** Top-N snapshot, top card first. */
   cards: CardEntry[];
+  /** Stack size, the upper bound for the N input. */
+  totalCount: number;
+  /** Focus and select the N input on open. */
+  focusCount?: boolean;
+  /** Asks the host to re-snapshot the top `count` cards, which remounts this
+   * modal and so resets order and destinations. */
+  onChangeCount: (count: number) => void;
   getFaceUrl: (code: string) => string | null;
   /** True when the entry has a discard zone to go to. */
   canDiscard: (entry: CardEntry) => boolean;
@@ -53,6 +60,9 @@ function slotAt(clientX: number, row: HTMLDivElement, slotWidth: number) {
 export function PeekModal({
   isOpen,
   cards,
+  totalCount,
+  focusCount = false,
+  onChangeCount,
   getFaceUrl,
   canDiscard,
   onDone,
@@ -63,10 +73,18 @@ export function PeekModal({
   );
   const [session, setSession] = useState<DragSession | null>(null);
   const [view, setView] = useState<DragView | null>(null);
+  const [countDraft, setCountDraft] = useState(String(cards.length));
   const rowRef = useRef<HTMLDivElement | null>(null);
+  const countRef = useRef<HTMLInputElement | null>(null);
 
   const { width, height } = getPreviewDimensions('small');
   const slotWidth = width + CARD_GAP;
+
+  useEffect(() => {
+    if (!isOpen || !focusCount) return;
+    countRef.current?.focus();
+    countRef.current?.select();
+  }, [isOpen, focusCount]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -138,6 +156,17 @@ export function PeekModal({
     onDone(order);
   };
 
+  const commitCount = () => {
+    const parsed = Math.trunc(Number(countDraft));
+    if (!Number.isFinite(parsed) || countDraft.trim() === '') {
+      setCountDraft(String(order.length));
+      return;
+    }
+    const next = Math.max(1, Math.min(totalCount, parsed));
+    setCountDraft(String(next));
+    if (next !== order.length) onChangeCount(next);
+  };
+
   const setDest = (index: number, dest: PeekDestination) => {
     setOrder((prev) =>
       prev.map((placement, i) =>
@@ -165,6 +194,23 @@ export function PeekModal({
           <div className="deck-import-title">
             Peek at top {order.length} {order.length === 1 ? 'card' : 'cards'}
           </div>
+          <label className="peek-modal-count">
+            Cards
+            <input
+              ref={countRef}
+              type="number"
+              min={1}
+              max={totalCount}
+              value={countDraft}
+              data-testid="peek-n-input"
+              onChange={(e) => setCountDraft(e.currentTarget.value)}
+              onBlur={() => setCountDraft(String(order.length))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitCount();
+              }}
+            />
+            of {totalCount}
+          </label>
           <button
             type="button"
             className="deck-import-close"

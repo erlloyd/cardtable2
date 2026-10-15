@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { CardEntry } from '@cardtable2/shared';
@@ -12,6 +13,8 @@ function setup(canDiscard: (entry: CardEntry) => boolean = () => true) {
     <PeekModal
       isOpen
       cards={cards}
+      totalCount={cards.length}
+      onChangeCount={() => {}}
       getFaceUrl={(code) => (code === 'a' ? 'a.png' : null)}
       canDiscard={canDiscard}
       onDone={onDone}
@@ -96,6 +99,90 @@ describe('PeekModal', () => {
       { entry: cards[0], dest: 'bottom' },
       { entry: cards[2], dest: 'top' },
     ]);
+  });
+
+  describe('N input', () => {
+    const deck = ['a', 'b', 'c', 'd', 'e', 'f'].map((code) => ({ code }));
+
+    // Mirrors usePeekDialog: a count change re-snapshots and remounts.
+    function Host({ focusCount }: { focusCount?: boolean }) {
+      const [snap, setSnap] = useState({ n: 3, key: 0 });
+      return (
+        <PeekModal
+          key={snap.key}
+          isOpen
+          cards={deck.slice(0, snap.n)}
+          totalCount={deck.length}
+          focusCount={focusCount}
+          onChangeCount={(n) => setSnap((s) => ({ n, key: s.key + 1 }))}
+          getFaceUrl={() => null}
+          canDiscard={() => true}
+          onDone={() => {}}
+          onClose={() => {}}
+        />
+      );
+    }
+
+    const input = () => screen.getByTestId<HTMLInputElement>('peek-n-input');
+    const enter = (value: string) => {
+      fireEvent.change(input(), { target: { value } });
+      fireEvent.keyDown(input(), { key: 'Enter' });
+    };
+
+    it('focuses the input with focusCount, not otherwise', () => {
+      const { unmount } = render(<Host focusCount />);
+      expect(document.activeElement).toBe(input());
+      unmount();
+      render(<Host />);
+      expect(document.activeElement).not.toBe(input());
+    });
+
+    it('shows N of total and re-snapshots on Enter', () => {
+      render(<Host />);
+      expect(input().value).toBe('3');
+      expect(screen.getByText(/of 6/)).toBeTruthy();
+      enter('5');
+      expect(codes()).toEqual(['a', 'b', 'c', 'd', 'e']);
+    });
+
+    it('clamps a value above the stack size', () => {
+      render(<Host />);
+      enter('20');
+      expect(codes()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+      expect(input().value).toBe('6');
+    });
+
+    it('blur reverts the input without calling onChangeCount', () => {
+      const onChangeCount = vi.fn();
+      render(
+        <PeekModal
+          isOpen
+          cards={cards}
+          totalCount={6}
+          onChangeCount={onChangeCount}
+          getFaceUrl={() => null}
+          canDiscard={() => true}
+          onDone={() => {}}
+          onClose={() => {}}
+        />,
+      );
+      fireEvent.change(input(), { target: { value: '5' } });
+      fireEvent.blur(input());
+      expect(onChangeCount).not.toHaveBeenCalled();
+      expect(input().value).toBe('3');
+      expect(codes()).toEqual(['a', 'b', 'c']);
+    });
+
+    it('Enter resets destinations when N changes', () => {
+      render(<Host />);
+      fireEvent.change(screen.getAllByTestId('peek-dest')[0], {
+        target: { value: 'hand' },
+      });
+      enter('4');
+      expect(codes()).toEqual(['a', 'b', 'c', 'd']);
+      const dests = screen.getAllByTestId('peek-dest') as HTMLSelectElement[];
+      expect(dests.map((s) => s.value)).toEqual(['top', 'top', 'top', 'top']);
+    });
   });
 
   it('disables Discard only for entries without a home zone', () => {

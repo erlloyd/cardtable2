@@ -42,13 +42,24 @@ export function registerPeekActions(registry: ActionRegistry): () => void {
         ctx.numericPrefix ?? DEFAULT_PEEK_COUNT,
       );
     },
-    variants: PEEK_VARIANT_COUNTS.map((n) => ({
-      id: `top-${n}`,
-      label: `Top ${n}`,
-      execute: (ctx) => {
-        ctx.onOpenPeek?.(ctx.selection.ids[0], n);
+    variants: [
+      ...PEEK_VARIANT_COUNTS.map((n) => ({
+        id: `top-${n}`,
+        label: `Top ${n}`,
+        execute: (ctx: ActionContext) => {
+          ctx.onOpenPeek?.(ctx.selection.ids[0], n);
+        },
+      })),
+      {
+        id: 'custom',
+        label: 'Custom…',
+        execute: (ctx: ActionContext) => {
+          ctx.onOpenPeek?.(ctx.selection.ids[0], DEFAULT_PEEK_COUNT, {
+            focusCount: true,
+          });
+        },
       },
-    })),
+    ],
   });
 
   return () => {

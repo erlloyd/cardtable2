@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { YjsStore } from './YjsStore';
-import { createObject } from './YjsActions';
+import { createDiscardZoneForStack, createObject } from './YjsActions';
 import { commitPeek, type PeekPlacement } from './YjsPeekActions';
 import { ObjectKind, toCardEntries, type CardEntry } from '@cardtable2/shared';
 
@@ -108,22 +108,222 @@ describe('YjsPeekActions.commitPeek', () => {
     expect(stackCards(id)).toEqual([a, b, c]);
   });
 
-  it('returns invalid for a non-top destination', () => {
-    const [a, b] = toCardEntries(['A', 'B']);
-    const id = makeStack([a, b]);
+  describe('destinations', () => {
+    function place(
+      ...pairs: [CardEntry, PeekPlacement['dest']][]
+    ): PeekPlacement[] {
+      return pairs.map(([entry, dest]) => ({ entry, dest }));
+    }
 
-    const result = commitPeek(
-      store,
-      id,
-      [a, b],
-      [
-        { entry: b, dest: 'top' },
-        { entry: a, dest: 'bottom' },
-      ],
-      {},
-    );
+    function makeZone(): string {
+      const temp = makeStack(toCardEntries(['T']));
+      const zoneId = createDiscardZoneForStack(store, temp)!;
+      store.deleteObject(temp);
+      return zoneId;
+    }
 
-    expect(result).toBe('invalid');
-    expect(stackCards(id)).toEqual([a, b]);
+    function pileCards(zoneId: string): CardEntry[] {
+      let cards: CardEntry[] = [];
+      store.forEachObject((yMap) => {
+        if (yMap.get('_containerId') === zoneId) cards = yMap.get('_cards')!;
+      });
+      return cards;
+    }
+
+    function tableStacks(): {
+      cards: CardEntry[];
+      faceUp: boolean;
+      y: number;
+    }[] {
+      const out: { cards: CardEntry[]; faceUp: boolean; y: number }[] = [];
+      store.forEachObject((yMap) => {
+        if (yMap.get('_kind') !== ObjectKind.Stack) return;
+        if (yMap.get('_containerId')) return;
+        if (yMap.get('_pos')!.y === 200) return;
+        out.push({
+          cards: yMap.get('_cards')!,
+          faceUp: yMap.get('_faceUp') === true,
+          y: yMap.get('_pos')!.y,
+        });
+      });
+      return out;
+    }
+
+    it('bottom keeps the first-listed card nearest the top of the bottom group', () => {
+      const [a, b, c, d] = toCardEntries(['A', 'B', 'C', 'D']);
+      const id = makeStack([a, b, c, d]);
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b, c],
+        place([c, 'bottom'], [a, 'bottom'], [b, 'top']),
+        {},
+      );
+
+      expect(result).toBe('applied');
+      expect(stackCards(id)).toEqual([b, d, c, a]);
+    });
+
+    it('hand appends in display order', () => {
+      const [a, b, c, d] = toCardEntries(['A', 'B', 'C', 'D']);
+      const id = makeStack([a, b, c, d]);
+      const handId = store.createHand('Hand');
+      store.addCardToHand(handId, { code: 'H' });
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b, c],
+        place([c, 'hand'], [a, 'hand'], [b, 'top']),
+        { handId },
+      );
+
+      expect(result).toBe('applied');
+      expect(store.getHandCards(handId)).toEqual([{ code: 'H' }, c, a]);
+      expect(stackCards(id)).toEqual([b, d]);
+    });
+
+    it('table deals face-up single-card stacks below the stack', () => {
+      const [a, b, c] = toCardEntries(['A', 'B', 'C']);
+      const id = makeStack([a, b, c]);
+
+      commitPeek(store, id, [a, b], place([b, 'table'], [a, 'table']), {});
+
+      expect(stackCards(id)).toEqual([c]);
+      const dealt = tableStacks();
+      expect(dealt.map((s) => s.cards)).toEqual([[b], [a]]);
+      expect(dealt.every((s) => s.faceUp && s.y > 200)).toBe(true);
+    });
+
+    it('discard routes cards to the home zone pile', () => {
+      const zoneId = makeZone();
+      const a: CardEntry = { code: 'A', homeZone: zoneId };
+      const b: CardEntry = { code: 'B', homeZone: zoneId };
+      const c: CardEntry = { code: 'C' };
+      const id = makeStack([a, b, c]);
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b],
+        place([a, 'discard'], [b, 'discard']),
+        {},
+      );
+
+      expect(result).toBe('applied');
+      expect(stackCards(id)).toEqual([c]);
+      expect(
+        pileCards(zoneId)
+          .map((e) => e.code)
+          .sort(),
+      ).toEqual(['A', 'B']);
+    });
+
+    it('applies a mixed plan across all five destinations', () => {
+      const zoneId = makeZone();
+      const a: CardEntry = { code: 'A', homeZone: zoneId };
+      const b: CardEntry = { code: 'B' };
+      const c: CardEntry = { code: 'C' };
+      const d: CardEntry = { code: 'D' };
+      const e: CardEntry = { code: 'E' };
+      const f: CardEntry = { code: 'F' };
+      const id = makeStack([a, b, c, d, e, f]);
+      const handId = store.createHand('Hand');
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b, c, d, e],
+        place(
+          [b, 'hand'],
+          [c, 'table'],
+          [a, 'discard'],
+          [d, 'top'],
+          [e, 'bottom'],
+        ),
+        { handId },
+      );
+
+      expect(result).toBe('applied');
+      expect(stackCards(id)).toEqual([d, f, e]);
+      expect(store.getHandCards(handId)).toEqual([b]);
+      expect(tableStacks().map((s) => s.cards)).toEqual([[c]]);
+      expect(pileCards(zoneId)).toEqual([a]);
+    });
+
+    it('deletes the stack and loses no card when every card leaves', () => {
+      const zoneId = makeZone();
+      const a: CardEntry = { code: 'A', homeZone: zoneId };
+      const b: CardEntry = { code: 'B' };
+      const c: CardEntry = { code: 'C' };
+      const id = makeStack([a, b, c]);
+      const handId = store.createHand('Hand');
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b, c],
+        place([b, 'hand'], [c, 'table'], [a, 'discard']),
+        { handId },
+      );
+
+      expect(result).toBe('applied');
+      // The last card is discarded in place: the emptied stack becomes the pile.
+      expect(store.getObjectYMap(id)?.get('_containerId')).toBe(zoneId);
+      expect(store.getHandCards(handId)).toEqual([b]);
+      expect(tableStacks().map((s) => s.cards)).toEqual([[c]]);
+      expect(pileCards(zoneId)).toEqual([a]);
+    });
+
+    it('deletes the stack when hand and table take every card', () => {
+      const [a, b] = toCardEntries(['A', 'B']);
+      const id = makeStack([a, b]);
+      const handId = store.createHand('Hand');
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b],
+        place([a, 'hand'], [b, 'table']),
+        { handId },
+      );
+
+      expect(result).toBe('applied');
+      expect(store.getObjectYMap(id)).toBeUndefined();
+      expect(store.getHandCards(handId)).toEqual([a]);
+      expect(tableStacks().map((s) => s.cards)).toEqual([[b]]);
+    });
+
+    it('keeps a discard card with no home on top of the stack', () => {
+      const a: CardEntry = { code: 'A' };
+      const b: CardEntry = { code: 'B' };
+      const c: CardEntry = { code: 'C' };
+      const id = makeStack([a, b, c]);
+
+      const result = commitPeek(
+        store,
+        id,
+        [a, b],
+        place([a, 'discard'], [b, 'top']),
+        {},
+      );
+
+      expect(result).toBe('applied');
+      expect(stackCards(id)).toEqual([a, b, c]);
+    });
+
+    it('returns invalid and writes nothing for hand placements without a hand', () => {
+      const [a, b] = toCardEntries(['A', 'B']);
+      const id = makeStack([a, b]);
+
+      expect(commitPeek(store, id, [a], place([a, 'hand']), {})).toBe(
+        'invalid',
+      );
+      expect(
+        commitPeek(store, id, [a], place([a, 'hand']), { handId: 'nope' }),
+      ).toBe('invalid');
+      expect(stackCards(id)).toEqual([a, b]);
+    });
   });
 });

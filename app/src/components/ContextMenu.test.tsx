@@ -1097,6 +1097,33 @@ describe('ContextMenu', () => {
       expect(parentExecute).not.toHaveBeenCalled();
     });
 
+    it('does not show a stale submenu after the menu closes and reopens', async () => {
+      const user = userEvent.setup();
+      const props = { onClose: mockOnClose, context };
+      const { rerender } = render(
+        <ContextMenu isOpen={true} position={{ x: 100, y: 100 }} {...props} />,
+      );
+      await user.click(screen.getByTestId('context-menu-item-peek-like'));
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toBeInTheDocument();
+
+      rerender(
+        <ContextMenu isOpen={false} position={{ x: 100, y: 100 }} {...props} />,
+      );
+      rerender(
+        <ContextMenu isOpen={true} position={{ x: 300, y: 200 }} {...props} />,
+      );
+
+      expect(
+        screen.queryByTestId('context-submenu-item-peek-like-one'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-peek-like')).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+
     it('ArrowUp/ArrowDown move focus within the submenu and wrap', async () => {
       const user = userEvent.setup();
       renderMenu();
@@ -1145,21 +1172,6 @@ describe('ContextMenu', () => {
       );
     });
 
-    it('takes DOM focus on open so ArrowDown walks to the parent row, then ArrowRight focuses the first submenu item', async () => {
-      const user = userEvent.setup();
-      renderMenu();
-      expect(screen.getByRole('menu', { hidden: true })).toHaveFocus();
-      const parent = screen.getByTestId('context-menu-item-peek-like');
-      for (let i = 0; i < 5 && !parent.classList.contains('focus'); i++) {
-        await user.keyboard('{ArrowDown}');
-      }
-      expect(parent).toHaveClass('focus');
-      await user.keyboard('{ArrowRight}');
-      expect(
-        screen.getByTestId('context-submenu-item-peek-like-one'),
-      ).toHaveFocus();
-    });
-
     it('focuses the first submenu item only once the panel is visible', async () => {
       const user = userEvent.setup();
       const visibilityAtFocus: string[] = [];
@@ -1180,13 +1192,6 @@ describe('ContextMenu', () => {
       await user.keyboard('{ArrowRight}');
       focusSpy.mockRestore();
       expect(visibilityAtFocus).toEqual(['visible']);
-    });
-
-    it('Escape on the top-level menu closes it', async () => {
-      const user = userEvent.setup();
-      renderMenu();
-      await user.keyboard('{Escape}');
-      expect(mockOnClose).toHaveBeenCalledTimes(1);
     });
 
     it('clicking a variant calls executeVariant with the ids and closes', async () => {

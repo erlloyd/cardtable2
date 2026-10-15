@@ -197,8 +197,11 @@ async function dragPeekCard(
 
 async function rightClickDeck(page: Page, world = DECK_POS): Promise<void> {
   const pos = await deckViewportPos(page, world);
-  await page.mouse.click(pos.x, pos.y, { button: 'right' });
-  await expect(openMenu(page)).toBeVisible({ timeout: 5000 });
+  // A just-seeded object may not be hit-testable yet; retry the right-click.
+  await expect(async () => {
+    await page.mouse.click(pos.x, pos.y, { button: 'right' });
+    await expect(openMenu(page)).toBeVisible({ timeout: 1500 });
+  }).toPass({ timeout: 10000 });
 }
 
 const openMenu = (page: Page) => page.locator('.context-menu').first();
@@ -660,5 +663,27 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     await expect.poll(() => handCodes(page)).toEqual(['A', 'B', 'C']);
     const all = await snapshotAll(page);
     expect(all.find((o) => o.id === DECK_ID)).toBeUndefined();
+  });
+
+  test('Done applies the current peek even with an uncommitted N edit', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    const codes = ['A', 'B', 'C', 'D', 'E', 'F'];
+    await seedDeck(page, codes);
+
+    await rightClickDeck(page);
+    await peekRow(page).click();
+    await submenuItem(page, 'custom').click();
+    await expectPeekCodes(page, ['A', 'B', 'C']);
+    await dragPeekCard(page, 2, 0);
+    await expectPeekCodes(page, ['C', 'A', 'B']);
+
+    await page.getByTestId('peek-n-input').fill('5');
+    await page.getByTestId('peek-done').click();
+    await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+    await expect
+      .poll(() => getDeckCodes(page))
+      .toEqual(['C', 'A', 'B', 'D', 'E', 'F']);
   });
 });

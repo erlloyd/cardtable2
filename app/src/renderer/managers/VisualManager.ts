@@ -11,6 +11,10 @@ import { getTokenSize } from '../objects/token/utils';
 import { getMatSize } from '../objects/mat/utils';
 import { getCounterDimensions } from '../objects/counter/utils';
 import { COUNTER_CLAMP_FLASH_DURATION_MS } from '../objects/counter/constants';
+import {
+  ZONE_LABEL_GAP,
+  ZONE_LABEL_HIT_HEIGHT,
+} from '../objects/zone/constants';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
 import type { CounterZone, HoverManager } from './HoverManager';
@@ -19,6 +23,12 @@ import { RenderMode } from '../IRendererAdapter';
 // Letter spacing keeps the 2px label stroke from closing gaps between glyphs
 const KIND_LABEL_FONT_SIZE = 16;
 const KIND_LABEL_LETTER_SPACING = 1;
+
+// Padlock badge for locked objects (world units)
+const LOCK_BADGE_SIZE = 14;
+const LOCK_BADGE_INSET = 2;
+const LOCK_BADGE_FILL = 0x1f2937;
+const LOCK_BADGE_STROKE = 0xf9fafb;
 
 /**
  * VisualManager - Manages visual effects and object rendering.
@@ -211,9 +221,50 @@ export class VisualManager {
     );
     container.addChild(shapeGraphic);
 
+    if (obj._locked) {
+      container.addChild(this.createLockBadge(obj));
+    }
+
     // Object behaviors handle their own text rendering via ctx.createKindLabel()
 
     return container;
+  }
+
+  /**
+   * Padlock badge for a locked object, drawn at the top-right corner of its
+   * bounds (relative to the visual origin at _pos). Fixed world size.
+   * Only the redraw/create paths call this; minimal (ghost/preview) renders
+   * go straight to behaviors.render and never get a badge.
+   */
+  private createLockBadge(obj: TableObject): Graphics {
+    const bounds = getBehaviors(obj._kind).getBounds(obj);
+    // A zone's bounds include the label band above the box; use the box corner
+    const top =
+      obj._kind === ObjectKind.Zone
+        ? bounds.minY + ZONE_LABEL_GAP + ZONE_LABEL_HIT_HEIGHT
+        : bounds.minY;
+    const cx =
+      bounds.maxX - obj._pos.x - LOCK_BADGE_SIZE / 2 - LOCK_BADGE_INSET;
+    const cy = top - obj._pos.y + LOCK_BADGE_SIZE / 2 + LOCK_BADGE_INSET;
+
+    const half = LOCK_BADGE_SIZE / 2;
+    const bodyTop = cy - 1;
+    const shackleRadius = half * 0.45;
+    const badge = new Graphics();
+    badge.label = 'lock-badge';
+    // Shackle
+    badge
+      .arc(cx, bodyTop, shackleRadius, Math.PI, 0)
+      .stroke({ color: LOCK_BADGE_STROKE, width: 2.5 });
+    badge
+      .arc(cx, bodyTop, shackleRadius, Math.PI, 0)
+      .stroke({ color: LOCK_BADGE_FILL, width: 1.5 });
+    // Body
+    badge
+      .roundRect(cx - half, bodyTop, LOCK_BADGE_SIZE, half + 1, 2)
+      .fill({ color: LOCK_BADGE_FILL })
+      .stroke({ color: LOCK_BADGE_STROKE, width: 1 });
+    return badge;
   }
 
   /**
@@ -758,6 +809,10 @@ export class VisualManager {
       counterZoneState,
     );
     visual.addChild(shapeGraphic);
+
+    if (obj._locked) {
+      visual.addChild(this.createLockBadge(obj));
+    }
 
     // Object behaviors handle their own text rendering via ctx.createKindLabel()
 

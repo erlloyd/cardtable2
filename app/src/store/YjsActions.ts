@@ -215,10 +215,12 @@ export function moveObjects(
       // Clear discard-pile membership when the object is manually moved.
       // A card dragged out of a zone is no longer resting in its pile; discarding
       // again must re-form the pile rather than treating the card as still there.
+      // The link is kept when the container moves in the same batch (a zone dragged
+      // with its pile): the pile travels with its zone and is still resting in it.
       // discardCardToZone sets _containerId AFTER calling moveObjects, so clearing
       // here is safe for the new-pile branch (it re-sets the value immediately after).
       const currentContainerId = yMap.get('_containerId');
-      if (currentContainerId) {
+      if (currentContainerId && !movedIds.has(currentContainerId)) {
         yMap.set('_containerId', null);
       }
 

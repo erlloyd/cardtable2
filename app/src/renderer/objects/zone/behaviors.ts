@@ -8,7 +8,8 @@ import {
   ZONE_DISCARD_BORDER_COLOR,
   ZONE_DISCARD_FILL_COLOR,
   ZONE_DISCARD_FILL_ALPHA,
-  ZONE_DISCARD_LABEL_GAP,
+  ZONE_LABEL_GAP,
+  ZONE_LABEL_HIT_HEIGHT,
 } from './constants';
 import {
   getZoneColor,
@@ -43,15 +44,10 @@ export const ZoneBehaviors: ObjectBehaviors = {
 
     // Add kind label text (unless in minimal mode)
     if (!ctx.minimal) {
-      const text = ctx.createKindLabel(discard ? getZoneLabel(obj) : obj._kind);
-      if (discard) {
-        // Above the top edge so cards dropped in the zone don't cover it
-        text.anchor.set(0.5, 1);
-        text.position.set(0, -height / 2 - ZONE_DISCARD_LABEL_GAP);
-      } else {
-        text.anchor.set(0.5);
-        text.position.set(0, 0);
-      }
+      const text = ctx.createKindLabel(getZoneLabel(obj));
+      // Above the top edge so cards dropped in the zone don't cover it
+      text.anchor.set(0.5, 1);
+      text.position.set(0, -height / 2 - ZONE_LABEL_GAP);
       container.addChild(text);
     }
 
@@ -63,7 +59,8 @@ export const ZoneBehaviors: ObjectBehaviors = {
     const height = getZoneHeight(obj);
     return {
       minX: obj._pos.x - width / 2,
-      minY: obj._pos.y - height / 2,
+      // Includes the label band above the box so the label is clickable/draggable
+      minY: obj._pos.y - height / 2 - ZONE_LABEL_GAP - ZONE_LABEL_HIT_HEIGHT,
       maxX: obj._pos.x + width / 2,
       maxY: obj._pos.y + height / 2,
     };

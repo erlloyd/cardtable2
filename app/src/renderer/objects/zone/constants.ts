@@ -13,5 +13,9 @@ export const ZONE_DISCARD_BORDER_COLOR = 0xe17055; // Warm orange — distinguis
 export const ZONE_DISCARD_FILL_COLOR = 0xe17055;
 export const ZONE_DISCARD_FILL_ALPHA = 0.15;
 
-// Gap between a discard zone's top edge and its label (world px)
-export const ZONE_DISCARD_LABEL_GAP = 8;
+// Gap between a zone's top edge and its label (world px)
+export const ZONE_LABEL_GAP = 8;
+
+// Height of the label band above the gap that counts as part of the zone's hit
+// area (world px): 16px kind-label font + 2px stroke + descenders
+export const ZONE_LABEL_HIT_HEIGHT = 24;

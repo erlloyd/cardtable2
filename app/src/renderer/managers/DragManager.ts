@@ -1,8 +1,26 @@
-import type { StackObject } from '@cardtable2/shared';
+import type { StackObject, TableObject } from '@cardtable2/shared';
 import { ObjectKind, DRAG_SENTINEL_KEY } from '@cardtable2/shared';
 import type { Container } from 'pixi.js';
 import type { SceneManager } from '../SceneManager';
 import type { SelectionManager } from './SelectionManager';
+import { getZoneWidth, getZoneHeight } from '../objects/zone/utils';
+
+/** A zone's body box (no label band), edges inclusive. */
+function getZoneBox(zone: TableObject): {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+} {
+  const halfW = getZoneWidth(zone) / 2;
+  const halfH = getZoneHeight(zone) / 2;
+  return {
+    left: zone._pos.x - halfW,
+    right: zone._pos.x + halfW,
+    top: zone._pos.y - halfH,
+    bottom: zone._pos.y + halfH,
+  };
+}
 
 /**
  * Drag state for multi-object dragging.
@@ -208,6 +226,50 @@ export class DragManager {
       } else {
         // Without modifier: drag only this object
         objectsToDrag.add(this.dragState.draggedObjectId);
+      }
+    }
+
+    // Dragging a zone carries what rests in it (and zones nested in it).
+    // Attached children are skipped here: they arrive via the expansion below.
+    const zoneWorklist = [...objectsToDrag].filter(
+      (id) => sceneManager.getObject(id)?._kind === ObjectKind.Zone,
+    );
+    const actorId = selectionManager.getActorId();
+    for (let i = 0; i < zoneWorklist.length; i++) {
+      const zone = sceneManager.getObject(zoneWorklist[i]);
+      if (!zone) continue;
+      const box = getZoneBox(zone);
+      for (const [id, candidate] of sceneManager.getAllObjects()) {
+        if (objectsToDrag.has(id)) continue;
+        if (
+          candidate._kind === ObjectKind.Stack &&
+          (candidate as StackObject)._attachedToId
+        ) {
+          continue;
+        }
+        if (candidate._selectedBy && candidate._selectedBy !== actorId) {
+          continue;
+        }
+        if (candidate._kind === ObjectKind.Zone) {
+          const inner = getZoneBox(candidate);
+          if (
+            inner.left < box.left ||
+            inner.right > box.right ||
+            inner.top < box.top ||
+            inner.bottom > box.bottom
+          ) {
+            continue;
+          }
+          zoneWorklist.push(id);
+        } else if (
+          candidate._pos.x < box.left ||
+          candidate._pos.x > box.right ||
+          candidate._pos.y < box.top ||
+          candidate._pos.y > box.bottom
+        ) {
+          continue;
+        }
+        objectsToDrag.add(id);
       }
     }
 

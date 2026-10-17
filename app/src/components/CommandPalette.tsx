@@ -18,7 +18,7 @@ import {
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { KeyboardManager } from '../actions/KeyboardManager';
 import type { Action, ActionContext } from '../actions/types';
-import { fuzzySearch } from '../utils/fuzzySearch';
+import { rankByLabel } from '../utils/rankByLabel';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -65,12 +65,12 @@ export function CommandPalette({
     if (!query) {
       return allActions;
     }
-    return fuzzySearch(allActions, query, (action) => {
-      // Search in both label and description
-      const label = resolveLabel(action.label);
-      const searchText = `${label} ${action.description || ''}`;
-      return searchText;
-    });
+    return rankByLabel(
+      allActions,
+      query,
+      (action) => resolveLabel(action.label),
+      (action) => action.description || '',
+    );
   }, [allActions, query, resolveLabel]);
 
   // Group actions by category
@@ -127,6 +127,46 @@ export function CommandPalette({
     if (!shortcut) return '';
     return new KeyboardManager(ActionRegistry.getInstance()).getShortcutDisplay(
       shortcut,
+    );
+  };
+
+  const renderOption = (action: Action, key: string, showCategory: boolean) => {
+    const isAvailable = availableActionIds.has(action.id);
+    const label = resolveLabel(action.label);
+    return (
+      <ComboboxOption
+        key={key}
+        value={{ action }}
+        className="command-palette-option"
+      >
+        {({ focus }) => (
+          <div
+            className={`command-palette-option-content ${
+              focus ? 'focus' : ''
+            } ${!isAvailable ? 'disabled' : ''}`}
+          >
+            <span className="command-palette-icon">{action.icon}</span>
+            <div className="command-palette-details">
+              <div className="command-palette-label">{label}</div>
+              {action.description && (
+                <div className="command-palette-description">
+                  {action.description}
+                </div>
+              )}
+            </div>
+            {showCategory && (
+              <span className="command-palette-category-tag">
+                {action.category}
+              </span>
+            )}
+            {action.shortcut && (
+              <span className="command-palette-shortcut">
+                {getShortcutDisplay(action.shortcut)}
+              </span>
+            )}
+          </div>
+        )}
+      </ComboboxOption>
     );
   };
 
@@ -235,59 +275,29 @@ export function CommandPalette({
                         </div>
                       )}
 
-                      {/* Actions grouped by category */}
-                      {Array.from(actionsByCategory.entries()).map(
-                        ([category, actions]) => (
-                          <div
-                            key={category}
-                            className="command-palette-section"
-                          >
-                            <div className="command-palette-section-title">
-                              {category}
-                            </div>
-                            {actions.map((action) => {
-                              const isAvailable = availableActionIds.has(
-                                action.id,
-                              );
-                              const label = resolveLabel(action.label);
-                              return (
-                                <ComboboxOption
-                                  key={`category-${category}-${action.id}`}
-                                  value={{ action }}
-                                  className="command-palette-option"
-                                >
-                                  {({ focus }) => (
-                                    <div
-                                      className={`command-palette-option-content ${
-                                        focus ? 'focus' : ''
-                                      } ${!isAvailable ? 'disabled' : ''}`}
-                                    >
-                                      <span className="command-palette-icon">
-                                        {action.icon}
-                                      </span>
-                                      <div className="command-palette-details">
-                                        <div className="command-palette-label">
-                                          {label}
-                                        </div>
-                                        {action.description && (
-                                          <div className="command-palette-description">
-                                            {action.description}
-                                          </div>
-                                        )}
-                                      </div>
-                                      {action.shortcut && (
-                                        <span className="command-palette-shortcut">
-                                          {getShortcutDisplay(action.shortcut)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
-                                </ComboboxOption>
-                              );
-                            })}
-                          </div>
-                        ),
-                      )}
+                      {query
+                        ? filteredActions.map((action) =>
+                            renderOption(action, `result-${action.id}`, true),
+                          )
+                        : Array.from(actionsByCategory.entries()).map(
+                            ([category, actions]) => (
+                              <div
+                                key={category}
+                                className="command-palette-section"
+                              >
+                                <div className="command-palette-section-title">
+                                  {category}
+                                </div>
+                                {actions.map((action) =>
+                                  renderOption(
+                                    action,
+                                    `category-${category}-${action.id}`,
+                                    false,
+                                  ),
+                                )}
+                              </div>
+                            ),
+                          )}
                     </ComboboxOptions>
                   </div>
                 </Combobox>

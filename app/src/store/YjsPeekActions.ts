@@ -53,7 +53,10 @@ function isPermutation(
  *   destination per card.
  * - Returns 'stale' when the live top N no longer equals `peeked`, and
  *   'invalid' when the stack, placements or destinations cannot be applied
- *   (including 'hand' placements without an existing `opts.handId`).
+ *   (including 'hand' placements with neither an existing `opts.handId` nor an
+ *   `opts.createHand`).
+ * - `opts.createHand` supplies the hand only once the commit is known to
+ *   apply, so a 'stale'/'invalid' result never creates one.
  * - The stack is rebuilt as hand, table, discard, top, rest, bottom so each
  *   draw/discard step takes the current top of the stack. A step that empties
  *   the stack deletes it, so later steps only run while it still exists.
@@ -67,7 +70,7 @@ export function commitPeek(
   stackId: string,
   peeked: CardEntry[],
   placements: PeekPlacement[],
-  opts: { handId?: string } & Partial<PeekShuffle>,
+  opts: { handId?: string; createHand?: () => string } & Partial<PeekShuffle>,
 ): PeekCommitResult {
   const yMap = store.getObjectYMap(stackId);
   if (!yMap || yMap.get('_kind') !== ObjectKind.Stack) return 'invalid';
@@ -85,9 +88,11 @@ export function commitPeek(
   const bottomGroup = opts.shuffleBottom
     ? fisherYatesShuffle(group('bottom'))
     : group('bottom');
-  const handId = opts.handId;
-  if (hand.length > 0 && (!handId || !store.hands.get(handId))) {
-    return 'invalid';
+  if (hand.length > 0) {
+    const missingHand = opts.handId
+      ? !store.hands.get(opts.handId)
+      : !opts.createHand;
+    if (missingHand) return 'invalid';
   }
 
   const live = yMap.get('_cards') ?? [];
@@ -95,6 +100,8 @@ export function commitPeek(
   if (!peeked.every((entry, i) => sameEntry(entry, live[i]))) return 'stale';
 
   store.getDoc().transact(() => {
+    const handId =
+      hand.length > 0 ? (opts.handId ?? opts.createHand?.()) : undefined;
     yMap.set('_cards', [
       ...hand,
       ...table,

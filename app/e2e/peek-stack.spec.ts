@@ -284,6 +284,32 @@ test.describe('Peek at the top of a stack', () => {
     expect(await getDeckCodes(page)).toEqual(['Z', 'A', 'B', 'C', 'D', 'E']);
   });
 
+  test('table shortcuts are inert while the peek window is open', async ({
+    page,
+  }, testInfo) => {
+    await openTable(page, testInfo.testId);
+    await setupDeck(page, ['A', 'B', 'C', 'D', 'E']);
+
+    await pressPeek(page, 3);
+    await expectPeekCodes(page, ['A', 'B', 'C']);
+
+    // F flips and D draws the selected stack; neither may act under the window.
+    await page.keyboard.press('f');
+    await page.keyboard.press('d');
+    await page.keyboard.press('p');
+
+    await expect(page.getByTestId('peek-modal')).toHaveCount(1);
+    expect(await getDeckCodes(page)).toEqual(['A', 'B', 'C', 'D', 'E']);
+    const faceUp = await page.evaluate(
+      (id) =>
+        (globalThis as unknown as PageGlobals)
+          .__TEST_STORE__!.getAllObjects()
+          .get(id)?._faceUp,
+      DECK_ID,
+    );
+    expect(faceUp).toBe(false);
+  });
+
   test('right-click Peek submenu Top 5 opens a 5-card peek; Done is a no-op', async ({
     page,
   }, testInfo) => {

@@ -696,11 +696,11 @@ function Table() {
 
   const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
 
-  const { openPeek: handleOpenPeek, peekDialog } = usePeekDialog(
-    store,
-    gameAssets,
-    handPanel.activeHandId,
-  );
+  const {
+    openPeek: handleOpenPeek,
+    peekDialog,
+    isPeekOpen,
+  } = usePeekDialog(store, gameAssets, handPanel.activeHandId);
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
@@ -845,7 +845,7 @@ function Table() {
   }, []);
   const numericPrefix = useKeyboardShortcuts(
     actionContext,
-    true,
+    !isPeekOpen,
     handleKeyboardAction,
   );
 

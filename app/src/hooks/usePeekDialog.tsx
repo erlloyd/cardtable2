@@ -27,11 +27,14 @@ interface CountPromptState {
   key: number;
 }
 
-/** Same resolution as the hand actions: active hand, else first, else create. */
-function resolveHandId(store: YjsStore, activeHandId: string | null): string {
+/**
+ * Same resolution as the hand actions: active hand, else first, else create.
+ * Returns the existing hand id, or null when commitPeek must create one (only
+ * once the commit is known to apply).
+ */
+function findHandId(store: YjsStore, activeHandId: string | null) {
   if (activeHandId) return activeHandId;
-  const existingIds = store.getHandIds();
-  return existingIds.length > 0 ? existingIds[0] : store.createHand('Hand 1');
+  return store.getHandIds()[0] ?? null;
 }
 
 /**
@@ -49,6 +52,8 @@ export function usePeekDialog(
     options?: { askCount?: boolean },
   ) => void;
   peekDialog: ReactElement;
+  /** True while the count prompt or peek window is up. */
+  isPeekOpen: boolean;
 } {
   const [state, setState] = useState<PeekState>({
     stackId: null,
@@ -110,15 +115,13 @@ export function usePeekDialog(
   const done = useCallback(
     (placements: PeekPlacement[], shuffle: PeekShuffle) => {
       if (store && state.stackId) {
-        const handId = placements.some((p) => p.dest === 'hand')
-          ? resolveHandId(store, activeHandId)
-          : undefined;
+        const handId = findHandId(store, activeHandId) ?? undefined;
         const result = commitPeek(
           store,
           state.stackId,
           state.snapshot,
           placements,
-          { handId, ...shuffle },
+          { handId, createHand: () => store.createHand('Hand 1'), ...shuffle },
         );
         if (result === 'stale') {
           showToast(
@@ -126,6 +129,7 @@ export function usePeekDialog(
           );
         } else if (result === 'invalid') {
           dbg('peek', 'commitPeek invalid', state.stackId);
+          showToast('Could not apply the peek; nothing was moved.');
         }
       }
       close();
@@ -164,5 +168,9 @@ export function usePeekDialog(
     </>
   );
 
-  return { openPeek, peekDialog };
+  return {
+    openPeek,
+    peekDialog,
+    isPeekOpen: state.stackId !== null || prompt.stackId !== null,
+  };
 }

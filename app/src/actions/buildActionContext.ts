@@ -24,6 +24,7 @@ import type { TableObjectYMap } from '../store/types';
  * @param onOpenLoadPicker - Optional callback to open the generic Load picker
  * @param onOpenRenameDialog - Optional callback to open the zone rename dialog
  * @param getHoveredHandCardIndex - Optional getter for the hovered active-hand card index
+ * @param onOpenPeek - Optional callback to open the peek modal for a stack's top N cards
  * @returns ActionContext or null if store is not available
  */
 export function buildActionContext(
@@ -37,6 +38,11 @@ export function buildActionContext(
   onOpenLoadPicker?: (presetType?: string) => void,
   onOpenRenameDialog?: (zoneId: string) => void,
   getHoveredHandCardIndex?: () => number | null,
+  onOpenPeek?: (
+    stackId: string,
+    count: number,
+    options?: { askCount?: boolean },
+  ) => void,
 ): ActionContext | null {
   if (!store) return null;
 
@@ -83,5 +89,6 @@ export function buildActionContext(
     onOpenLoadPicker,
     onOpenRenameDialog,
     getHoveredHandCardIndex,
+    onOpenPeek,
   };
 }

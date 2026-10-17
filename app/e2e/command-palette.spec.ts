@@ -29,8 +29,13 @@ interface PageGlobals {
   __ctTest?: PageCtTest;
 }
 
-async function openTableWithSelectedDeck(page: Page): Promise<void> {
-  await page.goto('/table/palette-ranking');
+// The sync server keys documents by table id, so tests running in parallel on
+// a shared id see each other's deck and clear each other's objects.
+async function openTableWithSelectedDeck(
+  page: Page,
+  tableId: string,
+): Promise<void> {
+  await page.goto(`/table/palette-${tableId}`);
   const canvas = page.getByTestId('board-canvas');
   await expect(canvas).toHaveAttribute('data-canvas-initialized', 'true', {
     timeout: 10000,
@@ -83,8 +88,11 @@ function getFaceUp(page: Page): Promise<boolean | undefined> {
 test.describe('Command palette ranking', () => {
   test('exact label match is first and highlighted, and Enter runs it', async ({
     page,
-  }) => {
-    await openTableWithSelectedDeck(page);
+  }, testInfo) => {
+    await openTableWithSelectedDeck(
+      page,
+      `${testInfo.testId}-${testInfo.repeatEachIndex}`,
+    );
     await page.keyboard.press('ControlOrMeta+k');
 
     const input = page.locator('input[placeholder*="Search"]').first();
@@ -108,8 +116,11 @@ test.describe('Command palette on a phone', () => {
 
   test('results list fits above the on-screen keyboard and scrolls by touch', async ({
     page,
-  }) => {
-    await openTableWithSelectedDeck(page);
+  }, testInfo) => {
+    await openTableWithSelectedDeck(
+      page,
+      `${testInfo.testId}-${testInfo.repeatEachIndex}`,
+    );
     await page.keyboard.press('ControlOrMeta+k');
 
     const list = page.locator('.command-palette-options');

@@ -653,6 +653,13 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       syntheticPointerEvent.clientY = (point.clientY - rect.top) * dpr;
     }
 
+    // Register the waiter before sending: the main-thread renderer (always on
+    // iOS) answers synchronously inside sendMessage, so a waiter pushed after
+    // would miss the signal and stay queued until some later selection change.
+    const selectionSettled = new Promise<void>((resolve) => {
+      selectionSettledCallbacksRef.current.push(resolve);
+    });
+
     // Send synthetic pointer-down
     renderer.sendMessage({
       type: 'pointer-down',
@@ -667,10 +674,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
 
     // Wait for selection to settle, then open context menu
     void (async () => {
-      // Wait for selection settled callback
-      await new Promise<void>((resolve) => {
-        selectionSettledCallbacksRef.current.push(resolve);
-      });
+      await selectionSettled;
 
       // Count selected objects using Y.Map iteration (M3.6-T5)
       const selectionCount = store.getObjectsSelectedBy(

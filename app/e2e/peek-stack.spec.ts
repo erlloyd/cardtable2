@@ -743,6 +743,52 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     expect(overflowX).toBe('scroll');
   });
 
+  test.describe('touch scroll bar', () => {
+    test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+    test('shows a draggable scroll bar when the row overflows and hides it when it fits', async ({
+      page,
+    }, testInfo) => {
+      await openTable(page, testInfo.testId);
+      const codes = Array.from({ length: 25 }, (_, i) => `K${i + 1}`);
+      await seedDeck(page, codes);
+
+      await rightClickDeck(page);
+      await peekRow(page).click();
+      await submenuItem(page, 'other').click();
+      await page.keyboard.type('20');
+      await page.keyboard.press('Enter');
+      await expectPeekCodes(page, codes.slice(0, 20));
+
+      const bar = page.getByTestId('peek-scrollbar');
+      await expect(bar).toBeVisible();
+
+      const row = page.locator('.peek-modal-row');
+      const thumb = await centerOf(page.getByTestId('peek-scrollbar-thumb'));
+      const barBox = await bar.boundingBox();
+      if (!barBox) throw new Error('scroll bar has no bounding box');
+      await page.mouse.move(thumb.x, thumb.y);
+      await page.mouse.down();
+      await page.mouse.move(barBox.x + barBox.width + 40, thumb.y, {
+        steps: 8,
+      });
+      await page.mouse.up();
+
+      await expect
+        .poll(() =>
+          row.evaluate((el) => el.scrollWidth - el.clientWidth - el.scrollLeft),
+        )
+        .toBeLessThanOrEqual(1);
+
+      await page.getByTestId('peek-cancel').click();
+      await expect(page.getByTestId('peek-modal')).toHaveCount(0);
+      await page.setViewportSize({ width: 1280, height: 844 });
+      await pressPeek(page, 3);
+      await expectPeekCodes(page, codes.slice(0, 3));
+      await expect(page.getByTestId('peek-scrollbar')).toHaveCount(0);
+    });
+  });
+
   test('Other… with 20 on an 8-card deck peeks all 8', async ({
     page,
   }, testInfo) => {

@@ -8,6 +8,7 @@ import type {
 } from '../store/YjsPeekActions';
 import { getPreviewDimensions } from '../constants/previewSizes';
 import { computeShiftOffset } from './handShift';
+import { PeekScrollbar } from './PeekScrollbar';
 
 const DRAG_SLOP = 5;
 const CARD_GAP = 8;
@@ -285,6 +286,8 @@ export function PeekModal({
             );
           })}
         </div>
+
+        <PeekScrollbar rowRef={rowRef} />
 
         <div className="deck-import-footer peek-modal-footer">
           <div className="peek-modal-shuffles">

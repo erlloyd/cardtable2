@@ -70,6 +70,26 @@ h1 {
   margin: 0 auto;
 }
 
+/* iOS Safari starts native text selection / callout during a long-press and
+   extends it to nearby text, so it must be off for the whole table screen,
+   not just the canvas. Touch long-press opens the board context menu. */
+.table,
+.dev-table {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.table input,
+.table textarea,
+.table [contenteditable],
+.dev-table input,
+.dev-table textarea,
+.dev-table [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Command Palette Button (legacy - will be replaced by GlobalMenuBar) */
 .command-palette-button {
   position: fixed;

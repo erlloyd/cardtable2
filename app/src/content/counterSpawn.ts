@@ -32,6 +32,7 @@ import {
 } from '@cardtable2/shared';
 import { getCounterTypeDef } from './counterRegistry';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
+import { newId } from '../utils/newId';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { COUNTER_PILL_WIDTH } from '../renderer/objects/counter/constants';
 
@@ -185,5 +186,5 @@ function generateSpawnInstanceId(): string {
   // Use UUIDs so spawn ids never collide with componentSet's local counter
   // ids (those use `cs-${timestamp}-${counter}-${rand}`); both maps may be
   // merged into one before the store update, so disjoint key spaces matter.
-  return `counter-spawn-${crypto.randomUUID()}`;
+  return `counter-spawn-${newId()}`;
 }

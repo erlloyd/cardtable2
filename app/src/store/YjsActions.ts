@@ -16,6 +16,7 @@ import {
 } from '@cardtable2/shared';
 import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
+import { newId } from '../utils/newId';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
 import {
@@ -95,7 +96,7 @@ export function createObject(
   store: YjsStore,
   options: CreateObjectOptions,
 ): string {
-  const id = crypto.randomUUID();
+  const id = newId();
   const sortKey = generateTopSortKey(store);
 
   // Get default properties for this kind from centralized defaults

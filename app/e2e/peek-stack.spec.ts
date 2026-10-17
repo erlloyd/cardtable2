@@ -743,6 +743,21 @@ test.describe('Peek per-card destinations (Ring 1)', () => {
     expect(overflowX).toBe('scroll');
   });
 
+  test('the peek row has no phantom overflow when the cards fit', async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await openTable(page, testInfo.testId);
+    await setupDeck(page, ['A', 'B', 'C']);
+
+    await pressPeek(page, 3);
+    await expectPeekCodes(page, ['A', 'B', 'C']);
+    const [scrollWidth, clientWidth] = await page
+      .locator('.peek-modal-row')
+      .evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    expect(scrollWidth).toBe(clientWidth);
+  });
+
   test.describe('touch scroll bar', () => {
     test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
 

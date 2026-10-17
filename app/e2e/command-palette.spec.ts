@@ -126,12 +126,26 @@ test.describe('Command palette on a phone', () => {
     const viewport = page.viewportSize()!;
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
 
+    // A raw touch drag, not Input.synthesizeScrollGesture: on Linux headless
+    // chromium (CI) the synthesized gesture never scrolls anything, even a
+    // plain overflow div, while real touch events do.
     const cdp = await page.context().newCDPSession(page);
-    await cdp.send('Input.synthesizeScrollGesture', {
-      x: box!.x + box!.width / 2,
-      y: box!.y + box!.height / 2,
-      yDistance: -150,
-      gestureSourceType: 'touch',
+    const x = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height * 0.75;
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x, y: startY }],
+    });
+    for (let step = 1; step <= 10; step++) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: startY - step * 15 }],
+      });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
     });
 
     await expect

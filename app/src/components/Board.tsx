@@ -31,6 +31,7 @@ import { useBoardState } from '../hooks/useBoardState';
 import { useStoreSync } from '../hooks/useStoreSync';
 import { useAwarenessSync } from '../hooks/useAwarenessSync';
 import { usePointerEvents } from '../hooks/usePointerEvents';
+import { useTouchLongPress } from '../hooks/useTouchLongPress';
 import { useCanvasLifecycle } from '../hooks/useCanvasLifecycle';
 import { useTestAPI } from '../hooks/useTestAPI';
 import { useDebugHandlers } from '../hooks/useDebugHandlers';
@@ -615,9 +616,12 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
   }, [gameAssets, isCanvasInitialized, renderer]);
 
   // Handle context menu
-  const handleCanvasContextMenu = (event: React.MouseEvent) => {
-    event.preventDefault();
-
+  const openContextMenuAt = (
+    point: Pick<
+      React.MouseEvent,
+      'clientX' | 'clientY' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'
+    >,
+  ) => {
     if (!isCanvasInitialized || !onContextMenu) {
       return;
     }
@@ -629,15 +633,15 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     const syntheticPointerEvent: PointerEventData = {
       pointerId: CONTEXT_MENU_POINTER_ID,
       pointerType: 'mouse',
-      clientX: event.clientX,
-      clientY: event.clientY,
+      clientX: point.clientX,
+      clientY: point.clientY,
       button: 0,
       buttons: 1,
       isPrimary: true,
-      metaKey: event.metaKey,
-      ctrlKey: event.ctrlKey,
-      shiftKey: event.shiftKey,
-      altKey: event.altKey,
+      metaKey: point.metaKey,
+      ctrlKey: point.ctrlKey,
+      shiftKey: point.shiftKey,
+      altKey: point.altKey,
     };
 
     // Convert to canvas-relative coordinates
@@ -645,8 +649,8 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
     if (canvas) {
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      syntheticPointerEvent.clientX = (event.clientX - rect.left) * dpr;
-      syntheticPointerEvent.clientY = (event.clientY - rect.top) * dpr;
+      syntheticPointerEvent.clientX = (point.clientX - rect.left) * dpr;
+      syntheticPointerEvent.clientY = (point.clientY - rect.top) * dpr;
     }
 
     // Send synthetic pointer-down
@@ -675,8 +679,31 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
       console.log(
         `[Board] Selection settled, opening context menu (selection count: ${selectionCount})`,
       );
-      onContextMenu(event.clientX, event.clientY);
+      onContextMenu(point.clientX, point.clientY);
     })();
+  };
+
+  // Touch long-press opens the context menu (iOS never fires `contextmenu`)
+  const { handlers: touchPointerHandlers, consumeNativeContextMenu } =
+    useTouchLongPress(pointerHandlers, (clientX, clientY) => {
+      openContextMenuAt({
+        clientX,
+        clientY,
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+      });
+    });
+
+  const handleCanvasContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+
+    if (consumeNativeContextMenu()) {
+      return;
+    }
+
+    openContextMenuAt(event);
   };
 
   return (
@@ -705,7 +732,7 @@ const Board = forwardRef<BoardHandle, BoardProps>(function Board(
           }}
           data-testid="board-canvas"
           data-canvas-initialized={isCanvasInitialized ? 'true' : 'false'}
-          {...pointerHandlers}
+          {...touchPointerHandlers}
           onContextMenu={handleCanvasContextMenu}
         />
       </div>

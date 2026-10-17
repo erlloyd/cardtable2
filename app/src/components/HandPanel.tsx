@@ -26,6 +26,7 @@ import {
   getLandscapeDimensions,
 } from '../constants/previewSizes';
 import type { BoardHandle } from './Board';
+import { computeShiftOffset } from './handShift';
 
 const DOUBLE_TAP_THRESHOLD = 300;
 const SCROLL_AMOUNT_CARDS = 3;
@@ -66,27 +67,6 @@ const DRAG_SLOP = 5;
 // Cards are positioned at top: 0.75rem inside the container (12px at 16px base)
 const CARD_ROW_TOP_OFFSET = 12;
 const CARD_SELECTOR = '.hand-panel__card';
-
-/**
- * Compute how far a card at `index` should shift during a drag-reorder.
- *
- * When `toSlot` is set and differs from `fromSlot`, cards between them shift
- * to visually move the empty slot from `fromSlot` to `toSlot`.
- */
-function computeShiftOffset(
-  index: number,
-  fromSlot: number,
-  toSlot: number,
-  slotWidth: number,
-): number {
-  if (toSlot === fromSlot) return 0;
-  if (fromSlot < toSlot) {
-    if (index > fromSlot && index <= toSlot) return -slotWidth;
-  } else {
-    if (index >= toSlot && index < fromSlot) return slotWidth;
-  }
-  return 0;
-}
 
 export const HandPanel = forwardRef<HTMLDivElement, HandPanelProps>(
   function HandPanel(

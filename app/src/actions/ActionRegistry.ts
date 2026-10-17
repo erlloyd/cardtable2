@@ -150,6 +150,40 @@ export class ActionRegistry {
   }
 
   /**
+   * Execute one variant of an action. The parent's isAvailable gates it.
+   * @param actionId The parent action ID
+   * @param variantId The variant ID within the parent
+   * @param context The action context
+   * @throws Error if action or variant not found, or action not available
+   */
+  public async executeVariant(
+    actionId: string,
+    variantId: string,
+    context: ActionContext,
+  ): Promise<void> {
+    const action = this.actions.get(actionId);
+
+    if (!action) {
+      throw new Error(`[ActionRegistry] Action "${actionId}" not found`);
+    }
+
+    if (!action.isAvailable(context)) {
+      throw new Error(
+        `[ActionRegistry] Action "${actionId}" is not available in current context`,
+      );
+    }
+
+    const variant = action.variants?.find((v) => v.id === variantId);
+    if (!variant) {
+      throw new Error(
+        `[ActionRegistry] Variant "${variantId}" of action "${actionId}" not found`,
+      );
+    }
+
+    await variant.execute(context);
+  }
+
+  /**
    * Get all registered actions. The returned array is a stable snapshot,
    * replaced only when actions are registered/unregistered/cleared, so it can
    * be used directly as a useSyncExternalStore snapshot. Callers must not

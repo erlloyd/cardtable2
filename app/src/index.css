@@ -538,6 +538,13 @@ h1 {
   flex-shrink: 0;
 }
 
+.context-menu-submenu-arrow {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
 .context-menu-divider {
   height: 1px;
   background-color: #e5e7eb;
@@ -2116,6 +2123,190 @@ h1 {
 .deck-import-submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.peek-modal-panel {
+  width: auto;
+  max-width: min(95vw, 80rem);
+}
+
+.peek-modal-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: scroll;
+  padding: 0.5rem 0;
+  user-select: none;
+}
+
+.peek-modal-row {
+  scrollbar-width: none;
+}
+
+.peek-modal-row::-webkit-scrollbar {
+  display: none;
+}
+
+.peek-scrollbar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.peek-scrollbar-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.peek-scrollbar-thumb {
+  height: 100%;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.5);
+  cursor: grab;
+}
+
+.peek-modal-slot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  transition: transform 0.12s;
+}
+
+.peek-modal-slot-dragging {
+  z-index: 1;
+  transition: none;
+}
+
+.peek-modal-dest {
+  width: 100%;
+  border-radius: 0.375rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.25rem 0.375rem;
+  font-size: 0.85rem;
+}
+
+.peek-modal-dest option {
+  color: #111827;
+}
+
+.peek-modal-card {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: grab;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.peek-modal-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.peek-modal-card-dragging {
+  cursor: grabbing;
+  box-shadow: 0 8px 16px rgb(0 0 0 / 0.5);
+}
+
+.peek-modal-top {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  background-color: rgba(37, 99, 235, 0.9);
+  color: white;
+  font-size: 0.75rem;
+  z-index: 2;
+}
+
+.peek-modal-code {
+  color: #d1d5db;
+  font-size: 0.9rem;
+  word-break: break-all;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.peek-modal-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  margin-right: 0.75rem;
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
+
+.peek-modal-count input {
+  width: 4rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 0.875rem;
+}
+
+.peek-count-panel {
+  width: auto;
+  min-width: 18rem;
+  max-width: 95vw;
+}
+
+.peek-count-field {
+  margin: 0.75rem 0 1rem;
+}
+
+.peek-modal-footer {
+  gap: 0.5rem;
+}
+
+.peek-modal-shuffles {
+  display: flex;
+  gap: 1rem;
+  margin-right: auto;
+  font-size: 0.875rem;
+  color: #d1d5db;
+}
+
+.peek-modal-shuffles label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+
+.peek-modal-shuffles input:disabled {
+  cursor: not-allowed;
+}
+
+.peek-modal-cancel {
+  border-radius: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1.25rem;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.peek-modal-cancel:hover {
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .merge-attachments-body {

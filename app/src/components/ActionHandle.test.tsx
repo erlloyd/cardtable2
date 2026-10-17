@@ -123,7 +123,7 @@ describe('ActionHandle', () => {
       label: 'Test Action 4',
       icon: '🚀',
       category: 'Test',
-      description: 'Fourth test action (should be in more menu)',
+      description: 'Fourth test action (not shown inline)',
       isAvailable: () => true,
       execute: vi.fn(),
     });
@@ -183,8 +183,13 @@ describe('ActionHandle', () => {
         screen.getByTestId('action-button-test-action-3'),
       ).toBeInTheDocument();
 
-      // Should show more menu for 4th action
-      expect(screen.getByTestId('action-button-more')).toBeInTheDocument();
+      // 4th action is not shown and there is no "more" button
+      expect(
+        screen.queryByTestId('action-button-test-action-4'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('action-button-more'),
+      ).not.toBeInTheDocument();
     });
   });
 

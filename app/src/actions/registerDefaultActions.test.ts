@@ -175,6 +175,22 @@ describe('registerDefaultActions / load actions', () => {
     ).toBeUndefined();
   });
 
+  it('does not register the stub menu actions or the Say Hello debug action', () => {
+    const registry = ActionRegistry.getInstance();
+    const removedIds = [
+      'stack-cards',
+      'unstack-cards',
+      'peek-card',
+      'reveal-card',
+      'lock-object',
+      'unlock-object',
+      'duplicate-object',
+      'delete-object',
+      'test-hello',
+    ];
+    for (const id of removedIds) expect(registry.getAction(id)).toBeUndefined();
+  });
+
   it('registers the generic Load… action', () => {
     const action = ActionRegistry.getInstance().getAction('load');
     expect(action).toBeDefined();

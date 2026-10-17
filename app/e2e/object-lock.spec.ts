@@ -247,6 +247,15 @@ test.describe('Object lock blocks dragging (ct-623.7)', () => {
     await expectLocked(page, 'z', true);
     const before = await snapshot(page);
 
+    // A blocked drag falls through to the pointer's gesture: in the default
+    // pan mode that pans the camera and shifts every later world coordinate
+    // (__ctTest assumes camera at origin), so use select mode, where it
+    // rectangle-selects instead.
+    await page.click('[data-testid="interaction-mode-toggle"]');
+    await expect(
+      page.locator('[data-testid="interaction-mode-toggle"]'),
+    ).toContainText('Select Mode');
+
     await drag(page, ZONE_LABEL, { x: 0, y: -416 });
     expectUnmoved(before, await snapshot(page), ['z', 'k', 'u']);
 

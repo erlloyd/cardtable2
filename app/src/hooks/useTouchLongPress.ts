@@ -24,7 +24,8 @@ export interface TouchLongPress {
   /**
    * Call from the native `contextmenu` handler. Returns true when the event
    * duplicates a long-press already handled and must be ignored. Otherwise it
-   * cancels any pending long-press (the native event wins) and returns false.
+   * returns false; if a touch press was still pending (the native event wins),
+   * that touch is taken over as if the long-press had fired.
    */
   consumeNativeContextMenu: () => boolean;
 }
@@ -80,17 +81,24 @@ export function useTouchLongPress(
     window.addEventListener('click', swallow, true);
   }, []);
 
-  const fire = useCallback(() => {
-    const pending = pendingRef.current;
-    if (!pending) return;
+  // Claim the rest of the pending touch for the menu: the renderer drops its
+  // gesture state and the lift (pointer-up + synthesized click) is swallowed.
+  const takeOverPending = useCallback((pending: PendingPress) => {
+    clearTimeout(pending.timer);
     pendingRef.current = null;
-
-    dbg('input', 'long-press fired at', pending.startX, pending.startY);
     firedPointerIdRef.current = pending.pointerId;
     lastFiredAtRef.current = Date.now();
     handlersRef.current.onPointerCancel(pending.lastEvent);
-    onLongPressRef.current(pending.startX, pending.startY);
   }, []);
+
+  const fire = useCallback(() => {
+    const pending = pendingRef.current;
+    if (!pending) return;
+
+    dbg('input', 'long-press fired at', pending.startX, pending.startY);
+    takeOverPending(pending);
+    onLongPressRef.current(pending.startX, pending.startY);
+  }, [takeOverPending]);
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
@@ -173,9 +181,12 @@ export function useTouchLongPress(
     ) {
       return true;
     }
-    cancelPending();
+    // Native event beat our timer: Board opens the menu, so take over the touch
+    // exactly as fire() would.
+    const pending = pendingRef.current;
+    if (pending) takeOverPending(pending);
     return false;
-  }, [cancelPending]);
+  }, [takeOverPending]);
 
   return {
     handlers: {

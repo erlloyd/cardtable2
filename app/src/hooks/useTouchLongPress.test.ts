@@ -153,4 +153,34 @@ describe('useTouchLongPress', () => {
     });
     expect(onLongPress).not.toHaveBeenCalled();
   });
+
+  it('after a native contextmenu wins, the lift is cancelled for the renderer and its click swallowed', () => {
+    const result = setup();
+    const onClick = vi.fn();
+    document.addEventListener('click', onClick);
+    const down = touch(1, 10, 10);
+
+    act(() => result.current.handlers.onPointerDown(down));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(result.current.consumeNativeContextMenu()).toBe(false);
+    expect(base.onPointerCancel).toHaveBeenCalledWith(down);
+
+    // The timer must not fire a second menu, and a duplicate native event is ignored.
+    act(() => {
+      vi.advanceTimersByTime(LONG_PRESS_MS * 2);
+    });
+    expect(onLongPress).not.toHaveBeenCalled();
+    expect(result.current.consumeNativeContextMenu()).toBe(true);
+
+    act(() => result.current.handlers.onPointerUp(touch(1, 10, 10)));
+    expect(base.onPointerUp).not.toHaveBeenCalled();
+    expect(base.onPointerCancel).toHaveBeenCalledTimes(1);
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(onClick).not.toHaveBeenCalled();
+
+    document.removeEventListener('click', onClick);
+  });
 });

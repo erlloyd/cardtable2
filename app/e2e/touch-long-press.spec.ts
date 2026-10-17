@@ -160,6 +160,49 @@ for (const renderMode of ['worker', 'main-thread']) {
       await touchEnd(cdp);
     });
 
+    test('a native contextmenu before the timer opens one menu that survives the lift', async ({
+      page,
+    }) => {
+      await page.evaluate(() => {
+        const w = globalThis as any;
+        w.__menuMounts = 0;
+        new MutationObserver((records) => {
+          for (const record of records) {
+            record.addedNodes.forEach((node) => {
+              if (
+                node instanceof HTMLElement &&
+                (node.matches('.context-menu') ||
+                  node.querySelector('.context-menu'))
+              ) {
+                w.__menuMounts++;
+              }
+            });
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+
+      await touchStart(cdp, stackPoint);
+      await page.waitForTimeout(300);
+      await page.evaluate(({ x, y }) => {
+        document.querySelector('canvas')!.dispatchEvent(
+          new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      }, stackPoint);
+      await expect(page.locator('.context-menu')).toHaveCount(1);
+      await touchEnd(cdp);
+      await page.waitForTimeout(500);
+
+      await expect(page.locator('.context-menu')).toHaveCount(1);
+      expect(await page.evaluate(() => (globalThis as any).__menuMounts)).toBe(
+        1,
+      );
+    });
+
     test('closing the long-press menu and tapping elsewhere does not reopen it', async ({
       page,
     }) => {

@@ -172,50 +172,6 @@ export function registerDefaultActions(): () => void {
     },
   });
 
-  register({
-    id: 'stack-cards',
-    label: 'Stack Cards',
-    shortLabel: 'Stack',
-    icon: '📚',
-    category: CARD_ACTIONS,
-    description: 'Stack selected cards together',
-    isAvailable: (ctx) => ctx.selection.count > 1 && ctx.selection.hasStacks,
-    execute: () => console.log('Stack cards'),
-  });
-
-  register({
-    id: 'unstack-cards',
-    label: 'Unstack Cards',
-    shortLabel: 'Unstack',
-    icon: '📖',
-    category: CARD_ACTIONS,
-    description: 'Unstack the selected stack',
-    isAvailable: (ctx) => ctx.selection.count === 1 && ctx.selection.hasStacks,
-    execute: () => console.log('Unstack cards'),
-  });
-
-  register({
-    id: 'peek-card',
-    label: 'Peek at Top Card',
-    shortLabel: 'Peek',
-    icon: '👀',
-    category: CARD_ACTIONS,
-    description: 'Look at the top card without revealing to others',
-    isAvailable: (ctx) => ctx.selection.count === 1 && ctx.selection.hasStacks,
-    execute: () => console.log('Peek at card'),
-  });
-
-  register({
-    id: 'reveal-card',
-    label: 'Reveal Card',
-    shortLabel: 'Reveal',
-    icon: '💡',
-    category: CARD_ACTIONS,
-    description: 'Reveal the selected card to all players',
-    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.hasStacks,
-    execute: () => console.log('Reveal card'),
-  });
-
   // Card-on-card attachment: Detach card from parent
   register({
     id: 'detach-card',
@@ -452,71 +408,6 @@ export function registerDefaultActions(): () => void {
         for (const strandedId of strandedIds) noHomeIds.add(strandedId);
       }
       if (noHomeIds.size > 0) notifyNoDiscardZone(noHomeIds.size);
-    },
-  });
-
-  // Object action: Lock/Unlock (works on any object)
-  register({
-    id: 'lock-object',
-    label: 'Lock Object',
-    shortLabel: 'Lock',
-    icon: '🔒',
-    shortcut: 'L',
-    category: CARD_ACTIONS,
-    description: 'Lock the selected object to prevent modifications',
-    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.allUnlocked,
-    execute: () => console.log('Lock object'),
-  });
-
-  register({
-    id: 'unlock-object',
-    label: 'Unlock Object',
-    shortLabel: 'Unlock',
-    icon: '🔓',
-    shortcut: 'Shift+L',
-    category: CARD_ACTIONS,
-    description: 'Unlock the selected object',
-    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.allLocked,
-    execute: () => console.log('Unlock object'),
-  });
-
-  // Object action: Duplicate/Delete (works on any object)
-  register({
-    id: 'duplicate-object',
-    label: 'Duplicate Object',
-    shortLabel: 'Duplicate',
-    icon: '📋',
-    shortcut: 'Cmd+D',
-    category: CARD_ACTIONS,
-    description: 'Create a copy of the selected object',
-    isAvailable: (ctx) => ctx.selection.count > 0,
-    execute: () => console.log('Duplicate object'),
-  });
-
-  register({
-    id: 'delete-object',
-    label: 'Delete Object',
-    shortLabel: 'Delete',
-    icon: '🗑️',
-    shortcut: 'Delete',
-    category: CARD_ACTIONS,
-    description: 'Delete the selected object',
-    isAvailable: (ctx) => ctx.selection.count > 0,
-    execute: () => console.log('Delete object'),
-  });
-
-  // Global action: Say Hello (only when nothing selected)
-  register({
-    id: 'test-hello',
-    label: 'Say Hello',
-    icon: '👋',
-    shortcut: 'H',
-    category: 'Global Actions',
-    description: 'Display a hello message (only when nothing selected)',
-    isAvailable: (ctx) => ctx.selection.count === 0,
-    execute: () => {
-      console.log('Hello from Command Palette!');
-      showToast('Hello from Command Palette!', 'info');
     },
   });
 

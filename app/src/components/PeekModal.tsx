@@ -13,7 +13,10 @@ import { PeekScrollbar } from './PeekScrollbar';
 const DRAG_SLOP = 5;
 const CARD_GAP = 8;
 const EDGE_SCROLL_ZONE = 60;
-const EDGE_SCROLL_STEP = 15;
+// Pixels per second, so the speed doesn't depend on the frame rate.
+const EDGE_SCROLL_SPEED = 900;
+// Cap per-frame dt so a stalled frame doesn't jump the row.
+const EDGE_SCROLL_MAX_DT = 100;
 
 export interface PeekModalProps {
   isOpen: boolean;
@@ -100,20 +103,23 @@ export function PeekModal({
     };
 
     let frame = 0;
-    const autoScroll = () => {
+    let lastFrameTime: number | null = null;
+    const autoScroll = (now: number) => {
       frame = requestAnimationFrame(autoScroll);
+      const dt = Math.min(now - (lastFrameTime ?? now), EDGE_SCROLL_MAX_DT);
+      lastFrameTime = now;
       const row = rowRef.current;
       if (!started || !row) return;
       const rect = row.getBoundingClientRect();
-      const step =
+      const direction =
         lastX < rect.left + EDGE_SCROLL_ZONE
-          ? -EDGE_SCROLL_STEP
+          ? -1
           : lastX > rect.right - EDGE_SCROLL_ZONE
-            ? EDGE_SCROLL_STEP
+            ? 1
             : 0;
-      if (step === 0) return;
+      if (direction === 0) return;
       const before = row.scrollLeft;
-      row.scrollLeft = before + step;
+      row.scrollLeft = before + (direction * EDGE_SCROLL_SPEED * dt) / 1000;
       if (row.scrollLeft === before) return;
       const next = clampSlot(lastX);
       if (next === to) return;

@@ -108,12 +108,25 @@ describe('PeekModal', () => {
   describe('edge auto-scroll', () => {
     afterEach(() => vi.restoreAllMocks());
 
-    function flushFrame(queue: Map<number, FrameRequestCallback>) {
+    function flushFrame(queue: Map<number, FrameRequestCallback>, now: number) {
       act(() => {
         const callbacks = [...queue.values()];
         queue.clear();
-        callbacks.forEach((cb) => cb(0));
+        callbacks.forEach((cb) => cb(now));
       });
+    }
+
+    function mockFrames() {
+      const queue = new Map<number, FrameRequestCallback>();
+      let nextId = 0;
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        queue.set(++nextId, cb);
+        return nextId;
+      });
+      vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+        queue.delete(id);
+      });
+      return queue;
     }
 
     function rowWith(scrollLeft: number) {
@@ -131,28 +144,23 @@ describe('PeekModal', () => {
     }
 
     it('scrolls each frame near an edge, retargets the slot, and stops on drop', () => {
-      const queue = new Map<number, FrameRequestCallback>();
-      let nextId = 0;
-      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-        queue.set(++nextId, cb);
-        return nextId;
-      });
-      vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
-        queue.delete(id);
-      });
+      const queue = mockFrames();
       const { onDone } = setup();
       const row = rowWith(20);
       const last = screen.getAllByTestId('peek-card')[2];
 
       fireEvent.pointerDown(last, { button: 0, clientX: 300, clientY: 0 });
       pointer('pointermove', 200);
-      flushFrame(queue);
+      flushFrame(queue, 0);
       expect(row.scrollLeft).toBe(20);
 
+      // 900 px/s: a 10ms frame scrolls 9px.
       pointer('pointermove', 20);
-      flushFrame(queue);
-      expect(row.scrollLeft).toBe(5);
-      flushFrame(queue);
+      flushFrame(queue, 10);
+      expect(row.scrollLeft).toBe(11);
+      flushFrame(queue, 20);
+      expect(row.scrollLeft).toBe(2);
+      flushFrame(queue, 30);
       expect(row.scrollLeft).toBe(0);
       expect(codes()).toEqual(['a', 'b', 'c']);
 
@@ -169,6 +177,22 @@ describe('PeekModal', () => {
         ],
         { shuffleTop: false, shuffleBottom: false },
       );
+    });
+
+    it('scrolls by elapsed time, not frame count, and caps a stalled frame', () => {
+      const queue = mockFrames();
+      setup();
+      const row = rowWith(500);
+      const last = screen.getAllByTestId('peek-card')[2];
+
+      fireEvent.pointerDown(last, { button: 0, clientX: 300, clientY: 0 });
+      pointer('pointermove', 20);
+      flushFrame(queue, 1000);
+      expect(row.scrollLeft).toBe(500);
+      flushFrame(queue, 1050);
+      expect(row.scrollLeft).toBe(455);
+      flushFrame(queue, 5000);
+      expect(row.scrollLeft).toBe(365);
     });
   });
 

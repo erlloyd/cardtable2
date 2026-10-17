@@ -321,11 +321,35 @@ h1 {
 }
 
 .command-palette-options {
-  max-height: 24rem;
+  max-height: min(24rem, calc(100dvh - 14rem));
   overflow-y: auto;
   border-top: 1px solid #f3f4f6;
   padding: 0.5rem 0;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+@media (max-height: 40rem) {
+  .command-palette-wrapper {
+    padding-top: 1rem;
+  }
+
+  .command-palette-options {
+    max-height: calc(100dvh - 7rem);
+  }
+}
+
+.command-palette-category-tag {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.command-palette-option-content.focus .command-palette-category-tag {
+  color: #c7d2fe;
 }
 
 .command-palette-empty {

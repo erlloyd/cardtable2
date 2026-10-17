@@ -325,6 +325,27 @@ describe('YjsPeekActions.commitPeek', () => {
       ).toBe('invalid');
       expect(stackCards(id)).toEqual([a, b]);
     });
+
+    it('createHand runs only when the commit applies', () => {
+      const [a, b, c] = toCardEntries(['A', 'B', 'C']);
+      const id = makeStack([a, b, c]);
+      const createHand = vi.fn(() => store.createHand('Hand 1'));
+
+      expect(
+        commitPeek(store, id, [b], place([b, 'hand']), { createHand }),
+      ).toBe('stale');
+      expect(
+        commitPeek(store, 'missing', [a], place([a, 'hand']), { createHand }),
+      ).toBe('invalid');
+      expect(createHand).not.toHaveBeenCalled();
+      expect(store.getHandIds()).toEqual([]);
+
+      expect(
+        commitPeek(store, id, [a], place([a, 'hand']), { createHand }),
+      ).toBe('applied');
+      expect(createHand).toHaveBeenCalledTimes(1);
+      expect(store.getHandCards(store.getHandIds()[0])).toEqual([a]);
+    });
   });
 
   describe('shuffle', () => {

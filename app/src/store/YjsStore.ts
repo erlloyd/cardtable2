@@ -11,6 +11,7 @@ import type {
   CardEntry,
 } from '@cardtable2/shared';
 import { throttle, AWARENESS_UPDATE_INTERVAL_MS } from '../utils/throttle';
+import { newId } from '../utils/newId';
 import { runMigrations } from './migrations';
 import type { TableObjectYMap } from './types';
 import { toTableObject } from './types';
@@ -130,7 +131,7 @@ export class YjsStore {
 
   constructor(tableId: string, wsUrl?: string) {
     this.doc = new Y.Doc();
-    this.actorId = crypto.randomUUID();
+    this.actorId = newId();
 
     // Get or create objects map
     this.objects = this.doc.getMap('objects');
@@ -851,7 +852,7 @@ export class YjsStore {
    * @returns The hand ID
    */
   createHand(name: string): string {
-    const handId = crypto.randomUUID();
+    const handId = newId();
     this.doc.transact(() => {
       const handMap = new Y.Map<unknown>();
       handMap.set('name', name);

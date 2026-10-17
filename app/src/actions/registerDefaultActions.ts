@@ -22,6 +22,7 @@ import {
   fillHomeZone,
   clearHomeZones,
   resolveHomeZone,
+  setObjectsLocked,
 } from '../store/YjsActions';
 import type { YjsStore } from '../store/YjsStore';
 import { discardCardFromHand } from '../store/YjsHandActions';
@@ -408,6 +409,35 @@ export function registerDefaultActions(): () => void {
         for (const strandedId of strandedIds) noHomeIds.add(strandedId);
       }
       if (noHomeIds.size > 0) notifyNoDiscardZone(noHomeIds.size);
+    },
+  });
+
+  // Object lock: blocks dragging only (direct and via zone carry)
+  register({
+    id: 'lock-object',
+    label: 'Lock Object',
+    shortLabel: 'Lock',
+    icon: '🔒',
+    shortcut: 'L',
+    category: CARD_ACTIONS,
+    description: 'Lock selected objects so they cannot be dragged',
+    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.allUnlocked,
+    execute: (ctx) => {
+      setObjectsLocked(ctx.store, ctx.selection.ids, true);
+    },
+  });
+
+  register({
+    id: 'unlock-object',
+    label: 'Unlock Object',
+    shortLabel: 'Unlock',
+    icon: '🔓',
+    shortcut: 'Shift+L',
+    category: CARD_ACTIONS,
+    description: 'Unlock selected objects so they can be dragged again',
+    isAvailable: (ctx) => ctx.selection.count > 0 && ctx.selection.allLocked,
+    execute: (ctx) => {
+      setObjectsLocked(ctx.store, ctx.selection.ids, false);
     },
   });
 

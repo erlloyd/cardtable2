@@ -30,6 +30,7 @@ import {
 } from '../store/YjsActions';
 import { moveCardToHand } from '../store/YjsHandActions';
 import { ActionRegistry } from './ActionRegistry';
+import { buildActionContext } from './buildActionContext';
 import {
   registerDefaultActions,
   registerLoadablesActions,
@@ -182,8 +183,6 @@ describe('registerDefaultActions / load actions', () => {
       'unstack-cards',
       'peek-card',
       'reveal-card',
-      'lock-object',
-      'unlock-object',
       'duplicate-object',
       'delete-object',
       'test-hello',
@@ -825,5 +824,79 @@ describe('set-discard-zone and clear-discard-zone actions (ct-sz2.2)', () => {
       expect(store.getObjectYMap(z)!.get('_kind')).toBe(ObjectKind.Zone);
       expect(discardCardToZone(store, s).result).toBe('no-home');
     });
+  });
+});
+
+describe('lock-object / unlock-object actions', () => {
+  let store: YjsStore;
+
+  function stack(): string {
+    return createObject(store, {
+      kind: ObjectKind.Stack,
+      pos: { x: 0, y: 0, r: 0 },
+      cards: toCardEntries(['a']),
+      faceUp: false,
+    });
+  }
+
+  function ctxFor(ids: string[]): ActionContext {
+    const ctx = buildActionContext(
+      store,
+      ids.map((id) => ({ id, yMap: store.getObjectYMap(id)! })),
+    );
+    if (!ctx) throw new Error('no context');
+    return ctx;
+  }
+
+  function action(id: string) {
+    const a = ActionRegistry.getInstance().getAction(id);
+    if (!a) throw new Error(`${id} not registered`);
+    return a;
+  }
+
+  beforeEach(() => {
+    ActionRegistry.getInstance().clear();
+    registerDefaultActions();
+    store = new YjsStore('test-lock-actions');
+  });
+
+  afterEach(() => {
+    ActionRegistry.getInstance().clear();
+    vi.restoreAllMocks();
+  });
+
+  it('registers L and Shift+L shortcuts', () => {
+    expect(action('lock-object').shortcut).toBe('L');
+    expect(action('unlock-object').shortcut).toBe('Shift+L');
+  });
+
+  it('lock is available for an unlocked selection, unlock is not', () => {
+    const id = stack();
+    expect(action('lock-object').isAvailable(ctxFor([id]))).toBe(true);
+    expect(action('unlock-object').isAvailable(ctxFor([id]))).toBe(false);
+  });
+
+  it('unlock is available for a locked selection, lock is not', () => {
+    const id = stack();
+    void action('lock-object').execute(ctxFor([id]));
+    expect(action('lock-object').isAvailable(ctxFor([id]))).toBe(false);
+    expect(action('unlock-object').isAvailable(ctxFor([id]))).toBe(true);
+  });
+
+  it('neither is available with an empty selection', () => {
+    expect(action('lock-object').isAvailable(ctxFor([]))).toBe(false);
+    expect(action('unlock-object').isAvailable(ctxFor([]))).toBe(false);
+  });
+
+  it('lock sets _locked on every selected object; unlock clears it', () => {
+    const ids = [stack(), stack()];
+    void action('lock-object').execute(ctxFor(ids));
+    for (const id of ids) {
+      expect(store.getObjectYMap(id)!.get('_locked')).toBe(true);
+    }
+    void action('unlock-object').execute(ctxFor(ids));
+    for (const id of ids) {
+      expect(store.getObjectYMap(id)!.get('_locked')).toBe(false);
+    }
   });
 });

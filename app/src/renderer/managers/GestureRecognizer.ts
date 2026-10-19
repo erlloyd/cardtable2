@@ -4,7 +4,7 @@ import type { PointerEventData } from '@cardtable2/shared';
  * Drag slop thresholds by pointer type (M2-T3).
  * Movement must exceed these thresholds to start a drag/pan gesture.
  */
-const DRAG_SLOP = {
+export const DRAG_SLOP = {
   touch: 12,
   pen: 6,
   mouse: 3,

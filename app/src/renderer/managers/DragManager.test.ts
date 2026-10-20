@@ -26,7 +26,17 @@ function makePointerEvent(
 function makeSceneManager(
   objects: Record<
     string,
-    { x: number; y: number; r?: number; kind?: number; sortKey?: string }
+    {
+      x: number;
+      y: number;
+      r?: number;
+      kind?: ObjectKind;
+      sortKey?: string;
+      selectedBy?: string;
+      attachedToId?: string;
+      attachedCardIds?: string[];
+      meta?: Record<string, unknown>;
+    }
   > = {},
 ): SceneManager {
   const store = new Map(
@@ -39,14 +49,17 @@ function makeSceneManager(
         _containerId: 'c1',
         _sortKey: o.sortKey ?? '0',
         _locked: false,
-        _selectedBy: null,
-        _meta: {},
+        _selectedBy: o.selectedBy ?? null,
+        _meta: o.meta ?? {},
+        ...(o.attachedToId ? { _attachedToId: o.attachedToId } : {}),
+        ...(o.attachedCardIds ? { _attachedCardIds: o.attachedCardIds } : {}),
       },
     ]),
   );
 
   return {
     getObject: vi.fn((id: string) => store.get(id)),
+    getAllObjects: vi.fn(() => store),
     updateObject: vi.fn(),
     removeSpatialEntries: vi.fn(),
   } as unknown as SceneManager;
@@ -57,6 +70,7 @@ function makeSelectionManager(selectedIds: string[] = []): SelectionManager {
   return {
     isSelected: vi.fn((id: string) => selected.has(id)),
     getSelectedIds: vi.fn(() => Array.from(selected)),
+    getActorId: vi.fn(() => 'me'),
   } as unknown as SelectionManager;
 }
 
@@ -323,6 +337,124 @@ describe('DragManager', () => {
 
       expect(dragged).toContain('obj-1');
       expect(dragged).toContain('obj-2');
+    });
+  });
+
+  // ── Dragging a zone carries what rests in it ──
+  describe('startObjectDrag zone carry', () => {
+    const Z = ObjectKind.Zone;
+    // Zone at (0,0), 200x100 -> box x[-100,100], y[-50,50]
+    const zone = {
+      x: 0,
+      y: 0,
+      kind: Z,
+      meta: { width: 200, height: 100 },
+    };
+
+    function dragZone(
+      objects: Parameters<typeof makeSceneManager>[0],
+      selected: string[] = [],
+      id = 'zone',
+    ): string[] {
+      const sm = makeSceneManager(objects);
+      drag.prepareObjectDrag(id, 0, 0);
+      return drag.startObjectDrag(sm, makeSelectionManager(selected));
+    }
+
+    it('carries a stack whose center is inside, not one 1px outside', () => {
+      const dragged = dragZone({
+        zone,
+        inside: { x: 100, y: 50 },
+        outside: { x: 101, y: 0 },
+      });
+      expect(dragged).toContain('inside');
+      expect(dragged).not.toContain('outside');
+    });
+
+    it('carries tokens and mats with centers inside', () => {
+      const dragged = dragZone({
+        zone,
+        tok: { x: 10, y: 10, kind: ObjectKind.Token },
+        mat: { x: -20, y: 5, kind: ObjectKind.Mat },
+      });
+      expect(dragged).toEqual(expect.arrayContaining(['zone', 'tok', 'mat']));
+    });
+
+    it('carries an attached child of a carried parent even if it is outside', () => {
+      const dragged = dragZone({
+        zone,
+        parent: { x: 0, y: 0, attachedCardIds: ['child'] },
+        child: { x: 150, y: 0, attachedToId: 'parent' },
+      });
+      expect(dragged).toContain('parent');
+      expect(dragged).toContain('child');
+    });
+
+    it('does not carry an attached child whose parent is outside', () => {
+      const dragged = dragZone({
+        zone,
+        parent: { x: 500, y: 0, attachedCardIds: ['child'] },
+        child: { x: 0, y: 0, attachedToId: 'parent' },
+      });
+      expect(dragged).not.toContain('child');
+      expect(dragged).not.toContain('parent');
+    });
+
+    it("skips objects held by another actor but carries the actor's own", () => {
+      const dragged = dragZone({
+        zone,
+        theirs: { x: 0, y: 0, selectedBy: 'other-actor' },
+        mine: { x: 10, y: 0, selectedBy: 'me' },
+      });
+      expect(dragged).not.toContain('theirs');
+      expect(dragged).toContain('mine');
+    });
+
+    it('carries a nested zone and its contents', () => {
+      const dragged = dragZone({
+        zone,
+        small: { x: 0, y: 0, kind: Z, meta: { width: 50, height: 50 } },
+        pile: { x: 5, y: 5 },
+      });
+      expect(dragged).toEqual(expect.arrayContaining(['small', 'pile']));
+    });
+
+    it('does not carry the enclosing zone when dragging the inner one', () => {
+      const dragged = dragZone(
+        {
+          big: { ...zone },
+          small: { x: 0, y: 0, kind: Z, meta: { width: 50, height: 50 } },
+        },
+        [],
+        'small',
+      );
+      expect(dragged).toEqual(['small']);
+    });
+
+    it('does not carry a zone that only partly overlaps', () => {
+      const dragged = dragZone({
+        zone,
+        overlap: { x: 90, y: 0, kind: Z, meta: { width: 100, height: 50 } },
+      });
+      expect(dragged).not.toContain('overlap');
+    });
+
+    it('has no duplicate ids when the zone and its pile are both selected', () => {
+      const dragged = dragZone({ zone, pile: { x: 0, y: 0 } }, [
+        'zone',
+        'pile',
+      ]);
+      expect(dragged).toHaveLength(2);
+      expect(new Set(dragged).size).toBe(2);
+    });
+
+    it('leaves a non-zone drag unchanged', () => {
+      const dragged = dragZone(
+        { zone, card: { x: 0, y: 0 }, other: { x: 5, y: 5 } },
+        [],
+        'card',
+      );
+      expect(dragged).toEqual(['card']);
     });
   });
 });

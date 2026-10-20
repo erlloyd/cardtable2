@@ -21,11 +21,23 @@ describe('getZoneLabel', () => {
     );
   });
 
-  it("falls back to 'Discard' when label is absent", () => {
-    expect(getZoneLabel(createTestZone())).toBe('Discard');
+  it("falls back to 'Discard' when label is empty on a discard zone", () => {
+    expect(
+      getZoneLabel(createTestZone({ label: '', isDiscardZone: true })),
+    ).toBe('Discard');
   });
 
-  it("falls back to 'Discard' when label is empty", () => {
-    expect(getZoneLabel(createTestZone({ label: '' }))).toBe('Discard');
+  it("falls back to 'Discard' for a discard zone without a label", () => {
+    expect(getZoneLabel(createTestZone({ isDiscardZone: true }))).toBe(
+      'Discard',
+    );
+  });
+
+  it("falls back to 'Zone' for a plain zone without a label", () => {
+    expect(getZoneLabel(createTestZone())).toBe('Zone');
+  });
+
+  it("falls back to 'Zone' when a plain zone's label is empty", () => {
+    expect(getZoneLabel(createTestZone({ label: '' }))).toBe('Zone');
   });
 });

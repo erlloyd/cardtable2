@@ -16,6 +16,7 @@ import {
 } from '@cardtable2/shared';
 import { getDefaultMeta, getDefaultProperties } from './ObjectDefaults';
 import { createCounterMeta } from '../renderer/objects/counter/utils';
+import { newId } from '../utils/newId';
 import type { CounterMeta } from '../renderer/objects/counter/types';
 import { computeAttachmentPositions } from './attachmentLayout';
 import {
@@ -95,7 +96,7 @@ export function createObject(
   store: YjsStore,
   options: CreateObjectOptions,
 ): string {
-  const id = crypto.randomUUID();
+  const id = newId();
   const sortKey = generateTopSortKey(store);
 
   // Get default properties for this kind from centralized defaults
@@ -215,10 +216,12 @@ export function moveObjects(
       // Clear discard-pile membership when the object is manually moved.
       // A card dragged out of a zone is no longer resting in its pile; discarding
       // again must re-form the pile rather than treating the card as still there.
+      // The link is kept when the container moves in the same batch (a zone dragged
+      // with its pile): the pile travels with its zone and is still resting in it.
       // discardCardToZone sets _containerId AFTER calling moveObjects, so clearing
       // here is safe for the new-pile branch (it re-sets the value immediately after).
       const currentContainerId = yMap.get('_containerId');
-      if (currentContainerId) {
+      if (currentContainerId && !movedIds.has(currentContainerId)) {
         yMap.set('_containerId', null);
       }
 
@@ -833,6 +836,16 @@ export function unstackCard(
   return newStackId;
 }
 
+/** Returns a Fisher-Yates shuffled copy of `items`. */
+export function fisherYatesShuffle<T>(items: readonly T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 /**
  * Shuffle stack - randomize card order using Fisher-Yates algorithm
  *
@@ -874,15 +887,7 @@ export function shuffleStack(store: YjsStore, stackId: string): boolean {
 
   // Use single transaction for atomicity
   store.getDoc().transact(() => {
-    // Fisher-Yates shuffle (in-place)
-    const shuffled = [...cards]; // Copy to avoid mutating
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-
-    // Update cards array
-    yMap.set('_cards', shuffled);
+    yMap.set('_cards', fisherYatesShuffle(cards));
   });
 
   console.log(

@@ -311,6 +311,7 @@ function DevTable() {
       handleOpenLoadPicker,
       openRenameDialog,
       undefined,
+      undefined,
       openSetTokensDialog,
     );
   }, [

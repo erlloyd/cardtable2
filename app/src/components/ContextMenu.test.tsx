@@ -968,4 +968,290 @@ describe('ContextMenu', () => {
       expect(dividers.length).toBe(0);
     });
   });
+
+  describe('Submenu (actions with variants)', () => {
+    let parentExecute: ReturnType<typeof vi.fn>;
+    let plainExecute: ReturnType<typeof vi.fn>;
+    let executeVariantSpy: ReturnType<typeof vi.spyOn>;
+    let context: ActionContext;
+
+    beforeEach(() => {
+      parentExecute = vi.fn();
+      plainExecute = vi.fn();
+      registry.register({
+        id: 'peek-like',
+        label: 'Peek',
+        icon: 'P',
+        category: CARD_ACTIONS,
+        isAvailable: () => true,
+        execute: parentExecute as () => void,
+        variants: [
+          { id: 'one', label: 'One', execute: vi.fn() as () => void },
+          { id: 'two', label: () => 'Two', execute: vi.fn() as () => void },
+        ],
+      });
+      registry.register({
+        id: 'plain',
+        label: 'Plain',
+        icon: 'X',
+        category: CARD_ACTIONS,
+        isAvailable: () => true,
+        execute: plainExecute as () => void,
+      });
+      executeVariantSpy = vi.spyOn(registry, 'executeVariant');
+      context = {
+        store: mockStore,
+        selection: {
+          ids: [],
+          yMaps: [],
+          count: 0,
+          hasStacks: false,
+          hasTokens: false,
+          hasCounters: false,
+          hasMixed: false,
+          allLocked: false,
+          allUnlocked: true,
+          canAct: true,
+        },
+        actorId: 'test-actor',
+      };
+    });
+
+    const renderMenu = () =>
+      render(
+        <ContextMenu
+          isOpen={true}
+          position={{ x: 100, y: 100 }}
+          onClose={mockOnClose}
+          context={context}
+        />,
+      );
+
+    it('renders a chevron and does not execute the parent on click', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      const parent = screen.getByTestId('context-menu-item-peek-like');
+      expect(parent.querySelector('.context-menu-submenu-arrow')).toBeTruthy();
+      expect(parent).toHaveAttribute('aria-haspopup', 'menu');
+      expect(parent).toHaveAttribute('aria-expanded', 'false');
+
+      await user.click(parent);
+
+      expect(parentExecute).not.toHaveBeenCalled();
+      expect(parent).toHaveAttribute('aria-expanded', 'true');
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one').parentElement,
+      ).toHaveAttribute('role', 'menu');
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('hover opens the submenu, hovering a sibling closes it', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      await user.hover(screen.getByTestId('context-menu-item-peek-like'));
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-two'),
+      ).toHaveTextContent('Two');
+
+      await user.hover(screen.getByText('Plain'));
+      expect(
+        screen.queryByTestId('context-submenu-item-peek-like-one'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('keeps the submenu open when the pointer moves into it', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      await user.hover(screen.getByTestId('context-menu-item-peek-like'));
+      await user.hover(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      );
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toBeInTheDocument();
+    });
+
+    it('ArrowRight on the focused parent opens the submenu and focuses the first item', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      const parent = screen.getByTestId('context-menu-item-peek-like');
+      parent.focus();
+      await user.keyboard('{ArrowRight}');
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toHaveFocus();
+    });
+
+    it('Enter and Space on the focused parent open the submenu', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      const parent = screen.getByTestId('context-menu-item-peek-like');
+      parent.focus();
+      await user.keyboard('{Enter}');
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toHaveFocus();
+      expect(parentExecute).not.toHaveBeenCalled();
+    });
+
+    it('does not show a stale submenu after the menu closes and reopens', async () => {
+      const user = userEvent.setup();
+      const props = { onClose: mockOnClose, context };
+      const { rerender } = render(
+        <ContextMenu isOpen={true} position={{ x: 100, y: 100 }} {...props} />,
+      );
+      await user.click(screen.getByTestId('context-menu-item-peek-like'));
+      expect(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      ).toBeInTheDocument();
+
+      rerender(
+        <ContextMenu isOpen={false} position={{ x: 100, y: 100 }} {...props} />,
+      );
+      rerender(
+        <ContextMenu isOpen={true} position={{ x: 300, y: 200 }} {...props} />,
+      );
+
+      expect(
+        screen.queryByTestId('context-submenu-item-peek-like-one'),
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-peek-like')).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+
+    it('ArrowUp/ArrowDown move focus within the submenu and wrap', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      screen.getByTestId('context-menu-item-peek-like').focus();
+      await user.keyboard('{ArrowRight}');
+      const one = screen.getByTestId('context-submenu-item-peek-like-one');
+      const two = screen.getByTestId('context-submenu-item-peek-like-two');
+      await user.keyboard('{ArrowDown}');
+      expect(two).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(one).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(two).toHaveFocus();
+    });
+
+    it('ArrowLeft and Escape close the submenu and refocus the parent', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      const parent = screen.getByTestId('context-menu-item-peek-like');
+      parent.focus();
+      await user.keyboard('{ArrowRight}');
+      await user.keyboard('{ArrowLeft}');
+      expect(
+        screen.queryByTestId('context-submenu-item-peek-like-one'),
+      ).not.toBeInTheDocument();
+      expect(parent).toHaveFocus();
+
+      await user.keyboard('{ArrowRight}');
+      await user.keyboard('{Escape}');
+      expect(
+        screen.queryByTestId('context-submenu-item-peek-like-one'),
+      ).not.toBeInTheDocument();
+      expect(parent).toHaveFocus();
+    });
+
+    it('Enter on a focused variant runs it and closes the menu', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      screen.getByTestId('context-menu-item-peek-like').focus();
+      await user.keyboard('{ArrowRight}{ArrowDown}{Enter}');
+      await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
+      expect(executeVariantSpy).toHaveBeenCalledWith(
+        'peek-like',
+        'two',
+        context,
+      );
+    });
+
+    it('focuses the first submenu item only once the panel is visible', async () => {
+      const user = userEvent.setup();
+      const visibilityAtFocus: string[] = [];
+      const originalFocus = HTMLElement.prototype.focus;
+      const focusSpy = vi
+        .spyOn(HTMLElement.prototype, 'focus')
+        .mockImplementation(function (this: HTMLElement, ...args) {
+          if (this.dataset.testid === 'context-submenu-item-peek-like-one') {
+            visibilityAtFocus.push(
+              getComputedStyle(this.closest('[role="menu"]') as Element)
+                .visibility,
+            );
+          }
+          originalFocus.apply(this, args);
+        });
+      renderMenu();
+      screen.getByTestId('context-menu-item-peek-like').focus();
+      await user.keyboard('{ArrowRight}');
+      focusSpy.mockRestore();
+      expect(visibilityAtFocus).toEqual(['visible']);
+    });
+
+    it('clicking a variant calls executeVariant with the ids and closes', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      await user.click(screen.getByTestId('context-menu-item-peek-like'));
+      await user.click(
+        screen.getByTestId('context-submenu-item-peek-like-one'),
+      );
+      await waitFor(() => expect(mockOnClose).toHaveBeenCalledTimes(1));
+      expect(executeVariantSpy).toHaveBeenCalledWith(
+        'peek-like',
+        'one',
+        context,
+      );
+      expect(parentExecute).not.toHaveBeenCalled();
+    });
+
+    it('flips to the left of the parent when the right side would overflow', async () => {
+      const user = userEvent.setup();
+      Object.defineProperty(window, 'innerWidth', {
+        writable: true,
+        configurable: true,
+        value: 400,
+      });
+      const rectSpy = vi
+        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+        .mockImplementation(function (this: HTMLElement) {
+          const isParent =
+            this.getAttribute('data-testid') === 'context-menu-item-peek-like';
+          const rect = isParent
+            ? { left: 200, right: 350, top: 50, bottom: 80, width: 150 }
+            : { left: 0, right: 160, top: 0, bottom: 100, width: 160 };
+          return {
+            ...rect,
+            height: rect.bottom - rect.top,
+            x: 0,
+            y: 0,
+          } as DOMRect;
+        });
+      try {
+        renderMenu();
+        await user.hover(screen.getByTestId('context-menu-item-peek-like'));
+        const panel = screen.getByTestId('context-submenu-item-peek-like-one')
+          .parentElement as HTMLElement;
+        await waitFor(() => expect(panel.style.left).toBe('40px'));
+        expect(parseFloat(panel.style.left)).toBeLessThan(200);
+      } finally {
+        rectSpy.mockRestore();
+      }
+    });
+
+    it('actions without variants render without chevron and still execute', async () => {
+      const user = userEvent.setup();
+      renderMenu();
+      const plain = screen.getByText('Plain').closest('button');
+      expect(plain?.querySelector('.context-menu-submenu-arrow')).toBeNull();
+      expect(plain).not.toHaveAttribute('aria-haspopup');
+      await user.click(screen.getByText('Plain'));
+      await waitFor(() => expect(plainExecute).toHaveBeenCalled());
+    });
+  });
 });

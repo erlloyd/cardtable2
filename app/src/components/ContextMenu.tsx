@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { KeyboardEvent } from 'react';
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import { ActionRegistry } from '../actions/ActionRegistry';
 import { KeyboardManager } from '../actions/KeyboardManager';
@@ -82,18 +90,139 @@ export function ContextMenu({
     setMaxHeight(viewportHeight - y - VIEWPORT_MARGIN);
   }, [isOpen, position]);
 
-  const handleSelect = (action: Action) => {
+  const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
+  const [submenuPosition, setSubmenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
+  const parentRowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const submenuItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const focusSubmenuOnOpen = useRef(false);
+
+  const openSubmenuAction = openSubmenuId
+    ? actions.find((a) => a.id === openSubmenuId)
+    : undefined;
+
+  const resolveLabel = (label: Action['label']): string => {
+    if (typeof label === 'function') return context ? label(context) : '';
+    return label;
+  };
+
+  const closeSubmenu = (restoreFocus: boolean) => {
+    if (openSubmenuId && restoreFocus) {
+      parentRowRefs.current.get(openSubmenuId)?.focus();
+    }
+    setOpenSubmenuId(null);
+    setSubmenuPosition(null);
+  };
+
+  const openSubmenu = (actionId: string, focusFirst: boolean) => {
+    focusSubmenuOnOpen.current = focusFirst;
+    setOpenSubmenuId(actionId);
+  };
+
+  // Place the submenu beside its parent row, flipping to the left when it
+  // would overflow the right edge and clamping to the viewport vertically.
+  useLayoutEffect(() => {
+    const row = openSubmenuId
+      ? parentRowRefs.current.get(openSubmenuId)
+      : undefined;
+    const panel = submenuRef.current;
+    if (!row || !panel) return;
+
+    const rowRect = row.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+
+    let x = rowRect.right;
+    if (x + panelRect.width > window.innerWidth - VIEWPORT_MARGIN) {
+      x = rowRect.left - panelRect.width;
+    }
+
+    let y = rowRect.top;
+    if (y + panelRect.height > window.innerHeight - VIEWPORT_MARGIN) {
+      y = window.innerHeight - panelRect.height - VIEWPORT_MARGIN;
+    }
+    y = Math.max(VIEWPORT_MARGIN, y);
+
+    setSubmenuPosition({ x, y });
+  }, [openSubmenuId, adjustedPosition]);
+
+  // The panel is visibility:hidden until submenuPosition is set, and browsers
+  // refuse focus() on hidden elements, so wait for the positioned render.
+  useEffect(() => {
+    if (openSubmenuId && submenuPosition && focusSubmenuOnOpen.current) {
+      focusSubmenuOnOpen.current = false;
+      submenuItemRefs.current[0]?.focus();
+    }
+  }, [openSubmenuId, submenuPosition]);
+
+  // The component stays mounted while closed, so submenu state would otherwise
+  // survive close/reopen and render a stale panel beside the new menu.
+  const openKey = `${isOpen}:${position.x}:${position.y}`;
+  const [prevOpenKey, setPrevOpenKey] = useState(openKey);
+  if (prevOpenKey !== openKey) {
+    setPrevOpenKey(openKey);
+    setOpenSubmenuId(null);
+    setSubmenuPosition(null);
+  }
+
+  const executeAndClose = (run: (ctx: ActionContext) => Promise<void>) => {
     if (!context) return;
 
     // Execute action asynchronously
     void (async () => {
       try {
-        await actionRegistry.execute(action.id, context);
+        await run(context);
         onClose();
       } catch (error) {
         console.error('[ContextMenu] Failed to execute action:', error);
       }
     })();
+  };
+
+  const handleSelect = (action: Action) => {
+    executeAndClose((ctx) => actionRegistry.execute(action.id, ctx));
+  };
+
+  const handleSelectVariant = (action: Action, variantId: string) => {
+    executeAndClose((ctx) =>
+      actionRegistry.executeVariant(action.id, variantId, ctx),
+    );
+  };
+
+  const handleSubmenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const items = submenuItemRefs.current.filter(
+      (el): el is HTMLButtonElement => el !== null,
+    );
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        items[(current + 1) % items.length]?.focus();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        items[(current - 1 + items.length) % items.length]?.focus();
+        break;
+      case 'ArrowLeft':
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        closeSubmenu(true);
+        break;
+    }
+  };
+
+  const handleParentKeyDown = (
+    e: KeyboardEvent<HTMLButtonElement>,
+    action: Action,
+  ) => {
+    if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      openSubmenu(action.id, true);
+    }
   };
 
   const getShortcutDisplay = (shortcut: string | undefined): string => {
@@ -155,19 +284,37 @@ export function ContextMenu({
                   <div className="context-menu-section-title">{category}</div>
                   {categoryActions.map((action) => {
                     // Resolve dynamic label
-                    const label =
-                      typeof action.label === 'function' && context
-                        ? action.label(context)
-                        : typeof action.label === 'string'
-                          ? action.label
-                          : '';
+                    const label = resolveLabel(action.label);
+                    const hasVariants = (action.variants?.length ?? 0) > 0;
                     return (
                       <MenuItem key={action.id}>
                         {({ focus }) => (
                           <button
                             type="button"
                             className={`context-menu-item ${focus ? 'focus' : ''}`}
-                            onClick={() => handleSelect(action)}
+                            {...(hasVariants
+                              ? {
+                                  'data-testid': `context-menu-item-${action.id}`,
+                                  'aria-haspopup': 'menu' as const,
+                                  'aria-expanded': openSubmenuId === action.id,
+                                  ref: (el: HTMLButtonElement | null) => {
+                                    if (el) {
+                                      parentRowRefs.current.set(action.id, el);
+                                    } else {
+                                      parentRowRefs.current.delete(action.id);
+                                    }
+                                  },
+                                  onClick: () => openSubmenu(action.id, false),
+                                  onKeyDown: (
+                                    e: KeyboardEvent<HTMLButtonElement>,
+                                  ) => handleParentKeyDown(e, action),
+                                }
+                              : { onClick: () => handleSelect(action) })}
+                            onMouseEnter={() =>
+                              hasVariants
+                                ? openSubmenu(action.id, false)
+                                : closeSubmenu(false)
+                            }
                           >
                             <span className="context-menu-icon">
                               {action.icon}
@@ -176,6 +323,11 @@ export function ContextMenu({
                             {action.shortcut && (
                               <span className="context-menu-shortcut">
                                 {getShortcutDisplay(action.shortcut)}
+                              </span>
+                            )}
+                            {hasVariants && (
+                              <span className="context-menu-submenu-arrow">
+                                ▸
                               </span>
                             )}
                           </button>
@@ -189,6 +341,39 @@ export function ContextMenu({
           )}
         </MenuItems>
       </Menu>
+
+      {openSubmenuAction && (
+        <div
+          ref={submenuRef}
+          role="menu"
+          className="context-menu"
+          style={{
+            position: 'fixed',
+            left: submenuPosition?.x ?? adjustedPosition.x,
+            top: submenuPosition?.y ?? adjustedPosition.y,
+            visibility: submenuPosition ? 'visible' : 'hidden',
+          }}
+          onKeyDown={handleSubmenuKeyDown}
+        >
+          {openSubmenuAction.variants?.map((variant, i) => (
+            <button
+              key={variant.id}
+              ref={(el) => {
+                submenuItemRefs.current[i] = el;
+              }}
+              type="button"
+              role="menuitem"
+              className="context-menu-item"
+              data-testid={`context-submenu-item-${openSubmenuAction.id}-${variant.id}`}
+              onClick={() => handleSelectVariant(openSubmenuAction, variant.id)}
+            >
+              <span className="context-menu-label">
+                {resolveLabel(variant.label)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }

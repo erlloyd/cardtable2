@@ -687,6 +687,73 @@ describe('YjsActions - moveObjects', () => {
     });
   });
 
+  describe('Discard pile membership (_containerId)', () => {
+    function makeZoneWithPile(): { zone: string; pile: string } {
+      const temp = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: toCardEntries(['temp']),
+        faceUp: false,
+      });
+      const zone = createDiscardZoneForStack(store, temp)!;
+      store.deleteObject(temp);
+      const pile = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 0, y: 0, r: 0 },
+        cards: [{ code: 'top', homeZone: zone }],
+        faceUp: true,
+      });
+      store.getObjectYMap(pile)!.set('_containerId', zone);
+      return { zone, pile };
+    }
+
+    it('keeps _containerId when the container moves in the same batch', () => {
+      const { zone, pile } = makeZoneWithPile();
+
+      moveObjects(store, [
+        { id: zone, pos: { x: 300, y: 400, r: 0 } },
+        { id: pile, pos: { x: 300, y: 400, r: 0 } },
+      ]);
+
+      expect(store.getObjectYMap(pile)!.get('_containerId')).toBe(zone);
+    });
+
+    it('clears _containerId when the pile moves without its container', () => {
+      const { zone, pile } = makeZoneWithPile();
+
+      moveObjects(store, [{ id: pile, pos: { x: 300, y: 400, r: 0 } }]);
+
+      expect(store.getObjectYMap(zone)).toBeDefined();
+      expect(store.getObjectYMap(pile)!.get('_containerId')).toBeNull();
+    });
+
+    it('discard after a zone+pile move merges into the moved pile', () => {
+      const { zone, pile } = makeZoneWithPile();
+      const dest = { x: 300, y: 400, r: 0 };
+      moveObjects(store, [
+        { id: zone, pos: dest },
+        { id: pile, pos: dest },
+      ]);
+
+      const card = createObject(store, {
+        kind: ObjectKind.Stack,
+        pos: { x: 50, y: 50, r: 0 },
+        cards: [{ code: 'next', homeZone: zone }],
+        faceUp: false,
+      });
+      expect(discardCardToZone(store, card).result).toBe('routed');
+
+      const piles: string[] = [];
+      store.forEachObject((yMap, id) => {
+        if (yMap.get('_containerId') === zone) piles.push(id);
+      });
+      expect(piles).toEqual([pile]);
+      const pileYMap = store.getObjectYMap(pile)!;
+      expect(pileYMap.get('_pos')).toEqual(dest);
+      expect(pileYMap.get('_cards')).toHaveLength(2);
+    });
+  });
+
   describe('Store Integration', () => {
     it('triggers observer callbacks when objects are moved', async () => {
       const id = createObject(store, {

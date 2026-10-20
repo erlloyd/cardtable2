@@ -19,6 +19,7 @@ import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useRenameZoneDialog } from '../hooks/useRenameZoneDialog';
 import { useSetTokensDialog } from '../hooks/useSetTokensDialog';
+import { usePeekDialog } from '../hooks/usePeekDialog';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { resetTable } from '../store/YjsActions';
@@ -34,6 +35,7 @@ import {
   registerAttachmentActions,
 } from '../actions/attachmentActions';
 import { registerHandActions } from '../actions/handActions';
+import { registerPeekActions } from '../actions/peekActions';
 import type { ActionContext } from '../actions/types';
 import type { TableObjectYMap } from '../store/types';
 import { HandPanel } from '../components/HandPanel';
@@ -269,9 +271,11 @@ function Table() {
   useEffect(() => {
     const unregisterDefaults = registerDefaultActions();
     const unregisterHand = registerHandActions(ActionRegistry.getInstance());
+    const unregisterPeek = registerPeekActions(ActionRegistry.getInstance());
     return () => {
       unregisterDefaults();
       unregisterHand();
+      unregisterPeek();
     };
   }, []);
 
@@ -694,6 +698,12 @@ function Table() {
   const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
   const { openSetTokensDialog, setTokensDialog } = useSetTokensDialog(store);
 
+  const {
+    openPeek: handleOpenPeek,
+    peekDialog,
+    isPeekOpen,
+  } = usePeekDialog(store, gameAssets, handPanel.activeHandId);
+
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
   }, []);
@@ -804,6 +814,7 @@ function Table() {
       handleOpenLoadPicker,
       openRenameDialog,
       getHoveredHandCardIndex,
+      handleOpenPeek,
       openSetTokensDialog,
     );
 
@@ -828,6 +839,7 @@ function Table() {
     handleOpenLoadPicker,
     openRenameDialog,
     getHoveredHandCardIndex,
+    handleOpenPeek,
     openSetTokensDialog,
   ]);
 
@@ -837,7 +849,7 @@ function Table() {
   }, []);
   const numericPrefix = useKeyboardShortcuts(
     actionContext,
-    true,
+    !isPeekOpen,
     handleKeyboardAction,
   );
 
@@ -1002,6 +1014,7 @@ function Table() {
 
       {renameDialog}
       {setTokensDialog}
+      {peekDialog}
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal

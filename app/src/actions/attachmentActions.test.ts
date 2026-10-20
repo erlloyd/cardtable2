@@ -857,4 +857,57 @@ describe('attachmentActions', () => {
       expect(yMaps.get('b')!.set).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('set-tokens action', () => {
+    it('is registered only when tokenTypes is non-empty', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      expect(registry.getAction('set-tokens')).toBeDefined();
+
+      registerAttachmentActions(registry, createGameAssets({ tokenTypes: {} }));
+      expect(registry.getAction('set-tokens')).toBeUndefined();
+    });
+
+    it('is unregistered on re-register and on null assets', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      registerAttachmentActions(
+        registry,
+        createGameAssets({ tokenTypes: undefined }),
+      );
+      expect(registry.getAction('set-tokens')).toBeUndefined();
+
+      registerAttachmentActions(registry, createGameAssets());
+      registerAttachmentActions(registry, null);
+      expect(registry.getAction('set-tokens')).toBeUndefined();
+    });
+
+    it('is available only for one stack with the opener present', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const action = registry.getAction('set-tokens')!;
+      const { context } = createMockContext();
+
+      expect(action.isAvailable(context)).toBe(false);
+
+      context.onOpenSetTokensDialog = vi.fn();
+      expect(action.isAvailable(context)).toBe(true);
+
+      context.selection.count = 2;
+      context.selection.ids = ['a', 'b'];
+      expect(action.isAvailable(context)).toBe(false);
+
+      context.selection.count = 1;
+      context.selection.hasStacks = false;
+      expect(action.isAvailable(context)).toBe(false);
+    });
+
+    it('execute calls the opener with the selected id', () => {
+      registerAttachmentActions(registry, createGameAssets());
+      const { context } = createMockContext();
+      const opener = vi.fn();
+      context.onOpenSetTokensDialog = opener;
+
+      void registry.getAction('set-tokens')!.execute(context);
+
+      expect(opener).toHaveBeenCalledWith('stack-1');
+    });
+  });
 });

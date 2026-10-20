@@ -18,6 +18,7 @@ import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useRenameZoneDialog } from '../hooks/useRenameZoneDialog';
+import { useSetTokensDialog } from '../hooks/useSetTokensDialog';
 import { usePeekDialog } from '../hooks/usePeekDialog';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -695,6 +696,7 @@ function Table() {
   }, [store]);
 
   const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
+  const { openSetTokensDialog, setTokensDialog } = useSetTokensDialog(store);
 
   const {
     openPeek: handleOpenPeek,
@@ -813,6 +815,7 @@ function Table() {
       openRenameDialog,
       getHoveredHandCardIndex,
       handleOpenPeek,
+      openSetTokensDialog,
     );
 
     if (context) {
@@ -837,6 +840,7 @@ function Table() {
     openRenameDialog,
     getHoveredHandCardIndex,
     handleOpenPeek,
+    openSetTokensDialog,
   ]);
 
   // Enable keyboard shortcuts
@@ -1009,6 +1013,7 @@ function Table() {
       />
 
       {renameDialog}
+      {setTokensDialog}
       {peekDialog}
 
       {/* Load Picker Modal (ct-8gf.5) */}

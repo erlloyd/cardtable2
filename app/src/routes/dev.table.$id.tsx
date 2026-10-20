@@ -39,6 +39,7 @@ import { ContextMenu } from '../components/ContextMenu';
 import { GlobalMenuBar } from '../components/GlobalMenuBar';
 import { useCommandPalette } from '../hooks/useCommandPalette';
 import { useRenameZoneDialog } from '../hooks/useRenameZoneDialog';
+import { useSetTokensDialog } from '../hooks/useSetTokensDialog';
 import { useContextMenu } from '../hooks/useContextMenu';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import {
@@ -213,6 +214,7 @@ function DevTable() {
   }, [store]);
 
   const { openRenameDialog, renameDialog } = useRenameZoneDialog(store);
+  const { openSetTokensDialog, setTokensDialog } = useSetTokensDialog(store);
 
   const handleOpenLoadPicker = useCallback((presetType?: string) => {
     setLoadPicker((prev) => ({ open: true, presetType, key: prev.key + 1 }));
@@ -308,6 +310,9 @@ function DevTable() {
       undefined,
       handleOpenLoadPicker,
       openRenameDialog,
+      undefined,
+      undefined,
+      openSetTokensDialog,
     );
   }, [
     store,
@@ -318,6 +323,7 @@ function DevTable() {
     setGridSnapEnabled,
     handleOpenLoadPicker,
     openRenameDialog,
+    openSetTokensDialog,
   ]);
 
   // Enable keyboard shortcuts
@@ -469,6 +475,7 @@ function DevTable() {
       />
 
       {renameDialog}
+      {setTokensDialog}
 
       {/* Load Picker Modal (ct-8gf.5) */}
       <LoadPickerModal

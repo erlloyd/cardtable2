@@ -49,6 +49,8 @@ export interface ActionContext {
   onOpenLoadPicker?: (presetType?: string) => void;
   /** Open the rename dialog for the given zone. */
   onOpenRenameDialog?: (zoneId: string) => void;
+  /** Open the Set Tokens dialog for the given stack. */
+  onOpenSetTokensDialog?: (stackId: string) => void;
   /** Open the peek modal for the top `count` cards of the given stack.
    * `askCount` first asks for the number in a small dialog, then opens. */
   onOpenPeek?: (
